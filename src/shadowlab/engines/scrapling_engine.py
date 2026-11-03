@@ -2,8 +2,7 @@
 
 Seuls deux réglages s'écartent du défaut, pour les besoins du laboratoire : pas de redirection suivie par
 la bibliothèque (le périmètre contrôle chaque étape) et une seule tentative (les erreurs sont comptées,
-pas masquées). `StealthyFetcher` n'est pas intégré : c'est un navigateur modifié pour échapper aux
-détecteurs, hors du périmètre de ce laboratoire.
+pas masquées). Le navigateur furtif de Scrapling a son propre pilote (`scrapling_furtif.py`).
 """
 
 from __future__ import annotations
@@ -16,9 +15,17 @@ from .http_base import DriverHttp, ReponseBrute
 
 class DriverScrapling(DriverHttp):
     name = "scrapling"
+    categorie = "anti_detection"  # imite Chrome par défaut (TLS et en-têtes)
+    options_permises = {"timeout": (int, float)}
 
     def configuration(self) -> dict[str, Any]:
-        return {"fetcher": "FetcherSession", "follow_redirects": False, "retries": 1, **self.options}
+        return {
+            "fetcher": "FetcherSession",
+            **self.options,
+            "follow_redirects": False,
+            "retries": 1,
+            "tls_non_verifie": True,
+        }
 
     def versions(self) -> dict[str, str]:
         return {
@@ -29,7 +36,7 @@ class DriverScrapling(DriverHttp):
     def _ouvrir_client(self) -> None:
         from scrapling.fetchers import FetcherSession
 
-        reglages = {"follow_redirects": False, "retries": 1, **self.options}
+        reglages = {**self.options, "follow_redirects": False, "retries": 1, "verify": False}  # imposés en dernier
         self._gestionnaire = FetcherSession(**reglages)
         self._client = self._gestionnaire.__enter__()
 

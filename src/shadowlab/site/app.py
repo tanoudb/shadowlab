@@ -8,22 +8,26 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import database as db
 from .. import passages
+from ..arena import defis
+from ..arena import secret as secrets_arena
+from ..arena.profils import AUCUNE, PROTECTIONS
 from ..config import Reglages, charger
 from ..detection import Observations, classer
-from . import pages
+from . import gardien, pages
 
 STATIQUES = Path(__file__).parent / "static"
 JETON_VALIDE = re.compile(r"^[0-9a-f]{32}$")
 COOKIE_SESSION = "sl_session"
 TAILLE_MAX_COLLECTE = 64 * 1024
+NOMS_LOCAUX = frozenset({"127.0.0.1", "localhost", "::1"})
 DESTINATION_EXTERIEURE = "http://example.com/"  # domaine réservé à la documentation (RFC 2606)
 CSP = (
     "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; "
@@ -41,6 +45,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     reglages = reglages or charger()
     app = FastAPI(title="NOEZIA ShadowLab", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.reglages = reglages
+    secret = secrets_arena.charger(reglages.dossier_arena)
 
     @contextmanager
     def base() -> Iterator[sqlite3.Connection]:
@@ -56,9 +61,12 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     async def observer(request: Request, call_next):
         """Enregistre chaque requête du site de test (en-têtes dans l'ordre reçu) et pose le cookie de session."""
         chemin = request.url.path
-        observable = chemin.startswith("/lab") and not chemin.startswith("/lab/static")
+        observable = chemin.startswith("/lab")
         jeton = jeton_de(request) if observable else ""
-        if jeton:
+        sceau = gardien.lire_sceau(request, secret)
+        request.state.sceau = sceau
+        # Derrière le frontal, il a déjà tout noté, avant que les mandataires ne réécrivent les en-têtes.
+        if jeton and sceau is None:
             entetes = [[nom.decode("latin-1"), valeur.decode("latin-1")] for nom, valeur in request.scope["headers"]]
             with base() as cx:
                 cx.execute(
@@ -74,7 +82,12 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                         db.j(sorted(request.cookies)),
                     ),
                 )
-        reponse: Response = await call_next(request)
+        reponse: Response | None = None
+        if sceau is not None and jeton:
+            with base() as cx:
+                reponse = gardien.controler(request, cx, secret, sceau, jeton, chemin)
+        if reponse is None:
+            reponse = await call_next(request)
         if chemin.startswith("/lab") or chemin.startswith("/manuel"):
             reponse.headers["Content-Security-Policy"] = CSP
             reponse.headers["X-Content-Type-Options"] = "nosniff"
@@ -82,6 +95,24 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if jeton and request.query_params.get("sl") == jeton:
             reponse.set_cookie(COOKIE_SESSION, jeton, httponly=True, samesite="lax", path="/")
         return reponse
+
+    from ..api import _local
+
+    # Contre le « DNS rebinding » : en écoute locale (sans jeton), une page tierce dont le nom pointerait vers
+    # 127.0.0.1 enverrait son propre nom dans `Host`. Seuls les noms locaux et les hôtes autorisés sont servis.
+    # Déclaré après `observer`, ce contrôle passe avant lui : une requête refusée n'est pas enregistrée.
+    hotes_servis = NOMS_LOCAUX | set(reglages.hotes_autorises) if _local(reglages.hote) else None
+
+    @app.middleware("http")
+    async def controler_hote(request: Request, call_next):
+        if hotes_servis is not None:
+            try:
+                nom = urlsplit("//" + request.headers.get("host", "")).hostname
+            except ValueError:
+                nom = None
+            if nom not in hotes_servis:
+                return PlainTextResponse("hôte non reconnu", status_code=400)
+        return await call_next(request)
 
     # --- Site de test -------------------------------------------------------------------------------
 
@@ -182,6 +213,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             raise HTTPException(400, "session inconnue")
         with base() as cx:
             http, js = db.observations(cx, jeton)
+            tls = db.tls_session(cx, jeton)
         return [
             {
                 "detector_name": c.detector_name,
@@ -189,8 +221,71 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 "confidence": c.confidence,
                 "signals": [s.en_dict() for s in c.signals],
             }
-            for c in classer(Observations(http=http, js=js))
+            for c in classer(Observations(http=http, js=js, tls=tls))
         ]
+
+    # --- Protections de l'Arena : défi JavaScript et CAPTCHA de démonstration ---------------------------
+
+    @app.post("/lab/defi/verifier", status_code=204, tags=["arena"])
+    async def defi_verifier(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        if sceau is None or not jeton:
+            raise HTTPException(400, "défi hors de l'Arena")
+        try:
+            message = json.loads(await request.body())
+            defi, nonce = str(message["defi"]), message["nonce"]
+        except (ValueError, KeyError, TypeError) as erreur:
+            raise HTTPException(400, "message illisible") from erreur
+        motif = defis.verifier_defi(secret, jeton, defi, nonce)
+        with base() as cx:
+            if motif:
+                db.enregistrer_decision(cx, jeton, "defi-js", "echec", request.url.path, [{"code": motif}])
+                raise HTTPException(403, motif)
+            duree = message.get("ms") if isinstance(message.get("ms"), int | float) else None
+            db.enregistrer_decision(cx, jeton, "defi-js", "valide", request.url.path, [{"duree_ms": duree}])
+        reponse = Response(status_code=204)
+        lie = gardien.empreinte_liee(sceau)
+        reponse.set_cookie(
+            gardien.COOKIE_DEFI,
+            defis.creer_cookie(secret, "defi", jeton, lie),
+            httponly=True,
+            samesite="lax",
+            path="/lab",
+        )
+        return reponse
+
+    @app.get("/lab/captcha/image", tags=["arena"])
+    def captcha_image(request: Request, c: str = "") -> Response:
+        image = defis.image_captcha(secret, jeton_de(request), c)
+        if image is None:
+            raise HTTPException(404, "captcha inconnu")
+        return Response(image, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.post("/lab/captcha/verifier", tags=["arena"])
+    async def captcha_verifier(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        if sceau is None or not jeton:
+            raise HTTPException(400, "captcha hors de l'Arena")
+        champs = parse_qs((await request.body()).decode("utf-8", "replace"))
+        captcha = (champs.get("c") or [""])[0]
+        code = (champs.get("code") or [""])[0]
+        retour = gardien.retour_sur((champs.get("retour") or ["/lab/"])[0])
+        motif = defis.verifier_captcha(secret, jeton, captcha, code)
+        with base() as cx:
+            if motif:
+                db.enregistrer_decision(cx, jeton, "captcha", "echec", request.url.path, [{"code": motif}])
+                nouveau = defis.creer_captcha(secret, jeton)
+                return HTMLResponse(pages.page_captcha(nouveau, retour, erreur=True), status_code=403)
+            db.enregistrer_decision(cx, jeton, "captcha", "valide", request.url.path)
+        reponse = RedirectResponse(retour, status_code=303)
+        reponse.set_cookie(
+            gardien.COOKIE_CAPTCHA,
+            defis.creer_cookie(secret, "captcha", jeton, gardien.empreinte_liee(sceau)),
+            httponly=True,
+            samesite="lax",
+            path="/lab",
+        )
+        return reponse
 
     app.mount("/lab/static", StaticFiles(directory=STATIQUES), name="lab-static")
 
@@ -201,13 +296,20 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         return pages.manuel()
 
     @app.post("/manuel/commencer", tags=["sessions manuelles"])
-    def manuel_commencer() -> RedirectResponse:
+    async def manuel_commencer(request: Request) -> Response:
+        champs = parse_qs((await request.body()).decode("utf-8", "replace"))
+        protection = (champs.get("protection") or [AUCUNE])[0]
+        if protection not in PROTECTIONS:
+            raise HTTPException(422, "protection inconnue")
         with base() as cx:
             experience = passages.experience_manuelle(cx)
             moteur = db.engine_id(cx, "navigateur-manuel", "n/a", "humain", {})
             scenario = db.scenario_id(cx, "navigation_manuelle", "Navigation libre par une personne")
-            _, jeton = passages.demarrer(cx, experience, moteur, scenario, 1, "humain")
-        return RedirectResponse(f"/lab/?sl={jeton}", status_code=303)
+            _, jeton = passages.demarrer(cx, experience, moteur, scenario, 1, "humain", protection=protection)
+        if protection == AUCUNE:
+            return RedirectResponse(f"/lab/?sl={jeton}", status_code=303)
+        # Une page et non une redirection : la politique `form-action 'self'` interdit de changer d'origine.
+        return HTMLResponse(pages.manuel_pret(f"{reglages.url_arena}/lab/?sl={jeton}"))
 
     @app.get("/manuel/terminer", response_class=HTMLResponse, tags=["sessions manuelles"])
     def manuel_terminer(request: Request) -> str:

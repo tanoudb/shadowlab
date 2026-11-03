@@ -1,0 +1,1386 @@
+# Catalogue des projets open source étudiés — NOEZIA ShadowLab
+#
+# Source : API GitHub (CLI gh), registres PyPI et npm, README des dépôts. Relevé du 2026-11-03.
+# Les champs objectifs (licence, dates, étoiles, archivage, version) viennent de l'API GitHub.
+# Les champs `documente` sont ce que le projet ANNONCE : ce sont des promesses, pas des preuves.
+# Les `limites_connues` sont rapportées par le projet ou ses issues, non reproduites par le laboratoire.
+# Aucun résultat de test n'est consigné ici : les mesures viennent des campagnes ShadowLab.
+# `non_documente` / `null` = information non trouvée lors du relevé, pas une absence prouvée.
+# Périmètre : ce catalogue sert à comparer des moteurs face aux protections du laboratoire, sur le site
+# de test local. Il ne vaut pas recommandation d'usage contre un site tiers.
+# Rappel : la recherche d'issues "Apple Silicon" par l'API de recherche GitHub a été limitée par le quota ;
+# `apple_silicon` repose surtout sur les README et sur les issues les plus commentées.
+releve_le: 2026-11-03
+projets:
+  # ---------------------------------------------------------------- obligatoires
+  - id: scrapling
+    nom: Scrapling
+    url: https://github.com/D4Vinci/Scrapling
+    categories: [crawling, collecte-http, automatisation-navigateur, anti-detection, extraction]
+    role: "Framework Python de scraping réunissant requêtes HTTP, navigateurs furtifs, parsing et crawl concurrent."
+    licence: BSD-3-Clause
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v0.5", date: 2026-10-17}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 94542
+    langages: [Python]
+    paquet: {pypi: scrapling, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "README sans mention d'Apple Silicon ; l'issue #515 montre une CI de tests sur macOS (Python 3.10)."
+      source: https://github.com/D4Vinci/Scrapling/issues/515
+    dependances: ["extra scrapling[fetchers] requis pour les clients HTTP et navigateurs (voir AGENTS.md du projet)", "patchright / navigateurs pilotés selon le fetcher"]
+    documente:
+      - "Fetchers HTTP rapides, navigateurs furtifs, rendu JavaScript, gestion Cloudflare Turnstile/Interstitial annoncée."
+      - "Spiders concurrents avec rotation de proxys, nouvelles tentatives, AutoThrottle, pause/reprise."
+      - "Serveur MCP, CLI et Agent Skill pour usage par des agents IA."
+    limites_connues: []
+    apparente_a: null
+
+  - id: crawlee
+    nom: Crawlee (JS/TS)
+    url: https://github.com/apify/crawlee
+    categories: [crawling, automatisation-navigateur, sessions-reprise]
+    role: "Bibliothèque Node.js de crawl et d'automatisation de navigateur avec file de requêtes, pool de sessions et crawlers HTTP/Playwright/Puppeteer."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v3.18.2", date: 2026-09-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 26326
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: crawlee, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "README sans mention d'Apple Silicon ; Node.js 22.13 ou plus requis ; Playwright à installer séparément."
+      source: https://github.com/apify/crawlee
+    dependances: ["Node.js >= 22.13", "playwright ou puppeteer (non fournis, à installer)"]
+    documente:
+      - "Annonce des robots d'apparence humaine avec la configuration par défaut (promesse du README, non vérifiée)."
+      - "SessionPool : gestion de sessions et de cookies (documentée par le projet) ; la rotation d'identité est hors périmètre du laboratoire."
+      - "File de requêtes persistante, reprise après arrêt, mise à l'échelle automatique."
+    limites_connues:
+      - {texte: "Playwright n'est pas livré avec Crawlee : installation séparée requise (npx playwright install).", source: https://github.com/apify/crawlee/issues/2275}
+      - {texte: "Demande ouverte de support du bundling.", source: https://github.com/apify/crawlee/issues/2208}
+    apparente_a: "Version Python : crawlee-python"
+
+  - id: crawlee-python
+    nom: Crawlee for Python
+    url: https://github.com/apify/crawlee-python
+    categories: [crawling, automatisation-navigateur, sessions-reprise]
+    role: "Portage Python de Crawlee : crawlers BeautifulSoup, Parsel, HTTP et Playwright avec file de requêtes et pool de sessions."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v1.11.0", date: 2026-10-15}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 9641
+    langages: [Python]
+    paquet: {pypi: crawlee, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "README sans mention d'Apple Silicon ; installation via pip puis playwright install."
+      source: https://github.com/apify/crawlee-python
+    dependances: ["playwright (extra crawlee[all], navigateurs à installer)"]
+    documente:
+      - "Annonce des robots presque humains avec la configuration par défaut (promesse du README, non vérifiée)."
+      - "Extras optionnels, CLI avec modèles de projet, intégration uv."
+    limites_connues:
+      - {texte: "Blocage possible (deadlock) signalé dans SitemapRequestLoader.", source: https://github.com/apify/crawlee-python/issues/1842}
+      - {texte: "Demande d'un seul EventManager par processus.", source: https://github.com/apify/crawlee-python/issues/2242}
+    apparente_a: "Portage Python de apify/crawlee"
+
+  - id: camoufox
+    nom: Camoufox
+    url: https://github.com/daijro/camoufox
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Navigateur Firefox modifié (patches C++) piloté via Playwright, présenté comme navigateur anti-détection pour le scraping et les agents IA."
+    licence: MPL-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v158.0.1-beta.41", date: 2026-10-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 13024
+    langages: [Python]
+    paquet: {pypi: camoufox, npm: camoufox, autre: "version PyPI 0.5.9 (à distinguer du numéro de version du navigateur)"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "README : binaires macOS cross-compilés ; WebGPU simulé seulement pour Windows et Apple Silicon. Issues ouvertes : plantage macOS arm64 au lancement (#915) et plantage intermittent de processus de contenu sur Mac (#957)."
+      source: https://github.com/daijro/camoufox/issues/915
+    dependances: ["binaire Firefox modifié, taille non vérifiée", "playwright / playwright-core"]
+    documente:
+      - "Usurpation d'empreinte (navigator, écran, WebGL, audio, polices, fuseau, géolocalisation) par appareil simulé."
+      - "Masquage des traces d'automatisation (navigator.webdriver, événements de confiance) par patches Juggler."
+      - "Tableau de ce qui n'est volontairement pas usurpé (pixels canvas, largeurs de texte, rendu audio)."
+    limites_connues:
+      - {texte: "Le README avertit que le projet est en développement et peut ne pas convenir à une production stable.", source: https://github.com/daijro/camoufox}
+      - {texte: "Augmentation de la mémoire sur les tâches longues.", source: https://github.com/daijro/camoufox/issues/245}
+      - {texte: "SIGSEGV macOS arm64 dans plugin-container peu après le lancement.", source: https://github.com/daijro/camoufox/issues/915}
+    apparente_a: "Basé sur Firefox ; piloté par Playwright"
+
+  - id: seleniumbase
+    nom: SeleniumBase
+    url: https://github.com/seleniumbase/SeleniumBase
+    categories: [automatisation-navigateur, anti-detection, test-securite-navigateur]
+    role: "Surcouche Selenium/Playwright pour tests E2E et scraping, avec modes UC et CDP annoncés comme furtifs."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v4.57.0", date: 2026-11-03}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 13223
+    langages: [Python]
+    paquet: {pypi: seleniumbase, npm: null, autre: null}
+    apple_silicon:
+      statut: documente
+      note: "README : systèmes Linux, macOS et Windows ; exemple de téléchargement de chromedriver-mac-arm64. Issue #4492 (connexion au navigateur sur MacBook) fermée."
+      source: https://github.com/seleniumbase/SeleniumBase
+    dependances: ["selenium", "chromedriver téléchargé automatiquement", "Chrome installé"]
+    documente:
+      - "Mode UC (Undetected-Chromedriver intégré) et mode CDP pour contourner la détection de bots (annonce du README)."
+      - "Enregistreur, tableau de bord, outils de test E2E et de capture."
+      - "Playwright furtif (pytest/CDP) annoncé dans la description du dépôt."
+    limites_connues: []
+    apparente_a: "Intègre une version dérivée de undetected-chromedriver"
+
+  - id: playwright
+    nom: Playwright
+    url: https://github.com/microsoft/playwright
+    categories: [automatisation-navigateur, test-securite-navigateur]
+    role: "Framework d'automatisation et de test web pilotant Chromium, Firefox et WebKit avec une seule API."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v1.64.1", date: 2026-10-14}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 99208
+    langages: [TypeScript]
+    paquet: {pypi: playwright, npm: playwright, autre: "@playwright/test, @playwright/mcp"}
+    apple_silicon:
+      statut: documente
+      note: "README : tableau de prise en charge Linux/macOS/Windows ; architecture arm64 non détaillée dans l'extrait lu. Issue ouverte sur Chromium 156 macOS (context.close lent) fermée."
+      source: https://github.com/microsoft/playwright/issues/43475
+    dependances: ["navigateurs téléchargés par playwright install (Chromium, Firefox, WebKit)"]
+    documente:
+      - "Trois moteurs (Chromium, Firefox, WebKit), auto-attente, isolation des contextes."
+      - "Playwright Test, CLI pour agents, serveur MCP, extension VS Code."
+    limites_connues:
+      - {texte: "Limites actuelles de l'adoption de WebDriver BiDi.", source: https://github.com/microsoft/playwright/issues/32577}
+      - {texte: "Headers multi-valeurs séparés sur les virgules sous Firefox et WebKit (headersArray).", source: https://github.com/microsoft/playwright/issues/42687}
+    apparente_a: null
+
+  - id: selenium
+    nom: Selenium
+    url: https://github.com/SeleniumHQ/selenium
+    categories: [automatisation-navigateur, test-securite-navigateur]
+    role: "Écosystème d'automatisation de navigateur reposant sur la spécification W3C WebDriver."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "selenium-4.52.0", date: 2026-10-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 34584
+    langages: [Java, Python, JavaScript, C#, Ruby, Rust]
+    paquet: {pypi: selenium, npm: selenium-webdriver, autre: null}
+    apple_silicon:
+      statut: issues_signalees
+      note: "Demande ouverte de binaires officiels Selenium Manager pour ARM64 ; plate-forme visée par l'issue à confirmer (le titre ne précise pas macOS). Le README décrit une construction avec Rosetta pour les Mac Apple Silicon."
+      source: https://github.com/SeleniumHQ/selenium/issues/15801
+    dependances: ["pilote du navigateur (chromedriver / geckodriver), gérés par Selenium Manager"]
+    documente:
+      - "Infrastructure pour la spécification W3C WebDriver, compatible avec les principaux navigateurs."
+      - "Le README du dépôt s'adresse aux contributeurs ; la documentation utilisateur est sur selenium.dev."
+    limites_connues:
+      - {texte: "Binaires Selenium Manager ARM64 officiels demandés (issue ouverte, très commentée).", source: https://github.com/SeleniumHQ/selenium/issues/15801}
+    apparente_a: null
+
+  - id: browser-use
+    nom: Browser Use
+    url: https://github.com/browser-use/browser-use
+    categories: [automatisation-navigateur]
+    role: "Bibliothèque Python d'agents IA qui pilotent un navigateur, avec CLI et offre cloud payante (navigateurs furtifs hébergés)."
+    licence: MIT
+    licence_note: "La bibliothèque est MIT ; les navigateurs furtifs et agents hébergés relèvent d'un service cloud commercial distinct."
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "0.13.14", date: 2026-10-26}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 119951
+    langages: [Python]
+    paquet: {pypi: browser-use, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "README : le mode CLI exige un hôte Linux ou macOS avec /bin/bash ; architecture non précisée."
+      source: https://github.com/browser-use/browser-use
+    dependances: ["Python >= 3.11", "un modèle de langage (local ou API)", "Chromium/Chrome via CDP"]
+    documente:
+      - "Agent qui pilote un navigateur local ou cloud avec le modèle de langage de son choix."
+      - "Annonce un score de 90,5 % sur Stealth Bench V2 pour son offre cloud (non vérifié, banc de test du fournisseur)."
+    limites_connues:
+      - {texte: "Plantage de MCPClient sur les types JSON Schema en tableau lors de l'enregistrement d'outils.", source: https://github.com/browser-use/browser-use/issues/6278}
+    apparente_a: null
+
+  - id: undetected-chromedriver
+    nom: undetected-chromedriver
+    url: https://github.com/ultrafunkamsterdam/undetected-chromedriver
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Patch automatique du chromedriver de Selenium présenté comme évitant les services anti-bot."
+    licence: GPL-3.0
+    licence_note: "Copyleft fort : intégrer ou redistribuer dans un produit livré à un client impose la GPL-3.0."
+    derniere_activite: 2025-07-05
+    derniere_version: null
+    archive: false
+    statut_maintenance: ralenti
+    etoiles: 12896
+    langages: [Python]
+    paquet: {pypi: undetected-chromedriver, npm: null, autre: "PyPI 3.5.5 ; aucune release GitHub"}
+    apple_silicon:
+      statut: non_documente
+      note: "README sans mention d'Apple Silicon ; les issues GitHub sont désactivées, donc aucun retour utilisateur consultable."
+      source: https://github.com/ultrafunkamsterdam/undetected-chromedriver
+    dependances: ["selenium", "Chrome installé"]
+    documente:
+      - "Patch du chromedriver, téléchargement automatique du pilote, annoncé comme sans configuration."
+      - "L'auteur indique que le projet ne masque pas l'IP et que la réputation de l'IP compte (README)."
+    limites_connues:
+      - {texte: "Le README précise que depuis un centre de données les chances de passer sont faibles et que la réputation de l'IP est déterminante.", source: https://github.com/ultrafunkamsterdam/undetected-chromedriver}
+      - {texte: "Issues désactivées (has_issues=false) ; discussions ouvertes à la place. Dernière activité il y a environ 16 mois.", source: https://github.com/ultrafunkamsterdam/undetected-chromedriver/discussions}
+    apparente_a: "Prédécesseur de nodriver ; Brotector le liste parmi les cibles détectées"
+
+  # ---------------------------------------------------------------- automatisation navigateur
+  - id: puppeteer
+    nom: Puppeteer
+    url: https://github.com/puppeteer/puppeteer
+    categories: [automatisation-navigateur]
+    role: "Bibliothèque JavaScript pour piloter Chrome ou Firefox via DevTools Protocol ou WebDriver BiDi."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "browsers-v3.2.6", date: 2026-10-22}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 95792
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: puppeteer, autre: "la dernière release GitHub est celle de @puppeteer/browsers ; npm puppeteer 25.16.0 au relevé"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "Issue fermée : @puppeteer/browsers tronque un fichier à l'installation sur macOS arm64 sous Node 26."
+      source: https://github.com/puppeteer/puppeteer/issues/15573
+    dependances: ["Chrome for Testing téléchargé à l'installation (puppeteer) ou absent (puppeteer-core)"]
+    documente:
+      - "Contrôle de Chrome ou Firefox par DevTools Protocol ou WebDriver BiDi ; headless par défaut."
+      - "Deux paquets : puppeteer (télécharge Chrome) et puppeteer-core (sans navigateur)."
+    limites_connues:
+      - {texte: "Interception des réponses non prise en charge (demande ancienne et très commentée).", source: https://github.com/puppeteer/puppeteer/issues/1191}
+    apparente_a: null
+
+  - id: patchright
+    nom: Patchright
+    url: https://github.com/Kaliiiiiiiiii-Vinyzu/patchright
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Version patchée de Playwright présentée comme remplacement direct qui masque les fuites d'automatisation."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "v1.64.1", date: 2026-10-15}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 5065
+    langages: [TypeScript]
+    paquet: {pypi: patchright, npm: patchright, autre: "dépôt du pilote ; paquets Python et Node dans des dépôts séparés"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "Demande ouverte de prise en charge de Google Chrome sur arm64 (#211) ; plate-forme précise non vérifiée."
+      source: https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues/211
+    dependances: ["Chromium (Chrome recommandé)", "pilote Playwright patché"]
+    documente:
+      - "Remplacement direct de Playwright avec patches contre les fuites d'automatisation."
+      - "Ne patche que les navigateurs basés sur Chromium."
+    limites_connues:
+      - {texte: "Firefox et WebKit non pris en charge (README).", source: https://github.com/Kaliiiiiiiiii-Vinyzu/patchright}
+      - {texte: "Google Chrome sur arm64 non pris en charge (demande ouverte).", source: https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues/211}
+    apparente_a: "Fork patché de Playwright"
+
+  - id: rebrowser-patches
+    nom: rebrowser-patches
+    url: https://github.com/rebrowser/rebrowser-patches
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Collection de patches pour Puppeteer et Playwright censés réduire les fuites d'automatisation (par exemple Runtime.enable)."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "v1.1.3", date: 2026-11-02}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1455
+    langages: [JavaScript]
+    paquet: {pypi: null, npm: rebrowser-patches, autre: "rebrowser-puppeteer, rebrowser-playwright (paquets dérivés)"}
+    apple_silicon:
+      statut: non_documente
+      note: "Aucune mention d'Apple Silicon dans le README ni dans les issues consultées."
+      source: null
+    dependances: ["puppeteer ou playwright à patcher"]
+    documente:
+      - "Patches appliqués au code source de Puppeteer et Playwright, avec paquets de remplacement prêts à l'emploi."
+      - "Renvoie à un détecteur de bots maison (rebrowser-bot-detector) pour tester sa configuration."
+    limites_connues: []
+    apparente_a: "Patches pour Puppeteer et Playwright"
+
+  - id: nodriver
+    nom: nodriver
+    url: https://github.com/ultrafunkamsterdam/nodriver
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Bibliothèque Python asynchrone pilotant Chromium directement par CDP, sans WebDriver ni Selenium."
+    licence: AGPL-3.0
+    licence_note: "AGPL-3.0 : obligation de publier le code source des services réseau qui l'embarquent ; à éviter dans un livrable fermé."
+    derniere_activite: 2026-10-26
+    derniere_version: null
+    archive: false
+    statut_maintenance: actif
+    etoiles: 4910
+    langages: [Python]
+    paquet: {pypi: nodriver, npm: null, autre: "PyPI 0.50.99 ; aucune release GitHub"}
+    apple_silicon:
+      statut: non_documente
+      note: "Aucune mention d'Apple Silicon dans le README ; deux issues ouvertes de comportement (pas spécifiques macOS)."
+      source: https://github.com/ultrafunkamsterdam/nodriver
+    dependances: ["Chrome ou Chromium installé"]
+    documente:
+      - "Successeur officiel de undetected-chromedriver, entièrement asynchrone."
+      - "Communication directe (CDP) annoncée comme plus résistante aux pare-feu applicatifs et plus rapide."
+    limites_connues:
+      - {texte: "cdp.dom.enable() échoue sur Chrome 156.", source: https://github.com/ultrafunkamsterdam/nodriver/issues/42}
+      - {texte: "Première utilisation concurrente d'un onglet : deux websockets ouverts.", source: https://github.com/ultrafunkamsterdam/nodriver/issues/46}
+    apparente_a: "Successeur de undetected-chromedriver ; zendriver en est un fork"
+
+  - id: zendriver
+    nom: Zendriver
+    url: https://github.com/cdpdriver/zendriver
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Fork communautaire de nodriver : automatisation Chrome asynchrone par CDP, avec correctifs et fonctions supplémentaires."
+    licence: AGPL-3.0
+    licence_note: "AGPL-3.0 : mêmes réserves que nodriver pour un produit livré."
+    derniere_activite: 2026-10-02
+    derniere_version: {nom: "v0.17.1", date: 2026-10-02}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1467
+    langages: [Python]
+    paquet: {pypi: zendriver, npm: null, autre: "dépôt Docker d'exemple séparé : cdpdriver/zendriver-docker"}
+    apple_silicon:
+      statut: non_documente
+      note: "Pas de mention dans le README ; le dépôt gère la détection de variantes de Edge sur macOS (PR fermée #276)."
+      source: https://github.com/cdpdriver/zendriver/issues/276
+    dependances: ["Chrome ou Chromium installé"]
+    documente:
+      - "Fork de nodriver visant à intégrer les correctifs non fusionnés et à améliorer le soutien communautaire."
+      - "Annoncé comme rapide, asynchrone et indétectable (promesse du README)."
+    limites_connues:
+      - {texte: "Un utilisateur rapporte que DataDome détecte zendriver.", source: https://github.com/cdpdriver/zendriver/issues/20}
+      - {texte: "Le navigateur ne se lance plus après une mise à jour de Chrome.", source: https://github.com/cdpdriver/zendriver/issues/142}
+      - {texte: "Plusieurs processus Chrome restent lancés après chaque exécution.", source: https://github.com/cdpdriver/zendriver/issues/33}
+    apparente_a: "Fork de nodriver"
+
+  - id: pydoll
+    nom: Pydoll
+    url: https://github.com/autoscrape-labs/pydoll
+    categories: [automatisation-navigateur, anti-detection]
+    role: "Bibliothèque Python d'automatisation de navigateurs Chromium par CDP brut, avec API synchrone et couche de compatibilité Playwright."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-10-09
+    derniere_version: {nom: "3.0.0", date: 2026-09-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 7133
+    langages: [Python]
+    paquet: {pypi: pydoll-python, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Pas de mention d'Apple Silicon dans les extraits lus."
+      source: null
+    dependances: ["navigateur Chromium installé"]
+    documente:
+      - "Pas de WebDriver ni de processus pilote ; mode synchrone ou asynchrone."
+      - "Couche compatible Playwright activable par un import."
+      - "Pydoll 3 : changements incompatibles annoncés par rapport à la version 2."
+    limites_connues:
+      - {texte: "Un proxy avec authentification provoque un délai de navigation dépassé.", source: https://github.com/autoscrape-labs/pydoll/issues/353}
+      - {texte: "ping() rapporte un navigateur gelé comme réactif.", source: https://github.com/autoscrape-labs/pydoll/issues/471}
+    apparente_a: null
+
+  - id: lightpanda
+    nom: Lightpanda
+    url: https://github.com/lightpanda-io/browser
+    categories: [automatisation-navigateur]
+    role: "Navigateur headless écrit en Zig, sans moteur Chromium ni WebKit, pensé pour agents IA et automatisation."
+    licence: AGPL-3.0
+    licence_note: "AGPL-3.0 : contraintes de redistribution et d'usage en service réseau."
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "1.0.2", date: 2026-10-23}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 41132
+    langages: [Zig]
+    paquet: {pypi: null, npm: "@lightpanda/browser", autre: "binaires de release et images Docker"}
+    apple_silicon:
+      statut: documente
+      note: "README : binaires pour Linux et macOS, en x86_64 et aarch64."
+      source: https://github.com/lightpanda-io/browser
+    dependances: ["aucun navigateur externe ; binaire glibc sous Linux"]
+    documente:
+      - "Navigateur construit de zéro, annoncé 16 fois plus léger et 9 fois plus rapide que Chromium (chiffres du projet, non vérifiés)."
+      - "Piloté par CDP depuis Puppeteer ou Playwright."
+    limites_connues:
+      - {texte: "Validation d'origine et d'hôte qui bloque l'usage dans Docker Compose.", source: https://github.com/lightpanda-io/browser/issues/3975}
+      - {texte: "Binaire Linux lié à glibc : inutilisable tel quel sous Alpine/musl (README).", source: https://github.com/lightpanda-io/browser}
+    apparente_a: "Pas un fork de Chromium ni de WebKit (selon le README)"
+
+  - id: stagehand
+    nom: Stagehand
+    url: https://github.com/browserbase/stagehand
+    categories: [automatisation-navigateur]
+    role: "SDK TypeScript d'agents navigateur : actions et extraction pilotées par un modèle de langage au-dessus de Playwright/CDP."
+    licence: MIT
+    licence_note: "Intégration native avec le service cloud commercial Browserbase ; le SDK reste utilisable en local."
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "stagehand-server-v3/v3.7.7", date: 2026-10-23}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 25929
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: "@browserbasehq/stagehand", autre: "npm 4.3.0 au relevé ; la release GitHub listée est celle du serveur v3"}
+    apple_silicon:
+      statut: non_documente
+      note: "Pas de mention dans le README ; les issues ouvertes consultées concernent surtout Windows et le CLI."
+      source: null
+    dependances: ["un modèle de langage via API", "Chrome local ou Browserbase"]
+    documente:
+      - "SDK pour extraire des données et interagir avec n'importe quel site, avec session persistante par userDataDir."
+      - "Schémas de sortie typés (zod)."
+    limites_connues:
+      - {texte: "CLI browse : le mode avec fenêtre prend le focus à chaque commande.", source: https://github.com/browserbase/stagehand/issues/2148}
+    apparente_a: null
+
+  - id: skyvern
+    nom: Skyvern
+    url: https://github.com/Skyvern-AI/skyvern
+    categories: [automatisation-navigateur]
+    role: "Automatisation de workflows navigateur par modèles de langage et vision, avec SDK compatible Playwright."
+    licence: AGPL-3.0
+    licence_note: "AGPL-3.0 (hors modules cloud/entreprise éventuels, non vérifiés) : prudence pour un livrable client."
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v1.0.56", date: 2026-10-14}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 23336
+    langages: [Python]
+    paquet: {pypi: skyvern, npm: null, autre: null}
+    apple_silicon:
+      statut: documente
+      note: "README : le CLI prend en charge Windows, WSL, macOS et Linux ; architecture non précisée."
+      source: https://github.com/Skyvern-AI/skyvern
+    dependances: ["Playwright", "un modèle de langage avec vision", "interface web auto-hébergeable"]
+    documente:
+      - "Agents qui comprennent la page par vision plutôt que par XPath prédéfinis."
+      - "Réutilisation d'un même workflow sur de nombreux sites (annonce)."
+    limites_connues:
+      - {texte: "L'interface auto-hébergée plante au chargement (erreur Clerk).", source: https://github.com/Skyvern-AI/skyvern/issues/8644}
+    apparente_a: null
+
+  # ---------------------------------------------------------------- collecte HTTP
+  - id: httpx
+    nom: HTTPX
+    url: https://github.com/encode/httpx
+    categories: [collecte-http]
+    role: "Client HTTP Python complet (synchrone et asynchrone, HTTP/1.1 et HTTP/2) avec CLI intégré."
+    licence: BSD-3-Clause
+    licence_note: null
+    derniere_activite: 2026-10-02
+    derniere_version: {nom: "0.28.1", date: 2024-12-06}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 15737
+    langages: [Python]
+    paquet: {pypi: httpx, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Bibliothèque Python pure ; aucune mention de plate-forme dans le README."
+      source: null
+    dependances: ["certifi", "httpcore", "h2 (extra http2)"]
+    documente:
+      - "Client HTTP de nouvelle génération, API proche de requests, support HTTP/2."
+      - "Dernière version publiée le 2024-12-06 (près de onze mois avant le relevé), alors que le dépôt reçoit encore des commits."
+    limites_connues:
+      - {texte: "Demande d'amélioration des performances asynchrones.", source: https://github.com/encode/httpx/issues/3215}
+      - {texte: "HTTP/3 non pris en charge (demande ouverte).", source: https://github.com/encode/httpx/issues/275}
+    apparente_a: null
+
+  - id: curl-cffi
+    nom: curl_cffi
+    url: https://github.com/lexiforest/curl_cffi
+    categories: [collecte-http, analyse-tls-http, anti-detection]
+    role: "Liaison Python de curl-impersonate : client HTTP capable d'émettre des empreintes TLS/JA3 et HTTP/2 de navigateurs."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-10-27
+    derniere_version: {nom: "v0.17.0", date: 2026-10-26}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 6814
+    langages: [Python]
+    paquet: {pypi: curl_cffi, npm: null, autre: "Homebrew sur macOS (selon le README)"}
+    apple_silicon:
+      statut: documente
+      note: "README : doit fonctionner sur Linux, macOS et Windows ; installation Homebrew possible. Issues macOS 27 (import impossible, #885) fermées."
+      source: https://github.com/lexiforest/curl_cffi/issues/885
+    dependances: ["bibliothèque libcurl-impersonate embarquée dans les roues"]
+    documente:
+      - "Imite les empreintes TLS/JA3 et HTTP/2 de navigateurs (annonce, non vérifiée par le laboratoire)."
+      - "API proche de requests, sessions asynchrones, WebSocket."
+    limites_connues:
+      - {texte: "Réponses tronquées occasionnellement avec statut 200 et sans exception.", source: https://github.com/lexiforest/curl_cffi/issues/597}
+      - {texte: "Construction cassée sur PowerPC ; ppc64le non pris en charge.", source: https://github.com/lexiforest/curl_cffi/issues/598}
+    apparente_a: "Liaison de lexiforest/curl-impersonate"
+
+  - id: curl-impersonate
+    nom: curl-impersonate (fork lexiforest)
+    url: https://github.com/lexiforest/curl-impersonate
+    categories: [collecte-http, analyse-tls-http, anti-detection]
+    role: "Fork actif de curl-impersonate : cURL construit pour reproduire les poignées de main TLS et HTTP/2 de navigateurs."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-10-29
+    derniere_version: {nom: "v2.3.2", date: 2026-10-30}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 2854
+    langages: [Python, C]
+    paquet: {pypi: null, npm: null, autre: "binaires de release ; utilisé par curl_cffi"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "Issues ouvertes : construire les binaires arm64 nativement (#96) et revoir les tests avec CI aarch64/macOS (#284)."
+      source: https://github.com/lexiforest/curl-impersonate/issues/96
+    dependances: ["BoringSSL / curl patchés (compilation lourde)"]
+    documente:
+      - "Ajouts annoncés : ECH, ZSTD, courbes X25519Kyber768/MLKEM, options d'empreinte HTTP/2 Akamai."
+      - "Profils nommés pour plusieurs versions de Chrome, Firefox, Safari."
+    limites_connues:
+      - {texte: "Le profil chrome152 diffère de Chrome 155/156 (GREASE, ancres de confiance).", source: https://github.com/lexiforest/curl-impersonate/issues/363}
+      - {texte: "Empreinte TCP/IP et adaptation à l'OS non prises en charge (demande ouverte).", source: https://github.com/lexiforest/curl-impersonate/issues/268}
+    apparente_a: "Fork de lwthiker/curl-impersonate (dépôt d'origine non évalué)"
+
+  - id: impit
+    nom: impit
+    url: https://github.com/apify/impit
+    categories: [collecte-http, analyse-tls-http, anti-detection]
+    role: "Bibliothèque Rust d'imitation de navigateur (reqwest, rustls) avec liaisons Python et Node."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "js-0.14.8", date: 2026-10-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 630
+    langages: [Rust]
+    paquet: {pypi: impit, npm: impit, autre: "crate Rust ; npm 0.14.8, PyPI 0.15.1 au relevé"}
+    apple_silicon:
+      statut: documente
+      note: "Le dépôt référence un paquet impit-darwin-arm64 (mise à jour de dépendance #525) ; pas de phrase explicite dans le README."
+      source: https://github.com/apify/impit/pull/525
+    dependances: ["binaire natif par plate-forme (paquets optionnels npm)"]
+    documente:
+      - "HTTP/1.1, HTTP/2 et HTTP/3 ; empreintes de navigateurs sélectionnables (Firefox, Chrome)."
+      - "Proxys, délais, en-têtes personnalisables."
+    limites_connues:
+      - {texte: "Les profils chrome155/156 requièrent l'extension Trust Anchor IDs de Chrome.", source: https://github.com/apify/impit/issues/588}
+      - {texte: "Ordre des pseudo-en-têtes HTTP/2 piloté par une variable d'environnement globale au processus.", source: https://github.com/apify/impit/issues/472}
+    apparente_a: null
+
+  - id: primp
+    nom: primp
+    url: https://github.com/deedy5/primp
+    categories: [collecte-http, analyse-tls-http, anti-detection]
+    role: "Client HTTP Rust avec liaison Python imitant l'empreinte de navigateurs."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-09-13
+    derniere_version: {nom: "v2.0.1", date: 2026-09-12}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 623
+    langages: [Rust, Python]
+    paquet: {pypi: primp, npm: null, autre: "crate primp"}
+    apple_silicon:
+      statut: non_documente
+      note: "Le README cite macos seulement comme système imité (option impersonate_os), pas comme plate-forme d'exécution."
+      source: https://github.com/deedy5/primp
+    dependances: ["roues précompilées par plate-forme"]
+    documente:
+      - "Imitation de navigateurs et de systèmes (Android, iOS, Linux, macOS, Windows)."
+    limites_connues:
+      - {texte: "HTTP/3 non pris en charge (demande ouverte).", source: https://github.com/deedy5/primp/issues/131}
+      - {texte: "Erreur DNSTimeout après reconnexion Wi-Fi.", source: https://github.com/deedy5/primp/issues/162}
+    apparente_a: null
+
+  - id: wreq
+    nom: wreq
+    url: https://github.com/0x676e67/wreq
+    categories: [collecte-http, analyse-tls-http, anti-detection]
+    role: "Client HTTP Rust à TLS, JA3/JA4 et signature HTTP/2 configurables, qui imite les profils de navigateurs."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v0.16.3", date: 2026-10-30}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1092
+    langages: [Rust]
+    paquet: {pypi: null, npm: null, autre: "crate wreq (crates.io)"}
+    apple_silicon:
+      statut: documente
+      note: "README : un workflow GitHub Actions de compilation pour Linux, Windows et macOS ; architecture non précisée."
+      source: https://github.com/0x676e67/wreq
+    dependances: ["BoringSSL (compilation native)"]
+    documente:
+      - "Correspondance de protocole de haute fidélité : TLS, JA3/JA4 et signatures HTTP/2 personnalisables."
+    limites_connues:
+      - {texte: "L'émulation Chrome ne répond pas à Critical-CH, ce qui laisserait certains défis Cloudflare non résolus.", source: https://github.com/0x676e67/wreq/issues/1299}
+      - {texte: "Profils Chrome de wreq-util : poids HEADERS HTTP/2 de 220 au lieu de 256.", source: https://github.com/0x676e67/wreq/issues/1320}
+    apparente_a: "Anciennement rquest (renommé)"
+
+  - id: aiohttp
+    nom: aiohttp
+    url: https://github.com/aio-libs/aiohttp
+    categories: [collecte-http]
+    role: "Client et serveur HTTP asynchrone pour asyncio."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v3.14.5", date: 2026-10-11}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 16606
+    langages: [Python]
+    paquet: {pypi: aiohttp, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Pas de mention de plate-forme dans l'extrait lu du README."
+      source: null
+    dependances: ["extensions C optionnelles (roues précompilées)"]
+    documente:
+      - "Framework client/serveur HTTP et WebSocket pour asyncio."
+    limites_connues:
+      - {texte: "HTTP/2 et HTTP/3 non pris en charge (demande ouverte, très commentée).", source: https://github.com/aio-libs/aiohttp/issues/5999}
+    apparente_a: null
+
+  - id: requests
+    nom: Requests
+    url: https://github.com/psf/requests
+    categories: [collecte-http]
+    role: "Bibliothèque HTTP Python de référence, synchrone, HTTP/1.1."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "v2.34.2", date: 2026-05-14}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 54600
+    langages: [Python]
+    paquet: {pypi: requests, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Bibliothèque Python pure."
+      source: null
+    dependances: ["urllib3", "certifi", "charset_normalizer"]
+    documente:
+      - "Bibliothèque HTTP simple et élégante."
+    limites_connues:
+      - {texte: "Fuite mémoire signalée.", source: https://github.com/psf/requests/issues/4601}
+      - {texte: "Le fournisseur de niquests décrit Requests comme en gel de fonctionnalités (source tierce : niquests).", source: https://github.com/jawah/niquests}
+    apparente_a: null
+
+  # ---------------------------------------------------------------- crawling
+  - id: scrapy
+    nom: Scrapy
+    url: https://github.com/scrapy/scrapy
+    categories: [crawling, extraction]
+    role: "Framework Python de crawl et de scraping à haut niveau, asynchrone (Twisted)."
+    licence: BSD-3-Clause
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "2.19.0", date: 2026-09-10}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 65200
+    langages: [Python]
+    paquet: {pypi: scrapy, npm: null, autre: "conda-forge"}
+    apple_silicon:
+      statut: non_documente
+      note: "Pas de mention dans le README."
+      source: null
+    dependances: ["Twisted", "lxml", "parsel"]
+    documente:
+      - "Framework de crawl rapide avec pipelines, middlewares, politesse (robots.txt, auto-throttle)."
+    limites_connues:
+      - {texte: "Le projet reconnaît le besoin de réglages par défaut qui ne nuisent pas.", source: https://github.com/scrapy/scrapy/issues/6597}
+      - {texte: "CONCURRENT_REQUESTS_PER_DOMAIN = 0 fait bloquer le crawl.", source: https://github.com/scrapy/scrapy/issues/8449}
+    apparente_a: null
+
+  - id: crawl4ai
+    nom: Crawl4AI
+    url: https://github.com/unclecode/crawl4ai
+    categories: [crawling, extraction]
+    role: "Crawler et extracteur qui transforme des pages en Markdown propre pour agents et pipelines RAG."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v0.9.5", date: 2026-10-14}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 86846
+    langages: [Python]
+    paquet: {pypi: crawl4ai, npm: null, autre: "images Docker AMD64 et ARM64"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "README : images Docker AMD64 et ARM64. Issue ouverte de fuite mémoire sur /md via Docker sous macOS (#1256)."
+      source: https://github.com/unclecode/crawl4ai/issues/1256
+    dependances: ["Playwright / Chromium", "Docker (mode serveur)"]
+    documente:
+      - "Sortie Markdown prête pour LLM, mode serveur Docker, usage gratuit en auto-hébergement."
+    limites_connues:
+      - {texte: "Fuite mémoire sur des appels /md répétés via Docker sous macOS.", source: https://github.com/unclecode/crawl4ai/issues/1256}
+      - {texte: "Avec scroll_full_page, seuls les derniers éléments sont analysés.", source: https://github.com/unclecode/crawl4ai/issues/731}
+    apparente_a: null
+
+  - id: firecrawl
+    nom: Firecrawl
+    url: https://github.com/firecrawl/firecrawl
+    categories: [crawling, extraction]
+    role: "API de recherche, de scraping et d'interaction web pour agents IA, auto-hébergeable ou hébergée."
+    licence: AGPL-3.0
+    licence_note: "AGPL-3.0 : un service réseau qui l'embarque doit publier ses sources ; offre cloud commerciale distincte."
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v2.11.0", date: 2026-06-19}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 198296
+    langages: [TypeScript]
+    paquet: {pypi: firecrawl-py, npm: firecrawl, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Non vérifié lors du relevé."
+      source: null
+    dependances: ["Redis, services multiples en auto-hébergement (non détaillé ici)"]
+    documente:
+      - "API de contexte web pour agents : scrape, crawl, recherche, interaction."
+    limites_connues: []
+    apparente_a: null
+
+  # ---------------------------------------------------------------- fingerprinting
+  - id: fingerprintjs
+    nom: FingerprintJS
+    url: https://github.com/fingerprintjs/fingerprintjs
+    categories: [fingerprinting, protection-anti-bot]
+    role: "Bibliothèque JavaScript d'empreinte de navigateur qui calcule un identifiant de visiteur à partir de ses attributs."
+    licence: MIT
+    licence_note: "MIT à partir de la version 5.0.0 (docs/licensing.md du dépôt). Les versions antérieures relevaient d'une autre licence que ce relevé n'a pas relue : à vérifier avant d'épingler une version 4.x. L'offre Fingerprint Pro (API) est un produit commercial distinct."
+    derniere_activite: 2026-10-31
+    derniere_version: {nom: "v5.3.0", date: 2026-10-07}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 28681
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: "@fingerprintjs/fingerprintjs", autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Bibliothèque exécutée dans le navigateur."
+      source: null
+    dependances: []
+    documente:
+      - "Calcule un identifiant de visiteur par hachage d'attributs du navigateur."
+      - "Annonce que l'identifiant reste identique en navigation privée (démo du README)."
+    limites_connues:
+      - {texte: "L'empreinte du canvas varie selon le niveau de zoom sous Firefox.", source: https://github.com/fingerprintjs/fingerprintjs/issues/103}
+      - {texte: "Violation de CSP due aux gestionnaires d'événements inline.", source: https://github.com/fingerprintjs/fingerprintjs/issues/1172}
+    apparente_a: "Édité par la société FingerprintJS, Inc"
+
+  - id: botd
+    nom: BotD
+    url: https://github.com/fingerprintjs/BotD
+    categories: [fingerprinting, protection-anti-bot]
+    role: "Bibliothèque JavaScript côté navigateur qui détecte l'automatisation de base et les frameworks de bots."
+    licence: MIT
+    licence_note: "Version open source limitée ; la détection avancée relève du produit commercial Fingerprint Pro Bot Detection."
+    derniere_activite: 2026-11-01
+    derniere_version: {nom: "v2.0.0", date: 2025-11-04}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1494
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: "@fingerprintjs/botd", autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Bibliothèque exécutée dans le navigateur."
+      source: null
+    dependances: []
+    documente:
+      - "Détection de bots basiques dans les applications web, licence permissive."
+      - "Section 'Maintenance Status' : feuille de route de stabilité seule à court terme, corrections critiques traitées."
+    limites_connues:
+      - {texte: "Faux positif avec le lecteur PDF interne du navigateur.", source: https://github.com/fingerprintjs/BotD/issues/135}
+      - {texte: "Détection headless via effets de bord CDP signalée comme demande.", source: https://github.com/fingerprintjs/BotD/issues/208}
+    apparente_a: "Version open source de la détection de Fingerprint"
+
+  - id: creepjs
+    nom: CreepJS
+    url: https://github.com/abrahamjuliot/creepjs
+    categories: [fingerprinting, test-securite-navigateur]
+    role: "Outil d'audit d'empreinte de navigateur qui cherche les incohérences et les signes d'usurpation (lies)."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-06-11
+    derniere_version: null
+    archive: false
+    statut_maintenance: actif
+    etoiles: 2539
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: null, autre: "page statique sur GitHub Pages"}
+    apple_silicon:
+      statut: non_documente
+      note: "Outil exécuté dans le navigateur."
+      source: null
+    dependances: []
+    documente:
+      - "Le README met en garde : seul le déploiement GitHub Pages est officiel ; les autres domaines sont à considérer comme non sûrs."
+    limites_connues:
+      - {texte: "Windows 11 reconnu comme Windows 10.", source: https://github.com/abrahamjuliot/creepjs/issues/234}
+      - {texte: "Test des workers non pris en charge sur Safari 17.3.", source: https://github.com/abrahamjuliot/creepjs/issues/259}
+    apparente_a: null
+
+  - id: fingerprint-suite
+    nom: fingerprint-suite (Apify)
+    url: https://github.com/apify/fingerprint-suite
+    categories: [fingerprinting, anti-detection]
+    role: "Ensemble de paquets npm générant et injectant des empreintes et en-têtes de navigateur dans Playwright ou Puppeteer."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-10-27
+    derniere_version: {nom: "v2.1.89", date: 2026-10-14}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 2650
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: "fingerprint-generator, fingerprint-injector, header-generator", autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Paquets JavaScript purs ; aucune mention."
+      source: null
+    dependances: ["playwright ou puppeteer pour l'injection"]
+    documente:
+      - "header-generator, fingerprint-generator, fingerprint-injector : génération d'en-têtes réalistes et injection d'empreintes dans le navigateur."
+      - "Intégré à Crawlee."
+    limites_connues:
+      - {texte: "Un utilisateur rapporte que CreepJS détecte l'injection.", source: https://github.com/apify/fingerprint-suite/issues/64}
+      - {texte: "Canvas et WebGL non couverts (demande ouverte).", source: https://github.com/apify/fingerprint-suite/issues/36}
+    apparente_a: "Réimplémenté en Python par browserforge"
+
+  - id: browserforge
+    nom: BrowserForge
+    url: https://github.com/daijro/browserforge
+    categories: [fingerprinting, anti-detection]
+    role: "Générateur Python d'en-têtes et d'empreintes de navigateur suivant la fréquence des navigateurs réels."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-10-29
+    derniere_version: {nom: "v1.2.4", date: null}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1290
+    langages: [Python]
+    paquet: {pypi: browserforge, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Aucune mention de plate-forme."
+      source: null
+    dependances: ["réseau bayésien de données d'empreintes téléchargé au premier usage"]
+    documente:
+      - "Réimplémentation Python de fingerprint-suite d'Apify."
+      - "Génération de User-Agent et d'empreintes par OS et appareil."
+    limites_connues:
+      - {texte: "Écriture du fichier de données impossible sur un système en lecture seule (AWS Lambda).", source: https://github.com/daijro/browserforge/issues/26}
+      - {texte: "Demande d'empreintes persistantes via fichiers.", source: https://github.com/daijro/browserforge/issues/30}
+    apparente_a: "Réimplémentation de apify/fingerprint-suite ; même auteur que Camoufox"
+
+  # ---------------------------------------------------------------- analyse TLS / HTTP
+  - id: ja4
+    nom: JA4+ (FoxIO)
+    url: https://github.com/FoxIO-LLC/ja4
+    categories: [analyse-tls-http, protection-anti-bot]
+    role: "Suite de standards d'empreintes réseau (JA4 pour TLS client, plus JA4S, JA4H, JA4T...) avec implémentations Wireshark, Zeek, Rust, Python."
+    licence: "FoxIO-1.1 + BSD-3-Clause"
+    licence_note: "GitHub renvoie NOASSERTION. JA4 (TLS client) est en BSD-3-Clause (LICENSE-JA4). Les autres méthodes JA4+ (S, H, L, X, SSH, T, D...) sont sous FoxIO License 1.1 : usage interne et académique permis, monétisation interdite sans licence OEM, brevets en instance. Risque pour tout produit livré qui revend ces empreintes."
+    derniere_activite: 2026-10-06
+    derniere_version: {nom: "v1.0.1", date: 2026-08-31}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 2157
+    langages: [Rust, Python]
+    paquet: {pypi: null, npm: null, autre: "plug-ins Wireshark, Zeek (zkg), outils Rust et Python"}
+    apple_silicon:
+      statut: documente
+      note: "README : section d'installation macOS pour le plug-in Wireshark (ja4.so.macos) ; architecture non précisée."
+      source: https://github.com/FoxIO-LLC/ja4
+    dependances: ["Wireshark / tshark, Zeek selon l'usage"]
+    documente:
+      - "Empreintes lisibles par l'humain et la machine, avec tri des suites de chiffrement et des extensions."
+      - "JA4 présenté comme remplaçant utilisable de JA3 sans retard."
+    limites_connues:
+      - {texte: "Demande de clarification de la licence.", source: https://github.com/FoxIO-LLC/ja4/issues/311}
+      - {texte: "JA4T/JA4L vides pour les connexions tunnelisées.", source: https://github.com/FoxIO-LLC/ja4/issues/324}
+    apparente_a: "Successeur de JA3"
+
+  - id: trackme
+    nom: TrackMe
+    url: https://github.com/pagpeter/TrackMe
+    categories: [analyse-tls-http]
+    role: "Serveur HTTP/1 et HTTP/2 bas niveau en Go qui renvoie JA3, empreinte HTTP/2 Akamai, ordre des en-têtes et trames (service tls.peet.ws)."
+    licence: GPL-3.0
+    licence_note: "Copyleft fort ; usage en service de test interne sans redistribution."
+    derniere_activite: 2026-08-26
+    derniere_version: null
+    archive: false
+    statut_maintenance: actif
+    etoiles: 470
+    langages: [Go]
+    paquet: {pypi: null, npm: null, autre: "service public tls.peet.ws ; auto-hébergeable"}
+    apple_silicon:
+      statut: non_documente
+      note: "Programme Go ; aucune mention de plate-forme."
+      source: null
+    dependances: ["certificats à générer avec openssl"]
+    documente:
+      - "Retourne JA3, empreinte HTTP/2 Akamai, en-têtes avec ordre, trames h2."
+    limites_connues:
+      - {texte: "Fuite de goroutines dans parseHTTP2.", source: https://github.com/pagpeter/TrackMe/issues/15}
+    apparente_a: "Dépôt déménagé : l'ancien nom wwhtrbbtt/TrackMe redirige vers pagpeter/TrackMe"
+
+  - id: ja3
+    nom: JA3 (Salesforce)
+    url: https://github.com/salesforce/ja3
+    categories: [analyse-tls-http]
+    role: "Méthode d'empreinte de clients SSL/TLS avec scripts Zeek et Python."
+    licence: BSD-3-Clause
+    licence_note: null
+    derniere_activite: 2025-05-01
+    derniere_version: null
+    archive: true
+    statut_maintenance: abandonne
+    etoiles: 3097
+    langages: [Python]
+    paquet: {pypi: null, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Scripts Python et Zeek ; aucune mention."
+      source: null
+    dependances: []
+    documente:
+      - "Inventé chez Salesforce en 2017 ; le README indique que le projet n'y est plus maintenu activement."
+      - "Intégré à Zeek, Moloch, nginx (modules tiers), etc."
+    limites_connues:
+      - {texte: "Unicité de JA3 réduite avec la randomisation du ClientHello de Chrome.", source: https://github.com/salesforce/ja3/issues/88}
+      - {texte: "Le service ja3er.com est tombé.", source: https://github.com/salesforce/ja3/issues/79}
+    apparente_a: "Remplacé en pratique par JA4 (même auteur)"
+
+  # ---------------------------------------------------------------- protections anti-bot
+  - id: coraza
+    nom: OWASP Coraza
+    url: https://github.com/corazawaf/coraza
+    categories: [protection-anti-bot]
+    role: "Bibliothèque Go de pare-feu applicatif web (WAF) compatible avec ModSecurity et le jeu de règles CRS."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-10-31
+    derniere_version: {nom: "v3.8.1", date: 2026-10-02}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 3991
+    langages: [Go]
+    paquet: {pypi: null, npm: null, autre: "module Go github.com/corazawaf/coraza"}
+    apple_silicon:
+      statut: non_documente
+      note: "Bibliothèque Go."
+      source: null
+    dependances: []
+    documente:
+      - "WAF en Go compatible ModSecurity, intégrable comme bibliothèque."
+    limites_connues: []
+    apparente_a: "Compatible ModSecurity ; consomme OWASP CRS via coraza-coreruleset"
+
+  - id: coraza-coreruleset
+    nom: coraza-coreruleset
+    url: https://github.com/corazawaf/coraza-coreruleset
+    categories: [protection-anti-bot]
+    role: "Modules Go qui embarquent OWASP CRS, ses plug-ins officiels et la configuration recommandée pour Coraza."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-10-13
+    derniere_version: {nom: "v4.25.0", date: 2026-03-30}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 61
+    langages: [Go]
+    paquet: {pypi: null, npm: null, autre: "module Go"}
+    apple_silicon:
+      statut: non_documente
+      note: "Modules Go."
+      source: null
+    dependances: ["coraza"]
+    documente:
+      - "Modules distincts pour CRS, CRS LTS, plug-ins officiels et configuration Coraza."
+    limites_connues:
+      - {texte: "Mise à jour et publication des versions à automatiser.", source: https://github.com/corazawaf/coraza-coreruleset/issues/80}
+    apparente_a: "Emballage de coreruleset/coreruleset pour Coraza"
+
+  - id: owasp-crs
+    nom: OWASP CRS (Core Rule Set)
+    url: https://github.com/coreruleset/coreruleset
+    categories: [protection-anti-bot]
+    role: "Jeu de règles génériques de détection d'attaques pour WAF compatibles ModSecurity."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v4.30.0", date: 2026-10-02}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 3340
+    langages: [Python]
+    paquet: {pypi: null, npm: null, autre: "archives de release ; modules Go via coraza-coreruleset"}
+    apple_silicon:
+      statut: non_documente
+      note: "Fichiers de règles ; hors sujet d'architecture."
+      source: null
+    dependances: ["un moteur WAF (ModSecurity, Coraza)"]
+    documente:
+      - "Règles génériques de protection contre les attaques web courantes (OWASP Top 10) et ligne LTS."
+    limites_connues: []
+    apparente_a: "Anciennement sous SpiderLabs ; dépôt officiel actuel coreruleset/coreruleset"
+
+  - id: modsecurity
+    nom: ModSecurity (v3)
+    url: https://github.com/owasp-modsecurity/ModSecurity
+    categories: [protection-anti-bot]
+    role: "Moteur de pare-feu applicatif web multiplateforme pour Apache, nginx et IIS."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "v3.0.17", date: 2026-09-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 9852
+    langages: [C++]
+    paquet: {pypi: null, npm: null, autre: "libmodsecurity, connecteurs nginx/Apache"}
+    apple_silicon:
+      statut: documente
+      note: "README : section de compilation Unix (Linux, macOS, FreeBSD...) ; architecture non précisée."
+      source: https://github.com/owasp-modsecurity/ModSecurity
+    dependances: ["PCRE2", "libxml2", "YAJL (dépendance contestée, issue #3308)"]
+    documente:
+      - "Moteur WAF open source multiplateforme."
+    limites_connues:
+      - {texte: "SecRequestBodyAccess off fait sauter les règles de la phase 2.", source: https://github.com/owasp-modsecurity/ModSecurity/issues/2465}
+      - {texte: "Fuites mémoire lors des rechargements nginx sans redémarrage.", source: https://github.com/owasp-modsecurity/ModSecurity/issues/2848}
+    apparente_a: "Dépôt déplacé de SpiderLabs vers owasp-modsecurity ; branche par défaut v3/master"
+
+  - id: anubis
+    nom: Anubis
+    url: https://github.com/TecharoHQ/anubis
+    categories: [protection-anti-bot]
+    role: "Intergiciel HTTP qui impose des défis (preuve de travail) aux requêtes pour protéger un site contre les robots d'aspiration."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-11-02
+    derniere_version: {nom: "v1.28.2", date: 2026-10-23}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 23923
+    langages: [Go]
+    paquet: {pypi: null, npm: null, autre: "binaires et images de conteneur"}
+    apple_silicon:
+      statut: non_documente
+      note: "Programme Go ; aucune mention."
+      source: null
+    dependances: []
+    documente:
+      - "Pondère chaque connexion avec un ou plusieurs défis et protège l'amont des scrapers."
+      - "Le README précise que l'approche est radicale : elle peut bloquer de petits robots et de bons robots comme Internet Archive, et propose des politiques configurables."
+    limites_connues:
+      - {texte: "Utilisateurs légitimes bloqués ou navigateur Chrome incompatible.", source: https://github.com/TecharoHQ/anubis/issues/476}
+      - {texte: "Demande d'un meilleur mécanisme de preuve de travail.", source: https://github.com/TecharoHQ/anubis/issues/94}
+    apparente_a: null
+
+  - id: altcha
+    nom: ALTCHA
+    url: https://github.com/altcha-org/altcha
+    categories: [protection-anti-bot]
+    role: "Widget et protocole de défi par preuve de travail, présenté comme alternative auto-hébergée aux CAPTCHA."
+    licence: MIT
+    licence_note: "Widget MIT ; l'éditeur propose aussi des services commerciaux (non évalués ici)."
+    derniere_activite: 2026-10-22
+    derniere_version: {nom: "v3.5.0", date: 2026-10-22}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 2875
+    langages: [TypeScript]
+    paquet: {pypi: null, npm: altcha, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Composant navigateur ; le README cite Safari 11+ (macOS, iOS) comme navigateur client, pas comme hôte."
+      source: https://github.com/altcha-org/altcha
+    dependances: ["bibliothèques serveur par langage pour vérifier les défis"]
+    documente:
+      - "Conformité annoncée RGPD, WCAG 2.2 AA et EAA ; mécanisme de preuve de travail sans suivi."
+    limites_connues: []
+    apparente_a: null
+
+  - id: cap
+    nom: Cap
+    url: https://github.com/tiagozip/cap
+    categories: [protection-anti-bot]
+    role: "CAPTCHA auto-hébergé fondé sur preuve de travail et instrumentation, sans puzzle visuel."
+    licence: Apache-2.0
+    licence_note: "GitHub renvoie NOASSERTION ; le README et le fichier LICENSE indiquent Apache 2.0."
+    derniere_activite: 2026-10-29
+    derniere_version: {nom: "standalone@3.1.13", date: 2026-09-23}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 8246
+    langages: [JavaScript]
+    paquet: {pypi: null, npm: "@cap.js/server", autre: "@cap.js/wasm, widget, image Docker"}
+    apple_silicon:
+      statut: non_documente
+      note: "Aucune mention dans les extraits lus."
+      source: null
+    dependances: ["Redis optionnel", "Docker, Workers ou Railway pour le mode autonome"]
+    documente:
+      - "Preuve de travail résistante au GPU et instrumentation, sans suivi ni tiers."
+      - "Annonce 200 fois plus léger que hCaptcha (chiffre du projet)."
+    limites_connues:
+      - {texte: "Un agent de pilotage d'ordinateur passe la case du démarrage rapide en un clic de pointeur (issue du projet).", source: https://github.com/tiagozip/cap/issues/348}
+      - {texte: "La CSP doit autoriser 'unsafe-eval' dans script-src.", source: https://github.com/tiagozip/cap/issues/268}
+    apparente_a: null
+
+  - id: nginx
+    nom: nginx
+    url: https://github.com/nginx/nginx
+    categories: [protection-anti-bot]
+    role: "Serveur web, proxy inverse et répartiteur de charge ; sert de point d'appui pour limiter le débit et brancher un WAF."
+    licence: BSD-2-Clause
+    licence_note: null
+    derniere_activite: 2026-10-29
+    derniere_version: {nom: "release-1.31.8", date: 2026-10-21}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 32043
+    langages: [C]
+    paquet: {pypi: null, npm: null, autre: "paquets de distribution, images officielles"}
+    apple_silicon:
+      statut: non_documente
+      note: "Non vérifié dans le README ; disponible via les gestionnaires de paquets usuels (non relevé ici)."
+      source: null
+    dependances: []
+    documente:
+      - "Serveur web, proxy inverse, répartiteur de charge, passerelle d'API et cache."
+    limites_connues:
+      - {texte: "Débit HTTP/3 de fichiers statiques très inférieur à HTTP/2 sur nginx 1.31.2.", source: https://github.com/nginx/nginx/issues/1498}
+      - {texte: "Plantages (segfault) signalés sur Debian 12 avec la 1.31.0.", source: https://github.com/nginx/nginx/issues/1371}
+    apparente_a: "Édité par F5 pour la version commerciale"
+
+  # ---------------------------------------------------------------- sessions et reprise
+  - id: tenacity
+    nom: Tenacity
+    url: https://github.com/jd/tenacity
+    categories: [sessions-reprise]
+    role: "Bibliothèque Python de nouvelles tentatives avec attente, arrêt et conditions configurables."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-01
+    derniere_version: {nom: "9.2.1", date: 2026-10-07}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 8818
+    langages: [Python]
+    paquet: {pypi: tenacity, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Python pur."
+      source: null
+    dependances: []
+    documente:
+      - "Décorateur de nouvelles tentatives avec stratégies d'attente et d'arrêt, synchrone et asynchrone."
+    limites_connues:
+      - {texte: "Statistiques vides dans un cas signalé.", source: https://github.com/jd/tenacity/issues/517}
+    apparente_a: null
+
+  # ---------------------------------------------------------------- extraction
+  - id: parsel
+    nom: Parsel
+    url: https://github.com/scrapy/parsel
+    categories: [extraction]
+    role: "Extraction de données HTML/XML par sélecteurs XPath et CSS (utilisé par Scrapy)."
+    licence: BSD-3-Clause
+    licence_note: null
+    derniere_activite: 2026-11-01
+    derniere_version: {nom: "v1.11.0", date: 2026-01-29}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1367
+    langages: [Python]
+    paquet: {pypi: parsel, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Python pur au-dessus de lxml."
+      source: null
+    dependances: ["lxml", "cssselect"]
+    documente:
+      - "Sélecteurs XPath et CSS sur HTML et XML."
+    limites_connues:
+      - {texte: "Pas d'analyseur html5lib (demande ouverte, très commentée).", source: https://github.com/scrapy/parsel/issues/83}
+      - {texte: "SelectorList.drop() ne retire pas les éléments comme attendu.", source: https://github.com/scrapy/parsel/issues/297}
+    apparente_a: null
+
+  - id: selectolax
+    nom: selectolax
+    url: https://github.com/rushter/selectolax
+    categories: [extraction]
+    role: "Analyseur HTML5 rapide avec sélecteurs CSS, écrit en Cython sur le moteur Lexbor."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2026-11-01
+    derniere_version: {nom: "v1.0.2", date: 2026-10-22}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 1705
+    langages: [Python, Cython]
+    paquet: {pypi: selectolax, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Extension compilée ; disponibilité des roues macOS arm64 non vérifiée."
+      source: null
+    dependances: ["moteur Lexbor embarqué"]
+    documente:
+      - "Analyseur HTML5 rapide basé sur Lexbor, avec sélecteurs CSS."
+    limites_connues:
+      - {texte: "Les expressions régulières ne sont pas acceptées dans text_contains (demande ouverte).", source: https://github.com/rushter/selectolax/issues/92}
+    apparente_a: null
+
+  - id: trafilatura
+    nom: Trafilatura
+    url: https://github.com/adbar/trafilatura
+    categories: [extraction, crawling]
+    role: "Outil Python et CLI de collecte de texte et de métadonnées sur le web : exploration, extraction, conversion."
+    licence: Apache-2.0
+    licence_note: "Les versions antérieures à 1.8.0 étaient en GPL-3.0 (information issue du dépôt amont, non revérifiée ici) ; la version actuelle est Apache-2.0 selon GitHub."
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v2.3.1", date: 2026-10-06}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 7067
+    langages: [Python]
+    paquet: {pypi: trafilatura, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Non documenté dans l'extrait lu."
+      source: null
+    dependances: ["lxml", "courlan", "htmldate", "justext"]
+    documente:
+      - "Extraction du texte principal et des métadonnées, exploration de sitemaps et de flux."
+    limites_connues:
+      - {texte: "SIGSEGV pendant des appels extract() concurrents (version 2.2.0).", source: https://github.com/adbar/trafilatura/issues/925}
+    apparente_a: null
+
+  # ---------------------------------------------------------------- tests de sécurité navigateur
+  - id: zaproxy
+    nom: OWASP ZAP
+    url: https://github.com/zaproxy/zaproxy
+    categories: [test-securite-navigateur]
+    role: "Proxy d'interception et scanner de sécurité d'applications web, avec API et mode automatisé."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2026-11-03
+    derniere_version: {nom: "v2.17.0", date: 2025-12-15}
+    archive: false
+    statut_maintenance: actif
+    etoiles: 16099
+    langages: [Java]
+    paquet: {pypi: null, npm: null, autre: "installateurs, images Docker, paquets par distribution"}
+    apple_silicon:
+      statut: issues_signalees
+      note: "Issue ouverte : la distribution macOS ne vient pas d'un développeur vérifié (#6162)."
+      source: https://github.com/zaproxy/zaproxy/issues/6162
+    dependances: ["Java (JRE)"]
+    documente:
+      - "Proxy, scan actif et passif, API, mode automatisation."
+    limites_connues:
+      - {texte: "Distribution macOS non signée par un développeur vérifié.", source: https://github.com/zaproxy/zaproxy/issues/6162}
+      - {texte: "Latence importante au chargement d'un fichier de session.", source: https://github.com/zaproxy/zaproxy/issues/1364}
+    apparente_a: null
+
+  - id: headless-cat-n-mouse
+    nom: headless-cat-n-mouse
+    url: https://github.com/paulirish/headless-cat-n-mouse
+    categories: [test-securite-navigateur, anti-detection]
+    role: "Dépôt historique qui opposait des détections de Chrome headless à des techniques de contournement."
+    licence: Apache-2.0
+    licence_note: null
+    derniere_activite: 2021-06-05
+    derniere_version: {nom: "v1.3.0", date: null}
+    archive: false
+    statut_maintenance: abandonne
+    etoiles: 657
+    langages: [JavaScript]
+    paquet: {pypi: null, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Dépôt de scripts, sans mention."
+      source: null
+    dependances: ["puppeteer"]
+    documente:
+      - "Mise à jour 2021 : le dépôt s'est calmé ; le jeu continue ailleurs mais peu de motivation à publier de part et d'autre."
+      - "Statut annoncé : la détection du mode headless a réussi ; les détecteurs gagnent (en 2021)."
+    limites_connues:
+      - {texte: "Un site marchand détecte Chrome headless 7 fois sur 10.", source: https://github.com/paulirish/headless-cat-n-mouse/issues/13}
+    apparente_a: "Enseignement : dépôt de référence abandonné depuis 2021 ; ne reflète pas les navigateurs actuels"
+
+  - id: brotector
+    nom: Brotector
+    url: https://github.com/ttlns/brotector
+    categories: [test-securite-navigateur, protection-anti-bot]
+    role: "Détecteur anti-bot JavaScript qui repère, voire fait planter, des pilotes comme Selenium, undetected-chromedriver et SeleniumBase."
+    licence: MIT
+    licence_note: null
+    derniere_activite: 2024-12-03
+    derniere_version: null
+    archive: true
+    statut_maintenance: abandonne
+    etoiles: 284
+    langages: [JavaScript]
+    paquet: {pypi: null, npm: null, autre: null}
+    apple_silicon:
+      statut: non_documente
+      note: "Script navigateur."
+      source: null
+    dependances: []
+    documente:
+      - "Liste de pilotes détectés : Selenium-Driverless, Selenium, undetected-chromedriver, SeleniumBase."
+    limites_connues:
+      - {texte: "Cromite sur Android détecté à tort comme bot (taille de fenêtre).", source: https://github.com/ttlns/brotector/issues/14}
+    apparente_a: "Dépôt déménagé : l'ancien nom kaliiiiiiiiii/brotector redirige vers ttlns/brotector ; archivé"

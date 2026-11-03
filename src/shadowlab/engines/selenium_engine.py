@@ -20,9 +20,10 @@ class DriverSelenium(Driver):
     name = "selenium"
     runtime = "navigateur"
     executes_javascript = True
+    options_permises = {"headless": bool}
 
     def configuration(self) -> dict[str, Any]:
-        return {"browser": "chrome", "headless": True, **self.options}
+        return {"browser": "chrome", "headless": True, "tls_non_verifie": True, **self.options}
 
     def versions(self) -> dict[str, str]:
         versions = {"selenium": importlib.metadata.version("selenium")}
@@ -41,6 +42,7 @@ class DriverSelenium(Driver):
         contournement = ";".join(liste_directe(self.hotes_autorises))
         options.add_argument(f"--proxy-server={MANDATAIRE_BLOQUANT}")
         options.add_argument(f"--proxy-bypass-list={contournement}")
+        options.add_argument("--ignore-certificate-errors")  # certificat local de l'Arena
         self._pilote = webdriver.Chrome(options=options)
         self._pilote.set_page_load_timeout(30)
 
@@ -130,6 +132,26 @@ class DriverSelenium(Driver):
         if self._pilote.execute_script("return document.contentType") == "application/json":
             return self._pilote.execute_script("return document.body.innerText")
         return self._pilote.page_source
+
+    def dom(self) -> str:
+        return self._pilote.page_source
+
+    def attendre_chargement(self) -> None:
+        from selenium.webdriver.support.ui import WebDriverWait
+
+        WebDriverWait(self._pilote, 30, poll_frequency=0.05).until(
+            lambda p: p.execute_script("return document.readyState") == "complete"
+        )
+
+    def deplacer_souris(self, x: int, y: int) -> None:
+        from selenium.webdriver import ActionChains
+
+        ActionChains(self._pilote).move_to_location(x, y).perform()
+
+    def defiler(self, hauteur: int) -> None:
+        from selenium.webdriver import ActionChains
+
+        ActionChains(self._pilote).scroll_by_amount(0, hauteur).perform()
 
     def capture_screenshot(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,20 @@
+# Profils de protection de l'Anti-Bot Arena. `shadowlab arena appliquer` régénère Nginx et Coraza à partir de ce fichier.
+# limitation : requêtes de pages par seconde et par session, et rafale tolérée (Nginx, les fichiers statiques sont exclus)
+# waf        : Coraza + OWASP CRS. `detection` journalise sans bloquer ; `blocage` bloque au-delà du seuil d'anomalie
+# defi_js    : preuve de travail SHA-256 (difficulté en bits). `lier_tls` lie son cookie à l'empreinte JA4 du client
+# captcha    : CAPTCHA de démonstration, servi quand une règle en direct classe la session comme automatisée
+faible:
+  limitation: {debit: 20, rafale: 40}
+  waf: {mode: detection, paranoia: 1, seuil: 5}
+  defi_js: {actif: false, difficulte: 0, lier_tls: false}
+  captcha: {actif: false}
+moyen:
+  limitation: {debit: 5, rafale: 15}
+  waf: {mode: blocage, paranoia: 1, seuil: 5}
+  defi_js: {actif: true, difficulte: 12, lier_tls: false}
+  captcha: {actif: false}
+eleve:
+  limitation: {debit: 2, rafale: 6}
+  waf: {mode: blocage, paranoia: 2, seuil: 5}
+  defi_js: {actif: true, difficulte: 15, lier_tls: true}
+  captcha: {actif: true}

@@ -7,8 +7,6 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from urllib.parse import urlencode, urljoin
 
-from lxml import html as lhtml
-
 from .base import Driver, FonctionIndisponible, ResultatNavigation
 
 REDIRECTIONS_MAX = 5
@@ -40,6 +38,8 @@ class DriverHttp(Driver):
 
     def _demander(self, methode: str, url: str, donnees: dict[str, str] | None = None) -> ResultatNavigation:
         """Envoie la requête et suit les redirections à la main, chacune contrôlée par le périmètre."""
+        from lxml import html as lhtml
+
         debut = time.perf_counter()
         for _ in range(REDIRECTIONS_MAX + 1):
             self.verifier(url)

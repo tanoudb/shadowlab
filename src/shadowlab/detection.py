@@ -11,11 +11,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol
 
 SEUIL_AUTOMATISE = 1.0
+SEUIL_RYTHME_PAR_S = 4.0
+SEUIL_DUREE_PAGE_MS = 500
 
+CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
 MARQUEURS_UA_OUTILS = re.compile(r"python|curl|httpx|requests|aiohttp|wget|go-http|java/|okhttp", re.I)
 
 
@@ -45,6 +49,8 @@ class Observations:
     http: list[dict[str, Any]]
     js: list[dict[str, Any]]
     attend_js: bool = True  # faux pour un scénario sans page HTML (API JSON)
+    tls: dict[str, Any] | None = None  # empreinte relevée par le frontal de l'Arena ; absente hors Arena
+    page_remplacee: bool = False  # une protection a servi sa page à la place du contenu : pas d'observateur
 
     @property
     def empreinte_js(self) -> dict[str, Any] | None:
@@ -55,8 +61,13 @@ class Observations:
 
     @property
     def documents(self) -> list[dict[str, Any]]:
-        """Requêtes de pages (hors balises de collecte)."""
-        return [o for o in self.http if not o["path"].startswith("/lab/collecte")]
+        """Requêtes de pages (hors échanges techniques et fichiers statiques)."""
+        return [o for o in self.http if not o["path"].startswith(CHEMINS_TECHNIQUES)]
+
+    @property
+    def ressources(self) -> list[dict[str, Any]]:
+        """Fichiers statiques réclamés : un navigateur les charge, un client HTTP non."""
+        return [o for o in self.http if o["path"].startswith("/lab/static")]
 
 
 class Detecteur(Protocol):
@@ -157,6 +168,8 @@ class DetecteurReglesJs:
         if not obs.attend_js:
             return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
         p = obs.empreinte_js
+        if p is None and obs.page_remplacee:
+            return _indetermine(self.name, self.version, "page_remplacee", "observateur non servi : page de protection")
         if p is None:
             # Un visiteur réel sans JavaScript existe : c'est une limite connue de cette règle.
             signal = Signal("sans_javascript", "aucune observation JavaScript reçue", 1.0)
@@ -215,8 +228,92 @@ class DetecteurCoherence:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurTls:
+    """Cohérence entre le ClientHello TLS et le navigateur annoncé (règles de structure, sans liste d'empreintes)."""
+
+    name = "tls"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        t = obs.tls
+        if t is None:
+            return _indetermine(self.name, self.version, "sans_tls", "session hors Arena : TLS non observé")
+        documents = obs.documents
+        ua = _entetes(documents[0]).get("user-agent", "").lower() if documents else ""
+        details = t
+        grease = details.get("grease")
+        alpn = details.get("alpn") or []
+        chrome = "chrome/" in ua
+        firefox = "firefox/" in ua
+        signaux: list[Signal] = []
+        if chrome and not grease:
+            signaux.append(
+                Signal("chrome_sans_grease", "Chrome annoncé, mais aucune valeur GREASE dans le ClientHello", 1.0)
+            )
+        if firefox and grease:
+            signaux.append(
+                Signal("firefox_avec_grease", "Firefox annoncé, mais des valeurs GREASE que Firefox n'envoie pas", 1.0)
+            )
+        if (chrome or firefox) and "h2" not in alpn:
+            signaux.append(Signal("navigateur_sans_h2", f"navigateur annoncé sans HTTP/2 dans l'ALPN : {alpn}", 1.0))
+        if not grease and "h2" not in alpn and not (chrome or firefox):
+            signaux.append(Signal("pile_non_navigateur", "ni GREASE ni HTTP/2 proposé : pile TLS de bibliothèque", 1.0))
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurComportement:
+    """Règles expérimentales sur le déroulement de la session. Encore jamais calibrées sur des sessions humaines."""
+
+    name = "comportement"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        documents = obs.documents
+        if not documents:
+            return _indetermine(self.name, self.version, "aucune_requete", "aucune requête reçue")
+        signaux: list[Signal] = []
+        if not obs.ressources:
+            signaux.append(Signal("sans_ressources", "aucun fichier CSS ou JavaScript réclamé", 0.5))
+        rythme = _requetes_par_seconde(documents)
+        if rythme is not None and rythme > SEUIL_RYTHME_PAR_S:
+            signaux.append(Signal("rythme_soutenu", f"{rythme:.1f} pages par seconde", 0.5))
+        releves = [o["payload"] for o in obs.js if o["kind"] == "comportement"]
+        if releves:
+            evenements = [r.get("evenements", {}) for r in releves]
+            interactions = sum(sum(e.values()) for e in evenements)
+            duree = sum(r.get("duree_page_ms") or 0 for r in releves)
+            if interactions == 0:
+                signaux.append(Signal("aucune_interaction", "aucun mouvement, clic, touche ni défilement", 0.5))
+            elif sum(e.get("mousemove", 0) for e in evenements) == 0 and sum(e.get("click", 0) for e in evenements) > 0:
+                signaux.append(Signal("clic_sans_souris", "des clics sans aucun mouvement de souris", 0.5))
+            if duree and duree < SEUIL_DUREE_PAGE_MS * len(releves):
+                signaux.append(Signal("pages_eclair", f"moins de {SEUIL_DUREE_PAGE_MS} ms par page en moyenne", 0.5))
+        elif obs.empreinte_js is None:
+            return _indetermine(self.name, self.version, "sans_releve", "aucun relevé de comportement reçu")
+        return _verdict(self.name, self.version, signaux)
+
+
+def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
+    if len(documents) < 3:
+        return None
+    debut = datetime.fromisoformat(documents[0]["received_at"])
+    fin = datetime.fromisoformat(documents[-1]["received_at"])
+    duree = (fin - debut).total_seconds()
+    return (len(documents) - 1) / duree if duree > 0 else None
+
+
 DETECTEURS: dict[str, Detecteur] = {
-    d.name: d for d in (DetecteurBotD(), DetecteurReglesHttp(), DetecteurReglesJs(), DetecteurCoherence())
+    d.name: d
+    for d in (
+        DetecteurBotD(),
+        DetecteurReglesHttp(),
+        DetecteurReglesJs(),
+        DetecteurCoherence(),
+        DetecteurTls(),
+        DetecteurComportement(),
+    )
 }
 
 
@@ -246,10 +343,8 @@ def proprietes(obs: Observations) -> dict[str, Any]:
             "entetes": premier["headers"] if premier else [],  # paires, dans l'ordre reçu
             "requetes": len(obs.http),
         },
-        "tls_properties": {
-            "statut": "not_collected",
-            "raison": "site de test servi en HTTP local ; uvicorn n'expose pas le ClientHello TLS",
-        },
+        "tls_properties": obs.tls
+        or {"statut": "not_collected", "raison": "session hors Arena : le site direct est servi en HTTP local"},
         "session_properties": {
             "pages": [o["path"] for o in documents],
             "cookies_renvoyes": sorted({c for o in documents for c in o["cookies"]}),

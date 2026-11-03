@@ -17,6 +17,13 @@ dependencies = [
     "httpx>=0.28",
     "lxml>=6.1",
     "cssselect>=1.5",
+    "cryptography>=46",
+    "pillow>=11",
+    "h11>=0.16",
+    "tenacity>=9",
+    "parsel>=1.12",
+    "selectolax>=1",
+    "scipy>=1.14",
 ]
 
 [project.scripts]

@@ -1,0 +1,13 @@
+# Environnement propre au moteur crawlee : il impose ses versions sans contraindre le reste du laboratoire.
+[project]
+name = "shadowlab-moteur-crawlee"
+version = "0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "crawlee[parsel]>=1.11",
+    "lxml>=6",
+    "cssselect>=1.5",
+]
+
+[tool.uv]
+package = false

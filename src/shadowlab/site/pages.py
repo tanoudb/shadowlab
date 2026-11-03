@@ -38,7 +38,7 @@ def gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = ()) -
 </head>
 <body>
 <header><strong>ShadowLab · site de test</strong><nav>{liens}</nav></header>
-<main>
+<main data-page="{escape(titre)}">
 <h1>{escape(titre)}</h1>
 {corps}
 </main>
@@ -137,12 +137,67 @@ def detection(jeton: str) -> str:
 
 def manuel() -> str:
     corps = """<p>Une session manuelle sert de <strong>référence humaine</strong> : elle permet de mesurer
-les faux positifs des détecteurs. Elle est enregistrée comme « humain » dans l'expérience
-« sessions-manuelles ».</p>
+les faux positifs des détecteurs et ce que les protections coûtent à une vraie personne. Elle est enregistrée comme
+« humain » dans l'expérience « sessions-manuelles ».</p>
 <p>Ouvrez cette page dans votre navigateur habituel, puis parcourez librement le site pendant une minute
 (cliquez, faites défiler, remplissez le formulaire) et revenez terminer la session.</p>
-<form method="post" action="/manuel/commencer"><button type="submit">Commencer une session manuelle</button></form>"""
+<form method="post" action="/manuel/commencer">
+<label>Protection <select id="choix-protection" name="protection">
+<option value="aucune">Aucune (site en direct)</option>
+<option value="faible">Faible</option>
+<option value="moyen">Moyenne</option>
+<option value="eleve">Élevée</option>
+</select></label>
+<button type="submit">Commencer une session manuelle</button></form>"""
     return gabarit("Session manuelle", corps, "")
+
+
+def manuel_pret(lien: str) -> str:
+    corps = f"""<p>Session prête. Elle passe par l'Arena : votre navigateur signalera un certificat local auto-signé,
+à accepter pour continuer.</p>
+<p><a id="entrer-arena" href="{escape(lien)}">Entrer dans l'Arena</a></p>"""
+    return gabarit("Session manuelle", corps, "")
+
+
+def _page_arena(type_page: str, titre: str, corps: str, scripts: str = "") -> str:
+    """Page servie par une protection à la place du contenu demandé. Elle ne porte pas l'observateur."""
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(titre)} — ShadowLab</title>
+<link rel="stylesheet" href="/lab/static/lab.css">
+</head>
+<body data-arena="{type_page}">
+<main class="arena">
+<h1>{escape(titre)}</h1>
+{corps}
+</main>
+{scripts}
+</body>
+</html>"""
+
+
+def page_defi(defi: str, difficulte: int, retour: str) -> str:
+    corps = f"""<p id="etat-defi">Vérification du navigateur en cours…</p>
+<noscript><p>Cette vérification demande JavaScript.</p></noscript>
+<div id="defi" hidden data-defi="{escape(defi)}" data-difficulte="{difficulte}" data-retour="{escape(retour)}"></div>"""
+    return _page_arena("defi", "Vérification", corps, '<script type="module" src="/lab/static/defi.js"></script>')
+
+
+def page_captcha(captcha: str, retour: str, erreur: bool = False) -> str:
+    message = '<p id="captcha-erreur" role="alert">Code incorrect, réessayez.</p>' if erreur else ""
+    corps = f"""<p>Cette session demande une vérification humaine (CAPTCHA de démonstration du laboratoire).</p>
+{message}
+<img id="captcha-image" src="/lab/captcha/image?c={escape(captcha)}" alt="Code à recopier" width="220" height="80">
+<form id="captcha-formulaire" method="post" action="/lab/captcha/verifier">
+<input type="hidden" name="c" value="{escape(captcha)}">
+<input type="hidden" name="retour" value="{escape(retour)}">
+<label>Code <input id="captcha-code" name="code" required maxlength="8" autocomplete="off"></label>
+<button id="captcha-envoyer" type="submit">Valider</button>
+</form>"""
+    return _page_arena("captcha", "Vérification humaine", corps)
 
 
 def fin_manuelle(classements: list[dict]) -> str:

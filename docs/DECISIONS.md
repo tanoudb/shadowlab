@@ -12,9 +12,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-04 — 03/11/2026 — Moteurs dans leur configuration standard, seuls deux réglages imposés** : pas de
   redirection suivie par la bibliothèque (le périmètre contrôle chaque étape) et une seule tentative pour
   Scrapling (les erreurs sont comptées, pas masquées).
-- **D-05 — 03/11/2026 — `StealthyFetcher` de Scrapling non intégré.** C'est un navigateur modifié pour échapper
+- ~~**D-05 — 03/11/2026 — `StealthyFetcher` de Scrapling non intégré.** C'est un navigateur modifié pour échapper
   aux détecteurs ; le cahier des charges exclut les modifications d'empreinte. Seul le client HTTP
-  `FetcherSession` est intégré.
+  `FetcherSession` est intégré.~~ Remplacée par D-15.
 - **D-06 — 03/11/2026 — `httpx` ajouté comme témoin brut** (aucun réglage d'en-têtes) : il donne le point
   bas de comparaison pour les clients HTTP.
 - **D-07 — 03/11/2026 — Verrou réseau pour les deux navigateurs** (mandataire bloquant `127.0.0.1:9`, exceptions
@@ -34,3 +34,26 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   « humain » ; ce sont des incohérences qu'aucun navigateur ne produit.
 - **D-13 — 03/11/2026 — Docker Compose reporté.** OrbStack n'était pas lancé et rien ne l'exige pour tourner en
   local ; une image non vérifiée serait pire que pas d'image. À faire avec le déploiement sur Linux.
+- **D-14 — 03/11/2026 — Suites de la revue de sécurité du premier commit.** Options de moteur sur liste blanche
+  typée (`Driver.options_permises`) : les options de Scrapling allaient telles quelles à `FetcherSession`, qui
+  accepte mandataire, rotation de mandataires et redirections. En écoute locale, l'en-tête `Host` doit être un nom
+  local ou autorisé (contre le « DNS rebinding »). Alias YAML refusés (expansion d'un petit fichier). Verrou de
+  campagne libéré si la création échoue. Non corrigé, documenté : le DNS résolu au contrôle n'est pas épinglé
+  pour la connexion (voir `docs/architecture.md`, Limites).
+- **D-15 — 03/11/2026 — Outils anti-détection et modification d'empreinte autorisés contre nos propres protections**
+  (décision d'Ethan, remplace D-05). Sans adversaire réel, un taux de détection de 100 % ne prouve rien : il ne
+  mesure que des outils naïfs. Restent exclus : toute destination non autorisée, tout solveur de CAPTCHA, tout
+  contournement écrit sur mesure contre un détecteur commercial ou un service tiers.
+- **D-16 — 03/11/2026 — Le projet est une plateforme de R&D à long terme, pas un benchmark ponctuel** (décision
+  d'Ethan). Trois axes : Arena (défenses configurables à difficulté progressive), catalogue + moteur expérimental
+  propre (combinaison modulaire des meilleures techniques open source), mesure scientifique. À terme, couche IA
+  pour planifier les campagnes et recommander des optimisations. Les résultats de CAPTCHA providers en test keys
+  sont étiquetés `captcha_test` et ne sont jamais confondus avec un vrai contournement.
+- **D-17 — 03/11/2026 — Environnements isolés par pont JSON-over-stdio** pour les moteurs aux dépendances
+  incompatibles (camoufox → playwright<1.63, seleniumbase → pytest==9.1.1). Chaque moteur a son `pyproject.toml`
+  dans `moteurs_isoles/`, son propre venv `uv`, et communique avec le processus principal via `engines/pont.py`.
+- **D-18 — 03/11/2026 — Arena à 6 niveaux de difficulté progressifs** (01 Baseline → 06 Défense multicouche).
+  Remplace les 3 profils faible/moyen/élevé qui deviennent des sous-ensembles des niveaux. Chaque niveau ajoute
+  des couches de protection ; un moteur qui passe le niveau N a franchi toutes les défenses des niveaux inférieurs.
+- ~~**D-13 — 03/11/2026 — Docker Compose reporté.**~~ Annulée : Docker Compose opérationnel (Coraza + Nginx)
+  pour l'Arena.

@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from shadowlab import database as db
 from shadowlab.site import pages
 
@@ -75,6 +77,26 @@ def test_session_manuelle_de_bout_en_bout(client, reglages):
 def test_api_ecriture_exige_l_entete_anti_csrf(client):
     assert client.post("/api/arret").status_code == 403
     assert client.get("/api/sante").json() == {"statut": "ok"}
+
+
+def test_hote_inconnu_refuse_en_local(client, reglages):
+    """DNS rebinding : une page tierce qui pointerait vers 127.0.0.1 envoie son propre nom dans Host."""
+    for chemin in ("/api/sante", "/lab/", "/tableau"):
+        assert client.get(chemin, headers={"host": "attaquant.example"}).status_code == 400
+    assert client.get("/api/sante", headers={"host": f"localhost:{reglages.port}"}).status_code == 200
+
+
+def test_verrou_libere_si_la_creation_echoue(client, monkeypatch):
+    from shadowlab import api, campaigns
+
+    def echec(*_):
+        raise RuntimeError("base indisponible")
+
+    monkeypatch.setattr(campaigns, "creer", echec)
+    yaml_valide = "experiment: {name: essai, engines: [httpx], scenarios: [static_html], repetitions: 1}"
+    with pytest.raises(RuntimeError):
+        client.post("/api/experiences", content=yaml_valide, headers={"X-ShadowLab": "1"})
+    assert not api._verrou_campagne.locked()
 
 
 def test_interface_exposee_exige_un_jeton(reglages, monkeypatch):

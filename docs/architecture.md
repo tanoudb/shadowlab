@@ -92,4 +92,7 @@ Il a été ajouté après qu'un test a montré que le filtre `route` de Playwrig
   brut de réponse (texte affiché pour un JSON).
 - **Scrapling 0.5** : seul le client HTTP est intégré. `StealthyFetcher` (navigateur modifié pour échapper aux
   détecteurs) est hors périmètre ; Scrapling 0.5 n'expose plus de navigateur « dynamique » standard.
+- **Contrôle DNS avant la requête, pas à la connexion** : le périmètre résout le nom puis la bibliothèque le
+  résout à nouveau. Un nom autorisé dont le DNS changerait entre les deux (« DNS rebinding ») passerait. La liste
+  par défaut (`127.0.0.1`, `localhost`) n'est pas concernée ; n'ajouter que des noms dont on maîtrise le DNS.
 - **Pas encore de Docker Compose** ni d'image : le projet tourne avec `uv` (voir `docs/DECISIONS.md`).

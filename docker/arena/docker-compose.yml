@@ -1,0 +1,25 @@
+# Pile de l'Anti-Bot Arena. Se pilote par `shadowlab arena demarrer | appliquer | arreter`, qui génère d'abord
+# les configurations dans SHADOWLAB_ARENA_DIR. Rien n'écoute en dehors de 127.0.0.1.
+name: shadowlab-arena
+services:
+  coraza:
+    build: ./coraza
+    image: shadowlab-coraza:local
+    restart: unless-stopped
+    environment:
+      AMONT_DEFAUT: "8770"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${SHADOWLAB_ARENA_DIR:?}/generes/coraza-profils.conf:/etc/coraza/profils.conf:ro
+      - ${SHADOWLAB_ARENA_DIR:?}/journaux:/var/log/arena
+  nginx:
+    image: nginx:1.31-alpine
+    restart: unless-stopped
+    depends_on:
+      - coraza
+    ports:
+      - "127.0.0.1:${SHADOWLAB_PORT_AVAL:-8781}:8781"
+    volumes:
+      - ${SHADOWLAB_ARENA_DIR:?}/generes/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${SHADOWLAB_ARENA_DIR:?}/journaux:/var/log/arena

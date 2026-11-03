@@ -15,3 +15,9 @@ pre { background: #fff; border: 1px solid var(--trait); padding: 12px; overflow:
 footer { text-align: center; color: #6b7280; font-size: 13px; padding: 24px 16px; }
 tr.automatise td:nth-child(2) { color: #b42318; font-weight: 600; }
 tr.humain td:nth-child(2) { color: #067647; font-weight: 600; }
+
+/* Pages servies par une protection de l'Arena */
+main.arena { max-width: 28rem; margin: 3rem auto; }
+main.arena img { display: block; margin: 1rem 0; border: 1px solid #ccd; }
+main.arena label { display: block; margin: .5rem 0; }
+#captcha-erreur { color: #a11; }

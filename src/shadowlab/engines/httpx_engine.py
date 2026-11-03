@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import importlib.metadata
-
-import httpx
+from typing import Any
 
 from .http_base import DriverHttp, ReponseBrute
 
 
 class DriverHttpx(DriverHttp):
     name = "httpx"
+    options_permises = {"timeout": (int, float)}
+
+    def configuration(self) -> dict[str, Any]:
+        return {**self.options, "tls_non_verifie": True}
 
     def versions(self) -> dict[str, str]:
         return {"httpx": importlib.metadata.version("httpx")}
 
     def _ouvrir_client(self) -> None:
-        self._client = httpx.Client(follow_redirects=False, timeout=self.options.get("timeout", 30))
+        import httpx
+
+        # verify=False : certificat local de l'Arena ; aucune destination n'échappe au périmètre.
+        self._client = httpx.Client(follow_redirects=False, timeout=self.options.get("timeout", 30), verify=False)
 
     def _envoyer(self, methode: str, url: str, donnees: dict[str, str] | None) -> ReponseBrute:
         reponse = self._client.request(methode, url, data=donnees)

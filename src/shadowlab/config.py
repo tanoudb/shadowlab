@@ -19,11 +19,22 @@ class Reglages:
     jeton_api: str | None
     memoire_max_mo: int
     concurrence_max: int
+    port_arena: int  # frontal TLS, point d'entrée de l'Arena
+    port_aval: int  # Nginx, publié par la pile Docker de l'Arena
 
     @property
     def url_site(self) -> str:
         hote = f"[{self.hote}]" if ":" in self.hote else self.hote
         return f"http://{hote}:{self.port}"
+
+    @property
+    def url_arena(self) -> str:
+        # `localhost` et non 127.0.0.1 : un navigateur envoie alors un SNI, comme vers un vrai site.
+        return f"https://localhost:{self.port_arena}"
+
+    @property
+    def dossier_arena(self) -> Path:
+        return self.sorties / "arena"
 
 
 def charger() -> Reglages:
@@ -38,5 +49,7 @@ def charger() -> Reglages:
         hotes_autorises=tuple(h.strip().lower() for h in hotes.split(",") if h.strip()),
         jeton_api=os.environ.get("SHADOWLAB_JETON") or None,
         memoire_max_mo=int(os.environ.get("SHADOWLAB_MEMOIRE_MAX_MO", "4096")),
-        concurrence_max=int(os.environ.get("SHADOWLAB_CONCURRENCE_MAX", "1")),
+        concurrence_max=int(os.environ.get("SHADOWLAB_CONCURRENCE_MAX", "4")),
+        port_arena=int(os.environ.get("SHADOWLAB_PORT_ARENA", "8743")),
+        port_aval=int(os.environ.get("SHADOWLAB_PORT_AVAL", "8781")),
     )

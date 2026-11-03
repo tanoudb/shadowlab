@@ -251,18 +251,16 @@ async def creer(request: Request) -> dict:
     if len(texte) > 32_000:
         raise HTTPException(413, "définition trop longue")
     try:
-        brut = yaml.safe_load(texte)
+        brut = campaigns.charger_yaml(texte)
         experience = campaigns.FichierCampagne.model_validate(brut).experiment
         if experience.base_url:
             campaigns.verifier_url(experience.base_url, reglages.hotes_autorises)
-        if experience.concurrency != 1:
-            raise ValueError("concurrency doit valoir 1 dans cette version")
+        if experience.concurrency > reglages.concurrence_max:
+            raise ValueError(f"concurrence {experience.concurrency} > plafond {reglages.concurrence_max}")
     except (yaml.YAMLError, ValidationError, ValueError) as erreur:
         raise HTTPException(422, str(erreur)) from erreur
     if not _verrou_campagne.acquire(blocking=False):
         raise HTTPException(409, "une campagne est déjà en cours")
-    with _base(request) as cx:
-        experiment_id = campaigns.creer(cx, experience)
 
     def travail() -> None:
         try:
@@ -274,7 +272,13 @@ async def creer(request: Request) -> dict:
         finally:
             _verrou_campagne.release()
 
-    threading.Thread(target=travail, daemon=True, name=f"campagne-{experiment_id}").start()
+    try:
+        with _base(request) as cx:
+            experiment_id = campaigns.creer(cx, experience)
+        threading.Thread(target=travail, daemon=True, name=f"campagne-{experiment_id}").start()
+    except BaseException:
+        _verrou_campagne.release()  # le fil n'a pas démarré : personne d'autre ne libérera le verrou
+        raise
     return {"id": experiment_id, "statut": "lancee"}
 
 

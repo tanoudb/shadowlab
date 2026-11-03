@@ -1,7 +1,14 @@
 """Campagnes expérimentales : définition YAML validée, exécution reproductible, reprise et arrêt.
 
-Ordre d'exécution : moteur par moteur ; pour chaque répétition, les scénarios dans un ordre tiré au sort
-avec la graine de la campagne (évite qu'un scénario profite toujours d'un navigateur « chaud »).
+Une campagne est une matrice moteurs × protections × scénarios × répétitions. Une « unité » est un couple
+(moteur, protection) : elle a son propre navigateur et son propre tirage, dérivé de la graine, ce qui rend son
+déroulé indépendant de l'ordre d'exécution. Dans une répétition, les scénarios passent dans un ordre tiré au sort
+(évite qu'un scénario profite toujours d'un navigateur « chaud »).
+
+Avec `concurrency: 1`, les unités s'enchaînent dans ce processus. Au-delà, chacune a son processus, et le superviseur
+n'en lance une nouvelle que si la mémoire et le CPU le permettent. Les durées mesurées en parallèle ne sont pas
+comparables à celles d'une campagne séquentielle : la concurrence est enregistrée avec l'expérience.
+
 Arrêt d'urgence : créer le fichier `<sorties>/ARRET` (commande `shadowlab arreter`) ; la campagne
 s'arrête après le passage en cours et peut être reprise.
 """
@@ -9,6 +16,7 @@ s'arrête après le passage en cours et peut être reprise.
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import platform
 import random
 import socket
@@ -16,24 +24,32 @@ import subprocess
 import sys
 import time
 import traceback
+from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
+import psutil
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import __version__, passages
 from . import database as db
+from .arena import pile
+from .arena import profils as module_profils
+from .arena.profils import AUCUNE, PROTECTIONS
 from .config import Reglages
 from .detection import registre as registre_detecteurs
-from .engines import Driver, registre
+from .engines import registre
+from .engines.base import FonctionIndisponible, RefusProtection
 from .mesures import PIDS_EXCLUS, Echantillonneur
 from .perimetre import verifier_url
 from .scenarios import SCENARIOS
 
 journal = logging.getLogger("shadowlab.campagne")
+
+CODE_INTERROMPU = 3
 
 METRIQUES = {
     "detection_rate",
@@ -58,12 +74,21 @@ class MoteurConfig(BaseModel):
         return self.label or self.name
 
 
+class Limites(BaseModel):
+    """Plafonds du superviseur : aucune nouvelle unité n'est lancée au-delà."""
+
+    model_config = ConfigDict(extra="forbid")
+    memoire_disponible_min_mo: int = Field(default=4096, ge=256)
+    cpu_max_pct: int = Field(default=85, ge=10, le=100)
+
+
 class Experience(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     description: str = ""
     environment: Literal["local"] = "local"
     engines: list[MoteurConfig]
+    protections: list[str] = Field(default_factory=lambda: [AUCUNE], min_length=1)
     scenarios: list[str]
     repetitions: int = Field(ge=1, le=10_000)
     detectors: list[str] | None = None
@@ -71,6 +96,7 @@ class Experience(BaseModel):
     output: list[Literal["json", "csv", "html"]] = Field(default_factory=lambda: ["json", "csv", "html"])
     seed: int | None = None
     concurrency: int = Field(default=1, ge=1)
+    limites: Limites = Field(default_factory=Limites)
     base_url: str | None = None
     screenshots_on_failure: bool = True
 
@@ -86,10 +112,21 @@ class Experience(BaseModel):
         for m in moteurs:
             if m.name not in connus:
                 raise ValueError(f"moteur inconnu : {m.name} (disponibles : {', '.join(sorted(connus))})")
+            connus[m.name].controler_options(m.options)
         libelles = [m.nom_affiche for m in moteurs]
         if len(set(libelles)) != len(libelles):
             raise ValueError("deux moteurs ont le même libellé : ajoutez `label`")
         return moteurs
+
+    @field_validator("protections")
+    @classmethod
+    def protections_connues(cls, protections: list[str]) -> list[str]:
+        for p in protections:
+            if p not in PROTECTIONS:
+                raise ValueError(f"protection inconnue : {p} (disponibles : {', '.join(PROTECTIONS)})")
+        if len(set(protections)) != len(protections):
+            raise ValueError("protection en double")
+        return protections
 
     @field_validator("scenarios")
     @classmethod
@@ -128,10 +165,23 @@ class FichierCampagne(BaseModel):
         return self
 
 
+class _ChargeurSansAlias(yaml.SafeLoader):
+    """Chargeur sûr qui refuse les alias (`*nom`) : un petit fichier ne peut pas s'étendre en un objet énorme."""
+
+    def compose_node(self, parent, index):
+        if self.check_event(yaml.AliasEvent):
+            raise yaml.YAMLError("alias YAML (*nom) refusés dans une définition de campagne")
+        return super().compose_node(parent, index)
+
+
+def charger_yaml(source: Any) -> Any:
+    return yaml.load(source, Loader=_ChargeurSansAlias)
+
+
 def lire(chemin: Path, reglages: Reglages) -> Experience:
     """Lit et valide un fichier YAML. Les URL sont contrôlées par le périmètre."""
     with chemin.open(encoding="utf-8") as f:
-        brut = yaml.safe_load(f)
+        brut = charger_yaml(f)
     experience = FichierCampagne.model_validate(brut).experiment
     if experience.base_url:
         verifier_url(experience.base_url, reglages.hotes_autorises)
@@ -139,8 +189,6 @@ def lire(chemin: Path, reglages: Reglages) -> Experience:
         raise ValueError(
             f"concurrence {experience.concurrency} > plafond {reglages.concurrence_max} (SHADOWLAB_CONCURRENCE_MAX)"
         )
-    if experience.concurrency > 1:
-        raise NotImplementedError("exécution concurrente pas encore disponible : concurrency doit valoir 1")
     return experience
 
 
@@ -151,6 +199,7 @@ def environnement() -> dict[str, Any]:
         "systeme": platform.platform(),
         "machine": platform.machine(),
         "processeurs": __import__("os").cpu_count(),
+        "profils_arena": module_profils.charger().model_dump(),
     }
 
 
@@ -225,13 +274,33 @@ def creer(cx, experience: Experience) -> int:
     return int(curseur.lastrowid)
 
 
-def _plan(experience: Experience) -> Iterator[tuple[MoteurConfig, int, list[str]]]:
-    rng = random.Random(experience.seed)
-    for moteur in experience.engines:
-        for repetition in range(1, experience.repetitions + 1):
-            ordre = list(experience.scenarios)
-            rng.shuffle(ordre)
-            yield moteur, repetition, ordre
+def unites(experience: Experience) -> list[tuple[MoteurConfig, str]]:
+    return [(moteur, protection) for moteur in experience.engines for protection in experience.protections]
+
+
+def _plan(experience: Experience, moteur: MoteurConfig, protection: str) -> Iterator[tuple[int, list[str]]]:
+    rng = random.Random(f"{experience.seed}:{moteur.nom_affiche}:{protection}")
+    for repetition in range(1, experience.repetitions + 1):
+        ordre = list(experience.scenarios)
+        rng.shuffle(ordre)
+        yield repetition, ordre
+
+
+def _deja_faits(cx, experiment_id: int) -> set[tuple[str, str, str, int]]:
+    return {
+        (r["engine_label"], r["protection"], r["scenario"], r["repetition"])
+        for r in cx.execute(
+            "SELECT json_extract(e.configuration, '$.label') AS engine_label, r.protection, s.name AS scenario,"
+            " r.repetition FROM runs r JOIN engines e ON e.id = r.engine_id JOIN scenarios s ON s.id = r.scenario_id"
+            " WHERE r.experiment_id = ? AND r.status IN ('reussi', 'echec', 'erreur')",
+            (experiment_id,),
+        )
+    }
+
+
+def _controler_arena(reglages: Reglages, experience: Experience) -> None:
+    if any(p != AUCUNE for p in experience.protections) and not pile.sante(reglages):
+        raise pile.ArenaIndisponible("Arena injoignable : lancez `uv run shadowlab arena demarrer`")
 
 
 def executer(reglages: Reglages, experiment_id: int) -> str:
@@ -241,50 +310,135 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
     if ligne is None:
         raise LookupError(f"expérience {experiment_id} introuvable")
     experience = Experience.model_validate_json(ligne["configuration"])
-    base = experience.base_url or reglages.url_site
-    verifier_url(base, reglages.hotes_autorises)
-    deja_faits = {
-        (r["engine_label"], r["scenario"], r["repetition"])
-        for r in cx.execute(
-            "SELECT json_extract(e.configuration, '$.label') AS engine_label, s.name AS scenario, r.repetition"
-            " FROM runs r JOIN engines e ON e.id = r.engine_id JOIN scenarios s ON s.id = r.scenario_id"
-            " WHERE r.experiment_id = ? AND r.status IN ('reussi', 'echec', 'erreur')",
-            (experiment_id,),
-        )
-    }
+    verifier_url(experience.base_url or reglages.url_site, reglages.hotes_autorises)
+    if experience.protections != [AUCUNE]:
+        verifier_url(reglages.url_arena, reglages.hotes_autorises)
     # Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
     cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
     cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (experiment_id,))
-    arret = fichier_arret(reglages)
-    arret.unlink(missing_ok=True)
-    statut = "termine"
-    rng_scenarios = random.Random(experience.seed)
-    dossier_artefacts = reglages.sorties / "artefacts" / str(experiment_id)
-    moteurs = registre()
+    fichier_arret(reglages).unlink(missing_ok=True)
+    statut = "interrompu"
+    try:
+        with serveur_local(reglages):
+            _controler_arena(reglages, experience)
+            if experience.concurrency == 1:
+                statut = "termine"
+                for rang in range(len(unites(experience))):
+                    if executer_unite(reglages, experiment_id, rang) != "termine":
+                        statut = "interrompu"
+                        break
+            else:
+                statut = _superviser(reglages, experience, experiment_id)
+    except KeyboardInterrupt:
+        statut = "interrompu"
+    finally:
+        cx.execute("UPDATE experiments SET status = ? WHERE id = ?", (statut, experiment_id))
+        cx.close()
+    return statut
 
-    with serveur_local(reglages):
-        moteur_courant: tuple[str, Driver, int] | None = None
+
+def _ressources_disponibles(limites: Limites) -> bool:
+    disponible_mo = psutil.virtual_memory().available / 1024 / 1024
+    return (
+        disponible_mo >= limites.memoire_disponible_min_mo and psutil.cpu_percent(interval=None) <= limites.cpu_max_pct
+    )
+
+
+def _travailleur(reglages: Reglages, experiment_id: int, rang: int) -> None:
+    sys.exit(0 if executer_unite(reglages, experiment_id, rang) == "termine" else CODE_INTERROMPU)
+
+
+def _superviser(reglages: Reglages, experience: Experience, experiment_id: int) -> str:
+    """Lance les unités en parallèle, sans dépasser la concurrence ni les plafonds de ressources."""
+    contexte = multiprocessing.get_context("spawn")  # processus neufs : Playwright et Chrome n'aiment pas `fork`
+    en_attente = deque(range(len(unites(experience))))
+    actifs: dict[int, Any] = {}
+    statut = "termine"
+    arret = fichier_arret(reglages)
+    psutil.cpu_percent(interval=None)  # le premier appel sert de point de départ
+    try:
+        while en_attente or actifs:
+            for rang, processus in list(actifs.items()):
+                if not processus.is_alive():
+                    processus.join()
+                    del actifs[rang]
+                    if processus.exitcode != 0:
+                        statut = "interrompu"
+                        journal.warning("unité %d arrêtée (code %s)", rang, processus.exitcode)
+            if arret.exists():
+                en_attente.clear()
+                statut = "interrompu"
+            # Toujours au moins une unité active : des plafonds trop serrés ralentissent, sans bloquer.
+            libre = len(actifs) < experience.concurrency and (not actifs or _ressources_disponibles(experience.limites))
+            if en_attente and libre:
+                rang = en_attente.popleft()
+                actifs[rang] = contexte.Process(target=_travailleur, args=(reglages, experiment_id, rang))
+                actifs[rang].start()
+            time.sleep(0.25)
+    except BaseException:
+        arret.parent.mkdir(parents=True, exist_ok=True)
+        arret.touch()  # les travailleurs s'arrêtent proprement après leur passage en cours
+        for processus in actifs.values():
+            processus.join(timeout=60)
+        raise
+    return statut
+
+
+def _moteur_indisponible(cx, experiment_id, experience, moteur_cfg, protection, faits, classe, cause: str) -> None:
+    """Un moteur qui ne démarre pas est un résultat : chacun de ses passages est enregistré en erreur, avec la cause."""
+    config = {**moteur_cfg.options, "label": moteur_cfg.nom_affiche}
+    engine_id = db.engine_id(cx, moteur_cfg.name, db.j({"erreur": "non démarré"}), classe.runtime, config)
+    for repetition, ordre in _plan(experience, moteur_cfg, protection):
+        for nom_scenario in ordre:
+            if (moteur_cfg.nom_affiche, protection, nom_scenario, repetition) in faits:
+                continue
+            scenario = SCENARIOS[nom_scenario]
+            scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
+            run_id, jeton = passages.demarrer(
+                cx, experiment_id, engine_id, scenario_id, repetition, "automatise", protection
+            )
+            passages.finaliser(
+                cx, run_id, jeton, status="erreur", success=False, duration_ms=None, error=cause,
+                attend_js=scenario.attend_js, detecteurs=experience.detectors,
+            )  # fmt: skip
+
+
+def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
+    """Exécute un couple (moteur, protection). Renvoie `termine` ou `interrompu`."""
+    cx = db.ouvrir(reglages.base_donnees)
+    try:
+        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+        experience = Experience.model_validate_json(ligne["configuration"])
+        moteur_cfg, protection = unites(experience)[rang]
+        faits = _deja_faits(cx, experiment_id)
+        classe = registre()[moteur_cfg.name]
+        base = experience.base_url or reglages.url_site
+        if protection != AUCUNE:
+            base = reglages.url_arena
+        dossier_artefacts = reglages.sorties / "artefacts" / str(experiment_id)
+        arret = fichier_arret(reglages)
+        pilote = classe(reglages.hotes_autorises, moteur_cfg.options)
         try:
-            for moteur_cfg, repetition, ordre in _plan(experience):
-                if moteur_courant is None or moteur_courant[0] != moteur_cfg.nom_affiche:
-                    if moteur_courant is not None:
-                        moteur_courant[1].close()
-                    pilote = moteurs[moteur_cfg.name](reglages.hotes_autorises, moteur_cfg.options)
-                    pilote.open()
-                    config = {**pilote.configuration(), "label": moteur_cfg.nom_affiche}
-                    versions = pilote.versions()
-                    engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
-                    moteur_courant = (moteur_cfg.nom_affiche, pilote, engine_id)
-                    journal.info("moteur %s %s", moteur_cfg.nom_affiche, versions)
-                _, pilote, engine_id = moteur_courant
+            pilote.open()
+        except Exception as exc:  # noqa: BLE001 — un moteur qui ne démarre pas ne doit pas arrêter la campagne
+            cause = f"démarrage impossible : {type(exc).__name__}: {str(exc)[:300]}"
+            journal.error("%s : %s", moteur_cfg.nom_affiche, cause)
+            _moteur_indisponible(cx, experiment_id, experience, moteur_cfg, protection, faits, classe, cause)
+            return "termine"
+        try:
+            config = {**pilote.configuration(), "label": moteur_cfg.nom_affiche}
+            versions = pilote.versions()
+            engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
+            journal.info("moteur %s (%s) %s", moteur_cfg.nom_affiche, protection, versions)
+            for repetition, ordre in _plan(experience, moteur_cfg, protection):
                 for nom_scenario in ordre:
-                    if (moteur_cfg.nom_affiche, nom_scenario, repetition) in deja_faits:
+                    if (moteur_cfg.nom_affiche, protection, nom_scenario, repetition) in faits:
                         continue
                     if arret.exists():
-                        statut = "interrompu"
-                        raise KeyboardInterrupt
+                        return "interrompu"
                     scenario = SCENARIOS[nom_scenario]
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
+                    graine = f"{experience.seed}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
                     _passage(
                         cx,
                         reglages,
@@ -295,21 +449,19 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
                         scenario,
                         scenario_id,
                         repetition,
+                        protection,
                         base,
-                        random.Random(rng_scenarios.random()),
+                        random.Random(graine),
                         dossier_artefacts,
                     )
-        except KeyboardInterrupt:
-            statut = "interrompu"
-        except MemoryError as erreur:
-            statut = "interrompu"
+        except (KeyboardInterrupt, MemoryError) as erreur:
             journal.error("arrêt : %s", erreur)
+            return "interrompu"
         finally:
-            if moteur_courant is not None:
-                moteur_courant[1].close()
-            cx.execute("UPDATE experiments SET status = ? WHERE id = ?", (statut, experiment_id))
-            cx.close()
-    return statut
+            pilote.close()
+        return "termine"
+    finally:
+        cx.close()
 
 
 def _passage(
@@ -322,11 +474,12 @@ def _passage(
     scenario,
     scenario_id,
     repetition,
+    protection,
     base,
     rng,
     dossier_artefacts,
 ) -> None:
-    run_id, jeton = passages.demarrer(cx, experiment_id, engine_id, scenario_id, repetition, "automatise")
+    run_id, jeton = passages.demarrer(cx, experiment_id, engine_id, scenario_id, repetition, "automatise", protection)
     pilote.mesures = type(pilote.mesures)()
     erreur: str | None = None
     succes: bool | None = None
@@ -335,10 +488,19 @@ def _passage(
         debut = time.perf_counter()
         try:
             pilote.start_session()
-            issue = scenario.executer(pilote, base, jeton, rng)
-            succes, details = issue.success, issue.details
-            if scenario.attend_js and pilote.executes_javascript:
+            natif = pilote.scenario_natif(scenario.name, base, jeton)
+            if natif is not None:
+                succes, details = natif["success"], natif.get("details", {})
+            else:
+                issue = scenario.executer(pilote, base, jeton, rng)
+                succes, details = issue.success, issue.details
+            # Une page de refus ne porte pas l'observateur : rien à attendre.
+            if scenario.attend_js and pilote.executes_javascript and not pilote.texts("body[data-arena]"):
                 pilote.wait_for_element("#observation-envoyee", timeout_ms=5000)
+        except FonctionIndisponible as exc:  # une limite du moteur, pas une panne
+            succes, details = False, {"fonction_indisponible": str(exc)}
+        except RefusProtection as exc:  # les décisions enregistrées disent quelle couche a refusé
+            succes, details = False, {"refus": str(exc)}
         except Exception as exc:  # une erreur de moteur est un résultat, pas une panne de la campagne
             erreur = f"{type(exc).__name__}: {exc}"
             journal.debug("passage %s : %s", run_id, traceback.format_exc())
@@ -376,6 +538,7 @@ def _passage(
         success=succes if not erreur else False,
         duration_ms=round(duree, 1),
         error=erreur or (db.j(details) if not succes else None),
+        motif_echec=db.j(details) if details else None,
         attend_js=scenario.attend_js,
         detecteurs=experience.detectors,
         metriques=metriques,

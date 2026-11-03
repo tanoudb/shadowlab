@@ -21,9 +21,10 @@ class DriverPlaywright(Driver):
     name = "playwright"
     runtime = "navigateur"
     executes_javascript = True
+    options_permises = {"headless": bool, "trace": bool, "channel": str}
 
     def configuration(self) -> dict[str, Any]:
-        return {"browser": "chromium", "headless": True, "trace": False, **self.options}
+        return {"browser": "chromium", "headless": True, "trace": False, "tls_non_verifie": True, **self.options}
 
     def versions(self) -> dict[str, str]:
         versions = {"playwright": importlib.metadata.version("playwright")}
@@ -31,11 +32,22 @@ class DriverPlaywright(Driver):
             versions["chromium"] = self._navigateur.version
         return versions
 
-    def open(self) -> None:
+    def _api(self):
         from playwright.sync_api import sync_playwright
 
+        return sync_playwright
+
+    def _nouveau_contexte(self):
+        contexte = self._navigateur.new_context(ignore_https_errors=True)  # certificat local de l'Arena
+        contexte.route("**/*", self._filtrer)
+        return contexte
+
+    def _fermer_contexte(self) -> None:
+        self._contexte.close()
+
+    def open(self) -> None:
         config = self.configuration()
-        self._pw = sync_playwright().start()
+        self._pw = self._api()().start()
         verrou = {"server": MANDATAIRE_BLOQUANT, "bypass": ",".join(liste_directe(self.hotes_autorises))}
         self._navigateur = self._pw.chromium.launch(
             headless=config["headless"], channel=config.get("channel"), proxy=verrou
@@ -49,14 +61,19 @@ class DriverPlaywright(Driver):
 
     def start_session(self) -> None:
         self.mesures.details["requetes_bloquees"] = 0
-        self._contexte = self._navigateur.new_context()
-        self._contexte.route("**/*", self._filtrer)
+        self._contexte = self._nouveau_contexte()
         if self.configuration()["trace"]:
             self._contexte.tracing.start(screenshots=True, snapshots=True)
         self._page = self._contexte.new_page()
         self._page.on("request", lambda _: self._compter("request_count"))
         self._page.on("requestfailed", lambda _: self._compter("error_count"))
-        self._texte = ""
+        self._page.on("response", self._noter_reponse)
+        self._reponse = None
+
+    def _noter_reponse(self, reponse) -> None:
+        # Le document courant peut changer sans `goto` (défi de l'Arena, redirection par script).
+        if reponse.request.is_navigation_request() and reponse.frame == self._page.main_frame:
+            self._reponse = reponse
 
     def _compter(self, champ: str) -> None:
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
@@ -74,7 +91,6 @@ class DriverPlaywright(Driver):
         reponse = self._page.goto(url, wait_until="load")
         duree = (time.perf_counter() - debut) * 1000
         self.mesures.navigation_time += duree
-        self._texte = reponse.text() if reponse is not None else ""
         status = reponse.status if reponse is not None else None
         if status is not None and status >= 400:
             self.mesures.error_count += 1
@@ -107,7 +123,19 @@ class DriverPlaywright(Driver):
         return self._page.locator(selector).all_text_contents()
 
     def content(self) -> str:
-        return self._texte
+        return self._reponse.text() if self._reponse is not None else ""
+
+    def dom(self) -> str:
+        return self._page.content()
+
+    def attendre_chargement(self) -> None:
+        self._page.wait_for_load_state("load")
+
+    def deplacer_souris(self, x: int, y: int) -> None:
+        self._page.mouse.move(x, y, steps=8)
+
+    def defiler(self, hauteur: int) -> None:
+        self._page.mouse.wheel(0, hauteur)
 
     def capture_screenshot(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,5 +160,5 @@ class DriverPlaywright(Driver):
                 self._contexte.tracing.stop()
             except Exception:
                 pass
-        self._contexte.close()
+        self._fermer_contexte()
         self._contexte = None

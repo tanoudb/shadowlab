@@ -8,6 +8,8 @@ from pathlib import Path
 
 from . import campaigns, reports
 from . import database as db
+from .arena import pile
+from .arena.frontal import Frontal
 from .config import charger
 from .journal import configurer
 
@@ -28,6 +30,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser("rapport", help="exporter les résultats d'une expérience")
     p.add_argument("id", type=int)
     p.add_argument("--formats", default="json,csv,html")
+    p = sous.add_parser("arena", help="piloter la pile Docker de l'Anti-Bot Arena")
+    p.add_argument("action", choices=["demarrer", "appliquer", "arreter", "etat"])
+    p.add_argument("--reconstruire", action="store_true", help="reconstruire l'image du WAF")
+    p = sous.add_parser("moteurs", help="installer les moteurs isolés et voir ce qui manque")
+    p.add_argument("action", choices=["etat", "installer"])
+    p.add_argument("noms", nargs="*", help="environnements à installer (tous par défaut)")
     sous.add_parser("liste", help="lister les expériences")
     p = sous.add_parser("supprimer", help="supprimer une expérience et toutes ses observations")
     p.add_argument("id", type=int)
@@ -47,12 +55,36 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(f"Site de test : {reglages.url_site}/lab/   Tableau de bord : {reglages.url_site}/tableau", flush=True)
         niveau = "error" if args.silencieux else "warning"
+        Frontal(reglages).demarrer()
+        print(f"Entrée de l'Arena : {reglages.url_arena}/lab/", flush=True)
         uvicorn.run(creer_app(reglages), host=reglages.hote, port=reglages.port, log_level=niveau)
+        return 0
+
+    if args.commande == "arena":
+        if args.action == "etat":
+            print(pile.etat(reglages))
+        elif args.action == "arreter":
+            pile.arreter(reglages)
+            print("Arena arrêtée.")
+        else:  # `appliquer` régénère les configurations et recrée les conteneurs, comme `demarrer`
+            pile.demarrer(reglages, reconstruire=args.reconstruire)
+            print(f"Arena prête : {pile.etat(reglages)}")
+        return 0
+
+    if args.commande == "moteurs":
+        from .engines import registre as registre_moteurs
+        from .engines.pont import installer
+
+        if args.action == "installer":
+            installer(args.noms)
+        for nom, classe in sorted(registre_moteurs().items()):
+            print(f"{nom:<26} {classe.runtime:<11} {classe.categorie:<15} {classe.manque() or 'prêt'}")
         return 0
 
     if args.commande == "valider":
         experience = campaigns.lire(args.fichier, reglages)
-        total = len(experience.engines) * len(experience.scenarios) * experience.repetitions
+        total = len(experience.engines) * len(experience.protections) * len(experience.scenarios)
+        total *= experience.repetitions
         print(f"Valide : {experience.name} — {total} passages, graine {experience.seed}")
         return 0
 

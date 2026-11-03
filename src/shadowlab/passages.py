@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any
 
 from . import database as db
+from . import issues
 from .detection import Classement, Observations, classer, proprietes
 
 EXPERIENCE_MANUELLE = "sessions-manuelles"
@@ -17,13 +18,19 @@ def nouveau_jeton() -> str:
 
 
 def demarrer(
-    cx: sqlite3.Connection, experiment_id: int, engine_id: int, scenario_id: int, repetition: int, truth: str
+    cx: sqlite3.Connection,
+    experiment_id: int,
+    engine_id: int,
+    scenario_id: int,
+    repetition: int,
+    truth: str,
+    protection: str = "aucune",
 ) -> tuple[int, str]:
     jeton = nouveau_jeton()
     curseur = cx.execute(
-        "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at, status)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours')",
-        (experiment_id, engine_id, scenario_id, repetition, jeton, truth, db.maintenant()),
+        "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at, status,"
+        " protection) VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?)",
+        (experiment_id, engine_id, scenario_id, repetition, jeton, truth, db.maintenant(), protection),
     )
     return int(curseur.lastrowid), jeton
 
@@ -37,15 +44,32 @@ def finaliser(
     success: bool | None,
     duration_ms: float | None,
     error: str | None = None,
+    motif_echec: str | None = None,
     attend_js: bool = True,
     detecteurs: list[str] | None = None,
     metriques: dict[str, Any] | None = None,
 ) -> list[Classement]:
     """Classe la session avec les détecteurs, puis enregistre empreinte, verdicts, mesures et fin du passage."""
     http, js = db.observations(cx, jeton)
-    obs = Observations(http=http, js=js, attend_js=attend_js)
+    decisions = db.decisions_session(cx, jeton)
+    obs = Observations(
+        http=http,
+        js=js,
+        attend_js=attend_js,
+        tls=db.tls_session(cx, jeton),
+        page_remplacee=any(d["decision"] in ("emis", "bloque") for d in decisions),
+    )
     classements = classer(obs, detecteurs)
     empreinte = proprietes(obs)
+    resultat = issues.evaluer(
+        success=success,
+        erreur=error if status == "erreur" else None,
+        http=http,
+        decisions=decisions,
+        classements=classements,
+        sous_arena=obs.tls is not None,
+        motif_echec=motif_echec,
+    )
     with db.transaction(cx):
         cx.execute(
             "INSERT OR REPLACE INTO fingerprints (run_id, browser_properties, http_properties, tls_properties,"
@@ -88,8 +112,19 @@ def finaliser(
                 ),
             )
         cx.execute(
-            "UPDATE runs SET completed_at = ?, status = ?, duration_ms = ?, success = ?, error = ? WHERE id = ?",
-            (db.maintenant(), status, duration_ms, None if success is None else int(success), error, run_id),
+            "UPDATE runs SET completed_at = ?, status = ?, duration_ms = ?, success = ?, error = ?, issue = ?,"
+            " cause = ?, drapeaux = ? WHERE id = ?",
+            (
+                db.maintenant(),
+                status,
+                duration_ms,
+                None if success is None else int(success),
+                error,
+                resultat.issue,
+                resultat.cause,
+                db.j(resultat.drapeaux),
+                run_id,
+            ),
         )
     return classements
 

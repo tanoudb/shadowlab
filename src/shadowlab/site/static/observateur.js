@@ -74,6 +74,32 @@ async function botd() {
   }
 }
 
+// FingerprintJS n'est lancé que sur les pages d'empreinte : il est coûteux (polices, audio) et fausserait les durées.
+const PAGES_FPJS = ['/lab/empreinte', '/lab/detection'];
+
+function resumer(valeur) {
+  const texte = typeof valeur === 'string' ? valeur : JSON.stringify(valeur);
+  return texte && texte.length > 160 ? `${texte.slice(0, 160)}…` : texte;
+}
+
+async function fingerprintjs() {
+  if (!PAGES_FPJS.includes(location.pathname)) return null;
+  try {
+    const { default: FingerprintJS } = await import('./vendor/fingerprintjs-5.3.0.esm.js');
+    const agent = await FingerprintJS.load({ monitoring: false });
+    const resultat = await agent.get();
+    const composants = {};
+    for (const [nom, c] of Object.entries(resultat.components)) {
+      composants[nom] = 'error' in c ? { erreur: String(c.error) } : { valeur: resumer(c.value), ms: c.duration };
+    }
+    return {
+      visitorId: resultat.visitorId, confidence: resultat.confidence?.score, version: resultat.version, composants,
+    };
+  } catch (erreur) {
+    return { erreur: String(erreur) };
+  }
+}
+
 async function collecter() {
   const nav = navigator;
   return {
@@ -110,6 +136,7 @@ async function collecter() {
     webgl: webgl(),
     canvas: await empreinteCanvas(),
     botd: await botd(),
+    fpjs: await fingerprintjs(),
     duree_collecte_ms: Math.round(performance.now() - debut),
   };
 }

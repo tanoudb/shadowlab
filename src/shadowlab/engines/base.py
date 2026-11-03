@@ -28,6 +28,10 @@ class FonctionIndisponible(RuntimeError):
     """Le moteur ne sait pas faire cette action (ex. capture d'écran pour un client HTTP)."""
 
 
+class RefusProtection(RuntimeError):
+    """Une page de protection de l'Arena reste affichée à la place de la page demandée."""
+
+
 @dataclass
 class ResultatNavigation:
     status: int | None
@@ -47,11 +51,33 @@ class Driver(ABC):
     name: str = "abstrait"
     runtime: str = "inconnu"  # "navigateur" ou "http"
     executes_javascript: bool = False
+    # standard : outil généraliste ; anti_detection : conçu pour échapper aux détecteurs (voir D-15)
+    categorie: str = "standard"
+    # Options qu'une campagne peut régler, avec leur type. Tout le reste est refusé : une option libre pourrait
+    # faire suivre les redirections sans contrôle, ajouter un mandataire ou modifier l'empreinte.
+    options_permises: dict[str, type | tuple[type, ...]] = {}
 
     def __init__(self, hotes_autorises: tuple[str, ...], options: dict[str, Any] | None = None) -> None:
+        self.controler_options(options or {})
         self.hotes_autorises = hotes_autorises
         self.options = options or {}
         self.mesures = MesuresSession()
+
+    @classmethod
+    def controler_options(cls, options: dict[str, Any]) -> None:
+        for cle, valeur in options.items():
+            if cle not in cls.options_permises:
+                permises = ", ".join(sorted(cls.options_permises)) or "aucune"
+                raise ValueError(f"option inconnue pour {cls.name} : {cle} (permises : {permises})")
+            attendu = cls.options_permises[cle]
+            types = attendu if isinstance(attendu, tuple) else (attendu,)
+            if (isinstance(valeur, bool) and bool not in types) or not isinstance(valeur, types):
+                raise ValueError(f"option {cls.name}.{cle} : valeur de type {type(valeur).__name__} refusée")
+
+    @classmethod
+    def manque(cls) -> str | None:
+        """Ce qui manque pour lancer ce moteur (paquet absent, navigateur à télécharger), ou None."""
+        return None
 
     def verifier(self, url: str) -> str:
         return verifier_url(url, self.hotes_autorises)
@@ -97,6 +123,19 @@ class Driver(ABC):
         """Textes de tous les éléments qui correspondent au sélecteur."""
         raise FonctionIndisponible(f"{self.name} : texts")
 
+    def dom(self) -> str:
+        """HTML de la page telle qu'elle est maintenant (après JavaScript pour un navigateur)."""
+        return self.content()
+
+    def attendre_chargement(self) -> None:  # noqa: B027 — rien à attendre pour un client HTTP
+        """Attend la fin du chargement du document courant."""
+
+    def deplacer_souris(self, x: int, y: int) -> None:
+        raise FonctionIndisponible(f"{self.name} : pas de souris")
+
+    def defiler(self, hauteur: int) -> None:
+        raise FonctionIndisponible(f"{self.name} : pas de défilement")
+
     def collect_metrics(self) -> MesuresSession:
         return self.mesures
 
@@ -108,3 +147,8 @@ class Driver(ABC):
 
     @abstractmethod
     def close_session(self) -> None: ...
+
+    def scenario_natif(self, nom: str, base: str, jeton: str) -> dict[str, Any] | None:
+        """Pour un moteur qui ne se pilote pas action par action (crawler, agent) : exécute lui-même le scénario et
+        renvoie `{"success": bool, "details": {...}}`. None : le scénario commun s'applique."""
+        return None

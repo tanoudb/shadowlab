@@ -52,7 +52,11 @@ def verdicts(obs):
 
 def test_navigateur_ordinaire_classe_humain():
     obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte()])
-    assert verdicts(obs) == {"botd": "humain", "regles-http": "humain", "regles-js": "humain", "coherence": "humain"}
+    v = verdicts(obs)
+    assert {k: v[k] for k in ("botd", "regles-http", "regles-js", "coherence")} == dict.fromkeys(
+        ("botd", "regles-http", "regles-js", "coherence"), "humain"
+    )
+    assert v["tls"] == "indetermine"  # hors Arena, TLS n'est pas observé
 
 
 def test_webdriver_classe_automatise():

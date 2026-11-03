@@ -48,7 +48,7 @@ Une campagne démarre elle-même le site dans un processus à part s'il ne tourn
 | `uv run shadowlab rapport <n°>` | Régénère les exports d'une expérience |
 | `uv run shadowlab liste` | Liste les expériences |
 | `uv run shadowlab supprimer <n°>` | Supprime une expérience, ses observations et ses captures |
-| `uv run pytest` | Tous les tests (dont 5 réels avec navigateurs, ~15 s) |
+| `uv run pytest` | Tous les tests (54, dont 5 réels avec navigateurs, ~15 s) |
 | `uv run pytest -m "not integration"` | Tests rapides seulement (< 1 s) |
 | `uv run ruff check src tests` | Lint |
 
@@ -72,7 +72,13 @@ experiment:
 ```
 
 Le fichier est validé strictement : moteur, scénario, détecteur ou métrique inconnus, champ en trop, URL hors
-périmètre sont refusés avant tout lancement.
+périmètre, option de moteur non prévue et alias YAML (`*nom`) sont refusés avant tout lancement.
+
+| Moteur | Options permises |
+|---|---|
+| `playwright` | `headless`, `trace` (booléens), `channel` (texte) |
+| `selenium` | `headless` |
+| `scrapling`, `httpx` | `timeout` (secondes) |
 
 ## Ce qui est mesuré
 
@@ -109,7 +115,7 @@ src/shadowlab/
 Détail des choix : [`docs/architecture.md`](docs/architecture.md) et [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 **Ajouter un moteur ou un détecteur** sans toucher au cœur : un paquet qui déclare le point d'entrée
-`shadowlab.engines` (une classe héritant de `engines.base.Driver`) ou `shadowlab.detectors` (une classe avec
+`shadowlab.engines` (une classe héritant de `engines.base.Driver`, options déclarées dans `options_permises`) ou `shadowlab.detectors` (une classe avec
 `name`, `version` et `classer(observations)`).
 
 ## Sécurité
@@ -117,6 +123,8 @@ Détail des choix : [`docs/architecture.md`](docs/architecture.md) et [`docs/DEC
 - Écoute sur `127.0.0.1` par défaut. Sur une autre adresse, le démarrage est refusé sans `SHADOWLAB_JETON`,
   et chaque appel exige `Authorization: Bearer <jeton>`.
 - Les appels qui écrivent exigent l'en-tête `X-ShadowLab: 1` (protection contre une page tierce).
+- En écoute locale, l'en-tête `Host` doit être un nom local ou un hôte autorisé : une page tierce dont le nom
+  pointerait vers `127.0.0.1` (« DNS rebinding ») reçoit une erreur 400.
 - Périmètre : `SHADOWLAB_HOTES_AUTORISES` (défaut `127.0.0.1,localhost`). Un nom d'hôte autorisé qui résout
   vers un réseau interne non déclaré est refusé. Navigateurs : verrou réseau (tout le reste part vers une
   adresse locale fermée) ; clients HTTP : chaque redirection est contrôlée.

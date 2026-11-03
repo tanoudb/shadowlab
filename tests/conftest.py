@@ -19,6 +19,7 @@ def reglages(tmp_path, monkeypatch):
     monkeypatch.setenv("SHADOWLAB_SORTIES", str(tmp_path / "sorties"))
     monkeypatch.setenv("SHADOWLAB_BASE", str(tmp_path / "sorties" / "test.sqlite3"))
     monkeypatch.setenv("SHADOWLAB_PORT", str(port_libre()))
+    monkeypatch.setenv("SHADOWLAB_PORT_ARENA", str(port_libre()))
     monkeypatch.delenv("SHADOWLAB_HOTE", raising=False)
     monkeypatch.delenv("SHADOWLAB_JETON", raising=False)
     return charger()

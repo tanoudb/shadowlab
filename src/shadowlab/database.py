@@ -117,6 +117,36 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE metrics ADD COLUMN cpu_time_ms REAL;
     """,
+    # 3 — Arena : protection du passage, issue détaillée, empreintes TLS, décisions de chaque couche
+    """
+    ALTER TABLE runs ADD COLUMN protection TEXT NOT NULL DEFAULT 'aucune';
+    ALTER TABLE runs ADD COLUMN issue TEXT;
+    ALTER TABLE runs ADD COLUMN cause TEXT;
+    ALTER TABLE runs ADD COLUMN drapeaux TEXT;
+    ALTER TABLE experiments ADD COLUMN serie TEXT;
+    ALTER TABLE observations_http ADD COLUMN tls_id INTEGER;
+    ALTER TABLE observations_http ADD COLUMN status INTEGER;
+    ALTER TABLE observations_http ADD COLUMN source TEXT NOT NULL DEFAULT 'site';
+    CREATE TABLE observations_tls (
+        id INTEGER PRIMARY KEY,
+        received_at TEXT NOT NULL,
+        ja3 TEXT NOT NULL,
+        ja3_hash TEXT NOT NULL,
+        ja4 TEXT NOT NULL,
+        details TEXT NOT NULL
+    );
+    CREATE TABLE decisions (
+        id INTEGER PRIMARY KEY,
+        session_token TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        couche TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        chemin TEXT NOT NULL DEFAULT '',
+        motifs TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE INDEX decisions_session ON decisions(session_token);
+    CREATE INDEX runs_protection ON runs(experiment_id, protection);
+    """,
 ]
 
 
@@ -205,3 +235,38 @@ def observations(connexion: sqlite3.Connection, jeton: str) -> tuple[list[dict],
         for r in connexion.execute("SELECT * FROM observations_js WHERE session_token = ? ORDER BY id", (jeton,))
     ]
     return http, js
+
+
+def tls_session(connexion: sqlite3.Connection, jeton: str) -> dict | None:
+    """Première empreinte TLS vue pour une session, ou None si elle n'est pas passée par le frontal."""
+    ligne = connexion.execute(
+        "SELECT t.ja3, t.ja3_hash, t.ja4, t.details FROM observations_http h"
+        " JOIN observations_tls t ON t.id = h.tls_id WHERE h.session_token = ? ORDER BY h.id LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    if ligne is None:
+        return None
+    return {"ja3": ligne["ja3"], "ja3_hash": ligne["ja3_hash"], "ja4": ligne["ja4"], **lj(ligne["details"])}
+
+
+def decisions_session(connexion: sqlite3.Connection, jeton: str) -> list[dict]:
+    return [
+        {
+            "created_at": r["created_at"],
+            "couche": r["couche"],
+            "decision": r["decision"],
+            "chemin": r["chemin"],
+            "motifs": lj(r["motifs"]),
+        }
+        for r in connexion.execute("SELECT * FROM decisions WHERE session_token = ? ORDER BY id", (jeton,))
+    ]
+
+
+def enregistrer_decision(
+    connexion: sqlite3.Connection, jeton: str, couche: str, decision: str, chemin: str = "", motifs: Any = ()
+) -> None:
+    """Une décision d'une couche de protection, avec ses motifs."""
+    connexion.execute(
+        "INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs) VALUES (?, ?, ?, ?, ?, ?)",
+        (jeton, maintenant(), couche, decision, chemin, j(list(motifs))),
+    )
