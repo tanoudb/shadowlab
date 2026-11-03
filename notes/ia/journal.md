@@ -108,3 +108,35 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - Dashboard avancé (challenges, combinaisons, faiblesses).
 - Moteur expérimental propre (à concevoir).
 - Couche IA (à concevoir).
+
+## 2026-11-03 — session Opus 4.6 (suite) — 6 niveaux, sécurité, honeypots
+
+### Fait
+- **6 niveaux progressifs (D-18)** : profils.yaml réécrit (01-06), profils.py refactoré
+  (classe Profils dynamique, normaliser(), compat arrière faible→02/moyen→04/élevé→05),
+  campaigns.py/app.py/pages.py mis à jour (BASELINE remplace AUCUNE, dropdown 6 niveaux).
+- **Sécurité paramètre `sl`** : rejet des doublons dans frontal.py et app.py (différentiel
+  parse_qs vs Starlette QueryParams corrigé).
+- **Honeypots** : lien piège invisible (`/lab/piege`), champ piège `sl_telephone` dans le
+  formulaire, décisions enregistrées en base, intégrés dans le calcul de suspicion du gardien.
+- **Fingerprinting actif** : le gardien enregistre les motifs de suspicion quand le profil
+  l'active (niveaux 03+).
+- Test d'intégration corrigé (nombre de détecteurs dynamique : 6, pas 4).
+- 3 tests honeypots ajoutés. 57 tests verts, lint propre.
+
+### Fichiers
+- `configs/arena/profils.yaml`, `src/shadowlab/arena/profils.py`, `src/shadowlab/campaigns.py`
+- `src/shadowlab/site/app.py`, `src/shadowlab/site/pages.py`, `src/shadowlab/site/gardien.py`
+- `src/shadowlab/site/static/lab.css`, `src/shadowlab/arena/frontal.py`
+- `tests/test_campagnes.py`, `tests/test_integration.py`, `tests/test_site.py`
+
+### Décisions
+- D-18 implémentée (6 niveaux progressifs).
+- Finding sécurité noté : quand un sceau existe, utiliser `sceau.session` au lieu de re-parser
+  `sl` (refactoring futur, touche la signature).
+
+### Reste
+- Turnstile avec clés de test (niveaux 05-06).
+- Dashboard avancé (challenges déclenchés/résolus, résultats par combinaison).
+- Environnements isolés (camoufox, seleniumbase, crawlee).
+- Moteur expérimental et couche IA.
