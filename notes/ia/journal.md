@@ -140,3 +140,26 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - Dashboard avancé (challenges déclenchés/résolus, résultats par combinaison).
 - Environnements isolés (camoufox, seleniumbase, crawlee).
 - Moteur expérimental et couche IA.
+
+## 2026-11-03 — session Opus 4.6 (suite 2) — Turnstile
+
+### Fait
+- **Turnstile (Cloudflare test keys)** intégré pour les niveaux 05-06 :
+  - Clés publiques always-pass/always-block dans `defis.py`
+  - Vérification serveur via API `siteverify`
+  - Page widget Turnstile (`pages.page_turnstile`)
+  - Route `/lab/turnstile/verifier` avec cookie de réussite signé
+  - CSP dédiée pour `challenges.cloudflare.com`
+  - Résultats étiquetés `captcha_test` (D-16)
+- AGENTS.md mis à jour (état courant).
+- 57 tests verts.
+
+### Fichiers
+- `src/shadowlab/arena/defis.py`, `src/shadowlab/site/gardien.py`
+- `src/shadowlab/site/app.py`, `src/shadowlab/site/pages.py`
+- `AGENTS.md`
+
+### Reste
+- Dashboard avancé (challenges déclenchés/résolus, résultats par combinaison).
+- Environnements isolés (camoufox, seleniumbase, crawlee).
+- Moteur expérimental et couche IA.
