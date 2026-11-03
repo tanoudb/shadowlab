@@ -163,3 +163,19 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - Dashboard avancé (challenges déclenchés/résolus, résultats par combinaison).
 - Environnements isolés (camoufox, seleniumbase, crawlee).
 - Moteur expérimental et couche IA.
+
+## 2026-11-03 — session Opus 4.6 (suite 3) — Consolidation
+
+### Fait
+- AGENTS.md mis à jour : Turnstile retiré de « Pas encore », ajouté dans l'état courant.
+- 57 tests verts, lint propre.
+
+### État des axes
+- **Arena** : 6 niveaux opérationnels, honeypots, fingerprinting actif, Turnstile (test keys).
+- **Moteurs** : 7 intégrés, 4 isolés à installer.
+- **Mesure** : campagnes matricielles, Wilson, CPU/mémoire.
+
+### Prochaines pistes (au choix)
+1. **Dashboard avancé** — challenges déclenchés/résolus, résultats par combinaison moteur×protection.
+2. **Environnements isolés** — rendre camoufox, seleniumbase, seleniumbase-uc opérationnels.
+3. **reCAPTCHA test keys** — second CAPTCHA provider après Turnstile.

@@ -30,15 +30,16 @@ recommander des optimisations.
 ## État (03/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **6 niveaux progressifs** (01 baseline → 06 multicouche, D-18). JS proof-of-work, demo CAPTCHA,
-  FingerprintJS 5.3.0, BotD 2.0, 6 détecteurs, honeypots (lien piège + champ piège), fingerprinting actif.
+  FingerprintJS 5.3.0, BotD 2.0, 6 détecteurs, honeypots (lien piège + champ piège), fingerprinting actif,
+  Turnstile Cloudflare (test keys, niveaux 05-06).
 - **11 moteurs** : 7 intégrés (playwright, selenium, scrapling, httpx, curl-cffi, patchright, scrapling-furtif),
   4 isolés à installer (camoufox, seleniumbase, seleniumbase-uc, undetected-chromedriver).
 - **Campagnes matricielles** : moteur × protection × scénario × répétitions, exécution parallèle (spawn),
   classification en 6 issues, intervalles de Wilson, mesures CPU/mémoire.
 - **Catalogue recherche** : 52 projets open source analysés (`docs/recherche/catalogue.yaml`).
 - **57 tests verts**, lint propre.
-- **Pas encore** : Turnstile/reCAPTCHA (test keys), Cloudflare sur domaine test, moteur expérimental propre,
-  dashboard avancé, couche IA.
+- **Pas encore** : reCAPTCHA (test keys), Cloudflare sur domaine test, moteur expérimental propre,
+  dashboard avancé, environnements isolés opérationnels, couche IA.
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
