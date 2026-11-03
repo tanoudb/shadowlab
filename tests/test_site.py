@@ -132,6 +132,19 @@ def test_verrou_libere_si_la_creation_echoue(client, monkeypatch):
     assert not api._verrou_campagne.locked()
 
 
+def test_api_decisions_et_protections(client, reglages):
+    cx = db.ouvrir(reglages.base_donnees)
+    cx.execute(
+        "INSERT INTO experiments (name, created_at, configuration, status) VALUES (?, ?, '{}', 'termine')",
+        ("test_arena", db.maintenant()),
+    )
+    eid = cx.execute("SELECT last_insert_rowid()").fetchone()[0]
+    decisions = client.get(f"/api/experiences/{eid}/decisions").json()
+    assert decisions == {"couches": {}}
+    protections = client.get(f"/api/experiences/{eid}/protections").json()
+    assert protections == {"protections": {}}
+
+
 def test_interface_exposee_exige_un_jeton(reglages, monkeypatch):
     from fastapi.testclient import TestClient
 

@@ -22,6 +22,7 @@ from . import pages
 COOKIE_DEFI = "sl_defi"
 COOKIE_CAPTCHA = "sl_captcha"
 COOKIE_TURNSTILE = "sl_turnstile"
+COOKIE_RECAPTCHA = "sl_recaptcha"
 # Échanges techniques du laboratoire et des protections : ils ne sont pas des pages à protéger.
 HORS_PROTECTION = (
     "/lab/static",
@@ -31,6 +32,7 @@ HORS_PROTECTION = (
     "/lab/captcha",
     "/lab/piege",
     "/lab/turnstile",
+    "/lab/recaptcha",
 )
 # Règles consultées en direct : celles qui peuvent trancher dès la requête, puis celles qui lisent le JavaScript.
 REGLES_REQUETE = ("regles-http", "tls")
@@ -144,6 +146,14 @@ def controler(
         site_key = defis.turnstile_site_key("pass")
         reponse = _refus(request, pages.page_turnstile(site_key, cible), "turnstile")
         reponse.headers["X-ShadowLab-Turnstile"] = "1"
+        return reponse
+    if profil.recaptcha.actif and not defis.cookie_valide(
+        secret, "recaptcha", request.cookies.get(COOKIE_RECAPTCHA), jeton, lie
+    ):
+        db.enregistrer_decision(cx, jeton, "recaptcha", "emis", chemin, [])
+        cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+        reponse = _refus(request, pages.page_recaptcha(defis.recaptcha_site_key(), cible), "recaptcha")
+        reponse.headers["X-ShadowLab-Recaptcha"] = "1"
         return reponse
     if profil.captcha.actif and not defis.cookie_valide(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie

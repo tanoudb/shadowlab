@@ -1,7 +1,8 @@
 // Tableau de bord ShadowLab : lit l'API locale et dessine les vues (SVG, sans bibliothèque externe).
 // Tout texte venant des données passe par textContent (jamais innerHTML).
 
-const SERIES = ['playwright', 'selenium', 'scrapling', 'httpx']; // ordre fixe : la couleur suit le moteur
+const SERIES_FIXES = ['playwright', 'selenium', 'scrapling', 'httpx', 'curl-cffi', 'patchright',
+  'scrapling-furtif', 'camoufox', 'seleniumbase', 'seleniumbase-uc', 'undetected-chromedriver'];
 const contenu = document.getElementById('contenu');
 const choixExperience = document.getElementById('choix-experience');
 const infobulle = document.getElementById('infobulle');
@@ -52,8 +53,8 @@ const pct = (bloc, d = 1) => (bloc ? `${nombre(bloc.taux * 100, d)} %` : 'n. m.'
 const ic = (bloc) => (bloc ? `[${nombre(bloc.bas * 100, 1)} – ${nombre(bloc.haut * 100, 1)}]` : '');
 
 function couleur(engine) {
-  const i = SERIES.indexOf(engine);
-  return i >= 0 ? `var(--serie-${i + 1})` : 'var(--texte-3)';
+  const i = SERIES_FIXES.indexOf(engine);
+  return i >= 0 ? `var(--serie-${(i % 11) + 1})` : 'var(--texte-3)';
 }
 
 function pastille(texte) {
@@ -280,6 +281,83 @@ const VUES = {
           tableau(['Nom', 'Version', 'Rôle'], detecteurs.map((d) => h('tr', {}, h('td', {}, h('code', {}, d.name)),
             h('td', {}, d.version), h('td', {}, d.description.split('\n')[0])))))),
     ];
+  },
+
+  async arena() {
+    if (etat.experienceId === null) return [h('h1', {}, 'Arena'), vide('Aucune expérience.')];
+    const [dec, prot, stats] = await Promise.all([
+      api(`/experiences/${etat.experienceId}/decisions`),
+      api(`/experiences/${etat.experienceId}/protections`),
+      statistiques(),
+    ]);
+    const couches = dec.couches;
+    const nomsCouches = Object.keys(couches).sort();
+    const compteurs = nomsCouches.map((couche) => {
+      const decisions = couches[couche];
+      const total = Object.values(decisions).reduce((a, b) => a + b, 0);
+      const details = Object.entries(decisions).map(([d, n]) => `${d}: ${n}`).join(' · ');
+      return h('div', { class: 'carte compteur' },
+        h('b', {}, nombre(total)),
+        h('div', { class: 'etiquette' }, couche),
+        h('div', { class: 'sous-etiquette' }, details));
+    });
+    const niveaux = Object.keys(prot.protections).sort();
+    const moteursVus = [...new Set(niveaux.flatMap((n) => prot.protections[n].map((r) => r.moteur)))].sort();
+    const lignesProtection = moteursVus.map((moteur) => {
+      const engine = niveaux.flatMap((n) => prot.protections[n]).find((r) => r.moteur === moteur)?.engine || moteur;
+      return h('tr', {},
+        h('td', {}, h('span', { class: 'cle' }, h('i', { style: `background:${couleur(engine)}` }), moteur)),
+        niveaux.map((niveau) => {
+          const entrees = (prot.protections[niveau] || []).filter((r) => r.moteur === moteur);
+          if (!entrees.length) return h('td', { class: 'num cellule-matrice nm' }, '—');
+          const passages = entrees.reduce((a, e) => a + e.passages, 0);
+          const reussis = entrees.reduce((a, e) => a + e.reussis, 0);
+          const taux = passages ? reussis / passages : 0;
+          const issues = entrees.filter((e) => e.issue).map((e) => `${e.issue}: ${e.passages}`).join(', ');
+          const cel = h('td', { class: 'num cellule-matrice', title: issues || `${reussis}/${passages}` });
+          cel.append(document.createTextNode(`${nombre(taux * 100, 0)} %`));
+          const barre = h('div', { class: 'bar', style: `width:${taux * 100}%;background:${taux === 1 ? 'var(--bon)' : taux === 0 ? 'var(--critique)' : 'var(--attention)'}` });
+          cel.append(barre);
+          return cel;
+        }));
+    });
+    const blocs = [
+      h('h1', {}, 'Arena'),
+      h('p', { class: 'chapeau' }, 'Décisions des couches de protection et résultats par niveau. '
+        + 'Les compteurs couvrent tous les passages de l'expérience sélectionnée.'),
+    ];
+    if (compteurs.length) {
+      blocs.push(h('section', { class: 'carte' }, h('h2', {}, 'Décisions par couche'),
+        h('div', { class: 'grille compteurs' }, compteurs)));
+    } else {
+      blocs.push(h('section', { class: 'carte' }, h('h2', {}, 'Décisions par couche'),
+        vide('Aucune décision enregistrée (campagne sans Arena ?)')));
+    }
+    if (niveaux.length > 1 || (niveaux.length === 1 && niveaux[0] !== 'aucune' && niveaux[0] !== '01')) {
+      blocs.push(h('section', { class: 'carte', style: 'margin-top:16px' }, h('h2', {}, 'Réussite par niveau de protection'),
+        h('p', { class: 'sous' }, 'Part des passages réussis pour chaque combinaison moteur × protection.'),
+        tableau(['Moteur', ...niveaux.map((n) => `Niv. ${n}`)], lignesProtection,
+          { classes: ['', ...niveaux.map(() => 'num')] })));
+    }
+    if (stats && stats.moteurs.length && niveaux.length > 1) {
+      const dureesDonnees = [];
+      for (const m of stats.moteurs) {
+        for (const niveau of niveaux) {
+          const entrees = (prot.protections[niveau] || []).filter((r) => r.moteur === m.label);
+          if (!entrees.length) continue;
+          const moy = entrees.reduce((a, e) => a + (e.duree_moy || 0) * e.passages, 0)
+            / entrees.reduce((a, e) => a + e.passages, 0);
+          dureesDonnees.push({ label: `${m.label} · ${niveau}`, engine: m.engine,
+            valeur: moy, texte: `${nombre(moy)} ms`, details: [] });
+        }
+      }
+      if (dureesDonnees.length) {
+        blocs.push(h('section', { class: 'carte', style: 'margin-top:16px' },
+          h('h2', {}, 'Durée moyenne par moteur × protection'),
+          barres(dureesDonnees, { format: (v) => nombre(v) })));
+      }
+    }
+    return blocs;
   },
 
   async empreintes() {

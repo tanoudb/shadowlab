@@ -306,6 +306,56 @@ def reglages_publics(request: Request) -> dict:
     }
 
 
+@routeur.get("/experiences/{experiment_id}/decisions")
+def decisions(experiment_id: int, request: Request) -> dict:
+    """Résumé des décisions de protection pour une expérience : par couche et par type."""
+    with _base(request) as cx:
+        lignes = cx.execute(
+            """SELECT d.couche, d.decision, COUNT(*) AS n
+               FROM decisions d JOIN runs r ON r.session_token = d.session_token
+               WHERE r.experiment_id = ?
+               GROUP BY d.couche, d.decision ORDER BY d.couche, d.decision""",
+            (experiment_id,),
+        ).fetchall()
+        par_couche: dict[str, dict[str, int]] = {}
+        for r in lignes:
+            par_couche.setdefault(r["couche"], {})[r["decision"]] = r["n"]
+        return {"couches": par_couche}
+
+
+@routeur.get("/experiences/{experiment_id}/protections")
+def protections(experiment_id: int, request: Request) -> dict:
+    """Résultats par niveau de protection : réussite, détection, durée pour chaque combinaison moteur×protection."""
+    with _base(request) as cx:
+        lignes = cx.execute(
+            """SELECT r.protection,
+                      COALESCE(json_extract(e.configuration, '$.label'), e.name) AS moteur,
+                      e.name AS engine,
+                      COUNT(*) AS passages,
+                      SUM(r.status = 'reussi') AS reussis,
+                      AVG(r.duration_ms) AS duree_moy,
+                      r.issue
+               FROM runs r JOIN engines e ON e.id = r.engine_id
+               WHERE r.experiment_id = ? AND r.status != 'en_cours'
+               GROUP BY r.protection, moteur, r.issue
+               ORDER BY r.protection, moteur""",
+            (experiment_id,),
+        ).fetchall()
+        resultat: dict[str, list[dict]] = {}
+        for r in lignes:
+            resultat.setdefault(r["protection"], []).append(
+                {
+                    "moteur": r["moteur"],
+                    "engine": r["engine"],
+                    "passages": r["passages"],
+                    "reussis": r["reussis"],
+                    "duree_moy": round(r["duree_moy"], 1) if r["duree_moy"] else None,
+                    "issue": r["issue"],
+                }
+            )
+        return {"protections": resultat}
+
+
 @routeur.get("/experiences/{experiment_id}/signaux")
 def signaux(experiment_id: int, request: Request) -> dict:
     """Fréquence de chaque signal, par moteur et par détecteur : ce qui a fait classer les sessions."""

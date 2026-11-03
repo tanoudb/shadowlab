@@ -1,4 +1,4 @@
-"""Défi JavaScript (preuve de travail), CAPTCHA de démonstration et Turnstile (Cloudflare test mode).
+"""Défi JavaScript (preuve de travail), CAPTCHA de démonstration, Turnstile et reCAPTCHA v2 (test mode).
 
 Tout est sans état côté serveur : défis et cookies sont signés avec le secret local. Le CAPTCHA est une
 démonstration : il mesure ce qui se passe quand une personne doit intervenir, pas la robustesse d'une image.
@@ -149,6 +149,26 @@ def verifier_turnstile(token: str, mode: str = "pass") -> dict:
     secret = TURNSTILE_SECRET_PASS if mode == "pass" else TURNSTILE_SECRET_BLOCK
     try:
         r = httpx.post(TURNSTILE_VERIFY_URL, data={"secret": secret, "response": token}, timeout=10)
+        return r.json()
+    except Exception:
+        return {"success": False, "error-codes": ["network_error"]}
+
+
+# --- reCAPTCHA v2 (Google, mode test) --------------------------------------------------------------
+# Clés publiques documentées par Google : https://developers.google.com/recaptcha/docs/faq
+RECAPTCHA_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+RECAPTCHA_SECRET_KEY = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
+RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
+
+
+def recaptcha_site_key() -> str:
+    return RECAPTCHA_SITE_KEY
+
+
+def verifier_recaptcha(token: str) -> dict:
+    """Vérifie un token reCAPTCHA v2 via l'API Google. Retourne le JSON de réponse."""
+    try:
+        r = httpx.post(RECAPTCHA_VERIFY_URL, data={"secret": RECAPTCHA_SECRET_KEY, "response": token}, timeout=10)
         return r.json()
     except Exception:
         return {"success": False, "error-codes": ["network_error"]}

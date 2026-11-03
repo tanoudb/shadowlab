@@ -40,6 +40,12 @@ CSP_TURNSTILE = (
     "frame-src https://challenges.cloudflare.com; img-src 'self' data:; "
     "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
+CSP_RECAPTCHA = (
+    "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
+    "connect-src 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
+    "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
 
 
 def jeton_de(request: Request) -> str:
@@ -100,9 +106,12 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             reponse = await call_next(request)
         if chemin.startswith("/lab") or chemin.startswith("/manuel"):
             est_turnstile = "X-ShadowLab-Turnstile" in reponse.headers
+            est_recaptcha = "X-ShadowLab-Recaptcha" in reponse.headers
             if est_turnstile:
                 del reponse.headers["X-ShadowLab-Turnstile"]
-            csp = CSP_TURNSTILE if est_turnstile else CSP
+            if est_recaptcha:
+                del reponse.headers["X-ShadowLab-Recaptcha"]
+            csp = CSP_TURNSTILE if est_turnstile else CSP_RECAPTCHA if est_recaptcha else CSP
             reponse.headers["Content-Security-Policy"] = csp
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "same-origin"
@@ -343,6 +352,34 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse.set_cookie(
             gardien.COOKIE_TURNSTILE,
             defis.creer_cookie(secret, "turnstile", jeton, gardien.empreinte_liee(sceau)),
+            httponly=True,
+            samesite="lax",
+            path="/lab",
+        )
+        return reponse
+
+    @app.post("/lab/recaptcha/verifier", tags=["arena"])
+    async def recaptcha_verifier(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        if sceau is None or not jeton:
+            raise HTTPException(400, "recaptcha hors de l'Arena")
+        champs = parse_qs((await request.body()).decode("utf-8", "replace"))
+        token = (champs.get("g-recaptcha-response") or [""])[0]
+        retour = gardien.retour_sur((champs.get("retour") or ["/lab/"])[0])
+        resultat = defis.verifier_recaptcha(token)
+        with base() as cx:
+            if not resultat.get("success"):
+                codes = resultat.get("error-codes", [])
+                db.enregistrer_decision(cx, jeton, "recaptcha", "echec", request.url.path, [{"codes": codes}])
+                site_key = defis.recaptcha_site_key()
+                reponse = HTMLResponse(pages.page_recaptcha(site_key, retour), status_code=403)
+                reponse.headers["X-ShadowLab-Recaptcha"] = "1"
+                return reponse
+            db.enregistrer_decision(cx, jeton, "recaptcha", "captcha_test", request.url.path)
+        reponse = RedirectResponse(retour, status_code=303)
+        reponse.set_cookie(
+            gardien.COOKIE_RECAPTCHA,
+            defis.creer_cookie(secret, "recaptcha", jeton, gardien.empreinte_liee(sceau)),
             httponly=True,
             samesite="lax",
             path="/lab",

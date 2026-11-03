@@ -8,6 +8,7 @@
 # fingerprinting : examen actif des signaux navigateur (FingerprintJS, BotD, comportement)
 # honeypots    : champs invisibles et liens piège détectant les crawlers aveugles
 # turnstile    : Cloudflare Turnstile en mode test (test keys, ne prouve rien contre le vrai)
+# recaptcha    : Google reCAPTCHA v2 en mode test (test keys, ne prouve rien contre le vrai)
 
 "01":
   nom: Baseline
@@ -19,6 +20,7 @@
   fingerprinting: {actif: false}
   honeypots: {actif: false}
   turnstile: {actif: false}
+  recaptcha: {actif: false}
 
 "02":
   nom: "D\xE9tection simple"
@@ -30,6 +32,7 @@
   fingerprinting: {actif: false}
   honeypots: {actif: false}
   turnstile: {actif: false}
+  recaptcha: {actif: false}
 
 "03":
   nom: Fingerprinting
@@ -41,6 +44,7 @@
   fingerprinting: {actif: true}
   honeypots: {actif: false}
   turnstile: {actif: false}
+  recaptcha: {actif: false}
 
 "04":
   nom: Challenges
@@ -52,6 +56,7 @@
   fingerprinting: {actif: true}
   honeypots: {actif: false}
   turnstile: {actif: false}
+  recaptcha: {actif: false}
 
 "05":
   nom: "Protection avanc\xE9e"
@@ -63,6 +68,7 @@
   fingerprinting: {actif: true}
   honeypots: {actif: false}
   turnstile: {actif: true}
+  recaptcha: {actif: true}
 
 "06":
   nom: "D\xE9fense multicouche"
@@ -74,3 +80,4 @@
   fingerprinting: {actif: true}
   honeypots: {actif: true}
   turnstile: {actif: true}
+  recaptcha: {actif: true}

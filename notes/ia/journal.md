@@ -179,3 +179,38 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 1. **Dashboard avancé** — challenges déclenchés/résolus, résultats par combinaison moteur×protection.
 2. **Environnements isolés** — rendre camoufox, seleniumbase, seleniumbase-uc opérationnels.
 3. **reCAPTCHA test keys** — second CAPTCHA provider après Turnstile.
+
+## 2026-11-03 — session Opus 4.6 (suite 4) — Dashboard avancé, reCAPTCHA, moteurs isolés
+
+### Fait
+- **Dashboard avancé (Arena)** : nouvelle vue avec compteurs de décisions par couche,
+  matrice moteur × protection (barres colorées), graphique durées. Deux endpoints API
+  ajoutés (`/api/experiences/{id}/decisions`, `/api/experiences/{id}/protections`).
+  Palette étendue à 11 séries (tous les moteurs).
+- **reCAPTCHA v2 (Google test keys)** intégré pour les niveaux 05-06 :
+  - Clés publiques test dans `defis.py` (always-pass)
+  - Vérification serveur via API `siteverify`
+  - Page widget reCAPTCHA (`pages.page_recaptcha`)
+  - Route `/lab/recaptcha/verifier` avec cookie de réussite signé
+  - CSP dédiée pour `www.google.com/recaptcha` et `www.gstatic.com`
+  - Résultats étiquetés `captcha_test` (D-16)
+  - Modèle `Recaptcha` dans `profils.py`, profils 05-06 activés
+- **Moteurs isolés** : infrastructure déjà complète (pont, pont_serveur, 4 drivers).
+  crawlee et zendriver ont des pyproject.toml mais pas de driver (API async → futur).
+- 58 tests verts, lint propre.
+- AGENTS.md mis à jour.
+
+### Fichiers modifiés
+- `src/shadowlab/arena/defis.py`, `src/shadowlab/arena/profils.py`
+- `src/shadowlab/site/app.py`, `src/shadowlab/site/gardien.py`, `src/shadowlab/site/pages.py`
+- `src/shadowlab/api.py` (endpoints Arena)
+- `src/shadowlab/tableau_static/app.js`, `app.css`, `index.html`
+- `configs/arena/profils.yaml`
+- `tests/test_site.py`
+
+### Décisions
+- crawlee et zendriver restent sans driver : leur API async ne mappe pas sur `Driver` sync.
+- reCAPTCHA placé après Turnstile dans la chaîne du gardien (deux challenges externes successifs en 05-06).
+
+### Reste
+- Cloudflare sur domaine test, moteur expérimental propre, couche IA.

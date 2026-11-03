@@ -238,6 +238,29 @@ function turnstileOk(token) {{
     )
 
 
+def page_recaptcha(site_key: str, retour: str) -> str:
+    corps = f"""<p>Cette session demande une vérification reCAPTCHA v2 (Google, mode test).</p>
+<p id="recaptcha-etat">Chargement du widget…</p>
+<form id="recaptcha-formulaire" method="post" action="/lab/recaptcha/verifier">
+<input type="hidden" name="retour" value="{escape(retour)}">
+<div id="recaptcha-widget" class="g-recaptcha" data-sitekey="{escape(site_key)}"
+ data-callback="recaptchaOk"></div>
+<button id="recaptcha-envoyer" type="submit" disabled>Valider</button>
+</form>
+<script>
+function recaptchaOk(token) {{
+  document.getElementById("recaptcha-etat").textContent = "Vérification reçue.";
+  document.getElementById("recaptcha-envoyer").disabled = false;
+}}
+</script>"""
+    return _page_arena(
+        "recaptcha",
+        "Vérification reCAPTCHA",
+        corps,
+        '<script src="https://www.google.com/recaptcha/api.js" async defer></script>',
+    )
+
+
 def fin_manuelle(classements: list[dict]) -> str:
     lignes = "".join(
         f"<tr><td>{escape(c['detector_name'])}</td><td>{escape(c['classification'])}</td></tr>" for c in classements

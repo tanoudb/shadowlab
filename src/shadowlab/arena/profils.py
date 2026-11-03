@@ -53,6 +53,10 @@ class Turnstile(_Strict):
     actif: bool
 
 
+class Recaptcha(_Strict):
+    actif: bool
+
+
 class Profil(_Strict):
     nom: str = ""
     description: str = ""
@@ -63,6 +67,7 @@ class Profil(_Strict):
     fingerprinting: Fingerprinting = Fingerprinting(actif=False)
     honeypots: Honeypots = Honeypots(actif=False)
     turnstile: Turnstile = Turnstile(actif=False)
+    recaptcha: Recaptcha = Recaptcha(actif=False)
 
 
 class Profils:
