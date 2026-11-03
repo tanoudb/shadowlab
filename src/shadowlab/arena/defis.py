@@ -1,8 +1,11 @@
-"""Défi JavaScript (preuve de travail) et CAPTCHA de démonstration de l'Arena.
+"""Défi JavaScript (preuve de travail), CAPTCHA de démonstration et Turnstile (Cloudflare test mode).
 
 Tout est sans état côté serveur : défis et cookies sont signés avec le secret local. Le CAPTCHA est une
 démonstration : il mesure ce qui se passe quand une personne doit intervenir, pas la robustesse d'une image.
 Le laboratoire ne contient aucun solveur : pour un robot, un CAPTCHA reste un challenge non validé.
+
+Turnstile en mode test utilise les clés publiques Cloudflare (always-pass / always-block). Un résultat
+réussi est étiqueté `captcha_test` (D-16) — ce n'est pas un contournement de CAPTCHA.
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ import io
 import random
 import secrets as aleatoire
 import time
+
+import httpx
 
 from . import secret as secrets_arena
 
@@ -124,3 +129,26 @@ def image_captcha(secret: bytes, jeton: str, captcha: str) -> bytes | None:
     sortie = io.BytesIO()
     image.save(sortie, format="PNG")
     return sortie.getvalue()
+
+
+# --- Turnstile (Cloudflare, mode test) -----------------------------------------------------------
+# Clés publiques documentées par Cloudflare : https://developers.cloudflare.com/turnstile/testing/
+TURNSTILE_SITE_PASS = "1x00000000000000000000AA"
+TURNSTILE_SECRET_PASS = "1x0000000000000000000000000000000AA"
+TURNSTILE_SITE_BLOCK = "2x00000000000000000000AB"
+TURNSTILE_SECRET_BLOCK = "2x0000000000000000000000000000000AB"
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+def turnstile_site_key(mode: str = "pass") -> str:
+    return TURNSTILE_SITE_PASS if mode == "pass" else TURNSTILE_SITE_BLOCK
+
+
+def verifier_turnstile(token: str, mode: str = "pass") -> dict:
+    """Vérifie un token Turnstile via l'API Cloudflare. Retourne le JSON de réponse."""
+    secret = TURNSTILE_SECRET_PASS if mode == "pass" else TURNSTILE_SECRET_BLOCK
+    try:
+        r = httpx.post(TURNSTILE_VERIFY_URL, data={"secret": secret, "response": token}, timeout=10)
+        return r.json()
+    except Exception:
+        return {"success": False, "error-codes": ["network_error"]}

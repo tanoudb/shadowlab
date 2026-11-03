@@ -34,6 +34,12 @@ CSP = (
     "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; "
     "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
+CSP_TURNSTILE = (
+    "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
+    "connect-src 'self' https://challenges.cloudflare.com; "
+    "frame-src https://challenges.cloudflare.com; img-src 'self' data:; "
+    "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
 
 
 def jeton_de(request: Request) -> str:
@@ -93,7 +99,11 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if reponse is None:
             reponse = await call_next(request)
         if chemin.startswith("/lab") or chemin.startswith("/manuel"):
-            reponse.headers["Content-Security-Policy"] = CSP
+            est_turnstile = "X-ShadowLab-Turnstile" in reponse.headers
+            if est_turnstile:
+                del reponse.headers["X-ShadowLab-Turnstile"]
+            csp = CSP_TURNSTILE if est_turnstile else CSP
+            reponse.headers["Content-Security-Policy"] = csp
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "same-origin"
         sl = request.query_params.getlist("sl")
@@ -305,6 +315,34 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse.set_cookie(
             gardien.COOKIE_CAPTCHA,
             defis.creer_cookie(secret, "captcha", jeton, gardien.empreinte_liee(sceau)),
+            httponly=True,
+            samesite="lax",
+            path="/lab",
+        )
+        return reponse
+
+    @app.post("/lab/turnstile/verifier", tags=["arena"])
+    async def turnstile_verifier(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        if sceau is None or not jeton:
+            raise HTTPException(400, "turnstile hors de l'Arena")
+        champs = parse_qs((await request.body()).decode("utf-8", "replace"))
+        token = (champs.get("cf-turnstile-response") or [""])[0]
+        retour = gardien.retour_sur((champs.get("retour") or ["/lab/"])[0])
+        resultat = defis.verifier_turnstile(token)
+        with base() as cx:
+            if not resultat.get("success"):
+                codes = resultat.get("error-codes", [])
+                db.enregistrer_decision(cx, jeton, "turnstile", "echec", request.url.path, [{"codes": codes}])
+                site_key = defis.turnstile_site_key("pass")
+                reponse = HTMLResponse(pages.page_turnstile(site_key, retour), status_code=403)
+                reponse.headers["X-ShadowLab-Turnstile"] = "1"
+                return reponse
+            db.enregistrer_decision(cx, jeton, "turnstile", "captcha_test", request.url.path)
+        reponse = RedirectResponse(retour, status_code=303)
+        reponse.set_cookie(
+            gardien.COOKIE_TURNSTILE,
+            defis.creer_cookie(secret, "turnstile", jeton, gardien.empreinte_liee(sceau)),
             httponly=True,
             samesite="lax",
             path="/lab",

@@ -215,6 +215,29 @@ def page_captcha(captcha: str, retour: str, erreur: bool = False) -> str:
     return _page_arena("captcha", "Vérification humaine", corps)
 
 
+def page_turnstile(site_key: str, retour: str) -> str:
+    corps = f"""<p>Cette session demande une vérification Turnstile (Cloudflare, mode test).</p>
+<p id="turnstile-etat">Chargement du widget…</p>
+<form id="turnstile-formulaire" method="post" action="/lab/turnstile/verifier">
+<input type="hidden" name="retour" value="{escape(retour)}">
+<div id="turnstile-widget" class="cf-turnstile" data-sitekey="{escape(site_key)}"
+ data-callback="turnstileOk"></div>
+<button id="turnstile-envoyer" type="submit" disabled>Valider</button>
+</form>
+<script>
+function turnstileOk(token) {{
+  document.getElementById("turnstile-etat").textContent = "Vérification reçue.";
+  document.getElementById("turnstile-envoyer").disabled = false;
+}}
+</script>"""
+    return _page_arena(
+        "turnstile",
+        "Vérification Turnstile",
+        corps,
+        '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>',
+    )
+
+
 def fin_manuelle(classements: list[dict]) -> str:
     lignes = "".join(
         f"<tr><td>{escape(c['detector_name'])}</td><td>{escape(c['classification'])}</td></tr>" for c in classements
