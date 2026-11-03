@@ -143,10 +143,12 @@ les faux positifs des détecteurs et ce que les protections coûtent à une vrai
 (cliquez, faites défiler, remplissez le formulaire) et revenez terminer la session.</p>
 <form method="post" action="/manuel/commencer">
 <label>Protection <select id="choix-protection" name="protection">
-<option value="aucune">Aucune (site en direct)</option>
-<option value="faible">Faible</option>
-<option value="moyen">Moyenne</option>
-<option value="eleve">Élevée</option>
+<option value="01">01 — Baseline (aucune)</option>
+<option value="02">02 — Détection simple</option>
+<option value="03">03 — Fingerprinting</option>
+<option value="04">04 — Challenges</option>
+<option value="05">05 — Protection avancée</option>
+<option value="06">06 — Défense multicouche</option>
 </select></label>
 <button type="submit">Commencer une session manuelle</button></form>"""
     return gabarit("Session manuelle", corps, "")

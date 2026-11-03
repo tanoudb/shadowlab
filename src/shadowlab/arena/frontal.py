@@ -79,6 +79,8 @@ def creer_certificat(dossier: Path) -> tuple[Path, Path]:
 def jeton_de(cible: str, entetes: list[tuple[str, str]]) -> str:
     """Même règle que le site : paramètre `sl` en priorité, sinon cookie de session."""
     valeurs = parse_qs(urlsplit(cible).query).get("sl")
+    if valeurs and len(valeurs) > 1:
+        return ""
     candidat = valeurs[0] if valeurs else ""
     if not candidat:
         for nom, valeur in entetes:

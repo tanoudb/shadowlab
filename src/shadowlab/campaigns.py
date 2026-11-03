@@ -38,7 +38,7 @@ from . import __version__, passages
 from . import database as db
 from .arena import pile
 from .arena import profils as module_profils
-from .arena.profils import AUCUNE, PROTECTIONS
+from .arena.profils import BASELINE, normaliser
 from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre
@@ -88,7 +88,7 @@ class Experience(BaseModel):
     description: str = ""
     environment: Literal["local"] = "local"
     engines: list[MoteurConfig]
-    protections: list[str] = Field(default_factory=lambda: [AUCUNE], min_length=1)
+    protections: list[str] = Field(default_factory=lambda: [BASELINE], min_length=1)
     scenarios: list[str]
     repetitions: int = Field(ge=1, le=10_000)
     detectors: list[str] | None = None
@@ -118,12 +118,18 @@ class Experience(BaseModel):
             raise ValueError("deux moteurs ont le même libellé : ajoutez `label`")
         return moteurs
 
+    @field_validator("protections", mode="before")
+    @classmethod
+    def normaliser_protections(cls, protections: list[str]) -> list[str]:
+        return [normaliser(p) for p in protections]
+
     @field_validator("protections")
     @classmethod
     def protections_connues(cls, protections: list[str]) -> list[str]:
+        profils = module_profils.charger()
         for p in protections:
-            if p not in PROTECTIONS:
-                raise ValueError(f"protection inconnue : {p} (disponibles : {', '.join(PROTECTIONS)})")
+            if p not in profils:
+                raise ValueError(f"protection inconnue : {p} (disponibles : {', '.join(profils.codes)})")
         if len(set(protections)) != len(protections):
             raise ValueError("protection en double")
         return protections
@@ -299,7 +305,7 @@ def _deja_faits(cx, experiment_id: int) -> set[tuple[str, str, str, int]]:
 
 
 def _controler_arena(reglages: Reglages, experience: Experience) -> None:
-    if any(p != AUCUNE for p in experience.protections) and not pile.sante(reglages):
+    if any(p != BASELINE for p in experience.protections) and not pile.sante(reglages):
         raise pile.ArenaIndisponible("Arena injoignable : lancez `uv run shadowlab arena demarrer`")
 
 
@@ -311,7 +317,7 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
         raise LookupError(f"expérience {experiment_id} introuvable")
     experience = Experience.model_validate_json(ligne["configuration"])
     verifier_url(experience.base_url or reglages.url_site, reglages.hotes_autorises)
-    if experience.protections != [AUCUNE]:
+    if experience.protections != [BASELINE]:
         verifier_url(reglages.url_arena, reglages.hotes_autorises)
     # Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
     cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
@@ -413,7 +419,7 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
         faits = _deja_faits(cx, experiment_id)
         classe = registre()[moteur_cfg.name]
         base = experience.base_url or reglages.url_site
-        if protection != AUCUNE:
+        if protection != BASELINE:
             base = reglages.url_arena
         dossier_artefacts = reglages.sorties / "artefacts" / str(experiment_id)
         arret = fichier_arret(reglages)

@@ -68,8 +68,8 @@ def test_meme_graine_meme_ordre():
         }
     }
     experience = FichierCampagne.model_validate(brut).experiment
-    plan1 = [o for _, o in _plan(experience, experience.engines[0], "aucune")]
-    plan2 = [o for _, o in _plan(experience, experience.engines[0], "aucune")]
+    plan1 = [o for _, o in _plan(experience, experience.engines[0], "01")]
+    plan2 = [o for _, o in _plan(experience, experience.engines[0], "01")]
     assert plan1 == plan2
 
 

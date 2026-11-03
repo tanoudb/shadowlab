@@ -18,7 +18,8 @@ from .. import database as db
 from .. import passages
 from ..arena import defis
 from ..arena import secret as secrets_arena
-from ..arena.profils import AUCUNE, PROTECTIONS
+from ..arena.profils import BASELINE
+from ..arena.profils import charger as charger_profils
 from ..config import Reglages, charger
 from ..detection import Observations, classer
 from . import gardien, pages
@@ -37,7 +38,10 @@ CSP = (
 
 def jeton_de(request: Request) -> str:
     """Jeton de session : paramètre `sl` en priorité, sinon cookie posé à la première visite."""
-    candidat = request.query_params.get("sl") or request.cookies.get(COOKIE_SESSION) or ""
+    sl = request.query_params.getlist("sl")
+    if len(sl) > 1:
+        return ""
+    candidat = sl[0] if sl else request.cookies.get(COOKIE_SESSION) or ""
     return candidat if JETON_VALIDE.match(candidat) else ""
 
 
@@ -92,7 +96,8 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             reponse.headers["Content-Security-Policy"] = CSP
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "same-origin"
-        if jeton and request.query_params.get("sl") == jeton:
+        sl = request.query_params.getlist("sl")
+        if jeton and len(sl) == 1 and sl[0] == jeton:
             reponse.set_cookie(COOKIE_SESSION, jeton, httponly=True, samesite="lax", path="/")
         return reponse
 
@@ -298,15 +303,16 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     @app.post("/manuel/commencer", tags=["sessions manuelles"])
     async def manuel_commencer(request: Request) -> Response:
         champs = parse_qs((await request.body()).decode("utf-8", "replace"))
-        protection = (champs.get("protection") or [AUCUNE])[0]
-        if protection not in PROTECTIONS:
+        profils = charger_profils()
+        protection = (champs.get("protection") or [BASELINE])[0]
+        if protection not in profils:
             raise HTTPException(422, "protection inconnue")
         with base() as cx:
             experience = passages.experience_manuelle(cx)
             moteur = db.engine_id(cx, "navigateur-manuel", "n/a", "humain", {})
             scenario = db.scenario_id(cx, "navigation_manuelle", "Navigation libre par une personne")
             _, jeton = passages.demarrer(cx, experience, moteur, scenario, 1, "humain", protection=protection)
-        if protection == AUCUNE:
+        if protection == BASELINE:
             return RedirectResponse(f"/lab/?sl={jeton}", status_code=303)
         # Une page et non une redirection : la politique `form-action 'self'` interdit de changer d'origine.
         return HTMLResponse(pages.manuel_pret(f"{reglages.url_arena}/lab/?sl={jeton}"))

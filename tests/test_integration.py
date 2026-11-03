@@ -55,5 +55,6 @@ def test_campagne_complete_tous_moteurs(reglages, tmp_path):
     for moteur in ("scrapling", "httpx"):
         assert statuts[(moteur, "javascript_content")] == "echec"  # sans JavaScript : attendu
         assert statuts[(moteur, "static_html")] == "reussi"
-    assert cx.execute("SELECT COUNT(*) FROM detections").fetchone()[0] == 16 * 4
+    nb_detecteurs = len(__import__("shadowlab.detection", fromlist=["registre"]).registre())
+    assert cx.execute("SELECT COUNT(*) FROM detections").fetchone()[0] == 16 * nb_detecteurs
     assert cx.execute("SELECT COUNT(*) FROM metrics WHERE cpu_time_ms IS NOT NULL").fetchone()[0] == 16

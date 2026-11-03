@@ -1,20 +1,76 @@
-# Profils de protection de l'Anti-Bot Arena. `shadowlab arena appliquer` régénère Nginx et Coraza à partir de ce fichier.
-# limitation : requêtes de pages par seconde et par session, et rafale tolérée (Nginx, les fichiers statiques sont exclus)
-# waf        : Coraza + OWASP CRS. `detection` journalise sans bloquer ; `blocage` bloque au-delà du seuil d'anomalie
-# defi_js    : preuve de travail SHA-256 (difficulté en bits). `lier_tls` lie son cookie à l'empreinte JA4 du client
-# captcha    : CAPTCHA de démonstration, servi quand une règle en direct classe la session comme automatisée
-faible:
+# Niveaux de difficulté progressive de l'Anti-Bot Arena.
+# `shadowlab arena appliquer` régénère Nginx et Coraza à partir de ce fichier.
+#
+# limitation   : requêtes de pages par seconde et par session (Nginx, statiques exclus)
+# waf          : Coraza + OWASP CRS. `detection` journalise ; `blocage` bloque au seuil
+# defi_js      : preuve de travail SHA-256. `lier_tls` lie le cookie au JA4 du client
+# captcha      : demo CAPTCHA servi quand une règle classe la session comme automatisée
+# fingerprinting : examen actif des signaux navigateur (FingerprintJS, BotD, comportement)
+# honeypots    : champs invisibles et liens piège détectant les crawlers aveugles
+# turnstile    : Cloudflare Turnstile en mode test (test keys, ne prouve rien contre le vrai)
+
+"01":
+  nom: Baseline
+  description: Site nu, aucune protection
+  limitation: {debit: 1000, rafale: 1000}
+  waf: {mode: detection, paranoia: 1, seuil: 100}
+  defi_js: {actif: false, difficulte: 0, lier_tls: false}
+  captcha: {actif: false}
+  fingerprinting: {actif: false}
+  honeypots: {actif: false}
+  turnstile: {actif: false}
+
+"02":
+  nom: "D\xE9tection simple"
+  description: User-Agent, cookies, limites de fréquence
   limitation: {debit: 20, rafale: 40}
+  waf: {mode: detection, paranoia: 1, seuil: 10}
+  defi_js: {actif: false, difficulte: 0, lier_tls: false}
+  captcha: {actif: false}
+  fingerprinting: {actif: false}
+  honeypots: {actif: false}
+  turnstile: {actif: false}
+
+"03":
+  nom: Fingerprinting
+  description: Signaux navigateur, JavaScript et comportements
+  limitation: {debit: 10, rafale: 25}
   waf: {mode: detection, paranoia: 1, seuil: 5}
   defi_js: {actif: false, difficulte: 0, lier_tls: false}
   captcha: {actif: false}
-moyen:
+  fingerprinting: {actif: true}
+  honeypots: {actif: false}
+  turnstile: {actif: false}
+
+"04":
+  nom: Challenges
+  description: CAPTCHA et challenges JavaScript en mode test
   limitation: {debit: 5, rafale: 15}
   waf: {mode: blocage, paranoia: 1, seuil: 5}
   defi_js: {actif: true, difficulte: 12, lier_tls: false}
-  captcha: {actif: false}
-eleve:
-  limitation: {debit: 2, rafale: 6}
+  captcha: {actif: true}
+  fingerprinting: {actif: true}
+  honeypots: {actif: false}
+  turnstile: {actif: false}
+
+"05":
+  nom: "Protection avanc\xE9e"
+  description: "WAF haute paranoïa, TLS binding, Turnstile test"
+  limitation: {debit: 3, rafale: 8}
   waf: {mode: blocage, paranoia: 2, seuil: 5}
   defi_js: {actif: true, difficulte: 15, lier_tls: true}
   captcha: {actif: true}
+  fingerprinting: {actif: true}
+  honeypots: {actif: false}
+  turnstile: {actif: true}
+
+"06":
+  nom: "D\xE9fense multicouche"
+  description: "Toutes protections combinées, corrélation et adaptation"
+  limitation: {debit: 2, rafale: 4}
+  waf: {mode: blocage, paranoia: 3, seuil: 3}
+  defi_js: {actif: true, difficulte: 18, lier_tls: true}
+  captcha: {actif: true}
+  fingerprinting: {actif: true}
+  honeypots: {actif: true}
+  turnstile: {actif: true}
