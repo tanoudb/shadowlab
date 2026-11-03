@@ -1,0 +1,8 @@
+outputs/
+notes/ia/ETAT.md
+.cerveau-branche
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.sqlite3*

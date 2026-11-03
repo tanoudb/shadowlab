@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShadowLab</title>
+<link rel="stylesheet" href="/tableau/app.css">
+</head>
+<body>
+<div class="cadre">
+  <aside class="lateral">
+    <div class="marque"><span class="logo" aria-hidden="true"></span><div><b>ShadowLab</b><small>NOEZIA · laboratoire local</small></div></div>
+    <nav id="navigation" aria-label="Sections">
+      <a href="#/vue">Vue d'ensemble</a>
+      <a href="#/moteurs">Moteurs</a>
+      <a href="#/experiences">Expériences</a>
+      <a href="#/empreintes">Empreintes</a>
+      <a href="#/detection">Détection</a>
+      <a href="#/performance">Performance</a>
+      <a href="#/comparer">Comparer</a>
+      <a href="#/rapports">Rapports</a>
+      <a href="#/reglages">Réglages</a>
+    </nav>
+    <div class="pied-lateral">
+      <a href="/lab/" target="_blank" rel="noopener">Site de test ↗</a>
+      <a href="/manuel" target="_blank" rel="noopener">Session manuelle ↗</a>
+      <a href="/api/docs" target="_blank" rel="noopener">API ↗</a>
+      <button id="theme" type="button">Thème clair</button>
+    </div>
+  </aside>
+  <div class="principal">
+    <header class="filtres" id="filtres">
+      <label>Expérience <select id="choix-experience"></select></label>
+      <span id="etat-campagne" class="etat" hidden></span>
+    </header>
+    <main id="contenu" tabindex="-1"></main>
+  </div>
+</div>
+<div id="infobulle" role="tooltip" hidden></div>
+<script type="module" src="/tableau/app.js"></script>
+</body>
+</html>

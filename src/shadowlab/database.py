@@ -1,0 +1,207 @@
+"""Base SQLite du laboratoire : schéma versionné, migrations et accès courants.
+
+Le site de test (qui reçoit les observations) et le lanceur de campagnes (qui écrit les passages)
+partagent le même fichier : mode WAL et délai d'attente pour les écritures concurrentes.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+# Chaque migration est appliquée une fois, dans l'ordre ; `PRAGMA user_version` garde le numéro atteint.
+MIGRATIONS: list[str] = [
+    # 1 — schéma initial
+    """
+    CREATE TABLE experiments (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        configuration TEXT NOT NULL,
+        status TEXT NOT NULL,
+        seed INTEGER,
+        environment TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE TABLE engines (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        version TEXT NOT NULL,
+        runtime TEXT NOT NULL,
+        configuration TEXT NOT NULL,
+        UNIQUE (name, version, configuration)
+    );
+    CREATE TABLE scenarios (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE runs (
+        id INTEGER PRIMARY KEY,
+        experiment_id INTEGER NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
+        engine_id INTEGER NOT NULL REFERENCES engines(id),
+        scenario_id INTEGER NOT NULL REFERENCES scenarios(id),
+        repetition INTEGER NOT NULL,
+        session_token TEXT NOT NULL UNIQUE,
+        truth TEXT NOT NULL CHECK (truth IN ('automatise', 'humain')),
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL,
+        duration_ms REAL,
+        success INTEGER,
+        error TEXT
+    );
+    CREATE INDEX runs_experiment ON runs(experiment_id);
+    CREATE TABLE observations_http (
+        id INTEGER PRIMARY KEY,
+        session_token TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        http_version TEXT,
+        headers TEXT NOT NULL,
+        cookies TEXT NOT NULL
+    );
+    CREATE INDEX observations_http_session ON observations_http(session_token);
+    CREATE TABLE observations_js (
+        id INTEGER PRIMARY KEY,
+        session_token TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        page TEXT NOT NULL,
+        payload TEXT NOT NULL
+    );
+    CREATE INDEX observations_js_session ON observations_js(session_token);
+    CREATE TABLE fingerprints (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        browser_properties TEXT NOT NULL,
+        http_properties TEXT NOT NULL,
+        tls_properties TEXT NOT NULL,
+        session_properties TEXT NOT NULL
+    );
+    CREATE TABLE detections (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        detector_name TEXT NOT NULL,
+        detector_version TEXT NOT NULL,
+        classification TEXT NOT NULL CHECK (classification IN ('automatise', 'humain', 'indetermine')),
+        confidence REAL NOT NULL,
+        signals TEXT NOT NULL
+    );
+    CREATE INDEX detections_run ON detections(run_id);
+    CREATE TABLE metrics (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        cpu_usage REAL,
+        memory_usage REAL,
+        memory_mean REAL,
+        navigation_time REAL,
+        request_count INTEGER,
+        error_count INTEGER
+    );
+    CREATE TABLE artifacts (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        artifact_type TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """,
+    # 2 — temps CPU absolu : un pourcentage seul trompe sur des passages de quelques millisecondes
+    """
+    ALTER TABLE metrics ADD COLUMN cpu_time_ms REAL;
+    """,
+]
+
+
+def maintenant() -> str:
+    return datetime.now(UTC).isoformat(timespec="milliseconds")
+
+
+def ouvrir(chemin: Path) -> sqlite3.Connection:
+    """Ouvre la base, applique les migrations manquantes, renvoie une connexion prête."""
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    connexion = sqlite3.connect(chemin, timeout=30, check_same_thread=False, isolation_level=None)
+    connexion.row_factory = sqlite3.Row
+    connexion.execute("PRAGMA journal_mode=WAL")
+    connexion.execute("PRAGMA foreign_keys=ON")
+    connexion.execute("PRAGMA busy_timeout=30000")
+    migrer(connexion)
+    return connexion
+
+
+def migrer(connexion: sqlite3.Connection) -> int:
+    version = connexion.execute("PRAGMA user_version").fetchone()[0]
+    for numero, script in enumerate(MIGRATIONS[version:], start=version + 1):
+        with transaction(connexion):
+            for instruction in (s.strip() for s in script.split(";")):
+                if instruction:
+                    connexion.execute(instruction)
+            connexion.execute(f"PRAGMA user_version={numero}")
+    return len(MIGRATIONS)
+
+
+@contextmanager
+def transaction(connexion: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    connexion.execute("BEGIN IMMEDIATE")
+    try:
+        yield connexion
+    except BaseException:
+        connexion.execute("ROLLBACK")
+        raise
+    connexion.execute("COMMIT")
+
+
+def j(valeur: Any) -> str:
+    return json.dumps(valeur, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def lj(texte: str | None) -> Any:
+    return json.loads(texte) if texte else None
+
+
+def engine_id(connexion: sqlite3.Connection, name: str, version: str, runtime: str, configuration: dict) -> int:
+    cfg = j(configuration)
+    connexion.execute(
+        "INSERT OR IGNORE INTO engines (name, version, runtime, configuration) VALUES (?, ?, ?, ?)",
+        (name, version, runtime, cfg),
+    )
+    ligne = connexion.execute(
+        "SELECT id FROM engines WHERE name = ? AND version = ? AND configuration = ?", (name, version, cfg)
+    ).fetchone()
+    return int(ligne["id"])
+
+
+def scenario_id(connexion: sqlite3.Connection, name: str, description: str) -> int:
+    connexion.execute(
+        "INSERT INTO scenarios (name, description) VALUES (?, ?) "
+        "ON CONFLICT(name) DO UPDATE SET description = excluded.description",
+        (name, description),
+    )
+    return int(connexion.execute("SELECT id FROM scenarios WHERE name = ?", (name,)).fetchone()["id"])
+
+
+def observations(connexion: sqlite3.Connection, jeton: str) -> tuple[list[dict], list[dict]]:
+    """Observations HTTP et JavaScript reçues pour une session, dans l'ordre d'arrivée."""
+    http = [
+        {
+            "received_at": r["received_at"],
+            "method": r["method"],
+            "path": r["path"],
+            "http_version": r["http_version"],
+            "headers": lj(r["headers"]),
+            "cookies": lj(r["cookies"]),
+        }
+        for r in connexion.execute("SELECT * FROM observations_http WHERE session_token = ? ORDER BY id", (jeton,))
+    ]
+    js = [
+        {"received_at": r["received_at"], "kind": r["kind"], "page": r["page"], "payload": lj(r["payload"])}
+        for r in connexion.execute("SELECT * FROM observations_js WHERE session_token = ? ORDER BY id", (jeton,))
+    ]
+    return http, js

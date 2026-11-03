@@ -1,0 +1,17 @@
+:root { color-scheme: light; --encre: #1d2330; --fond: #f6f7f9; --trait: #d9dde5; --accent: #2f5bd3; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; color: var(--encre); background: var(--fond); }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 12px 24px;
+  background: #fff; border-bottom: 1px solid var(--trait); }
+nav { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+a { color: var(--accent); }
+main { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+table { border-collapse: collapse; width: 100%; background: #fff; }
+th, td { border: 1px solid var(--trait); padding: 6px 10px; text-align: left; vertical-align: top; }
+form { display: grid; gap: 12px; max-width: 360px; }
+label { display: grid; gap: 4px; }
+input, select, button { font: inherit; padding: 6px 8px; }
+pre { background: #fff; border: 1px solid var(--trait); padding: 12px; overflow: auto; max-height: 60vh; }
+footer { text-align: center; color: #6b7280; font-size: 13px; padding: 24px 16px; }
+tr.automatise td:nth-child(2) { color: #b42318; font-weight: 600; }
+tr.humain td:nth-child(2) { color: #067647; font-weight: 600; }

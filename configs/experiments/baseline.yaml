@@ -1,0 +1,33 @@
+# Campagne de référence : 4 moteurs × 8 scénarios × 100 répétitions = 3 200 passages.
+experiment:
+  name: browser_baseline
+  description: >-
+    Référence des moteurs dans leur configuration standard sur le site de test local.
+    Navigateurs sans tête ; httpx sert de témoin brut.
+  environment: local
+  engines:
+    - playwright
+    - selenium
+    - scrapling
+    - httpx
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - detection_page
+    - api_json
+  repetitions: 100
+  seed: 20261103
+  metrics:
+    - detection_rate
+    - false_positive_rate
+    - false_negative_rate
+    - execution_time
+    - memory_usage
+    - cpu_usage
+    - scenario_success
+    - error_rate
+  output: [json, csv, html]

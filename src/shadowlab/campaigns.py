@@ -1,0 +1,385 @@
+"""Campagnes expérimentales : définition YAML validée, exécution reproductible, reprise et arrêt.
+
+Ordre d'exécution : moteur par moteur ; pour chaque répétition, les scénarios dans un ordre tiré au sort
+avec la graine de la campagne (évite qu'un scénario profite toujours d'un navigateur « chaud »).
+Arrêt d'urgence : créer le fichier `<sorties>/ARRET` (commande `shadowlab arreter`) ; la campagne
+s'arrête après le passage en cours et peut être reprise.
+"""
+
+from __future__ import annotations
+
+import logging
+import platform
+import random
+import socket
+import subprocess
+import sys
+import time
+import traceback
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from . import __version__, passages
+from . import database as db
+from .config import Reglages
+from .detection import registre as registre_detecteurs
+from .engines import Driver, registre
+from .mesures import PIDS_EXCLUS, Echantillonneur
+from .perimetre import verifier_url
+from .scenarios import SCENARIOS
+
+journal = logging.getLogger("shadowlab.campagne")
+
+METRIQUES = {
+    "detection_rate",
+    "false_positive_rate",
+    "false_negative_rate",
+    "execution_time",
+    "memory_usage",
+    "cpu_usage",
+    "scenario_success",
+    "error_rate",
+}
+
+
+class MoteurConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    label: str | None = None  # pour comparer deux configurations du même moteur
+    options: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def nom_affiche(self) -> str:
+        return self.label or self.name
+
+
+class Experience(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    description: str = ""
+    environment: Literal["local"] = "local"
+    engines: list[MoteurConfig]
+    scenarios: list[str]
+    repetitions: int = Field(ge=1, le=10_000)
+    detectors: list[str] | None = None
+    metrics: list[str] = Field(default_factory=lambda: sorted(METRIQUES))
+    output: list[Literal["json", "csv", "html"]] = Field(default_factory=lambda: ["json", "csv", "html"])
+    seed: int | None = None
+    concurrency: int = Field(default=1, ge=1)
+    base_url: str | None = None
+    screenshots_on_failure: bool = True
+
+    @field_validator("engines", mode="before")
+    @classmethod
+    def moteurs_courts(cls, valeur: Any) -> Any:
+        return [{"name": v} if isinstance(v, str) else v for v in valeur]
+
+    @field_validator("engines")
+    @classmethod
+    def moteurs_connus(cls, moteurs: list[MoteurConfig]) -> list[MoteurConfig]:
+        connus = registre()
+        for m in moteurs:
+            if m.name not in connus:
+                raise ValueError(f"moteur inconnu : {m.name} (disponibles : {', '.join(sorted(connus))})")
+        libelles = [m.nom_affiche for m in moteurs]
+        if len(set(libelles)) != len(libelles):
+            raise ValueError("deux moteurs ont le même libellé : ajoutez `label`")
+        return moteurs
+
+    @field_validator("scenarios")
+    @classmethod
+    def scenarios_connus(cls, scenarios: list[str]) -> list[str]:
+        for s in scenarios:
+            if s not in SCENARIOS:
+                raise ValueError(f"scénario inconnu : {s} (disponibles : {', '.join(SCENARIOS)})")
+        return scenarios
+
+    @field_validator("detectors")
+    @classmethod
+    def detecteurs_connus(cls, detecteurs: list[str] | None) -> list[str] | None:
+        connus = registre_detecteurs()
+        for d in detecteurs or []:
+            if d not in connus:
+                raise ValueError(f"détecteur inconnu : {d} (disponibles : {', '.join(connus)})")
+        return detecteurs
+
+    @field_validator("metrics")
+    @classmethod
+    def metriques_connues(cls, metriques: list[str]) -> list[str]:
+        inconnues = set(metriques) - METRIQUES
+        if inconnues:
+            raise ValueError(f"métriques inconnues : {', '.join(sorted(inconnues))}")
+        return metriques
+
+
+class FichierCampagne(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    experiment: Experience
+
+    @model_validator(mode="after")
+    def graine(self) -> FichierCampagne:
+        if self.experiment.seed is None:
+            self.experiment.seed = random.SystemRandom().randrange(2**31)
+        return self
+
+
+def lire(chemin: Path, reglages: Reglages) -> Experience:
+    """Lit et valide un fichier YAML. Les URL sont contrôlées par le périmètre."""
+    with chemin.open(encoding="utf-8") as f:
+        brut = yaml.safe_load(f)
+    experience = FichierCampagne.model_validate(brut).experiment
+    if experience.base_url:
+        verifier_url(experience.base_url, reglages.hotes_autorises)
+    if experience.concurrency > reglages.concurrence_max:
+        raise ValueError(
+            f"concurrence {experience.concurrency} > plafond {reglages.concurrence_max} (SHADOWLAB_CONCURRENCE_MAX)"
+        )
+    if experience.concurrency > 1:
+        raise NotImplementedError("exécution concurrente pas encore disponible : concurrency doit valoir 1")
+    return experience
+
+
+def environnement() -> dict[str, Any]:
+    return {
+        "shadowlab": __version__,
+        "python": sys.version.split()[0],
+        "systeme": platform.platform(),
+        "machine": platform.machine(),
+        "processeurs": __import__("os").cpu_count(),
+    }
+
+
+# --- Serveur local ------------------------------------------------------------------------------------
+
+
+def _repond(hote: str, port: int) -> bool:
+    try:
+        with socket.create_connection((hote, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+@contextmanager
+def serveur_local(reglages: Reglages) -> Iterator[None]:
+    """Démarre le site de test dans un processus à part si rien n'écoute déjà sur le port configuré.
+
+    Processus séparé : sa consommation CPU et mémoire n'entre pas dans la mesure des moteurs.
+    """
+    if _repond(reglages.hote, reglages.port):
+        journal.info("site de test déjà démarré sur %s", reglages.url_site)
+        yield
+        return
+    reglages.sorties.mkdir(parents=True, exist_ok=True)
+    sortie = (reglages.sorties / "logs").joinpath("site.log")
+    sortie.parent.mkdir(parents=True, exist_ok=True)
+    with sortie.open("ab") as flux:
+        processus = subprocess.Popen(
+            [sys.executable, "-m", "shadowlab.cli", "site", "--silencieux"], stdout=flux, stderr=flux
+        )
+    PIDS_EXCLUS.add(processus.pid)
+    try:
+        for _ in range(200):
+            if _repond(reglages.hote, reglages.port):
+                break
+            if processus.poll() is not None:
+                raise RuntimeError(f"le site de test s'est arrêté au démarrage (voir {sortie})")
+            time.sleep(0.05)
+        else:
+            raise RuntimeError("le site de test n'a pas démarré")
+        yield
+    finally:
+        processus.terminate()
+        try:
+            processus.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            processus.kill()
+        PIDS_EXCLUS.discard(processus.pid)
+
+
+# --- Exécution ----------------------------------------------------------------------------------------
+
+
+def fichier_arret(reglages: Reglages) -> Path:
+    return reglages.sorties / "ARRET"
+
+
+def creer(cx, experience: Experience) -> int:
+    curseur = cx.execute(
+        "INSERT INTO experiments (name, description, created_at, configuration, status, seed, environment)"
+        " VALUES (?, ?, ?, ?, 'creee', ?, ?)",
+        (
+            experience.name,
+            experience.description,
+            db.maintenant(),
+            experience.model_dump_json(),
+            experience.seed,
+            db.j(environnement()),
+        ),
+    )
+    return int(curseur.lastrowid)
+
+
+def _plan(experience: Experience) -> Iterator[tuple[MoteurConfig, int, list[str]]]:
+    rng = random.Random(experience.seed)
+    for moteur in experience.engines:
+        for repetition in range(1, experience.repetitions + 1):
+            ordre = list(experience.scenarios)
+            rng.shuffle(ordre)
+            yield moteur, repetition, ordre
+
+
+def executer(reglages: Reglages, experiment_id: int) -> str:
+    """Exécute (ou reprend) une campagne. Renvoie son état final."""
+    cx = db.ouvrir(reglages.base_donnees)
+    ligne = cx.execute("SELECT * FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+    if ligne is None:
+        raise LookupError(f"expérience {experiment_id} introuvable")
+    experience = Experience.model_validate_json(ligne["configuration"])
+    base = experience.base_url or reglages.url_site
+    verifier_url(base, reglages.hotes_autorises)
+    deja_faits = {
+        (r["engine_label"], r["scenario"], r["repetition"])
+        for r in cx.execute(
+            "SELECT json_extract(e.configuration, '$.label') AS engine_label, s.name AS scenario, r.repetition"
+            " FROM runs r JOIN engines e ON e.id = r.engine_id JOIN scenarios s ON s.id = r.scenario_id"
+            " WHERE r.experiment_id = ? AND r.status IN ('reussi', 'echec', 'erreur')",
+            (experiment_id,),
+        )
+    }
+    # Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
+    cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
+    cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (experiment_id,))
+    arret = fichier_arret(reglages)
+    arret.unlink(missing_ok=True)
+    statut = "termine"
+    rng_scenarios = random.Random(experience.seed)
+    dossier_artefacts = reglages.sorties / "artefacts" / str(experiment_id)
+    moteurs = registre()
+
+    with serveur_local(reglages):
+        moteur_courant: tuple[str, Driver, int] | None = None
+        try:
+            for moteur_cfg, repetition, ordre in _plan(experience):
+                if moteur_courant is None or moteur_courant[0] != moteur_cfg.nom_affiche:
+                    if moteur_courant is not None:
+                        moteur_courant[1].close()
+                    pilote = moteurs[moteur_cfg.name](reglages.hotes_autorises, moteur_cfg.options)
+                    pilote.open()
+                    config = {**pilote.configuration(), "label": moteur_cfg.nom_affiche}
+                    versions = pilote.versions()
+                    engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
+                    moteur_courant = (moteur_cfg.nom_affiche, pilote, engine_id)
+                    journal.info("moteur %s %s", moteur_cfg.nom_affiche, versions)
+                _, pilote, engine_id = moteur_courant
+                for nom_scenario in ordre:
+                    if (moteur_cfg.nom_affiche, nom_scenario, repetition) in deja_faits:
+                        continue
+                    if arret.exists():
+                        statut = "interrompu"
+                        raise KeyboardInterrupt
+                    scenario = SCENARIOS[nom_scenario]
+                    scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
+                    _passage(
+                        cx,
+                        reglages,
+                        experience,
+                        experiment_id,
+                        pilote,
+                        engine_id,
+                        scenario,
+                        scenario_id,
+                        repetition,
+                        base,
+                        random.Random(rng_scenarios.random()),
+                        dossier_artefacts,
+                    )
+        except KeyboardInterrupt:
+            statut = "interrompu"
+        except MemoryError as erreur:
+            statut = "interrompu"
+            journal.error("arrêt : %s", erreur)
+        finally:
+            if moteur_courant is not None:
+                moteur_courant[1].close()
+            cx.execute("UPDATE experiments SET status = ? WHERE id = ?", (statut, experiment_id))
+            cx.close()
+    return statut
+
+
+def _passage(
+    cx,
+    reglages,
+    experience,
+    experiment_id,
+    pilote,
+    engine_id,
+    scenario,
+    scenario_id,
+    repetition,
+    base,
+    rng,
+    dossier_artefacts,
+) -> None:
+    run_id, jeton = passages.demarrer(cx, experiment_id, engine_id, scenario_id, repetition, "automatise")
+    pilote.mesures = type(pilote.mesures)()
+    erreur: str | None = None
+    succes: bool | None = None
+    details: dict[str, Any] = {}
+    with Echantillonneur(reglages.memoire_max_mo) as echantillon:
+        debut = time.perf_counter()
+        try:
+            pilote.start_session()
+            issue = scenario.executer(pilote, base, jeton, rng)
+            succes, details = issue.success, issue.details
+            if scenario.attend_js and pilote.executes_javascript:
+                pilote.wait_for_element("#observation-envoyee", timeout_ms=5000)
+        except Exception as exc:  # une erreur de moteur est un résultat, pas une panne de la campagne
+            erreur = f"{type(exc).__name__}: {exc}"
+            journal.debug("passage %s : %s", run_id, traceback.format_exc())
+        duree = (time.perf_counter() - debut) * 1000
+        if experience.screenshots_on_failure and pilote.runtime == "navigateur" and (erreur or not succes):
+            try:
+                chemin = pilote.capture_screenshot(dossier_artefacts / f"run-{run_id}.png")
+                cx.execute(
+                    "INSERT INTO artifacts (run_id, artifact_type, file_path, created_at)"
+                    " VALUES (?, 'screenshot', ?, ?)",
+                    (run_id, str(chemin), db.maintenant()),
+                )
+            except Exception:
+                pass
+        try:
+            pilote.close_session()
+        except Exception as exc:
+            erreur = erreur or f"fermeture : {type(exc).__name__}: {exc}"
+    time.sleep(0.05)  # laisse arriver la balise de fin de page envoyée à la fermeture
+    mesures = pilote.collect_metrics()
+    metriques = {
+        **echantillon.resultat(),
+        "navigation_time": round(mesures.navigation_time, 1),
+        "request_count": mesures.request_count,
+        "error_count": mesures.error_count,
+    }
+    statut = "erreur" if erreur else ("reussi" if succes else "echec")
+    if echantillon.depassement:
+        erreur = (erreur or "") + f" plafond mémoire dépassé ({reglages.memoire_max_mo} Mo)"
+    passages.finaliser(
+        cx,
+        run_id,
+        jeton,
+        status=statut,
+        success=succes if not erreur else False,
+        duration_ms=round(duree, 1),
+        error=erreur or (db.j(details) if not succes else None),
+        attend_js=scenario.attend_js,
+        detecteurs=experience.detectors,
+        metriques=metriques,
+    )
+    journal.info("%s · %s · rép. %d : %s (%.0f ms)", pilote.name, scenario.name, repetition, statut, duree)
+    if echantillon.depassement:
+        raise MemoryError(f"plafond mémoire dépassé ({reglages.memoire_max_mo} Mo)")

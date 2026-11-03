@@ -1,0 +1,8 @@
+experiment:
+  name: essai-selenium
+  description: Validation du pilote Selenium (1 répétition)
+  engines: [selenium]
+  scenarios: [static_html, javascript_content, pagination, form_interaction, session_cookies,
+              fingerprint_observation, detection_page, api_json]
+  repetitions: 1
+  seed: 7
