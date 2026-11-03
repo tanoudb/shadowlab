@@ -62,6 +62,39 @@ def test_formulaire(client):
     assert client.post("/lab/formulaire", content="nom=&modele=Rally4").status_code == 422
 
 
+def test_honeypot_lien_piege(client, reglages):
+    r = client.get(f"/lab/piege?sl={JETON}")
+    assert r.status_code == 204
+    cx = db.ouvrir(reglages.base_donnees)
+    dec = cx.execute(
+        "SELECT decision, motifs FROM decisions WHERE session_token = ? AND couche = 'honeypot'", (JETON,)
+    ).fetchone()
+    assert dec is not None
+    assert dec["decision"] == "declenche"
+    assert "lien" in dec["motifs"]
+
+
+def test_honeypot_champ_piege(client, reglages):
+    r = client.post(
+        f"/lab/formulaire?sl={JETON}",
+        content="nom=Bot&modele=Rally2&sl_telephone=0612345678",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert r.status_code == 200
+    cx = db.ouvrir(reglages.base_donnees)
+    dec = cx.execute(
+        "SELECT decision, motifs FROM decisions WHERE session_token = ? AND couche = 'honeypot'", (JETON,)
+    ).fetchone()
+    assert dec is not None
+    assert "champ" in dec["motifs"]
+
+
+def test_honeypot_absent_sans_arena(client):
+    r = client.get("/lab/formulaire")
+    assert "sl_telephone" not in r.text
+    assert "/lab/piege" not in r.text
+
+
 def test_session_manuelle_de_bout_en_bout(client, reglages):
     r = client.post("/manuel/commencer", follow_redirects=False)
     assert r.status_code == 303

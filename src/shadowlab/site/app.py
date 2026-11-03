@@ -127,34 +127,53 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
 
     @app.get("/lab/", response_class=HTMLResponse, tags=["site"])
     def accueil(request: Request) -> str:
-        return pages.accueil(jeton_de(request))
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.accueil(jeton_de(request), honeypot=hp)
 
     @app.get("/lab/statique", response_class=HTMLResponse, tags=["site"])
     def statique(request: Request) -> str:
-        return pages.statique(jeton_de(request))
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.statique(jeton_de(request), honeypot=hp)
 
     @app.get("/lab/dynamique", response_class=HTMLResponse, tags=["site"])
     def dynamique(request: Request) -> str:
-        return pages.dynamique(jeton_de(request))
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.dynamique(jeton_de(request), honeypot=hp)
 
     @app.get("/lab/catalogue", response_class=HTMLResponse, tags=["site"])
     def catalogue(request: Request, page: int = 1) -> str:
         if not 1 <= page <= pages.NB_PAGES_CATALOGUE:
             raise HTTPException(404, "page inexistante")
-        return pages.catalogue(jeton_de(request), page)
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.catalogue(jeton_de(request), page, honeypot=hp)
 
     @app.get("/lab/formulaire", response_class=HTMLResponse, tags=["site"])
     def formulaire(request: Request) -> str:
-        return pages.formulaire(jeton_de(request))
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.formulaire(jeton_de(request), honeypot=hp)
 
     @app.post("/lab/formulaire", response_class=HTMLResponse, tags=["site"])
     async def formulaire_envoye(request: Request) -> str:
         champs = parse_qs((await request.body()).decode("utf-8", "replace"))
         nom = (champs.get("nom") or [""])[0].strip()[:60]
         modele = (champs.get("modele") or [""])[0]
+        piege = (champs.get("sl_telephone") or [""])[0]
+        jeton = jeton_de(request)
+        if piege and jeton:
+            with base() as cx:
+                db.enregistrer_decision(cx, jeton, "honeypot", "declenche", "/lab/formulaire", [{"type": "champ"}])
         if not nom or modele not in pages.MODELES:
             raise HTTPException(422, "formulaire incomplet")
-        return pages.confirmation(jeton_de(request), nom, modele)
+        return pages.confirmation(jeton, nom, modele)
+
+    @app.get("/lab/piege", status_code=204, tags=["site"])
+    def piege(request: Request) -> Response:
+        """Lien invisible : seul un robot le visite. Enregistre le déclenchement."""
+        jeton = jeton_de(request)
+        if jeton:
+            with base() as cx:
+                db.enregistrer_decision(cx, jeton, "honeypot", "declenche", "/lab/piege", [{"type": "lien"}])
+        return Response(status_code=204)
 
     @app.get("/lab/session", response_class=HTMLResponse, tags=["site"])
     def session(request: Request) -> HTMLResponse:

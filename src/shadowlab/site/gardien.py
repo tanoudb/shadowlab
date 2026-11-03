@@ -22,7 +22,7 @@ from . import pages
 COOKIE_DEFI = "sl_defi"
 COOKIE_CAPTCHA = "sl_captcha"
 # Échanges techniques du laboratoire et des protections : ils ne sont pas des pages à protéger.
-HORS_PROTECTION = ("/lab/static", "/lab/collecte", "/lab/verdict", "/lab/defi", "/lab/captcha")
+HORS_PROTECTION = ("/lab/static", "/lab/collecte", "/lab/verdict", "/lab/defi", "/lab/captcha", "/lab/piege")
 # Règles consultées en direct : celles qui peuvent trancher dès la requête, puis celles qui lisent le JavaScript.
 REGLES_REQUETE = ("regles-http", "tls")
 REGLES_JAVASCRIPT = ("botd", "regles-js", "coherence")
@@ -86,11 +86,25 @@ def suspicion(cx: sqlite3.Connection, jeton: str) -> list[dict]:
         classement = detecteurs[nom].classer(observations)
         if classement.classification == "automatise":
             motifs.append({"detecteur": nom, "signaux": [_signal(s) for s in classement.signals]})
+    hp = cx.execute(
+        "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
+        (jeton,),
+    ).fetchone()[0]
+    if hp:
+        motifs.append({"detecteur": "honeypot", "signaux": [{"code": "honeypot", "description": f"{hp} piège(s)"}]})
     return motifs
 
 
 def _signal(s: Signal) -> dict:
     return {"code": s.code, "description": s.description}
+
+
+def honeypots_actifs(sceau: Sceau | None) -> bool:
+    """Les honeypots ne sont injectés que si le profil Arena les active."""
+    if sceau is None:
+        return False
+    profil = profils.charger().de(sceau.profil)
+    return bool(profil and profil.honeypots.actif)
 
 
 def controler(
@@ -109,6 +123,10 @@ def controler(
         db.enregistrer_decision(cx, jeton, "defi-js", "emis", chemin, motifs)
         cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
+    if profil.fingerprinting.actif:
+        motifs = suspicion(cx, jeton)
+        if motifs:
+            db.enregistrer_decision(cx, jeton, "fingerprinting", "suspect", chemin, motifs)
     if profil.captcha.actif and not defis.cookie_valide(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie
     ):

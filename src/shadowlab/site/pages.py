@@ -23,10 +23,14 @@ NAVIGATION = [
 ]
 
 
-def gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = ()) -> str:
+HONEYPOT_LIEN = '<a class="sl-hp" href="/lab/piege" tabindex="-1" aria-hidden="true">offres</a>'
+
+
+def gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = (), honeypot: bool = False) -> str:
     """Page complète : navigation, jeton de session et observateur JavaScript."""
     liens = "".join(f'<a href="{href}">{escape(nom)}</a>' for href, nom in NAVIGATION)
     balises = "".join(f'<script type="module" src="/lab/static/{nom}"></script>' for nom in scripts)
+    piege = HONEYPOT_LIEN if honeypot else ""
     return f"""<!doctype html>
 <html lang="fr">
 <head>
@@ -41,6 +45,7 @@ def gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = ()) -
 <main data-page="{escape(titre)}">
 <h1>{escape(titre)}</h1>
 {corps}
+{piege}
 </main>
 <footer>Site d'expérimentation local. Aucune donnée n'en sort. · <a href="/manuel/terminer">Terminer une session manuelle</a></footer>
 <script type="module" src="/lab/static/observateur.js"></script>
@@ -49,7 +54,7 @@ def gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = ()) -
 </html>"""
 
 
-def accueil(jeton: str) -> str:
+def accueil(jeton: str, honeypot: bool = False) -> str:
     corps = """<p>Ce site sert de terrain d'essai aux moteurs de navigation. Chaque page produit un résultat
 attendu que les scénarios vérifient.</p>
 <ul>
@@ -62,10 +67,10 @@ attendu que les scénarios vérifient.</p>
 <li><a href="/lab/detection">Détection</a> : verdict des détecteurs pour cette session</li>
 <li><a href="/lab/api/articles">API JSON</a></li>
 </ul>"""
-    return gabarit("Accueil", corps, jeton)
+    return gabarit("Accueil", corps, jeton, honeypot=honeypot)
 
 
-def statique(jeton: str) -> str:
+def statique(jeton: str, honeypot: bool = False) -> str:
     lignes = "".join(
         f"<tr><td class='reference'>{ref}</td><td>Pièce {n}</td><td>{100 + n * 7} €</td></tr>"
         for n, ref in enumerate(REFERENCES_STATIQUES, start=1)
@@ -74,16 +79,16 @@ def statique(jeton: str) -> str:
 <table id="tableau-references"><thead><tr><th>Référence</th><th>Désignation</th><th>Prix</th></tr></thead>
 <tbody>{lignes}</tbody></table>
 <p><a href="/lab/catalogue">Voir le catalogue</a></p>"""
-    return gabarit("HTML simple", corps, jeton)
+    return gabarit("HTML simple", corps, jeton, honeypot=honeypot)
 
 
-def dynamique(jeton: str) -> str:
+def dynamique(jeton: str, honeypot: bool = False) -> str:
     corps = """<p>Le bloc ci-dessous est rempli par JavaScript 400 ms après le chargement.</p>
 <div id="zone-dynamique" aria-live="polite">chargement…</div>"""
-    return gabarit("JavaScript", corps, jeton, scripts=("dynamique.js",))
+    return gabarit("JavaScript", corps, jeton, scripts=("dynamique.js",), honeypot=honeypot)
 
 
-def catalogue(jeton: str, page: int) -> str:
+def catalogue(jeton: str, page: int, honeypot: bool = False) -> str:
     debut = (page - 1) * ARTICLES_PAR_PAGE
     articles = "".join(
         f"<li class='article' data-id='ART-{n:03d}'>Article ART-{n:03d}</li>"
@@ -96,17 +101,25 @@ def catalogue(jeton: str, page: int) -> str:
     corps = f"""<p>Page {page} sur {NB_PAGES_CATALOGUE}.</p>
 <ul id="articles">{articles}</ul>
 <p class="pagination">{precedent} {suivant}</p>"""
-    return gabarit(f"Catalogue — page {page}", corps, jeton)
+    return gabarit(f"Catalogue — page {page}", corps, jeton, honeypot=honeypot)
 
 
-def formulaire(jeton: str) -> str:
+HONEYPOT_CHAMP = (
+    '<label class="sl-hp" aria-hidden="true">Téléphone '
+    '<input name="sl_telephone" tabindex="-1" autocomplete="off"></label>'
+)
+
+
+def formulaire(jeton: str, honeypot: bool = False) -> str:
     options = "".join(f'<option value="{m}">{m}</option>' for m in MODELES)
+    piege = HONEYPOT_CHAMP if honeypot else ""
     corps = f"""<form id="formulaire-essai" method="post" action="/lab/formulaire">
 <label>Nom <input id="champ-nom" name="nom" required maxlength="60"></label>
 <label>Modèle <select id="champ-modele" name="modele">{options}</select></label>
+{piege}
 <button id="bouton-envoyer" type="submit">Envoyer</button>
 </form>"""
-    return gabarit("Formulaire", corps, jeton)
+    return gabarit("Formulaire", corps, jeton, honeypot=honeypot)
 
 
 def confirmation(jeton: str, nom: str, modele: str) -> str:
