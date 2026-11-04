@@ -145,6 +145,32 @@ def test_api_decisions_et_protections(client, reglages):
     assert protections == {"protections": {}}
 
 
+def test_cles_turnstile_sont_les_cles_officielles_de_test():
+    """Les clés Turnstile doivent être celles documentées par Cloudflare pour le mode test."""
+    from shadowlab.arena.defis import (
+        TURNSTILE_SECRET_BLOCK,
+        TURNSTILE_SECRET_PASS,
+        TURNSTILE_SITE_BLOCK,
+        TURNSTILE_SITE_PASS,
+        TURNSTILE_VERIFY_URL,
+    )
+
+    assert TURNSTILE_SITE_PASS == "1x00000000000000000000AA"
+    assert TURNSTILE_SECRET_PASS == "1x0000000000000000000000000000000AA"
+    assert TURNSTILE_SITE_BLOCK == "2x00000000000000000000AB"
+    assert TURNSTILE_SECRET_BLOCK == "2x0000000000000000000000000000000AB"
+    assert TURNSTILE_VERIFY_URL == "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+def test_cles_recaptcha_sont_les_cles_officielles_de_test():
+    """Les clés reCAPTCHA v2 doivent être celles documentées par Google pour le mode test."""
+    from shadowlab.arena.defis import RECAPTCHA_SECRET_KEY, RECAPTCHA_SITE_KEY, RECAPTCHA_VERIFY_URL
+
+    assert RECAPTCHA_SITE_KEY == "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+    assert RECAPTCHA_SECRET_KEY == "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
+    assert RECAPTCHA_VERIFY_URL == "https://www.google.com/recaptcha/api/siteverify"
+
+
 def test_interface_exposee_exige_un_jeton(reglages, monkeypatch):
     from fastapi.testclient import TestClient
 
