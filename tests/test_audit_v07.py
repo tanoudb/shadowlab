@@ -9,6 +9,31 @@ from __future__ import annotations
 
 import pytest
 
+from shadowlab import database as db
+
+
+def _exp_un_groupe(tmp_path, nom, suites):
+    """Base avec une expérience et une suite de succès (0/1) pour un groupe moteur×protection×scénario."""
+    cx = db.ouvrir(tmp_path / f"{nom}.sqlite3")
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+        " VALUES (1, ?, '2026-01-01', '{}', 'termine', 1)",
+        (nom,),
+    )
+    cx.execute("INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')")
+    cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+    rid = 0
+    for rep, succ in enumerate(suites, start=1):
+        rid += 1
+        issue = "extraction_reussie" if succ else "bloque"
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue)"
+            " VALUES (?, 1, 1, 1, ?, ?, 'automatise', '2026-01-01', ?, ?, '01', ?)",
+            (rid, rep, f"t-{rid}", "reussi" if succ else "echec", succ, issue),
+        )
+    return cx
+
 # ---------------------------------------------------------------------------
 # Défaut #4 — statut du passage calculé avant l'intégration du dépassement mémoire
 # ---------------------------------------------------------------------------
@@ -55,3 +80,46 @@ class TestStatutDepassementMemoire:
         assert statut == "erreur"
         assert succes is False
         assert erreur == "TimeoutError: x"
+
+
+# ---------------------------------------------------------------------------
+# Défaut #7 — lag-1 ne prouve pas l'indépendance : diagnostic complémentaire requis
+# ---------------------------------------------------------------------------
+
+
+class TestDependanceRepetitions:
+    def test_diagnostic_complementaire_present(self, tmp_path):
+        """Le lag-1 seul ne suffit pas : un test des runs (Wald–Wolfowitz) doit
+        accompagner chaque groupe, et le résumé ne doit pas affirmer l'indépendance."""
+        from shadowlab.analytics import dependance_repetitions
+
+        cx = _exp_un_groupe(tmp_path, "dep7", [1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
+        r = dependance_repetitions(cx, 1)
+        assert r["groupes"], "aucun groupe mesuré"
+        g = r["groupes"][0]
+        assert "runs_test" in g, "diagnostic des runs absent — lag-1 est le seul indicateur"
+        # Le résumé doit porter une mise en garde explicite, pas une affirmation d'indépendance.
+        assert "avertissement" in r["resume"]
+
+    def test_lag1_nul_mais_dependance_periodique(self, tmp_path):
+        """Motif périodique (0,0,1,1,…) : lag-1 proche de 0 alors que la série
+        est clairement dépendante. Le code ne doit jamais conclure à l'indépendance."""
+        from shadowlab.analytics import dependance_repetitions
+
+        cx = _exp_un_groupe(tmp_path, "dep7b", [0, 0, 1, 1] * 4)
+        r = dependance_repetitions(cx, 1)
+        g = r["groupes"][0]
+        assert abs(g["autocorrelation_lag1"]) < 0.3
+        assert "independant" not in g  # aucune affirmation d'indépendance
+        assert g["runs_test"] is not None
+
+    def test_runs_test_detecte_le_clustering(self, tmp_path):
+        """Une série fortement groupée (0×5 puis 1×5) a trop peu de runs :
+        le test des runs doit produire un z négatif marqué."""
+        from shadowlab.analytics import dependance_repetitions
+
+        cx = _exp_un_groupe(tmp_path, "dep7c", [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+        g = dependance_repetitions(cx, 1)["groupes"][0]
+        assert g["runs_test"] is not None
+        assert g["runs_test"]["runs"] == 2
+        assert g["runs_test"]["z"] < -1.5
