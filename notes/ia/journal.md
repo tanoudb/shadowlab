@@ -6,6 +6,28 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-04 — Claude (Opus 4.6) — Diagnostic par signal (D-20)
+
+**Fait :**
+- Module `src/shadowlab/diagnostic.py` avec 4 rapports post-campagne :
+  - `signaux` : détecteur, signal déclencheur et description, par moteur détecté
+  - `chaine` : premier motif de blocage par moteur et par niveau de protection (répond à la demande sur les niveaux 05-06)
+  - `configurations` : UA, Accept-Language, Sec-Fetch, Sec-CH-UA, version HTTP, JA4, ordre des en-têtes, comparés côte à côte
+  - `ablation` : recalcul des verdicts de détection en désactivant chaque règle une par une
+- Commande CLI `shadowlab diagnostic <id> [--rapport signaux|chaine|configurations|ablation|tous]`
+- D-20 ajoutée : patchright reste en configuration standard comme référence
+
+**Résultats clés de l'ablation (expérience 7, 264 passages) :**
+- `regles-js` est la règle la plus critique : sans elle, 31% échappent (undetected-chromedriver passe aussi)
+- `comportement` a un impact modéré (14% vs 8% de passages échappés)
+- Les 3 anti-détection (camoufox, scrapling-furtif, seleniumbase-uc) échappent toujours, peu importe la règle retirée
+
+**Fichiers :** `src/shadowlab/diagnostic.py` (nouveau), `src/shadowlab/cli.py`, `docs/DECISIONS.md`
+**Commit :** `fa4f569`
+**Reste :** enrichir le rapport HTML avec les diagnostics, ajouter des tests unitaires pour le module diagnostic.
+
+---
+
 ## 2026-11-04 — Claude (Opus 4.6) — Blocage fingerprinting niveaux 02-03
 
 **Fait**
