@@ -10,7 +10,7 @@ from . import campaigns, reports
 from . import database as db
 from .arena import pile
 from .arena.frontal import Frontal
-from .config import charger
+from .config import RACINE, charger
 from .journal import configurer
 
 
@@ -79,7 +79,13 @@ def main(argv: list[str] | None = None) -> int:
         if not _local(reglages.hote) and not reglages.jeton_api:
             print("Refus : écoute hors local sans SHADOWLAB_JETON.", file=sys.stderr)
             return 2
-        print(f"Site de test : {reglages.url_site}/lab/   Tableau de bord : {reglages.url_site}/tableau", flush=True)
+        print(f"Laboratoire : {reglages.url_site}/labo   Site de test : {reglages.url_site}/lab/", flush=True)
+        if not (RACINE / "frontend" / "dist").is_dir():
+            print(
+                "  (interface non construite : `npm --prefix frontend install && npm --prefix frontend run build`,"
+                " ou `npm --prefix frontend run dev` pour le mode développement)",
+                flush=True,
+            )
         niveau = "error" if args.silencieux else "warning"
         Frontal(reglages).demarrer()
         print(f"Entrée de l'Arena : {reglages.url_arena}/lab/", flush=True)
