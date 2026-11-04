@@ -9,6 +9,7 @@ import pytest
 from shadowlab import database as db
 from shadowlab import reports
 from shadowlab.analytics import comparer, qualite_metriques, statistiques, wilson
+from shadowlab.campaigns import Experience, _plan, unites
 
 # ---------------------------------------------------------------------------
 # Fixture : base réaliste avec erreurs techniques, blocages, réussites
@@ -542,3 +543,237 @@ class TestQualiteMetriques:
             assert q[cle] == "limite", f"qualite.{cle} devrait être 'limite' avec n=2 évaluables"
         assert q["duree_ms"] == "limite"
         assert q["detection"] == "limite"
+
+
+# ---------------------------------------------------------------------------
+# Passe 6 : E1 — Golden dataset à résultats connus
+# ---------------------------------------------------------------------------
+
+
+def _golden_run(cx, rid, *, eng, sc, prot, issue, success, detections=None):
+    status = "reussi" if success else "erreur"
+    cx.execute(
+        "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+        " session_token, truth, started_at, status, success, duration_ms, protection, issue)"
+        " VALUES (?, 1, ?, ?, ?, ?, 'automatise', '2026-01-01T00:00:00', ?, ?, ?, ?, ?)",
+        (rid, eng, sc, rid, f"gold-{rid}", status, int(success), float(rid * 100), prot, issue),
+    )
+    if detections:
+        for det_name, classification in detections.items():
+            cx.execute(
+                "INSERT INTO detections (run_id, detector_name, detector_version,"
+                " classification, confidence, signals) VALUES (?, ?, '1.0', ?, 1.0, '[]')",
+                (rid, det_name, classification),
+            )
+
+
+@pytest.fixture
+def golden(tmp_path):
+    base = tmp_path / "golden.sqlite3"
+    cx = db.ouvrir(base)
+    cx.execute(
+        "INSERT INTO experiments (id, name, description, created_at, configuration, status, seed)"
+        " VALUES (1, 'golden', 'golden dataset', '2026-01-01T00:00:00', '{}', 'termine', 42)"
+    )
+    cx.execute(
+        "INSERT INTO engines (id, name, version, runtime, configuration)"
+        " VALUES (1, 'httpx', '{\"httpx\": \"0.27\"}', 'python', '{}')"
+    )
+    cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+
+    _golden_run(
+        cx,
+        1,
+        eng=1,
+        sc=1,
+        prot="01",
+        issue="extraction_reussie",
+        success=True,
+        detections={"BotD": "humain"},
+    )
+    _golden_run(
+        cx,
+        2,
+        eng=1,
+        sc=1,
+        prot="01",
+        issue="extraction_reussie",
+        success=True,
+        detections={"BotD": "automatise"},
+    )
+    _golden_run(
+        cx,
+        3,
+        eng=1,
+        sc=1,
+        prot="01",
+        issue="bloque",
+        success=False,
+        detections={"BotD": "automatise"},
+    )
+    _golden_run(
+        cx,
+        4,
+        eng=1,
+        sc=1,
+        prot="02",
+        issue="extraction_reussie",
+        success=True,
+        detections={"BotD": "automatise"},
+    )
+    _golden_run(
+        cx,
+        5,
+        eng=1,
+        sc=1,
+        prot="02",
+        issue="erreur_technique",
+        success=False,
+        detections={"BotD": "indetermine"},
+    )
+    _golden_run(
+        cx,
+        6,
+        eng=1,
+        sc=1,
+        prot="02",
+        issue="challenge_non_valide",
+        success=False,
+        detections={"BotD": "automatise"},
+    )
+    return cx
+
+
+class TestGoldenDataset:
+    """E1 — Résultats attendus calculés à la main, vérifiés contre statistiques()."""
+
+    def test_comptages_globaux(self, golden):
+        s = statistiques(golden, 1)
+        assert s["passages"] == 6
+        m = s["moteurs"][0]
+        assert m["passages"] == 6
+        assert m["evaluables"] == 5
+        assert m["erreurs_techniques"] == 1
+        assert m["par_issue"] == {
+            "extraction_reussie": 3,
+            "bloque": 1,
+            "erreur_technique": 1,
+            "challenge_non_valide": 1,
+        }
+
+    def test_taux_globaux(self, golden):
+        m = statistiques(golden, 1)["moteurs"][0]
+        assert m["reussite"]["taux"] == round(3 / 6, 4)
+        assert m["reussite_fonctionnelle"]["taux"] == round(3 / 5, 4)
+        assert m["taux_erreur_technique"]["taux"] == round(1 / 6, 4)
+        assert m["taux_blocage"]["taux"] == round(1 / 5, 4)
+        assert m["reussite_si_non_bloque"]["taux"] == round(3 / 4, 4)
+
+    def test_detection_botd(self, golden):
+        m = statistiques(golden, 1)["moteurs"][0]
+        det = m["detection"]["BotD"]
+        assert det["vp"] == 4
+        assert det["fn"] == 1
+        assert det["indetermine"] == 1
+        assert det["taux_detection"]["taux"] == round(4 / 5, 4)
+
+    def test_matrice_par_protection(self, golden):
+        s = statistiques(golden, 1)
+        par_prot = {p["protection"]: p for p in s["par_protection"]}
+        p01 = par_prot["01"]
+        assert p01["passages"] == 3
+        assert p01["evaluables"] == 3
+        assert p01["par_issue"]["extraction_reussie"] == 2
+        assert p01["par_issue"]["bloque"] == 1
+        assert p01["reussite"]["taux"] == round(2 / 3, 4)
+        assert p01["reussite_si_non_bloque"]["taux"] == round(2 / 2, 4)
+
+        p02 = par_prot["02"]
+        assert p02["passages"] == 3
+        assert p02["evaluables"] == 2
+        assert p02["par_issue"]["extraction_reussie"] == 1
+        assert p02["taux_erreur_technique"]["taux"] == round(1 / 3, 4)
+
+    def test_matrice_croisee_golden(self, golden):
+        s = statistiques(golden, 1)
+        mc = {(c["moteur"], c["protection"], c["scenario"]): c for c in s["matrice_croisee"]}
+        assert len(mc) == 2
+
+        c01 = mc[("httpx", "01", "static_html")]
+        assert c01["passages"] == 3
+        assert c01["reussite"]["taux"] == round(2 / 3, 4)
+
+        c02 = mc[("httpx", "02", "static_html")]
+        assert c02["passages"] == 3
+        assert c02["reussite"]["taux"] == round(1 / 3, 4)
+
+    def test_qualite_tags_golden(self, golden):
+        m = statistiques(golden, 1)["moteurs"][0]
+        q = m["qualite"]
+        assert q["passages"] == "observe"
+        assert q["par_issue"] == "observe"
+        assert q["reussite"] == "limite"
+        assert q["duree_ms"] == "limite"
+
+
+# ---------------------------------------------------------------------------
+# Passe 6 : E6 — Reproductibilité bout en bout par seed
+# ---------------------------------------------------------------------------
+
+
+class TestReproductibiliteSeed:
+    def test_plan_deterministe_meme_seed(self):
+        moteurs = [{"name": "httpx"}, {"name": "playwright"}]
+        exp = Experience(
+            name="repro",
+            engines=moteurs,
+            scenarios=["static_html", "api_json", "pagination"],
+            protections=["01", "02"],
+            repetitions=5,
+            seed=12345,
+        )
+        plan1 = [(m.nom_affiche, p) for m, p in unites(exp)]
+        plan2 = [(m.nom_affiche, p) for m, p in unites(exp)]
+        assert plan1 == plan2
+
+    def test_plan_scenarios_deterministe(self):
+        moteurs = [{"name": "httpx"}]
+        exp = Experience(
+            name="repro-sc",
+            engines=moteurs,
+            scenarios=["static_html", "api_json", "pagination", "form_interaction"],
+            protections=["01"],
+            repetitions=3,
+            seed=99999,
+        )
+        ordres1 = list(_plan(exp, exp.engines[0], "01"))
+        ordres2 = list(_plan(exp, exp.engines[0], "01"))
+        assert ordres1 == ordres2
+
+    def test_seed_different_ordre_different(self):
+        moteurs = [{"name": "httpx"}, {"name": "playwright"}, {"name": "selenium"}]
+        exp_a = Experience(
+            name="a",
+            engines=moteurs,
+            scenarios=["static_html", "api_json"],
+            protections=["01", "02", "03"],
+            repetitions=3,
+            seed=111,
+        )
+        exp_b = Experience(
+            name="b",
+            engines=moteurs,
+            scenarios=["static_html", "api_json"],
+            protections=["01", "02", "03"],
+            repetitions=3,
+            seed=222,
+        )
+        plan_a = [(m.nom_affiche, p) for m, p in unites(exp_a)]
+        plan_b = [(m.nom_affiche, p) for m, p in unites(exp_b)]
+        assert set(plan_a) == set(plan_b)
+        assert plan_a != plan_b
+
+    def test_statistiques_identiques_deux_appels(self, golden):
+        s1 = json.dumps(statistiques(golden, 1), sort_keys=True, default=str)
+        s2 = json.dumps(statistiques(golden, 1), sort_keys=True, default=str)
+        assert s1 == s2
