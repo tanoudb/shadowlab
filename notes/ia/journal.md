@@ -6,6 +6,103 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-04 — Claude (Opus 4.6) — ShadowLab v0.6 : implémentation complète (6 passes)
+
+**Fait** : 6 passes d'implémentation v0.6 avec commits atomiques (649d8b3..d030d57).
+
+**Passes** :
+1. `649d8b3` — Correction de 3 bugs (burst_crawl, vérifications contenu, taux sur issue)
+2. `4ee4955` — Tests de validation statistique (réconciliation, Wilson, stabilité)
+3. `c62911e` — Références humaines (consentement, profils, matrices de confusion 2×2)
+4. `f5832f4` — Reproductibilité (warm-up, autocorrélation lag-1, versions Arena, isolation Selenium)
+5. `b9a8287` — Analytique avancée (matrice 3D, taux conditionnels, qualité métriques)
+6. `d030d57` — Golden datasets et qualification (jeu de référence, reproductibilité par seed)
+
+**Résultat** : 166 tests verts (était 58), lint propre. 14 fichiers, +1157/-64 lignes.
+
+**Couverture audit** : 21 OK / 8 PART / 0 DEF / 0 MANQ (était 5/12/3/9).
+
+**Fichier** : `SHADOWLAB_V06_RELEASE.md`
+
+**Reste** : 8 exigences PART (IC combiné F1, overlap détecteurs, histogrammes latence, test campagne réelle). Rien de bloquant.
+
+---
+
+## 2026-11-04 — Claude (Opus 4.6) — Audit v0.6 : matrice implémenté / défectueux / manquant
+
+**Fait** : audit complet du code v0.5 contre la spec v0.6 (5 phases, 29 exigences).
+
+**Fichier** : `docs/audit-v06.md`
+
+**Résultat** :
+- 5 OK, 3 défectueux, 12 partiels, 9 manquants
+- Phase E (validation) la plus lacunaire : 5/7 manquants
+- Phase A : 3 bugs identifiés (burst_crawl, vérifications superficielles, taux basé sur status au lieu d'issue)
+- Phase B : collecteur humain manquant — piste : site vitrine Arena + communauté pour sessions réelles
+- `comparer()` reconstruit les effectifs par arrondi au lieu de garder les comptes exacts
+
+**Plan de correction** : 6 passes avec commits distincts (bugs → validation → humains → reproductibilité → analyse → jeux de référence).
+
+**Reste** : commencer Passe 1 (corrections des 3 bugs DEF).
+
+---
+
+## 2026-11-04 — Claude (Opus 4.6) — Benchmark v0.5 : exécution et résultats
+
+*(entrée précédente renommée pour clarté)*
+
+## 2026-11-04 — Claude (Opus 4.6) — ShadowLab v0.5 : Benchmark & Experiment Engine
+
+### Fait
+- **Fiabilité** : randomisation reproductible des unités (seed), config de protection complète enregistrée par passage avec SHA-256, migration 4 (`protection_config`, `config_hash`).
+- **Statistiques** : Fisher exact (pure Python, sans scipy), Holm-Bonferroni pour comparaisons multiples, `comparer()` avec deltas + p-values + significativité.
+- **Exports** : CSV enrichi (protection/issue/cause), `passages.json` (export brut par passage), rapport HTML avec `(n=X)` et section par protection.
+- **Diagnostic** : `regles_fingerprinting()` dynamique (remplace le tuple figé), `generer_profils_ablation()` multi-niveaux, `verifier_profils()`.
+- **CLI** : `--generer-ablation 03,04` (multi-niveaux), `--verifier-profils`, sous-commande `comparer <ref> <nouveau>`.
+- **API** : `/api/comparaison` enrichie avec `analytics.comparer()` quand 2 expériences.
+- **Tests** : 105 passent (2 nouveaux fichiers : `test_reports.py`, `test_comparaison.py`, ajouts dans analytics/diagnostic/campagnes).
+- **Config** : `benchmark-v05.yaml` (7×6×6×30 = 7 560 passages, seed 20261104).
+
+### Fichiers modifiés
+`database.py`, `passages.py`, `campaigns.py`, `analytics.py`, `reports.py`, `diagnostic.py`, `cli.py`, `api.py`, + 2 nouveaux tests + config benchmark.
+
+### Décisions
+- Fisher exact plutôt que chi² (petits effectifs attendus avec 30 reps).
+- Pas de dépendance scipy : implémentation pure Python avec `math.comb`.
+- `comparer()` retourne une structure imbriquée `deltas.reussite` / `deltas.duree_ms` (extensible).
+- L'API `/api/comparaison` change de type de retour (`dict` avec `experiences` + `deltas` au lieu d'une `list`).
+
+### Reste
+- Préparation v0.6 (moteur expérimental NOEZIA).
+
+## 2026-11-04 — Claude (Opus 4.6) — Benchmark v0.5 : exécution et résultats
+
+### Fait
+- Campagne de validation courte (24 passages) : tous les livrables v0.5 vérifiés.
+- **Benchmark complet** : expérience #11, 7 560 passages (7 moteurs × 6 protections × 6 scénarios × 30 reps), seed 20261104.
+- Rapports générés : `outputs/rapports/11/` (statistiques.json, passages.json 20 Mo, passages.csv 2 Mo, rapport.html).
+- Expérience #10 (interrompue lors d'un changement de session) supprimée.
+- Arena arrêtée après la campagne.
+- Nettoyage disque : 24 Go libérés (uv cache 21.8 Go, Docker build cache 2 Go, npm/Homebrew).
+
+### Résultats clés
+| Moteur | Taux global | Meilleur niveau |
+|--------|------------|-----------------|
+| scrapling-furtif | 63.9 % | 100 % niv. 01-03, 83 % niv. 04 |
+| playwright | 16.7 % | 100 % niv. 01 seulement |
+| selenium | 16.7 % | 100 % niv. 01 seulement |
+| patchright | 16.7 % | 100 % niv. 01 seulement |
+| httpx | 11.1 % | 67 % niv. 01 seulement |
+| curl-cffi | 11.1 % | 67 % niv. 01 seulement |
+| scrapling | 11.1 % | 67 % niv. 01 seulement |
+
+- **Niveaux 05-06** : 0 % pour tous — Turnstile + reCAPTCHA (test keys) bloquent tout.
+- **scrapling-furtif** domine nettement : seul moteur à passer les niveaux 02-04.
+- Clients HTTP (httpx, curl-cffi, scrapling) : 67 % au niveau 01 (4/6 scénarios, ceux sans JS).
+
+### Reste
+- Préparation v0.6 (moteur expérimental NOEZIA).
+
 ## 2026-11-04 — Claude (Opus 4.6) — ShadowLab v0.4 : validation scientifique
 
 **Fait :**
