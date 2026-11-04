@@ -110,14 +110,34 @@ def session_cookies(d: Driver, base: str, jeton: str, rng: random.Random) -> Iss
 
 def fingerprint_observation(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     aller(d, url(base, "/lab/empreinte", jeton))
-    recue = d.wait_for_element("#observation-envoyee", timeout_ms=8000) is not None
-    return Issue(recue, {"empreinte_envoyee": recue})
+    marqueur = d.wait_for_element("#observation-envoyee", timeout_ms=8000)
+    proprietes = d.wait_for_element("#proprietes", timeout_ms=500) or ""
+    envoyee = marqueur is not None
+    contenu_valide = envoyee and proprietes != "collecte en cours…" and len(proprietes) > 5
+    return Issue(
+        contenu_valide,
+        {
+            "empreinte_envoyee": envoyee,
+            "contenu_valide": contenu_valide,
+            "longueur_proprietes": len(proprietes),
+        },
+    )
 
 
 def detection_page(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     aller(d, url(base, "/lab/detection", jeton))
-    affiche = d.wait_for_element("#verdict-affiche", timeout_ms=8000) is not None
-    return Issue(affiche, {"verdict_affiche": affiche})
+    marqueur = d.wait_for_element("#verdict-affiche", timeout_ms=8000)
+    tableau = d.wait_for_element("#verdicts tbody", timeout_ms=500) or ""
+    affiche = marqueur is not None
+    contenu_valide = affiche and "en attente" not in tableau and len(tableau) > 5
+    return Issue(
+        contenu_valide,
+        {
+            "verdict_affiche": affiche,
+            "contenu_valide": contenu_valide,
+            "longueur_tableau": len(tableau),
+        },
+    )
 
 
 def api_json(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
@@ -132,15 +152,45 @@ def api_json(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
 
 def burst_crawl(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     """Suite rapide de pages sans pause : c'est ce scénario qui éprouve la limitation de débit."""
-    refus = 0
+    ok = 0
+    waf = 0
+    rate_limit = 0
+    erreur_serveur = 0
+    protection = 0
+    erreur_reseau = 0
     for rang in range(NB_REQUETES_RAFALE):
         page = rang % pages.NB_PAGES_CATALOGUE + 1
         try:
-            if aller(d, url(base, f"/lab/catalogue?page={page}", jeton)).status != 200:
-                refus += 1
+            resultat = aller(d, url(base, f"/lab/catalogue?page={page}", jeton))
+            code = resultat.status or 0
+            if 200 <= code <= 299:
+                ok += 1
+            elif code == 403:
+                waf += 1
+            elif code == 429:
+                rate_limit += 1
+            elif 500 <= code <= 599:
+                erreur_serveur += 1
+            else:
+                erreur_reseau += 1
         except RefusProtection:
-            refus += 1
-    return Issue(refus == 0, {"requetes": NB_REQUETES_RAFALE, "refus": refus})
+            protection += 1
+        except Exception:  # noqa: BLE001
+            erreur_reseau += 1
+    refus = waf + rate_limit + protection
+    return Issue(
+        refus == 0 and erreur_serveur == 0,
+        {
+            "requetes": NB_REQUETES_RAFALE,
+            "ok": ok,
+            "waf_403": waf,
+            "rate_limit_429": rate_limit,
+            "erreur_serveur_5xx": erreur_serveur,
+            "protection": protection,
+            "erreur_reseau": erreur_reseau,
+            "refus": refus,
+        },
+    )
 
 
 def synthetic_browse(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:

@@ -148,23 +148,29 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
 
     def bloc(lignes: list[sqlite3.Row]) -> dict[str, Any]:
         n = len(lignes)
-        reussis = sum(1 for p in lignes if p["status"] == "reussi")
-        erreurs = sum(1 for p in lignes if p["status"] == "erreur")
         a_issue = lignes and "issue" in lignes[0].keys()
-        bloques = sum(1 for p in lignes if p["issue"] == "bloque") if a_issue else 0
         par_issue: dict[str, int] = {}
         for p in lignes:
-            issue = p["issue"] if "issue" in p.keys() and p["issue"] else p["status"]
+            issue = p["issue"] if a_issue and p["issue"] else p["status"]
             par_issue[issue] = par_issue.get(issue, 0) + 1
+        erreurs_techniques = par_issue.get("erreur_technique", 0)
+        reussis = (
+            par_issue.get("extraction_reussie", 0) if a_issue else sum(1 for p in lignes if p["status"] == "reussi")
+        )
+        bloques = par_issue.get("bloque", 0)
+        evaluables = n - erreurs_techniques
         par_detecteur: dict[str, list[str]] = defaultdict(list)
         for p in lignes:
             for nom, classement in detections.get(p["id"], {}).items():
                 par_detecteur[nom].append(classement)
         return {
             "passages": n,
+            "evaluables": evaluables,
+            "erreurs_techniques": erreurs_techniques,
             "reussite": wilson(reussis, n),
-            "taux_erreur": wilson(erreurs, n),
-            "taux_blocage": wilson(bloques, n),
+            "reussite_fonctionnelle": wilson(reussis, evaluables),
+            "taux_erreur_technique": wilson(erreurs_techniques, n),
+            "taux_blocage": wilson(bloques, evaluables),
             "par_issue": par_issue,
             "duree_ms": _resume([p["duration_ms"] for p in lignes]),
             "navigation_ms": _resume([p["navigation_time"] for p in lignes]),
@@ -296,12 +302,9 @@ def comparer(cx: sqlite3.Connection, id_reference: int, id_nouveau: int) -> dict
             "nouveau": {"passages": n["passages"]},
             "deltas": {},
         }
-        # Delta sur taux de réussite — test exact de Fisher
-        r_ok = sum(1 for _ in range(r["passages"]) if r["reussite"] and True) if r["reussite"] else 0
-        n_ok = sum(1 for _ in range(n["passages"]) if n["reussite"] and True) if n["reussite"] else 0
-        # Recalculer les effectifs exacts
-        r_ok = round(r["reussite"]["taux"] * r["passages"]) if r["reussite"] else 0
-        n_ok = round(n["reussite"]["taux"] * n["passages"]) if n["reussite"] else 0
+        # Delta sur taux de réussite — effectifs exacts depuis par_issue
+        r_ok = r["par_issue"].get("extraction_reussie", 0)
+        n_ok = n["par_issue"].get("extraction_reussie", 0)
         r_ko = r["passages"] - r_ok
         n_ko = n["passages"] - n_ok
         p_fisher = _fisher_exact_p(r_ok, r_ko, n_ok, n_ko)

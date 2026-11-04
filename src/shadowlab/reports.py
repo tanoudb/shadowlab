@@ -102,7 +102,7 @@ def rapport_html(stats: dict[str, Any]) -> str:
             escape(", ".join(f"{k} {v}" for k, v in (m["versions"] or {}).items()))
         }</small></th>
 <td>{m["passages"]}</td><td>{_barre(m["reussite"], "ok")}{_pct(m["reussite"], m["passages"])}</td>
-<td>{_pct(m["taux_erreur"], m["passages"])}</td>
+<td>{_pct(m["taux_erreur_technique"], m["passages"])}</td>
 <td>{_ms(m["duree_ms"]["mediane"])}</td><td>{_ms(m["duree_ms"]["p95"])}</td><td>{_ms(m["duree_ms"]["p99"])}</td>
 <td>{_ms(m["cpu_ms"]["moyenne"])} ms<small>{_ms(m["cpu_pct"]["moyenne"])} % d'un cœur</small></td><td>{
             _ms(m["memoire_mo"]["moyenne"])
@@ -142,7 +142,7 @@ def rapport_html(stats: dict[str, Any]) -> str:
         lignes_protections += (
             f"<tr><th scope='row'>{escape(str(p['protection']))}</th><td>{p['passages']}</td>"
             f"<td>{_barre(p['reussite'], 'ok')}{_pct(p['reussite'], p['passages'])}</td>"
-            f"<td>{_pct(p['taux_erreur'], p['passages'])}</td>"
+            f"<td>{_pct(p['taux_erreur_technique'], p['passages'])}</td>"
             f"<td>{_ms(p['duree_ms']['mediane'])}</td></tr>"
         )
     environnement = e["environment"] or {}
