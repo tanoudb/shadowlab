@@ -1,0 +1,35 @@
+# Validation du blocage fingerprinting : 11 moteurs × 6 niveaux × 4 scénarios × 1 = 264 passages.
+experiment:
+  name: validation_blocage_v1
+  description: >-
+    Validation rapide du blocage fingerprinting (D-19) avec les 11 moteurs.
+    Vérifie la différenciation entre niveaux 02 (HTTP) et 03 (tout).
+  environment: local
+  engines:
+    - playwright
+    - selenium
+    - patchright
+    - scrapling
+    - scrapling-furtif
+    - curl-cffi
+    - httpx
+    - camoufox
+    - seleniumbase
+    - seleniumbase-uc
+    - undetected-chromedriver
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - api_json
+  repetitions: 1
+  seed: 42
+  concurrency: 1
+  output: [json]

@@ -22,10 +22,19 @@ type: note
 
 **Décisions** : D-19 (trois modes de blocage fingerprinting).
 
+**Campagne de validation (11 moteurs × 6 niveaux, 264 passages)**
+- Trois groupes : 7 moteurs bloqués dès le 02 (dont patchright, surprenant), 3 anti-détection (camoufox,
+  scrapling-furtif, seleniumbase-uc) passent jusqu'au 04 et bloqués au 05 par Turnstile/reCAPTCHA,
+  undetected-chromedriver échoue partout (bug moteur).
+- La différenciation 02 vs 03 ne se manifeste pas : les vrais anti-détection passent les deux niveaux.
+  Les détecteurs JS (BotD, regles-js, coherence) ne parviennent pas à distinguer camoufox/seleniumbase-uc
+  d'un vrai navigateur. C'est un résultat utile : il montre que le fingerprinting passif ne suffit pas contre
+  les outils modernes, et que les CAPTCHA (niveau 05+) restent la seule barrière efficace.
+- patchright bloqué dès le 02 : à investiguer (signaux HTTP détectables malgré le patch ?).
+
 **Reste**
-- La différenciation entre niveaux 02 (`http`) et 03 (`tout`) n'est visible qu'avec les moteurs anti-détection
-  (patchright, camoufox) qui passent les règles HTTP mais pas les règles JS. Tester avec une campagne élargie.
-- Committer les changements.
+- Investiguer pourquoi patchright est détecté par les règles HTTP.
+- Renforcer les détecteurs JS pour distinguer les anti-détection (axe futur, non urgent).
 
 
 ## 2026-11-03 — Claude (Opus 5.5) — Audit, MVP complet et campagne de référence
