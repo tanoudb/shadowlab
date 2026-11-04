@@ -7,6 +7,11 @@ passent une fois la cause racine corrigée.
 
 from __future__ import annotations
 
+import dataclasses
+import random
+
+import pytest
+
 from shadowlab import database as db
 
 
@@ -75,6 +80,75 @@ class TestStatutDepassementMemoire:
         assert statut == "erreur"
         assert succes is False
         assert erreur == "TimeoutError: x"
+
+    def test_chemin_reel_passage_depassement(self, tmp_path):
+        """Chemin d'exécution RÉEL : _passage() avec un plafond mémoire d'1 Mo force
+        le dépassement. Le passage est fonctionnellement réussi (scenario_natif) mais
+        doit être enregistré en erreur, success=0, avec la cause mémoire."""
+        from shadowlab import database as db
+        from shadowlab.arena.profils import BASELINE
+        from shadowlab.campaigns import Experience, _passage
+        from shadowlab.config import charger
+        from shadowlab.engines.base import MesuresSession
+        from shadowlab.scenarios import SCENARIOS
+
+        class FauxPilote:
+            name = "faux"
+            runtime = "python"
+            executes_javascript = False
+
+            def __init__(self):
+                self.mesures = MesuresSession()
+
+            def start_session(self):
+                pass
+
+            def scenario_natif(self, nom, base, jeton):
+                return {"success": True, "details": {}}  # réussite fonctionnelle
+
+            def close_session(self):
+                pass
+
+            def collect_metrics(self):
+                return self.mesures
+
+        reglages = dataclasses.replace(
+            charger(),
+            sorties=tmp_path,
+            base_donnees=tmp_path / "db.sqlite3",
+            memoire_max_mo=1,  # 1 Mo : dépassement garanti dès le premier relevé
+        )
+        cx = db.ouvrir(reglages.base_donnees)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+            " VALUES (1, 'reel', '2026-01-01', '{}', 'en_cours', 1)"
+        )
+        experience = Experience(name="reel", engines=["httpx"], scenarios=["static_html"], repetitions=1, detectors=[])
+        engine_id = db.engine_id(cx, "httpx", db.j({}), "python", {"label": "httpx"})
+        scenario = SCENARIOS["static_html"]
+        scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
+
+        with pytest.raises(MemoryError):
+            _passage(
+                cx,
+                reglages,
+                experience,
+                1,
+                FauxPilote(),
+                engine_id,
+                scenario,
+                scenario_id,
+                1,
+                BASELINE,
+                reglages.url_site,
+                random.Random(0),
+                tmp_path / "artefacts",
+            )
+
+        row = cx.execute("SELECT status, success, error FROM runs WHERE experiment_id = 1").fetchone()
+        assert row["status"] == "erreur", f"statut réel incohérent : {row['status']!r}"
+        assert row["success"] == 0
+        assert "plafond mémoire" in (row["error"] or "")
 
 
 # ---------------------------------------------------------------------------
