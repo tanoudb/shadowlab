@@ -1,0 +1,41 @@
+# Campagne d'ablation réelle au niveau 03 : chaque règle de fingerprinting est désactivée tour à tour.
+#
+# Prérequis :
+#   1. Générer les profils d'ablation :
+#      uv run shadowlab diagnostic --generer-ablation 03
+#   2. Lancer l'Arena avec les profils supplémentaires :
+#      SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-ablation-03.yaml uv run shadowlab arena demarrer
+#   3. Lancer la campagne :
+#      SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-ablation-03.yaml uv run shadowlab campagne configs/experiments/ablation-03.yaml
+experiment:
+  name: ablation_03_v1
+  description: >-
+    Ablation réelle au niveau 03 : désactivation de chaque règle de fingerprinting
+    dans l'Arena. Compare le résultat réel (moteur qui progresse plus loin) avec
+    l'analyse a posteriori.
+  environment: local
+  engines:
+    - playwright
+    - selenium
+    - patchright
+    - scrapling
+    - httpx
+    - curl-cffi
+    - camoufox
+    - scrapling-furtif
+    - seleniumbase-uc
+  protections:
+    - "03"
+    - "03sregleshttp"
+    - "03stls"
+    - "03sbotd"
+    - "03sreglesjs"
+    - "03scoherence"
+    - "03scomportement"
+  scenarios:
+    - static_html
+    - javascript_content
+  repetitions: 1
+  seed: 42
+  concurrency: 1
+  output: [json]

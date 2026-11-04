@@ -1,0 +1,188 @@
+'03':
+  nom: Fingerprinting
+  description: Blocage sur signaux navigateur, JavaScript et comportements
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure: []
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03sregleshttp:
+  nom: 'Ablation : sans regles-http'
+  description: Niveau 03 sans la règle regles-http
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - regles-http
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03stls:
+  nom: 'Ablation : sans tls'
+  description: Niveau 03 sans la règle tls
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - tls
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03sbotd:
+  nom: 'Ablation : sans botd'
+  description: Niveau 03 sans la règle botd
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - botd
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03sreglesjs:
+  nom: 'Ablation : sans regles-js'
+  description: Niveau 03 sans la règle regles-js
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - regles-js
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03scoherence:
+  nom: 'Ablation : sans coherence'
+  description: Niveau 03 sans la règle coherence
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - coherence
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+03scomportement:
+  nom: 'Ablation : sans comportement'
+  description: Niveau 03 sans la règle comportement
+  limitation:
+    debit: 10
+    rafale: 25
+  waf:
+    mode: detection
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: false
+    difficulte: 0
+    lier_tls: false
+  captcha:
+    actif: false
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - comportement
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false

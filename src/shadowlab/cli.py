@@ -40,8 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser("supprimer", help="supprimer une expérience et toutes ses observations")
     p.add_argument("id", type=int)
     p = sous.add_parser("diagnostic", help="diagnostic par signal d'une expérience")
-    p.add_argument("id", type=int)
+    p.add_argument("id", type=int, nargs="?")
     p.add_argument("--rapport", choices=["signaux", "ablation", "configurations", "chaine", "tous"], default="tous")
+    p.add_argument("--generer-ablation", metavar="NIVEAU", help="générer les profils d'ablation pour un niveau")
     args = parseur.parse_args(argv)
 
     reglages = charger()
@@ -140,6 +141,18 @@ def main(argv: list[str] | None = None) -> int:
 
         from . import diagnostic as diag
 
+        if args.generer_ablation:
+            niveau = args.generer_ablation
+            chemin = f"configs/arena/profils-ablation-{niveau}.yaml"
+            codes = diag.ecrire_profils_ablation(chemin, niveau)
+            print(f"Profils d'ablation écrits dans {chemin} :")
+            for code, nom in codes.items():
+                print(f"  {code} — {nom}")
+            print(f"\nLancer l'Arena : SHADOWLAB_PROFILS_EXTRA={chemin} uv run shadowlab arena demarrer")
+            return 0
+        if args.id is None:
+            print("Erreur : id requis (sauf avec --generer-ablation)", file=sys.stderr)
+            return 2
         rapports = [args.rapport] if args.rapport != "tous" else ["signaux", "chaine", "configurations", "ablation"]
         for nom in rapports:
             fn = getattr(diag, nom)

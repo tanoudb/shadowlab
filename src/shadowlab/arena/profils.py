@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -47,6 +48,7 @@ ModeBlocage = Literal["non", "http", "tout"]
 class Fingerprinting(_Strict):
     actif: bool
     bloquer: ModeBlocage = "non"
+    exclure: list[str] = Field(default_factory=list)
 
 
 class Honeypots(_Strict):
@@ -115,10 +117,16 @@ def normaliser(niveau: str) -> str:
 def charger(chemin: Path | None = None) -> Profils:
     with (chemin or FICHIER).open(encoding="utf-8") as f:
         raw = yaml.safe_load(f)
+    extra = os.environ.get("SHADOWLAB_PROFILS_EXTRA")
+    if extra:
+        with Path(extra).open(encoding="utf-8") as f:
+            raw.update(yaml.safe_load(f) or {})
     niveaux = {}
     for code, data in raw.items():
-        code = str(code).zfill(2)
-        niveaux[code] = Profil.model_validate(data)
+        code_str = str(code)
+        if code_str.isdigit():
+            code_str = code_str.zfill(2)
+        niveaux[code_str] = Profil.model_validate(data)
     return Profils(niveaux)
 
 

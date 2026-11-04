@@ -9,6 +9,7 @@ Trois rapports extraits de la base après une campagne :
 
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from collections import defaultdict
@@ -210,3 +211,47 @@ def chaine(cx: sqlite3.Connection, experiment_id: int) -> list[dict[str, Any]]:
             }
 
     return sorted(par_moteur_prot.values(), key=lambda d: (d["moteur"], d["protection"]))
+
+
+# ---------------------------------------------------------------------------
+# 5. Génération de profils d'ablation pour campagne réelle
+# ---------------------------------------------------------------------------
+
+REGLES_FINGERPRINTING = ("regles-http", "tls", "botd", "regles-js", "coherence", "comportement")
+
+
+def generer_profils_ablation(niveau_base: str = "03") -> dict[str, dict]:
+    """Génère un dictionnaire de profils Arena pour campagne d'ablation réelle.
+
+    Pour chaque règle de fingerprinting, crée une variante du niveau de base
+    avec cette règle exclue. Inclut aussi le profil de référence (toutes les règles).
+    """
+    from .arena.profils import charger
+
+    profils = charger()
+    base = profils.de(niveau_base)
+    if base is None:
+        raise ValueError(f"niveau {niveau_base} introuvable")
+    base_dict = base.model_dump()
+    resultat = {niveau_base: copy.deepcopy(base_dict)}
+    for regle in REGLES_FINGERPRINTING:
+        code = f"{niveau_base}s{regle.replace('-', '')}"
+        variante = copy.deepcopy(base_dict)
+        variante["fingerprinting"]["exclure"] = [regle]
+        variante["nom"] = f"Ablation : sans {regle}"
+        variante["description"] = f"Niveau {niveau_base} sans la règle {regle}"
+        resultat[code] = variante
+    return resultat
+
+
+def ecrire_profils_ablation(chemin: str, niveau_base: str = "03") -> dict[str, str]:
+    """Écrit les profils d'ablation dans un fichier YAML et renvoie les codes générés."""
+    import yaml
+
+    profils = generer_profils_ablation(niveau_base)
+    from pathlib import Path
+
+    p = Path(chemin)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(yaml.safe_dump(profils, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return {code: prof.get("nom", code) for code, prof in profils.items()}

@@ -84,13 +84,17 @@ def _refus(request: Request, html: str, code: str) -> Response:
     return JSONResponse({"bloque_par": code}, status_code=403, headers={"Cache-Control": "no-store"})
 
 
-def suspicion(cx: sqlite3.Connection, jeton: str, inclure_js: bool = True) -> list[dict]:
+def suspicion(
+    cx: sqlite3.Connection, jeton: str, inclure_js: bool = True, exclure: list[str] | None = None
+) -> list[dict]:
     """Motifs de suspicion connus à cet instant. Le JavaScript ne compte qu'une fois l'empreinte reçue."""
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
     noms = list(REGLES_REQUETE)
     if inclure_js and observations.empreinte_js is not None:
         noms += REGLES_JAVASCRIPT
+    if exclure:
+        noms = [n for n in noms if n not in exclure]
     detecteurs = registre()
     motifs: list[dict] = []
     for nom in noms:
@@ -136,7 +140,7 @@ def controler(
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
         inclure_js = profil.fingerprinting.bloquer != "http"
-        motifs = suspicion(cx, jeton, inclure_js=inclure_js)
+        motifs = suspicion(cx, jeton, inclure_js=inclure_js, exclure=profil.fingerprinting.exclure or None)
         if motifs:
             if profil.fingerprinting.bloquer != "non":
                 db.enregistrer_decision(cx, jeton, "fingerprinting", "bloque", chemin, motifs)
