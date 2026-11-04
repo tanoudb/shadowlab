@@ -118,3 +118,79 @@ class TestDependanceRepetitions:
         assert g["runs_test"] is not None
         assert g["runs_test"]["runs"] == 2
         assert g["runs_test"]["z"] < -1.5
+
+
+# ---------------------------------------------------------------------------
+# Défaut #1 — matrice_confusion mélange des populations non comparables
+# ---------------------------------------------------------------------------
+
+
+def _matrice_confusion_base(tmp_path, nom, *, prot_auto, prot_humain):
+    """Expérience automatisée sous `prot_auto` et sessions humaines sous `prot_humain`.
+
+    Détecteur 'botd' : 8 VP + 2 FN côté auto ; 5 VN + 1 FP côté humain.
+    """
+    cx = db.ouvrir(tmp_path / f"{nom}.sqlite3")
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+        " VALUES (1, 'auto', '2026-01-01', '{}', 'termine', 1)"
+    )
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status)"
+        " VALUES (2, 'sessions-manuelles', '2026-01-01', '{}', 'permanente')"
+    )
+    cx.execute(
+        "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+    )
+    cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+    rid = 0
+
+    def ajouter(exp, prot, classif, rep):
+        nonlocal rid
+        rid += 1
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue)"
+            " VALUES (?, ?, 1, 1, ?, ?, ?, '2026-01-01', 'reussi', 1, ?, 'extraction_reussie')",
+            (rid, exp, rep, f"t-{rid}", "automatise" if exp == 1 else "humain", prot),
+        )
+        cx.execute(
+            "INSERT INTO detections (run_id, detector_name, detector_version, classification, confidence, signals)"
+            " VALUES (?, 'botd', '2.0.0', ?, 0.5, '[]')",
+            (rid, classif),
+        )
+
+    for i in range(8):
+        ajouter(1, prot_auto, "automatise", i + 1)  # VP
+    for i in range(2):
+        ajouter(1, prot_auto, "humain", i + 9)  # FN
+    for i in range(5):
+        ajouter(2, prot_humain, "humain", i + 1)  # VN
+    ajouter(2, prot_humain, "automatise", 6)  # FP
+    return cx
+
+
+class TestMatriceConfusionComparabilite:
+    def test_populations_non_comparables_neutralisent_precision(self, tmp_path):
+        """Auto sous '06', humain sous '01' : precision et F1 ne doivent pas être
+        calculés (populations non comparables), et surtout pas valoir 1.0."""
+        from shadowlab.analytics import matrice_confusion
+
+        cx = _matrice_confusion_base(tmp_path, "mc1", prot_auto="06", prot_humain="01")
+        m = matrice_confusion(cx, 1)["botd"]
+        assert m["populations_comparables"] is False
+        assert m["precision"] is None
+        assert m["f1"] is None
+        # Le rappel reste valide (population automatisée seule).
+        assert m["rappel"]["taux"] == round(8 / 10, 4)
+
+    def test_populations_comparables_autorisent_precision(self, tmp_path):
+        """Auto et humain sous la même protection '06' : precision devient calculable."""
+        from shadowlab.analytics import matrice_confusion
+
+        cx = _matrice_confusion_base(tmp_path, "mc2", prot_auto="06", prot_humain="06")
+        m = matrice_confusion(cx, 1)["botd"]
+        assert m["populations_comparables"] is True
+        assert m["precision"] is not None
+        assert m["precision"]["taux"] == round(8 / 9, 4)  # VP / (VP + FP)
+        assert m["f1"] is not None
