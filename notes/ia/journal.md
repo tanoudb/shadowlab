@@ -6,6 +6,28 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-04 — Claude (Opus 4.6) — ShadowLab v0.4 : validation scientifique
+
+**Fait :**
+- Tests de régression pour les 5 rapports CLI diagnostic (18 tests) : `test_diagnostic.py`
+- Campagne d'ablation réelle dans l'Arena :
+  - `profils.py` : champ `exclure` sur `Fingerprinting`, env `SHADOWLAB_PROFILS_EXTRA`
+  - `gardien.py` : `suspicion()` respecte les exclusions du profil
+  - `diagnostic.py` : `generer_profils_ablation()`, `ecrire_profils_ablation()`
+  - `cli.py` : `--generer-ablation NIVEAU`
+  - `configs/experiments/ablation-03.yaml` : 9 moteurs × 7 protections × 2 scénarios
+- Tests Turnstile/reCAPTCHA : assertions que les clés sont les officielles de développement
+- Diagnostic `par_protection` : taux indépendant par couche, erreurs techniques exclues du dénominateur
+  - Répond à « Ce moteur a été classé automatisé par telle règle, avec telle observation »
+  - CLI : `--rapport par_protection`
+
+**Commits :** `fb278a2`, `68b0402`, `d79f068`, `d553ac7`
+**Fichiers :** `diagnostic.py`, `cli.py`, `profils.py`, `gardien.py`, `test_diagnostic.py`, `test_site.py`,
+`configs/experiments/ablation-03.yaml`, `configs/arena/profils-ablation-03.yaml`
+**Reste :** lancer la campagne d'ablation réelle, enrichir le rapport HTML avec le diagnostic par protection.
+
+---
+
 ## 2026-11-04 — Claude (Opus 4.6) — Diagnostic par signal (D-20)
 
 **Fait :**
