@@ -1,0 +1,24 @@
+# Essai rapide Arena : 3 moteurs × 6 protections × 4 scénarios × 1 = 72 passages.
+experiment:
+  name: arena_essai
+  description: Essai rapide multi-niveaux avant la campagne complète.
+  environment: local
+  engines:
+    - playwright
+    - httpx
+    - curl-cffi
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - api_json
+  repetitions: 1
+  seed: 42
+  output: [json]

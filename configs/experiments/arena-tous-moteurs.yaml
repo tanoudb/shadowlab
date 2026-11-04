@@ -1,0 +1,46 @@
+# Campagne Arena élargie : 11 moteurs × 6 protections × 10 scénarios × 3 répétitions = 1 980 passages.
+# Inclut les 4 moteurs isolés (camoufox, seleniumbase, seleniumbase-uc, undetected-chromedriver).
+experiment:
+  name: arena_tous_moteurs_v1
+  description: >-
+    Campagne avec les 11 moteurs disponibles (7 intégrés + 4 isolés) contre les
+    6 niveaux Arena. Les moteurs anti-détection isolés (camoufox, seleniumbase-uc,
+    undetected-chromedriver) sont testés pour la première fois. Turnstile et
+    reCAPTCHA en test keys (résultats étiquetés captcha_test). 3 répétitions.
+  environment: local
+  engines:
+    # Intégrés
+    - playwright
+    - selenium
+    - patchright
+    - scrapling
+    - scrapling-furtif
+    - curl-cffi
+    - httpx
+    # Isolés
+    - camoufox
+    - seleniumbase
+    - seleniumbase-uc
+    - undetected-chromedriver
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - detection_page
+    - api_json
+    - burst_crawl
+    - synthetic_browse
+  repetitions: 3
+  seed: 20261104
+  concurrency: 1
+  output: [json, csv, html]

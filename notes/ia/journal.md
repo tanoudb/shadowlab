@@ -200,6 +200,101 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - 58 tests verts, lint propre.
 - AGENTS.md mis à jour.
 
+## 2026-11-04 — session Opus 4.6 — Première campagne Arena complète
+
+### Fait
+- **Campagne essai** (exp. 3) : 3 moteurs × 6 protections × 4 scénarios × 1 rép = 72 passages.
+  Résultat : playwright 100 % sur 01-03, httpx/curl-cffi 75 % (pas de JS), tout bloque à 04+.
+- **Campagne complète** (exp. 4) : 7 moteurs × 6 protections × 10 scénarios × 5 rép = **2 100 passages**.
+  Durée : ~12 minutes, concurrency 1.
+
+### Résultats (exp. 4)
+| Moteur | 01 | 02 | 03 | 04 | 05 | 06 |
+|---|---|---|---|---|---|---|
+| scrapling-furtif | 100 % | 100 % | 100 % | **90 %** | 0 % | 0 % |
+| playwright | 100 % | 100 % | 100 % | 0 % | 0 % | 0 % |
+| patchright | 100 % | 100 % | 100 % | 0 % | 0 % | 0 % |
+| selenium | 90 % | 90 % | 90 % | 0 % | 0 % | 0 % |
+| httpx | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+| curl-cffi | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+| scrapling | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+
+- **scrapling-furtif** seul moteur à percer le niveau 04 (proof-of-work JS) : 45/50 = 90 %.
+- Selenium à 90 % (01-03) : 5 erreurs techniques par niveau (burst_crawl timeout probable).
+- Clients HTTP (httpx, curl-cffi, scrapling) à 60 % : les 4 scénarios JS échouent (pas de moteur JS).
+- Niveaux 05-06 : mur total (Turnstile + reCAPTCHA, aucun solveur conforme au périmètre).
+- Décisions : 21 572 WAF passes, 2 356 défis JS émis / 601 validés (26 %), 3 095 fingerprinting suspects,
+  585 CAPTCHA + 1 560 Turnstile émis / 0 validés.
+- Durées moyennes : httpx 42 ms, curl-cffi 44 ms, scrapling 89 ms, selenium 402 ms,
+  playwright 660 ms, patchright 694 ms, scrapling-furtif 889 ms.
+
+### Enseignements
+- La rupture défensive est entre 03 (fingerprinting passif) et 04 (challenge JS actif).
+- scrapling-furtif (Scrapling StealthySession) résout le proof-of-work JS contrairement à playwright/patchright standard.
+- Patchright ne fait pas mieux que playwright standard sur cette Arena (pas de contremesures spécifiques ici).
+- Les niveaux 05-06 nécessitent une validation CAPTCHA humaine ou un futur mécanisme de contournement de test keys.
+
+### Fichiers
+- `configs/experiments/arena-essai.yaml`, `configs/experiments/arena-complete.yaml`
+- `outputs/rapports/3/`, `outputs/rapports/4/` (statistiques.json, passages.csv, rapport.html)
+
+### Reste
+- ~~Installer les environnements isolés~~ → fait (session suivante).
+- Investiguer pourquoi scrapling-furtif perce 04 mais pas 05 (Turnstile bloque, pas le JS).
+- Moteur expérimental propre, couche IA.
+
+## 2026-11-04 — session Opus 4.6 — Moteurs isolés et campagne 11 moteurs
+
+### Fait
+- **Environnements isolés installés** : camoufox (+ Firefox modifié 158.0.1-beta.41, 1.3 Go),
+  seleniumbase, undetected-chromedriver. 11/11 moteurs prêts (`shadowlab moteurs etat`).
+- **Campagne élargie** (exp. 5) : 11 moteurs × 6 protections × 10 scénarios × 3 rép = **1 980 passages**.
+
+### Résultats (exp. 5)
+| Moteur | Type | 01 | 02 | 03 | 04 | 05 | 06 |
+|---|---|---|---|---|---|---|---|
+| camoufox | iso, anti-det | 100 % | 100 % | 100 % | **90 %** | 0 % | 0 % |
+| scrapling-furtif | intégré, anti-det | 100 % | 100 % | 100 % | **90 %** | 0 % | 0 % |
+| seleniumbase-uc | iso, anti-det | 90 % | 90 % | 90 % | **80 %** | 0 % | 0 % |
+| patchright | intégré, anti-det | 100 % | 100 % | 100 % | 0 % | 0 % | 0 % |
+| playwright | intégré, standard | 100 % | 100 % | 100 % | 0 % | 0 % | 0 % |
+| selenium | intégré, standard | 90 % | 90 % | 90 % | 0 % | 0 % | 0 % |
+| seleniumbase | iso, standard | 90 % | 90 % | 90 % | 0 % | 0 % | 0 % |
+| curl-cffi | intégré, anti-det | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+| httpx | intégré, standard | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+| scrapling | intégré, anti-det | 60 % | 60 % | 60 % | 0 % | 0 % | 0 % |
+| undetected-chromedriver | iso, anti-det | 0 % | 0 % | 0 % | 0 % | 0 % | 0 % |
+
+- **3 moteurs percent le niveau 04** (proof-of-work JS) : camoufox (90 %), scrapling-furtif (90 %),
+  seleniumbase-uc (80 %). Ce sont les 3 outils avec contournement actif de détection JS.
+- **undetected-chromedriver** : erreur technique 100 % — incompatibilité Chrome 156 probable, à investiguer.
+- **seleniumbase (standard)** : 90 % comme selenium, sans gain anti-détection (mode UC désactivé).
+- Durées moyennes : httpx 61 ms, curl-cffi 67 ms, scrapling 73 ms, selenium 360 ms,
+  seleniumbase 436 ms, patchright 679 ms, playwright 680 ms, scrapling-furtif 976 ms,
+  seleniumbase-uc 1 616 ms, camoufox 2 730 ms.
+- Niveaux 05-06 : mur total (Turnstile + reCAPTCHA, aucun solveur).
+
+### Enseignements
+- Les moteurs anti-détection actifs (camoufox, scrapling-furtif, seleniumbase-uc) résistent au
+  proof-of-work JS grâce à leur camouflage d'empreinte navigateur.
+- Patchright et playwright standard ne percent pas le 04 : ils se contentent de masquer
+  `navigator.webdriver` mais l'empreinte complète est détectée.
+- Compromis vitesse/furtivité : camoufox est 45× plus lent que httpx mais le seul à combiner
+  Firefox modifié + empreinte custom.
+- undetected-chromedriver est cassé avec Chrome 156 (le projet semble mal maintenu).
+
+### Fichiers
+- `moteurs_isoles/camoufox/.venv/`, `moteurs_isoles/seleniumbase/.venv/`,
+  `moteurs_isoles/undetected-chromedriver/.venv/` (créés, non versionnés)
+- `configs/experiments/arena-tous-moteurs.yaml` (nouveau)
+- `outputs/rapports/5/` (statistiques.json, passages.csv, rapport.html)
+
+### Reste
+- Investiguer l'erreur undetected-chromedriver (version Chrome ? API dépréciée ?).
+- Moteur expérimental propre (combiner les techniques de camoufox + scrapling-furtif).
+- Couche IA pour analyse automatique des résultats.
+- Cloudflare sur domaine test (pour tester hors test keys).
+
 ### Fichiers modifiés
 - `src/shadowlab/arena/defis.py`, `src/shadowlab/arena/profils.py`
 - `src/shadowlab/site/app.py`, `src/shadowlab/site/gardien.py`, `src/shadowlab/site/pages.py`

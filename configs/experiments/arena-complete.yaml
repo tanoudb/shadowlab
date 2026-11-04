@@ -1,0 +1,49 @@
+# Campagne Arena complète : 7 moteurs × 6 protections × 10 scénarios × 5 répétitions = 2 100 passages.
+# Première campagne avec tous les niveaux de protection (01 baseline → 06 multicouche).
+# Les moteurs isolés (camoufox, seleniumbase…) ne sont pas inclus (venvs non installés).
+experiment:
+  name: arena_complete_v1
+  description: >-
+    Première campagne multi-niveaux : chaque moteur intégré affronte les 6 niveaux
+    de l'Arena, du site nu (01) à la défense multicouche (06). Turnstile et reCAPTCHA
+    en test keys (résultats étiquetés captcha_test). 5 répétitions par combinaison.
+  environment: local
+  engines:
+    - playwright
+    - selenium
+    - patchright
+    - scrapling
+    - scrapling-furtif
+    - curl-cffi
+    - httpx
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - detection_page
+    - api_json
+    - burst_crawl
+    - synthetic_browse
+  repetitions: 5
+  seed: 20261103
+  concurrency: 1
+  metrics:
+    - detection_rate
+    - false_positive_rate
+    - false_negative_rate
+    - execution_time
+    - memory_usage
+    - cpu_usage
+    - scenario_success
+    - error_rate
+  output: [json, csv, html]
