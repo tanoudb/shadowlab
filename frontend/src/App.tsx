@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { obtenir } from "./api";
+import Configurer from "./screens/Configurer";
 import Moteurs from "./screens/Moteurs";
 import Protections from "./screens/Protections";
 
@@ -72,7 +73,7 @@ export default function App() {
       <main className="principal" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<Navigate to="/configurer" replace />} />
-          <Route path="/configurer" element={<AVenir titre="Configurer une campagne" />} />
+          <Route path="/configurer" element={<Configurer />} />
           <Route path="/experiences" element={<AVenir titre="Expériences" />} />
           <Route path="/experiences/:id" element={<AVenir titre="Suivi de campagne" />} />
           <Route path="/passages/:id" element={<AVenir titre="Passage" />} />

@@ -3,8 +3,11 @@
 export interface MoteurDisponible {
   name: string;
   runtime: string;
+  categorie: string;
   javascript: boolean;
   description: string;
+  pret: boolean;
+  manque: string | null;
 }
 
 export interface MoteursReponse {
@@ -35,4 +38,26 @@ export interface Protection {
 
 export interface ProtectionsReponse {
   protections: Protection[];
+}
+
+export interface Reglages {
+  hote: string;
+  port: number;
+  hotes_autorises: string[];
+  memoire_max_mo: number;
+  concurrence_max: number;
+  base_donnees: string;
+  jeton_configure: boolean;
+  campagne_en_cours: boolean;
+}
+
+export interface Validation {
+  valide: boolean;
+  erreur?: string;
+  nom?: string;
+  seed?: number | null;
+  total?: number;
+  moteurs?: string[];
+  protections?: string[];
+  scenarios?: string[];
 }

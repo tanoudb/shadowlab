@@ -18,8 +18,10 @@ export default function Moteurs() {
                 <p className="etiquettes">
                   <span className="etiquette">{m.runtime}</span>
                   <Puce actif={m.javascript}>{m.javascript ? "exécute JS" : "sans JS"}</Puce>
+                  <Puce actif={m.pret}>{m.pret ? "prêt" : "à installer"}</Puce>
                 </p>
                 <p className="sous">{m.description || "—"}</p>
+                {!m.pret && m.manque && <p className="message avert">{m.manque}</p>}
               </article>
             ))}
           </div>

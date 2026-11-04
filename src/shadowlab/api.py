@@ -92,8 +92,11 @@ def moteurs(request: Request) -> dict:
         {
             "name": nom,
             "runtime": classe.runtime,
+            "categorie": classe.categorie,
             "javascript": classe.executes_javascript,
             "description": (classe.__doc__ or "").strip().split("\n")[0],
+            "pret": classe.manque() is None,
+            "manque": classe.manque(),
         }
         for nom, classe in sorted(registre_moteurs().items())
     ]
