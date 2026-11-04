@@ -480,6 +480,22 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
         cx.close()
 
 
+def _resultat_passage(
+    erreur: str | None, succes: bool | None, depassement: bool, plafond_mo: float | None
+) -> tuple[str, str | None, bool]:
+    """Calcule (statut, erreur_finale, succes_final) pour un passage.
+
+    Un dépassement du plafond mémoire est une erreur technique : il doit être
+    intégré *avant* le calcul du statut, faute de quoi un passage réussi mais
+    hors budget mémoire serait étiqueté « reussi » (défaut #4).
+    """
+    statut = "erreur" if erreur else ("reussi" if succes else "echec")
+    if depassement:
+        erreur = (erreur or "") + f" plafond mémoire dépassé ({plafond_mo} Mo)"
+    succes_final = bool(succes) if not erreur else False
+    return statut, erreur, succes_final
+
+
 def _passage(
     cx,
     reglages,
@@ -564,15 +580,15 @@ def _passage(
         "request_count": mesures.request_count,
         "error_count": mesures.error_count,
     }
-    statut = "erreur" if erreur else ("reussi" if succes else "echec")
-    if echantillon.depassement:
-        erreur = (erreur or "") + f" plafond mémoire dépassé ({reglages.memoire_max_mo} Mo)"
+    statut, erreur, succes_final = _resultat_passage(
+        erreur, succes, echantillon.depassement, reglages.memoire_max_mo
+    )
     passages.finaliser(
         cx,
         run_id,
         jeton,
         status=statut,
-        success=succes if not erreur else False,
+        success=succes_final,
         duration_ms=round(duree, 1),
         error=erreur or (db.j(details) if not succes else None),
         motif_echec=db.j(details) if details else None,
