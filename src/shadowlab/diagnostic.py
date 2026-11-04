@@ -299,40 +299,81 @@ def par_protection(cx: sqlite3.Connection, experiment_id: int) -> list[dict[str,
 # 6. Génération de profils d'ablation pour campagne réelle
 # ---------------------------------------------------------------------------
 
-REGLES_FINGERPRINTING = ("regles-http", "tls", "botd", "regles-js", "coherence", "comportement")
+
+def regles_fingerprinting() -> list[str]:
+    """Noms des détecteurs de fingerprinting, découverts dynamiquement."""
+    return sorted(registre().keys())
 
 
-def generer_profils_ablation(niveau_base: str = "03") -> dict[str, dict]:
-    """Génère un dictionnaire de profils Arena pour campagne d'ablation réelle.
+def generer_profils_ablation(niveaux: str | list[str] = "03") -> dict[str, dict]:
+    """Génère des profils Arena d'ablation pour un ou plusieurs niveaux.
 
-    Pour chaque règle de fingerprinting, crée une variante du niveau de base
-    avec cette règle exclue. Inclut aussi le profil de référence (toutes les règles).
+    Pour chaque niveau, vérifie que le fingerprinting est actif, puis crée
+    une variante par règle avec cette règle exclue.
     """
     from .arena.profils import charger
 
-    profils = charger()
-    base = profils.de(niveau_base)
-    if base is None:
-        raise ValueError(f"niveau {niveau_base} introuvable")
-    base_dict = base.model_dump()
-    resultat = {niveau_base: copy.deepcopy(base_dict)}
-    for regle in REGLES_FINGERPRINTING:
-        code = f"{niveau_base}s{regle.replace('-', '')}"
-        variante = copy.deepcopy(base_dict)
-        variante["fingerprinting"]["exclure"] = [regle]
-        variante["nom"] = f"Ablation : sans {regle}"
-        variante["description"] = f"Niveau {niveau_base} sans la règle {regle}"
-        resultat[code] = variante
+    if isinstance(niveaux, str):
+        niveaux = [niveaux]
+    profils_arena = charger()
+    regles = regles_fingerprinting()
+    resultat: dict[str, dict] = {}
+    for niveau in niveaux:
+        base = profils_arena.de(niveau)
+        if base is None:
+            raise ValueError(f"niveau {niveau} introuvable")
+        base_dict = base.model_dump()
+        fp = base_dict.get("fingerprinting")
+        if not fp or not fp.get("actif", False):
+            raise ValueError(f"niveau {niveau} : fingerprinting inactif, ablation impossible")
+        resultat[niveau] = copy.deepcopy(base_dict)
+        for regle in regles:
+            code = f"{niveau}s{regle.replace('-', '')}"
+            variante = copy.deepcopy(base_dict)
+            variante["fingerprinting"]["exclure"] = [regle]
+            variante["nom"] = f"Ablation : sans {regle}"
+            variante["description"] = f"Niveau {niveau} sans la règle {regle}"
+            resultat[code] = variante
     return resultat
 
 
-def ecrire_profils_ablation(chemin: str, niveau_base: str = "03") -> dict[str, str]:
-    """Écrit les profils d'ablation dans un fichier YAML et renvoie les codes générés."""
-    import yaml
+def verifier_profils(cx: sqlite3.Connection, experiment_id: int) -> list[dict]:
+    """Vérifie que chaque niveau de protection a une config enregistrée et un hash cohérent."""
+    import hashlib
 
-    profils = generer_profils_ablation(niveau_base)
+    rows = cx.execute(
+        "SELECT DISTINCT protection, protection_config, config_hash FROM runs WHERE experiment_id = ?",
+        (experiment_id,),
+    ).fetchall()
+    resultats = []
+    for r in rows:
+        prot = r["protection"]
+        cfg = r["protection_config"]
+        h = r["config_hash"]
+        if cfg is None:
+            resultats.append({"protection": prot, "ok": False, "erreur": "config absente"})
+            continue
+        attendu = hashlib.sha256(cfg.encode()).hexdigest()[:16]
+        ok = attendu == h
+        resultats.append(
+            {
+                "protection": prot,
+                "ok": ok,
+                "config_hash": h,
+                "hash_attendu": attendu,
+                "erreur": None if ok else "hash incohérent",
+            }
+        )
+    return sorted(resultats, key=lambda d: d["protection"])
+
+
+def ecrire_profils_ablation(chemin: str, niveaux: str | list[str] = "03") -> dict[str, str]:
+    """Écrit les profils d'ablation dans un fichier YAML et renvoie les codes générés."""
     from pathlib import Path
 
+    import yaml
+
+    profils = generer_profils_ablation(niveaux)
     p = Path(chemin)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(yaml.safe_dump(profils, sort_keys=False, allow_unicode=True), encoding="utf-8")

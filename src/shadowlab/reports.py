@@ -18,7 +18,8 @@ def lignes_csv(cx: sqlite3.Connection, experiment_id: int) -> str:
     passages = cx.execute(
         """
         SELECT r.id, COALESCE(json_extract(e.configuration, '$.label'), e.name) AS moteur, s.name AS scenario,
-               r.repetition, r.status, r.success, r.duration_ms, r.started_at,
+               r.repetition, r.protection, r.issue, r.cause,
+               r.status, r.success, r.duration_ms, r.started_at,
                m.cpu_usage, m.cpu_time_ms, m.memory_usage, m.navigation_time, m.request_count, m.error_count, r.error
         FROM runs r JOIN engines e ON e.id = r.engine_id JOIN scenarios s ON s.id = r.scenario_id
         LEFT JOIN metrics m ON m.run_id = r.id
@@ -50,6 +51,9 @@ def lignes_csv(cx: sqlite3.Connection, experiment_id: int) -> str:
         "moteur",
         "scenario",
         "repetition",
+        "protection",
+        "issue",
+        "cause",
         "status",
         "success",
         "duration_ms",
@@ -68,12 +72,14 @@ def lignes_csv(cx: sqlite3.Connection, experiment_id: int) -> str:
     return sortie.getvalue()
 
 
-def _pct(bloc: dict[str, float] | None) -> str:
+def _pct(bloc: dict[str, float] | None, n: int | None = None) -> str:
     if not bloc:
         return "<span class='nm'>n. m.</span>"
+    n_txt = f" <span class='ic'>(n={n})</span>" if n is not None else ""
     return (
         f"<span class='val'>{bloc['taux'] * 100:.1f} %</span>"
         f"<span class='ic'>[{bloc['bas'] * 100:.1f} – {bloc['haut'] * 100:.1f}]</span>"
+        f"{n_txt}"
     )
 
 
@@ -95,8 +101,8 @@ def rapport_html(stats: dict[str, Any]) -> str:
         f"""<tr><th scope="row">{escape(m["label"])}<small>{escape(m["runtime"])} · {
             escape(", ".join(f"{k} {v}" for k, v in (m["versions"] or {}).items()))
         }</small></th>
-<td>{m["passages"]}</td><td>{_barre(m["reussite"], "ok")}{_pct(m["reussite"])}</td>
-<td>{_pct(m["taux_erreur"])}</td>
+<td>{m["passages"]}</td><td>{_barre(m["reussite"], "ok")}{_pct(m["reussite"], m["passages"])}</td>
+<td>{_pct(m["taux_erreur"], m["passages"])}</td>
 <td>{_ms(m["duree_ms"]["mediane"])}</td><td>{_ms(m["duree_ms"]["p95"])}</td><td>{_ms(m["duree_ms"]["p99"])}</td>
 <td>{_ms(m["cpu_ms"]["moyenne"])} ms<small>{_ms(m["cpu_pct"]["moyenne"])} % d'un cœur</small></td><td>{
             _ms(m["memoire_mo"]["moyenne"])
@@ -127,10 +133,18 @@ def rapport_html(stats: dict[str, Any]) -> str:
     )
     lignes_scenarios = "".join(
         f"<tr><th scope='row'>{escape(s['label'])}</th><td>{escape(s['scenario'])}</td><td>{s['passages']}</td>"
-        f"<td>{_barre(s['reussite'], 'ok')}{_pct(s['reussite'])}</td><td>{_ms(s['duree_ms']['mediane'])}</td>"
+        f"<td>{_barre(s['reussite'], 'ok')}{_pct(s['reussite'], s['passages'])}</td><td>{_ms(s['duree_ms']['mediane'])}</td>"
         f"<td>{_ms(s['duree_ms']['p95'])}</td></tr>"
         for s in stats["scenarios"]
     )
+    lignes_protections = ""
+    for p in stats.get("par_protection", []):
+        lignes_protections += (
+            f"<tr><th scope='row'>{escape(str(p['protection']))}</th><td>{p['passages']}</td>"
+            f"<td>{_barre(p['reussite'], 'ok')}{_pct(p['reussite'], p['passages'])}</td>"
+            f"<td>{_pct(p['taux_erreur'], p['passages'])}</td>"
+            f"<td>{_ms(p['duree_ms']['mediane'])}</td></tr>"
+        )
     environnement = e["environment"] or {}
     limites = "".join(f"<li>{escape(limite)}</li>" for limite in stats["limites"])
     return f"""<!doctype html>
@@ -184,9 +198,82 @@ ul {{ color:var(--doux); }}
 <h2>Par scénario</h2>
 <div class="tableau"><table><thead><tr><th>Moteur</th><th>Scénario</th><th>Passages</th><th>Réussite</th>
 <th>Médiane (ms)</th><th>p95</th></tr></thead><tbody>{lignes_scenarios}</tbody></table></div>
+{"<h2>Par niveau de protection</h2>" + chr(10) + "<div class='tableau'><table><thead><tr><th>Protection</th><th>Passages</th><th>Réussite [IC 95 %]</th><th>Erreurs</th><th>Médiane (ms)</th></tr></thead>" + chr(10) + "<tbody>" + lignes_protections + "</tbody></table></div>" if lignes_protections else ""}
 <h2>Limites</h2><ul>{limites}</ul>
 <p class="meta">n. m. : non mesurable. Généré par NOEZIA ShadowLab.</p>
 </main></body></html>"""
+
+
+def passages_json(cx: sqlite3.Connection, experiment_id: int) -> str:
+    """Export JSON par passage avec toutes les observations, détections et métriques."""
+    passages = cx.execute(
+        """SELECT r.id, COALESCE(json_extract(e.configuration, '$.label'), e.name) AS moteur,
+                  e.name AS engine, e.version AS versions, e.runtime,
+                  s.name AS scenario, r.repetition, r.protection, r.status, r.success,
+                  r.duration_ms, r.started_at, r.completed_at, r.issue, r.cause,
+                  r.error, r.drapeaux,
+                  m.cpu_usage, m.cpu_time_ms, m.memory_usage, m.memory_mean,
+                  m.navigation_time, m.request_count, m.error_count
+           FROM runs r JOIN engines e ON e.id = r.engine_id JOIN scenarios s ON s.id = r.scenario_id
+           LEFT JOIN metrics m ON m.run_id = r.id
+           WHERE r.experiment_id = ? ORDER BY r.id""",
+        (experiment_id,),
+    ).fetchall()
+    # Batch-query des détections
+    run_ids = [p["id"] for p in passages]
+    det_par_run: dict[int, list[dict]] = {}
+    for i in range(0, len(run_ids), 500):
+        lot = run_ids[i : i + 500]
+        marques = ",".join("?" * len(lot))
+        for d in cx.execute(
+            f"SELECT run_id, detector_name, classification, confidence FROM detections WHERE run_id IN ({marques})",
+            lot,
+        ):
+            det_par_run.setdefault(d["run_id"], []).append(
+                {"detecteur": d["detector_name"], "classification": d["classification"], "confiance": d["confidence"]}
+            )
+    # Protection config (migration 4, peut être absente)
+    config_par_run: dict[int, tuple[str | None, str | None]] = {}
+    try:
+        for r in cx.execute(
+            "SELECT id, protection_config, config_hash FROM runs WHERE experiment_id = ?", (experiment_id,)
+        ):
+            config_par_run[r["id"]] = (r["protection_config"], r["config_hash"])
+    except Exception:
+        pass
+    resultat = []
+    for p in passages:
+        cfg, hsh = config_par_run.get(p["id"], (None, None))
+        resultat.append(
+            {
+                "run_id": p["id"],
+                "moteur": p["moteur"],
+                "engine": p["engine"],
+                "versions": db.lj(p["versions"]),
+                "scenario": p["scenario"],
+                "repetition": p["repetition"],
+                "protection": p["protection"],
+                "protection_config": db.lj(cfg) if cfg else None,
+                "config_hash": hsh,
+                "status": p["status"],
+                "success": bool(p["success"]) if p["success"] is not None else None,
+                "issue": p["issue"],
+                "cause": p["cause"],
+                "drapeaux": db.lj(p["drapeaux"]) if p["drapeaux"] else None,
+                "duration_ms": p["duration_ms"],
+                "metriques": {
+                    "cpu_pct": p["cpu_usage"],
+                    "cpu_ms": p["cpu_time_ms"],
+                    "memoire_mo": p["memory_usage"],
+                    "memoire_moyenne_mo": p["memory_mean"],
+                    "navigation_ms": p["navigation_time"],
+                    "requetes": p["request_count"],
+                    "erreurs": p["error_count"],
+                },
+                "detections": det_par_run.get(p["id"], []),
+            }
+        )
+    return json.dumps(resultat, ensure_ascii=False, indent=2, default=str)
 
 
 def exporter(cx: sqlite3.Connection, experiment_id: int, dossier: Path, formats: list[str]) -> list[Path]:
@@ -197,6 +284,9 @@ def exporter(cx: sqlite3.Connection, experiment_id: int, dossier: Path, formats:
         chemin = dossier / "statistiques.json"
         chemin.write_text(json.dumps(stats, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         fichiers.append(chemin)
+        chemin_passages = dossier / "passages.json"
+        chemin_passages.write_text(passages_json(cx, experiment_id), encoding="utf-8")
+        fichiers.append(chemin_passages)
     if "csv" in formats:
         chemin = dossier / "passages.csv"
         chemin.write_text(lignes_csv(cx, experiment_id), encoding="utf-8")

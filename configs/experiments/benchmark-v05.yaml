@@ -1,0 +1,33 @@
+experiment:
+  name: benchmark_v05
+  description: >-
+    Benchmark v0.5. 30 répétitions par combinaison pour des intervalles
+    de confiance exploitables. Ordre d'exécution randomisé. Configuration
+    de protection complète enregistrée avec chaque passage.
+  environment: local
+  engines:
+    - playwright
+    - selenium
+    - patchright
+    - scrapling
+    - scrapling-furtif
+    - curl-cffi
+    - httpx
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - api_json
+    - fingerprint_observation
+    - burst_crawl
+  repetitions: 30
+  seed: 20261104
+  concurrency: 1
+  output: [json, csv, html]

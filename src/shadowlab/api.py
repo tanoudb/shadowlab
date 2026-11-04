@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from . import campaigns, reports
 from . import database as db
+from .analytics import comparer as comparer_experiences
 from .analytics import statistiques
 from .config import Reglages
 from .detection import registre as registre_detecteurs
@@ -227,20 +228,26 @@ def export(experiment_id: int, format: str, request: Request):
 
 
 @routeur.get("/comparaison")
-def comparaison(ids: str, request: Request) -> list[dict]:
+def comparaison(ids: str, request: Request) -> dict:
     try:
         identifiants = [int(i) for i in ids.split(",") if i.strip()][:10]
     except ValueError as erreur:
         raise HTTPException(400, "ids : liste d'entiers séparés par des virgules") from erreur
     with _base(request) as cx:
-        resultat = []
+        experiences = []
         for i in identifiants:
             try:
                 s = statistiques(cx, i)
             except LookupError:
                 continue
-            resultat.append({"experience": s["experience"], "moteurs": s["moteurs"]})
-        return resultat
+            experiences.append({"experience": s["experience"], "moteurs": s["moteurs"]})
+        deltas = None
+        if len(identifiants) == 2:
+            try:
+                deltas = comparer_experiences(cx, identifiants[0], identifiants[1])
+            except LookupError:
+                pass
+        return {"experiences": experiences, "deltas": deltas}
 
 
 @routeur.post("/experiences", dependencies=[Depends(ecriture)], status_code=201)

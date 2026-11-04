@@ -46,7 +46,19 @@ def main(argv: list[str] | None = None) -> int:
         choices=["signaux", "ablation", "configurations", "chaine", "par_protection", "tous"],
         default="tous",
     )
-    p.add_argument("--generer-ablation", metavar="NIVEAU", help="générer les profils d'ablation pour un niveau")
+    p.add_argument(
+        "--generer-ablation",
+        metavar="NIVEAUX",
+        help="générer les profils d'ablation (niveaux séparés par virgule, ex: 03,04)",
+    )
+    p.add_argument(
+        "--verifier-profils",
+        action="store_true",
+        help="vérifier les configs de protection enregistrées pour une expérience",
+    )
+    p = sous.add_parser("comparer", help="comparer deux expériences (Fisher exact + Holm-Bonferroni)")
+    p.add_argument("reference", type=int, help="id de l'expérience de référence")
+    p.add_argument("nouveau", type=int, help="id de la nouvelle expérience")
     args = parseur.parse_args(argv)
 
     reglages = charger()
@@ -146,13 +158,23 @@ def main(argv: list[str] | None = None) -> int:
         from . import diagnostic as diag
 
         if args.generer_ablation:
-            niveau = args.generer_ablation
-            chemin = f"configs/arena/profils-ablation-{niveau}.yaml"
-            codes = diag.ecrire_profils_ablation(chemin, niveau)
+            niveaux = [n.strip() for n in args.generer_ablation.split(",") if n.strip()]
+            suffixe = "-".join(niveaux)
+            chemin = f"configs/arena/profils-ablation-{suffixe}.yaml"
+            codes = diag.ecrire_profils_ablation(chemin, niveaux)
             print(f"Profils d'ablation écrits dans {chemin} :")
             for code, nom in codes.items():
                 print(f"  {code} — {nom}")
             print(f"\nLancer l'Arena : SHADOWLAB_PROFILS_EXTRA={chemin} uv run shadowlab arena demarrer")
+            return 0
+        if args.verifier_profils:
+            if args.id is None:
+                print("Erreur : id requis avec --verifier-profils", file=sys.stderr)
+                return 2
+            resultats = diag.verifier_profils(cx, args.id)
+            for r in resultats:
+                etat = "OK" if r["ok"] else f"ERREUR : {r['erreur']}"
+                print(f"  {r['protection']} : {etat}")
             return 0
         if args.id is None:
             print("Erreur : id requis (sauf avec --generer-ablation)", file=sys.stderr)
@@ -216,6 +238,34 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"      {c['couche']:<16} bloque={c['bloque']} emis={c['emis']}  {sigs}")
             else:
                 print(json.dumps(donnees, ensure_ascii=False, indent=2))
+        return 0
+    if args.commande == "comparer":
+        from . import analytics
+
+        try:
+            resultat = analytics.comparer(cx, args.reference, args.nouveau)
+        except LookupError as e:
+            print(f"Erreur : {e}", file=sys.stderr)
+            return 2
+        ref = resultat["reference"]
+        nouv = resultat["nouveau"]
+        print(f"\nRéférence : {ref['name']} (id {ref['id']}, {ref['passages']} passages)")
+        print(f"Nouveau   : {nouv['name']} (id {nouv['id']}, {nouv['passages']} passages)")
+        print(f"\n{'Moteur':<22} {'Δ réussite':>12} {'p-value':>10} {'p corrigé':>10} {'Sig.':>6} {'Δ durée':>12}")
+        print("-" * 76)
+        for m in resultat["moteurs"]:
+            label = m["label"]
+            if m.get("only_in"):
+                print(f"{label:<22} seulement dans {m['only_in']}")
+                continue
+            d_r = m.get("deltas", {}).get("reussite", {})
+            d_d = m.get("deltas", {}).get("duree_ms", {})
+            delta = f"{d_r.get('delta', 0) * 100:+.1f}%"
+            pv = f"{d_r['p_value']:.4f}" if d_r.get("p_value") is not None else "-"
+            pc = f"{d_r['p_value_corrigee']:.4f}" if d_r.get("p_value_corrigee") is not None else "-"
+            sig = "OUI" if d_r.get("significatif") else "non"
+            duree = f"{d_d['delta']:+.0f}ms" if d_d.get("delta") is not None else "-"
+            print(f"{label:<22} {delta:>12} {pv:>10} {pc:>10} {sig:>6} {duree:>12}")
         return 0
     return 1
 

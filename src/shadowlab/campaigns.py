@@ -281,7 +281,11 @@ def creer(cx, experience: Experience) -> int:
 
 
 def unites(experience: Experience) -> list[tuple[MoteurConfig, str]]:
-    return [(moteur, protection) for moteur in experience.engines for protection in experience.protections]
+    """Produit les unités moteur × protection, en ordre randomisé reproductible si un seed existe."""
+    liste = [(moteur, protection) for moteur in experience.engines for protection in experience.protections]
+    if experience.seed is not None:
+        random.Random(f"{experience.seed}:unites").shuffle(liste)
+    return liste
 
 
 def _plan(experience: Experience, moteur: MoteurConfig, protection: str) -> Iterator[tuple[int, list[str]]]:
@@ -322,6 +326,8 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
     # Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
     cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
     cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (experiment_id,))
+    ordre = unites(experience)
+    journal.info("Ordre d'exécution : %d unités, seed %s", len(ordre), experience.seed)
     fichier_arret(reglages).unlink(missing_ok=True)
     statut = "interrompu"
     try:
@@ -485,7 +491,27 @@ def _passage(
     rng,
     dossier_artefacts,
 ) -> None:
-    run_id, jeton = passages.demarrer(cx, experiment_id, engine_id, scenario_id, repetition, "automatise", protection)
+    profil = module_profils.charger().de(protection)
+    protection_config = (
+        db.j(
+            {
+                "profil": profil.model_dump(),
+                "detecteurs": {n: d.version for n, d in registre_detecteurs().items()},
+            }
+        )
+        if profil
+        else None
+    )
+    run_id, jeton = passages.demarrer(
+        cx,
+        experiment_id,
+        engine_id,
+        scenario_id,
+        repetition,
+        "automatise",
+        protection,
+        protection_config=protection_config,
+    )
     pilote.mesures = type(pilote.mesures)()
     erreur: str | None = None
     succes: bool | None = None

@@ -281,3 +281,59 @@ class TestParProtection:
         turnstile = [c for c in cam_05["couches"] if c["couche"] == "turnstile"]
         assert len(turnstile) == 1
         assert turnstile[0]["emis"] == 1
+
+
+# ---- 6. regles_fingerprinting ----
+
+
+class TestReglesFingerprinting:
+    def test_decouverte_dynamique(self):
+        noms = diag.regles_fingerprinting()
+        assert len(noms) >= 4
+        assert "botd" in noms
+        assert "regles-http" in noms
+
+    def test_ordre_alphabetique(self):
+        noms = diag.regles_fingerprinting()
+        assert noms == sorted(noms)
+
+
+# ---- 7. verifier_profils ----
+
+
+class TestVerifierProfils:
+    def test_config_absente(self, cx):
+        result = diag.verifier_profils(cx, 1)
+        for r in result:
+            assert r["ok"] is False
+            assert "absente" in r["erreur"]
+
+    def test_config_valide(self, cx):
+        import hashlib
+
+        cfg = '{"test": true}'
+        h = hashlib.sha256(cfg.encode()).hexdigest()[:16]
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection,"
+            " protection_config, config_hash)"
+            " VALUES (100, 1, 1, 1, 99, 'tok-100', 'automatise', '2026-01-01',"
+            " 'termine', 1, '99', ?, ?)",
+            (cfg, h),
+        )
+        result = diag.verifier_profils(cx, 1)
+        p99 = next(r for r in result if r["protection"] == "99")
+        assert p99["ok"] is True
+
+    def test_hash_incoherent(self, cx):
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection,"
+            " protection_config, config_hash)"
+            " VALUES (101, 1, 1, 1, 99, 'tok-101', 'automatise', '2026-01-01',"
+            " 'termine', 1, '98', '{\"x\":1}', 'mauvais_hash_ici!')",
+        )
+        result = diag.verifier_profils(cx, 1)
+        p98 = next(r for r in result if r["protection"] == "98")
+        assert p98["ok"] is False
+        assert "incohérent" in p98["erreur"]

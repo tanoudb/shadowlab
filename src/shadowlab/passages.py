@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import sqlite3
 from typing import Any
@@ -25,12 +26,25 @@ def demarrer(
     repetition: int,
     truth: str,
     protection: str = "aucune",
+    protection_config: str | None = None,
 ) -> tuple[int, str]:
     jeton = nouveau_jeton()
+    config_hash = hashlib.sha256(protection_config.encode()).hexdigest()[:16] if protection_config else None
     curseur = cx.execute(
         "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at, status,"
-        " protection) VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?)",
-        (experiment_id, engine_id, scenario_id, repetition, jeton, truth, db.maintenant(), protection),
+        " protection, protection_config, config_hash) VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?, ?, ?)",
+        (
+            experiment_id,
+            engine_id,
+            scenario_id,
+            repetition,
+            jeton,
+            truth,
+            db.maintenant(),
+            protection,
+            protection_config,
+            config_hash,
+        ),
     )
     return int(curseur.lastrowid), jeton
 

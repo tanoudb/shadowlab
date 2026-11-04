@@ -79,6 +79,7 @@ def _passages(cx: sqlite3.Connection, experiment_id: int) -> list[sqlite3.Row]:
     return cx.execute(
         """
         SELECT r.id, r.status, r.success, r.duration_ms, r.truth, r.repetition,
+               r.protection, r.issue, r.cause,
                s.name AS scenario,
                e.name AS engine, e.version AS versions, e.runtime,
                COALESCE(json_extract(e.configuration, '$.label'), e.name) AS label,
@@ -138,14 +139,23 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
 
     par_moteur: dict[str, list[sqlite3.Row]] = defaultdict(list)
     par_couple: dict[tuple[str, str], list[sqlite3.Row]] = defaultdict(list)
+    par_protection: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for p in passages:
         par_moteur[p["label"]].append(p)
         par_couple[(p["label"], p["scenario"])].append(p)
+        if "protection" in p.keys() and p["protection"]:
+            par_protection[p["protection"]].append(p)
 
     def bloc(lignes: list[sqlite3.Row]) -> dict[str, Any]:
         n = len(lignes)
         reussis = sum(1 for p in lignes if p["status"] == "reussi")
         erreurs = sum(1 for p in lignes if p["status"] == "erreur")
+        a_issue = lignes and "issue" in lignes[0].keys()
+        bloques = sum(1 for p in lignes if p["issue"] == "bloque") if a_issue else 0
+        par_issue: dict[str, int] = {}
+        for p in lignes:
+            issue = p["issue"] if "issue" in p.keys() and p["issue"] else p["status"]
+            par_issue[issue] = par_issue.get(issue, 0) + 1
         par_detecteur: dict[str, list[str]] = defaultdict(list)
         for p in lignes:
             for nom, classement in detections.get(p["id"], {}).items():
@@ -154,6 +164,8 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "passages": n,
             "reussite": wilson(reussis, n),
             "taux_erreur": wilson(erreurs, n),
+            "taux_blocage": wilson(bloques, n),
+            "par_issue": par_issue,
             "duree_ms": _resume([p["duration_ms"] for p in lignes]),
             "navigation_ms": _resume([p["navigation_time"] for p in lignes]),
             "cpu_pct": _resume([p["cpu_usage"] for p in lignes]),
@@ -221,9 +233,113 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             {"label": label, "scenario": scenario, **bloc(lignes)}
             for (label, scenario), lignes in sorted(par_couple.items())
         ],
+        "par_protection": [{"protection": prot, **bloc(lignes)} for prot, lignes in sorted(par_protection.items())],
         "qualite_detecteurs": qualite,
         "sessions_humaines": humains,
         "limites": LIMITES,
+    }
+
+
+def _fisher_exact_p(a: int, b: int, c: int, d: int) -> float:
+    """P-value bilatérale du test exact de Fisher (table 2×2), implémentation pure Python."""
+    from math import comb
+
+    n = a + b + c + d
+    r1, r2, c1 = a + b, c + d, a + c
+
+    # Probabilité d'une cellule donnée sous H0
+    def _hyper_p(x: int) -> float:
+        return comb(r1, x) * comb(r2, c1 - x) / comb(n, c1)
+
+    p_obs = _hyper_p(a)
+    lo = max(0, c1 - r2)
+    hi = min(r1, c1)
+    return sum(_hyper_p(x) for x in range(lo, hi + 1) if _hyper_p(x) <= p_obs * (1 + 1e-7))
+
+
+def _holm_bonferroni(pvaleurs: list[float]) -> list[float]:
+    """Correction de Holm-Bonferroni pour comparaisons multiples."""
+    m = len(pvaleurs)
+    if m == 0:
+        return []
+    indices = sorted(range(m), key=lambda i: pvaleurs[i])
+    corrigees = [0.0] * m
+    cumul = 0.0
+    for rang, idx in enumerate(indices):
+        ajustee = pvaleurs[idx] * (m - rang)
+        cumul = max(cumul, ajustee)
+        corrigees[idx] = min(cumul, 1.0)
+    return corrigees
+
+
+def comparer(cx: sqlite3.Connection, id_reference: int, id_nouveau: int) -> dict[str, Any]:
+    """Compare deux expériences avec deltas, tests statistiques et correction pour comparaisons multiples."""
+    ref = statistiques(cx, id_reference)
+    nouveau = statistiques(cx, id_nouveau)
+
+    ref_moteurs = {m["label"]: m for m in ref["moteurs"]}
+    nouveau_moteurs = {m["label"]: m for m in nouveau["moteurs"]}
+
+    comparaisons = []
+    pvaleurs_brutes: list[float] = []
+    indices_pvaleurs: list[int] = []
+
+    for label in sorted(set(ref_moteurs) | set(nouveau_moteurs)):
+        r = ref_moteurs.get(label)
+        n = nouveau_moteurs.get(label)
+        if not (r and n):
+            comparaisons.append({"label": label, "only_in": "reference" if r else "nouveau"})
+            continue
+        entry: dict[str, Any] = {
+            "label": label,
+            "reference": {"passages": r["passages"]},
+            "nouveau": {"passages": n["passages"]},
+            "deltas": {},
+        }
+        # Delta sur taux de réussite — test exact de Fisher
+        r_ok = sum(1 for _ in range(r["passages"]) if r["reussite"] and True) if r["reussite"] else 0
+        n_ok = sum(1 for _ in range(n["passages"]) if n["reussite"] and True) if n["reussite"] else 0
+        # Recalculer les effectifs exacts
+        r_ok = round(r["reussite"]["taux"] * r["passages"]) if r["reussite"] else 0
+        n_ok = round(n["reussite"]["taux"] * n["passages"]) if n["reussite"] else 0
+        r_ko = r["passages"] - r_ok
+        n_ko = n["passages"] - n_ok
+        p_fisher = _fisher_exact_p(r_ok, r_ko, n_ok, n_ko)
+        idx = len(comparaisons)
+        pvaleurs_brutes.append(p_fisher)
+        indices_pvaleurs.append(idx)
+        entry["deltas"]["reussite"] = {
+            "reference": r["reussite"]["taux"] if r["reussite"] else None,
+            "nouveau": n["reussite"]["taux"] if n["reussite"] else None,
+            "delta": round(
+                (n["reussite"]["taux"] if n["reussite"] else 0) - (r["reussite"]["taux"] if r["reussite"] else 0),
+                4,
+            ),
+            "p_value": round(p_fisher, 6),
+        }
+        # Delta sur durée médiane
+        r_med = r["duree_ms"]["mediane"] if r.get("duree_ms") else None
+        n_med = n["duree_ms"]["mediane"] if n.get("duree_ms") else None
+        if r_med is not None and n_med is not None:
+            entry["deltas"]["duree_ms"] = {
+                "reference": r_med,
+                "nouveau": n_med,
+                "delta": round(n_med - r_med, 1),
+            }
+        comparaisons.append(entry)
+
+    # Correction de Holm-Bonferroni
+    if pvaleurs_brutes:
+        corrigees = _holm_bonferroni(pvaleurs_brutes)
+        for i, idx in enumerate(indices_pvaleurs):
+            if "deltas" in comparaisons[idx] and "reussite" in comparaisons[idx]["deltas"]:
+                comparaisons[idx]["deltas"]["reussite"]["p_value_corrigee"] = round(corrigees[i], 6)
+                comparaisons[idx]["deltas"]["reussite"]["significatif"] = corrigees[i] < 0.05
+
+    return {
+        "reference": {"id": id_reference, "name": ref["experience"]["name"], "passages": ref["passages"]},
+        "nouveau": {"id": id_nouveau, "name": nouveau["experience"]["name"], "passages": nouveau["passages"]},
+        "moteurs": comparaisons,
     }
 
 

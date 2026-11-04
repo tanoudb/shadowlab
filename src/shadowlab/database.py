@@ -147,6 +147,11 @@ MIGRATIONS: list[str] = [
     CREATE INDEX decisions_session ON decisions(session_token);
     CREATE INDEX runs_protection ON runs(experiment_id, protection);
     """,
+    # 4 — v0.5 : configuration de protection complète par passage, empreinte SHA-256
+    """
+    ALTER TABLE runs ADD COLUMN protection_config TEXT;
+    ALTER TABLE runs ADD COLUMN config_hash TEXT;
+    """,
 ]
 
 

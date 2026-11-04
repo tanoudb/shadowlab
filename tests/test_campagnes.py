@@ -88,3 +88,43 @@ def test_option_de_moteur_hors_liste_refusee_meme_sans_campagne():
         DriverScrapling(("127.0.0.1",), {"follow_redirects": True})
     pilote = DriverScrapling(("127.0.0.1",), {"timeout": 5})
     assert pilote.configuration()["follow_redirects"] is False
+
+
+def test_unites_randomisees_par_seed():
+    from shadowlab.campaigns import FichierCampagne, unites
+
+    brut = {
+        "experiment": {
+            "name": "rand",
+            "engines": ["httpx", "playwright"],
+            "protections": ["01", "02", "03"],
+            "scenarios": ["static_html"],
+            "repetitions": 1,
+            "seed": 42,
+        }
+    }
+    exp = FichierCampagne.model_validate(brut).experiment
+    u1 = unites(exp)
+    u2 = unites(exp)
+    assert u1 == u2  # même seed → même ordre
+
+
+def test_unites_seed_different_ordre_different():
+    from shadowlab.campaigns import FichierCampagne, unites
+
+    brut1 = {
+        "experiment": {
+            "name": "a",
+            "engines": ["httpx", "playwright", "selenium"],
+            "protections": ["01", "02", "03", "04"],
+            "scenarios": ["static_html"],
+            "repetitions": 1,
+            "seed": 1,
+        }
+    }
+    brut2 = {**brut1, "experiment": {**brut1["experiment"], "seed": 2}}
+    exp1 = FichierCampagne.model_validate(brut1).experiment
+    exp2 = FichierCampagne.model_validate(brut2).experiment
+    u1 = [(m.nom_affiche, p) for m, p in unites(exp1)]
+    u2 = [(m.nom_affiche, p) for m, p in unites(exp2)]
+    assert u1 != u2  # seeds différents → ordres différents (très probable avec 12 éléments)
