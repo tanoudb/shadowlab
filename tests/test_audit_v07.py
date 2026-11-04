@@ -287,3 +287,79 @@ class TestMatriceConfusionComparabilite:
         # Le rappel (population auto seule) et le FPR (population humaine seule) restent calculés.
         assert m["rappel"] is not None
         assert m["taux_faux_positifs"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Défaut #5 — comparer() ne vérifie pas l'équivalence des designs expérimentaux
+# ---------------------------------------------------------------------------
+
+
+def _exp_comparer(cx, exp_id, *, protections, scenarios, n_ok, n_total):
+    import json
+
+    config = json.dumps(
+        {
+            "name": f"exp{exp_id}",
+            "scenarios": scenarios,
+            "protections": protections,
+            "engines": [{"name": "httpx", "label": "httpx", "options": {}}],
+        }
+    )
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+        " VALUES (?, ?, '2026-01-01', ?, 'termine', 1)",
+        (exp_id, f"exp{exp_id}", config),
+    )
+    if exp_id == 1:
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration)"
+            " VALUES (1, 'httpx', '{}', 'python', '{\"label\": \"httpx\"}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+    base = exp_id * 1000
+    for i in range(n_total):
+        succ = 1 if i < n_ok else 0
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue)"
+            " VALUES (?, ?, 1, 1, ?, ?, 'automatise', '2026-01-01', ?, ?, ?, ?)",
+            (
+                base + i,
+                exp_id,
+                i + 1,
+                f"t-{base + i}",
+                "reussi" if succ else "echec",
+                succ,
+                protections[0],
+                "extraction_reussie" if succ else "bloque",
+            ),
+        )
+
+
+class TestComparerDesignEquivalence:
+    def test_designs_differents_refuses(self, tmp_path):
+        """Protections différentes (01 vs 06) : comparer() doit refuser la comparaison
+        statistique et signaler la différence, pas émettre un verdict de significativité."""
+        from shadowlab.analytics import comparer
+
+        cx = db.ouvrir(tmp_path / "cmp1.sqlite3")
+        _exp_comparer(cx, 1, protections=["01"], scenarios=["static_html"], n_ok=28, n_total=30)
+        _exp_comparer(cx, 2, protections=["06"], scenarios=["static_html"], n_ok=3, n_total=30)
+        res = comparer(cx, 1, 2)
+        assert res["comparable"] is False
+        assert "protections" in res["differences"]
+        # Aucun verdict de significativité ne doit être produit sur des designs non équivalents.
+        for m in res.get("moteurs", []):
+            assert "significatif" not in m.get("deltas", {}).get("reussite", {})
+
+    def test_designs_identiques_compares(self, tmp_path):
+        """Mêmes protections et scénarios : la comparaison est autorisée."""
+        from shadowlab.analytics import comparer
+
+        cx = db.ouvrir(tmp_path / "cmp2.sqlite3")
+        _exp_comparer(cx, 1, protections=["01"], scenarios=["static_html"], n_ok=28, n_total=30)
+        _exp_comparer(cx, 2, protections=["01"], scenarios=["static_html"], n_ok=10, n_total=30)
+        res = comparer(cx, 1, 2)
+        assert res["comparable"] is True
+        reussite = res["moteurs"][0]["deltas"]["reussite"]
+        assert "significatif" in reussite
