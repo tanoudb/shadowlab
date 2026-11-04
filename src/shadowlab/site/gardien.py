@@ -84,12 +84,12 @@ def _refus(request: Request, html: str, code: str) -> Response:
     return JSONResponse({"bloque_par": code}, status_code=403, headers={"Cache-Control": "no-store"})
 
 
-def suspicion(cx: sqlite3.Connection, jeton: str) -> list[dict]:
+def suspicion(cx: sqlite3.Connection, jeton: str, inclure_js: bool = True) -> list[dict]:
     """Motifs de suspicion connus à cet instant. Le JavaScript ne compte qu'une fois l'empreinte reçue."""
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
     noms = list(REGLES_REQUETE)
-    if observations.empreinte_js is not None:
+    if inclure_js and observations.empreinte_js is not None:
         noms += REGLES_JAVASCRIPT
     detecteurs = registre()
     motifs: list[dict] = []
@@ -135,8 +135,12 @@ def controler(
         cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
-        motifs = suspicion(cx, jeton)
+        inclure_js = profil.fingerprinting.bloquer != "http"
+        motifs = suspicion(cx, jeton, inclure_js=inclure_js)
         if motifs:
+            if profil.fingerprinting.bloquer != "non":
+                db.enregistrer_decision(cx, jeton, "fingerprinting", "bloque", chemin, motifs)
+                return _refus(request, pages.page_blocage(), "fingerprinting")
             db.enregistrer_decision(cx, jeton, "fingerprinting", "suspect", chemin, motifs)
     if profil.turnstile.actif and not defis.cookie_valide(
         secret, "turnstile", request.cookies.get(COOKIE_TURNSTILE), jeton, lie

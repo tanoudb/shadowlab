@@ -24,24 +24,24 @@
 
 "02":
   nom: "D\xE9tection simple"
-  description: User-Agent, cookies, limites de fréquence
+  description: "Blocage sur signaux HTTP et TLS, limites de fréquence"
   limitation: {debit: 20, rafale: 40}
   waf: {mode: detection, paranoia: 1, seuil: 10}
   defi_js: {actif: false, difficulte: 0, lier_tls: false}
   captcha: {actif: false}
-  fingerprinting: {actif: false}
+  fingerprinting: {actif: true, bloquer: http}
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
 
 "03":
   nom: Fingerprinting
-  description: Signaux navigateur, JavaScript et comportements
+  description: "Blocage sur signaux navigateur, JavaScript et comportements"
   limitation: {debit: 10, rafale: 25}
   waf: {mode: detection, paranoia: 1, seuil: 5}
   defi_js: {actif: false, difficulte: 0, lier_tls: false}
   captcha: {actif: false}
-  fingerprinting: {actif: true}
+  fingerprinting: {actif: true, bloquer: tout}
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -53,7 +53,7 @@
   waf: {mode: blocage, paranoia: 1, seuil: 5}
   defi_js: {actif: true, difficulte: 12, lier_tls: false}
   captcha: {actif: true}
-  fingerprinting: {actif: true}
+  fingerprinting: {actif: true, bloquer: tout}
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -65,7 +65,7 @@
   waf: {mode: blocage, paranoia: 2, seuil: 5}
   defi_js: {actif: true, difficulte: 15, lier_tls: true}
   captcha: {actif: true}
-  fingerprinting: {actif: true}
+  fingerprinting: {actif: true, bloquer: tout}
   honeypots: {actif: false}
   turnstile: {actif: true}
   recaptcha: {actif: true}
@@ -77,7 +77,7 @@
   waf: {mode: blocage, paranoia: 3, seuil: 3}
   defi_js: {actif: true, difficulte: 18, lier_tls: true}
   captcha: {actif: true}
-  fingerprinting: {actif: true}
+  fingerprinting: {actif: true, bloquer: tout}
   honeypots: {actif: true}
   turnstile: {actif: true}
   recaptcha: {actif: true}

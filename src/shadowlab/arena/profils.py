@@ -41,8 +41,12 @@ class Captcha(_Strict):
     actif: bool
 
 
+ModeBlocage = Literal["non", "http", "tout"]
+
+
 class Fingerprinting(_Strict):
     actif: bool
+    bloquer: ModeBlocage = "non"
 
 
 class Honeypots(_Strict):

@@ -6,6 +6,28 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-04 — Claude (Opus 4.6) — Blocage fingerprinting niveaux 02-03
+
+**Fait**
+- Ajout du mode de blocage fingerprinting à trois valeurs (`non`, `http`, `tout`) dans `profils.py` et
+  `profils.yaml` (D-19). Niveau 02 bloque sur signaux HTTP/TLS, niveau 03 sur tous les signaux y compris JS.
+- `gardien.py:controler()` bloque désormais quand `bloquer != "non"` au lieu de simplement loguer.
+- `suspicion()` accepte `inclure_js` pour que le mode `http` ne consulte que les règles HTTP/TLS.
+- Page `page_blocage()` ajoutée dans `pages.py` pour le refus fingerprinting.
+- Campagne `arena-essai` (3 moteurs × 6 niveaux) : niveau 01 = 100 % réussite, niveaux 02-06 = 0 % (blocage
+  fingerprinting confirmé). 53 tests verts, lint propre.
+
+**Fichiers modifiés** : `src/shadowlab/arena/profils.py`, `configs/arena/profils.yaml`,
+`src/shadowlab/site/gardien.py`, `src/shadowlab/site/pages.py`, `docs/DECISIONS.md`.
+
+**Décisions** : D-19 (trois modes de blocage fingerprinting).
+
+**Reste**
+- La différenciation entre niveaux 02 (`http`) et 03 (`tout`) n'est visible qu'avec les moteurs anti-détection
+  (patchright, camoufox) qui passent les règles HTTP mais pas les règles JS. Tester avec une campagne élargie.
+- Committer les changements.
+
+
 ## 2026-11-03 — Claude (Opus 5.5) — Audit, MVP complet et campagne de référence
 
 **Fait**

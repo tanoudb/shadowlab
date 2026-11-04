@@ -57,3 +57,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   des couches de protection ; un moteur qui passe le niveau N a franchi toutes les défenses des niveaux inférieurs.
 - ~~**D-13 — 03/11/2026 — Docker Compose reporté.**~~ Annulée : Docker Compose opérationnel (Coraza + Nginx)
   pour l'Arena.
+- **D-19 — 04/11/2026 — Fingerprinting à trois modes de blocage** (`non`, `http`, `tout`). Niveaux 02-03
+  loguaient les suspicions sans jamais bloquer : tous les moteurs avaient les mêmes résultats qu'en niveau 01.
+  Niveau 02 bloque sur signaux HTTP/TLS seuls (attrape les outils HTTP bruts), niveau 03 ajoute les signaux
+  JavaScript (attrape l'automation navigateur standard). Niveaux 04-06 gardent `tout`.

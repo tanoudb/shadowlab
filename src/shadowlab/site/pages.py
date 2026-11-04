@@ -261,6 +261,14 @@ function recaptchaOk(token) {{
     )
 
 
+def page_blocage() -> str:
+    return _page_arena(
+        "blocage",
+        "Accès refusé",
+        "<p>Activité suspecte détectée. L'accès à cette page a été bloqué.</p>",
+    )
+
+
 def fin_manuelle(classements: list[dict]) -> str:
     lignes = "".join(
         f"<tr><td>{escape(c['detector_name'])}</td><td>{escape(c['classification'])}</td></tr>" for c in classements
