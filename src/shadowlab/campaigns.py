@@ -95,6 +95,7 @@ class Experience(BaseModel):
     metrics: list[str] = Field(default_factory=lambda: sorted(METRIQUES))
     output: list[Literal["json", "csv", "html"]] = Field(default_factory=lambda: ["json", "csv", "html"])
     seed: int | None = None
+    warmup: int = Field(default=0, ge=0)
     concurrency: int = Field(default=1, ge=1)
     limites: Limites = Field(default_factory=Limites)
     base_url: str | None = None
@@ -198,8 +199,8 @@ def lire(chemin: Path, reglages: Reglages) -> Experience:
     return experience
 
 
-def environnement() -> dict[str, Any]:
-    return {
+def environnement(reglages: Reglages | None = None) -> dict[str, Any]:
+    env: dict[str, Any] = {
         "shadowlab": __version__,
         "python": sys.version.split()[0],
         "systeme": platform.platform(),
@@ -207,6 +208,9 @@ def environnement() -> dict[str, Any]:
         "processeurs": __import__("os").cpu_count(),
         "profils_arena": module_profils.charger().model_dump(),
     }
+    if reglages is not None:
+        env["arena_versions"] = pile.versions(reglages)
+    return env
 
 
 # --- Serveur local ------------------------------------------------------------------------------------
@@ -264,7 +268,7 @@ def fichier_arret(reglages: Reglages) -> Path:
     return reglages.sorties / "ARRET"
 
 
-def creer(cx, experience: Experience) -> int:
+def creer(cx, experience: Experience, reglages: Reglages | None = None) -> int:
     curseur = cx.execute(
         "INSERT INTO experiments (name, description, created_at, configuration, status, seed, environment)"
         " VALUES (?, ?, ?, ?, 'creee', ?, ?)",
@@ -274,7 +278,7 @@ def creer(cx, experience: Experience) -> int:
             db.maintenant(),
             experience.model_dump_json(),
             experience.seed,
-            db.j(environnement()),
+            db.j(environnement(reglages)),
         ),
     )
     return int(curseur.lastrowid)
@@ -511,6 +515,7 @@ def _passage(
         "automatise",
         protection,
         protection_config=protection_config,
+        is_warmup=repetition <= experience.warmup,
     )
     pilote.mesures = type(pilote.mesures)()
     erreur: str | None = None

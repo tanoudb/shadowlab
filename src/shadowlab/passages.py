@@ -27,12 +27,14 @@ def demarrer(
     truth: str,
     protection: str = "aucune",
     protection_config: str | None = None,
+    is_warmup: bool = False,
 ) -> tuple[int, str]:
     jeton = nouveau_jeton()
     config_hash = hashlib.sha256(protection_config.encode()).hexdigest()[:16] if protection_config else None
     curseur = cx.execute(
         "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at, status,"
-        " protection, protection_config, config_hash) VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?, ?, ?)",
+        " protection, protection_config, config_hash, is_warmup)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?, ?, ?, ?)",
         (
             experiment_id,
             engine_id,
@@ -44,6 +46,7 @@ def demarrer(
             protection,
             protection_config,
             config_hash,
+            int(is_warmup),
         ),
     )
     return int(curseur.lastrowid), jeton

@@ -70,5 +70,21 @@ def sante(reglages: Reglages) -> bool:
         connexion.close()
 
 
+def versions(reglages: Reglages) -> dict[str, str]:
+    """Versions des composants Docker de l'Arena, ou dict vide si la pile n'est pas active."""
+    if not sante(reglages):
+        return {}
+    resultat: dict[str, str] = {}
+    try:
+        r = _compose(reglages, "images", "--format", "{{.Repository}}:{{.Tag}}", delai=10)
+        if r.returncode == 0:
+            for ligne in r.stdout.strip().splitlines():
+                nom = ligne.split("/")[-1].split(":")[0] if "/" in ligne else ligne.split(":")[0]
+                resultat[nom] = ligne.strip()
+    except Exception:
+        pass
+    return resultat
+
+
 def etat(reglages: Reglages) -> dict:
     return {"chaine_active": sante(reglages), "port_aval": reglages.port_aval, "url_arena": reglages.url_arena}

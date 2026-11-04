@@ -52,9 +52,16 @@ class DriverSelenium(Driver):
             self._pilote = None
 
     def start_session(self) -> None:
-        # Pas de contexte isolé dans WebDriver : on vide cookies et cache entre deux passages.
+        # Pas de contexte isolé dans WebDriver : on vide cookies, cache et stockage entre deux passages.
         self._pilote.execute_cdp_cmd("Network.clearBrowserCookies", {})
         self._pilote.execute_cdp_cmd("Network.clearBrowserCache", {})
+        try:
+            self._pilote.execute_cdp_cmd(
+                "Storage.clearDataForOrigin",
+                {"origin": self._pilote.current_url or "*", "storageTypes": "all"},
+            )
+        except Exception:
+            pass
         self.mesures.details["requetes_bloquees"] = "non mesuré"
 
     def _apres_chargement(self) -> int | None:

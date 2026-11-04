@@ -75,11 +75,12 @@ def _bloc_detection(classements: list[str]) -> dict[str, Any]:
     }
 
 
-def _passages(cx: sqlite3.Connection, experiment_id: int) -> list[sqlite3.Row]:
+def _passages(cx: sqlite3.Connection, experiment_id: int, inclure_warmup: bool = False) -> list[sqlite3.Row]:
+    filtre_warmup = "" if inclure_warmup else " AND COALESCE(r.is_warmup, 0) = 0"
     return cx.execute(
-        """
+        f"""
         SELECT r.id, r.status, r.success, r.duration_ms, r.truth, r.repetition,
-               r.protection, r.issue, r.cause,
+               r.protection, r.issue, r.cause, COALESCE(r.is_warmup, 0) AS is_warmup,
                s.name AS scenario,
                e.name AS engine, e.version AS versions, e.runtime,
                COALESCE(json_extract(e.configuration, '$.label'), e.name) AS label,
@@ -89,7 +90,7 @@ def _passages(cx: sqlite3.Connection, experiment_id: int) -> list[sqlite3.Row]:
         JOIN scenarios s ON s.id = r.scenario_id
         JOIN engines e ON e.id = r.engine_id
         LEFT JOIN metrics m ON m.run_id = r.id
-        WHERE r.experiment_id = ? AND r.status != 'en_cours'
+        WHERE r.experiment_id = ? AND r.status != 'en_cours'{filtre_warmup}
         ORDER BY r.id
         """,
         (experiment_id,),
@@ -225,6 +226,62 @@ def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, d
     return matrices
 
 
+def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
+    """Autocorrélation lag-1 du succès entre répétitions consécutives, par (moteur, protection, scénario).
+
+    Une autocorrélation proche de 0 indique l'indépendance des répétitions.
+    Une valeur positive suggère que le résultat d'une répétition influence la suivante.
+    """
+    passages = _passages(cx, experiment_id)
+    groupes: dict[tuple[str, str, str], list[tuple[int, int]]] = defaultdict(list)
+    for p in passages:
+        cle = (p["label"], p["protection"], p["scenario"])
+        groupes[cle].append((p["repetition"], 1 if p["success"] else 0))
+    resultats: list[dict[str, Any]] = []
+    for (moteur, protection, scenario), paires in groupes.items():
+        paires.sort()
+        valeurs = [v for _, v in paires]
+        n = len(valeurs)
+        if n < 4:
+            continue
+        moyenne = sum(valeurs) / n
+        variance = sum((v - moyenne) ** 2 for v in valeurs) / n
+        if variance == 0:
+            resultats.append(
+                {
+                    "moteur": moteur,
+                    "protection": protection,
+                    "scenario": scenario,
+                    "n": n,
+                    "autocorrelation_lag1": None,
+                    "note": "variance nulle (résultats identiques)",
+                }
+            )
+            continue
+        covariance = sum((valeurs[i] - moyenne) * (valeurs[i + 1] - moyenne) for i in range(n - 1)) / (n - 1)
+        r1 = round(covariance / variance, 4)
+        resultats.append(
+            {
+                "moteur": moteur,
+                "protection": protection,
+                "scenario": scenario,
+                "n": n,
+                "autocorrelation_lag1": r1,
+            }
+        )
+    return {
+        "groupes": resultats,
+        "resume": {
+            "n_groupes": len(resultats),
+            "mesurables": sum(1 for r in resultats if r["autocorrelation_lag1"] is not None),
+            "max_absolu": max(
+                (abs(r["autocorrelation_lag1"]) for r in resultats if r["autocorrelation_lag1"] is not None),
+                default=None,
+            ),
+        },
+    }
+
+
 def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
     experience = cx.execute("SELECT * FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
     if experience is None:
@@ -301,6 +358,12 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "sessions_humaines": mc["n_humain"],
         }
 
+    warmup_exclus = cx.execute(
+        "SELECT COUNT(*) FROM runs WHERE experiment_id = ? AND COALESCE(is_warmup, 0) = 1 AND status != 'en_cours'",
+        (experiment_id,),
+    ).fetchone()[0]
+    dependance = dependance_repetitions(cx, experiment_id)
+
     return {
         "experience": {
             "id": experience["id"],
@@ -313,6 +376,7 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "configuration": db.lj(experience["configuration"]),
         },
         "passages": len(passages),
+        "warmup_exclus": warmup_exclus,
         "moteurs": moteurs,
         "scenarios": [
             {"label": label, "scenario": scenario, **bloc(lignes)}
@@ -322,6 +386,7 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
         "qualite_detecteurs": qualite,
         "matrices_confusion": matrices,
         "sessions_humaines": humains,
+        "dependance_repetitions": dependance,
         "limites": LIMITES,
     }
 

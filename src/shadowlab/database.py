@@ -156,6 +156,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE runs ADD COLUMN consent_at TEXT;
     """,
+    # 6 — v0.6 : marquage des passages de préchauffage (warm-up), exclus des statistiques
+    """
+    ALTER TABLE runs ADD COLUMN is_warmup INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

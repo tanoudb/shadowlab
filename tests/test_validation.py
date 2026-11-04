@@ -223,3 +223,184 @@ class TestComparerEffectifsExacts:
             ref_val = d["reference"] if d["reference"] is not None else 0
             new_val = d["nouveau"] if d["nouveau"] is not None else 0
             assert d["delta"] == pytest.approx(new_val - ref_val, abs=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Passe 4 : Reproductibilité — warm-up, dépendance, versions
+# ---------------------------------------------------------------------------
+
+
+class TestWarmup:
+    def test_warmup_exclus_des_statistiques(self, tmp_path):
+        base = tmp_path / "warmup.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+            " VALUES (1, 'warmup-test', '2026-01-01', '{}', 'termine', 1)"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        for rep in range(1, 6):
+            is_warmup = 1 if rep <= 2 else 0
+            cx.execute(
+                "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+                " session_token, truth, started_at, status, success, duration_ms,"
+                " protection, issue, is_warmup)"
+                " VALUES (1, 1, 1, ?, ?, 'automatise', '2026-01-01', 'reussi', 1, 100.0,"
+                " '01', 'extraction_reussie', ?)",
+                (rep, f"tok-{rep}", is_warmup),
+            )
+        stats = statistiques(cx, 1)
+        assert stats["passages"] == 3
+        assert stats["warmup_exclus"] == 2
+
+    def test_warmup_inclus_quand_demande(self, tmp_path):
+        from shadowlab.analytics import _passages
+
+        base = tmp_path / "warmup2.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status)"
+            " VALUES (1, 'test', '2026-01-01', '{}', 'termine')"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        for rep in range(1, 4):
+            cx.execute(
+                "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+                " session_token, truth, started_at, status, success, protection, is_warmup)"
+                " VALUES (1, 1, 1, ?, ?, 'automatise', '2026-01-01', 'reussi', 1, '01', ?)",
+                (rep, f"tok-{rep}", 1 if rep == 1 else 0),
+            )
+        assert len(_passages(cx, 1, inclure_warmup=False)) == 2
+        assert len(_passages(cx, 1, inclure_warmup=True)) == 3
+
+
+class TestDependanceRepetitions:
+    def test_autocorrelation_resultats_identiques(self, tmp_path):
+        """Si tous les résultats sont identiques, la variance est nulle → autocorrélation non mesurable."""
+        from shadowlab.analytics import dependance_repetitions
+
+        base = tmp_path / "dep.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status)"
+            " VALUES (1, 'dep', '2026-01-01', '{}', 'termine')"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        for rep in range(1, 11):
+            cx.execute(
+                "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+                " session_token, truth, started_at, status, success, protection, issue)"
+                " VALUES (1, 1, 1, ?, ?, 'automatise', '2026-01-01', 'reussi', 1, '01',"
+                " 'extraction_reussie')",
+                (rep, f"tok-{rep}"),
+            )
+        result = dependance_repetitions(cx, 1)
+        assert result["resume"]["n_groupes"] == 1
+        assert result["groupes"][0]["autocorrelation_lag1"] is None
+
+    def test_autocorrelation_alternante(self, tmp_path):
+        """Un pattern alternant (1, 0, 1, 0, …) donne une autocorrélation fortement négative."""
+        from shadowlab.analytics import dependance_repetitions
+
+        base = tmp_path / "dep2.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status)"
+            " VALUES (1, 'dep2', '2026-01-01', '{}', 'termine')"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        for rep in range(1, 21):
+            success = 1 if rep % 2 == 1 else 0
+            issue = "extraction_reussie" if success else "bloque"
+            cx.execute(
+                "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+                " session_token, truth, started_at, status, success, protection, issue)"
+                " VALUES (1, 1, 1, ?, ?, 'automatise', '2026-01-01', ?, ?, '01', ?)",
+                (rep, f"tok-{rep}", "reussi" if success else "echec", success, issue),
+            )
+        result = dependance_repetitions(cx, 1)
+        r1 = result["groupes"][0]["autocorrelation_lag1"]
+        assert r1 is not None
+        assert r1 < -0.5
+
+    def test_trop_peu_de_repetitions(self, tmp_path):
+        """Moins de 4 répétitions → le groupe est exclu."""
+        from shadowlab.analytics import dependance_repetitions
+
+        base = tmp_path / "dep3.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status)"
+            " VALUES (1, 'dep3', '2026-01-01', '{}', 'termine')"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        for rep in range(1, 4):
+            cx.execute(
+                "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+                " session_token, truth, started_at, status, success, protection, issue)"
+                " VALUES (1, 1, 1, ?, ?, 'automatise', '2026-01-01', 'reussi', 1, '01',"
+                " 'extraction_reussie')",
+                (rep, f"tok-{rep}"),
+            )
+        result = dependance_repetitions(cx, 1)
+        assert result["resume"]["n_groupes"] == 0
+
+
+class TestVersionsEnvironnement:
+    def test_environnement_contient_arena_versions(self):
+        from shadowlab.campaigns import environnement
+
+        env = environnement()
+        assert "shadowlab" in env
+        assert "python" in env
+        assert "arena_versions" not in env
+
+    def test_experience_warmup_defaut_zero(self):
+        from shadowlab.campaigns import Experience
+
+        moteurs = [{"name": "httpx"}]
+        exp = Experience(name="test-warmup", engines=moteurs, scenarios=["static_html"], repetitions=5)
+        assert exp.warmup == 0
+
+    def test_experience_warmup_positif(self):
+        from shadowlab.campaigns import Experience
+
+        moteurs = [{"name": "httpx"}]
+        exp = Experience(name="test-warmup", engines=moteurs, scenarios=["static_html"], repetitions=5, warmup=2)
+        assert exp.warmup == 2
+
+
+class TestMigration6:
+    def test_colonne_is_warmup_existe(self, tmp_path):
+        base = tmp_path / "mig6.sqlite3"
+        cx = db.ouvrir(base)
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status)"
+            " VALUES (1, 'test', '2026-01-01', '{}', 'termine')"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'test')")
+        cx.execute(
+            "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, is_warmup)"
+            " VALUES (1, 1, 1, 1, 'tok-1', 'automatise', '2026-01-01', 'reussi', 1)"
+        )
+        row = cx.execute("SELECT is_warmup FROM runs WHERE session_token = 'tok-1'").fetchone()
+        assert row["is_warmup"] == 1

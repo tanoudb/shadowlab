@@ -281,7 +281,7 @@ async def creer(request: Request) -> dict:
 
     try:
         with _base(request) as cx:
-            experiment_id = campaigns.creer(cx, experience)
+            experiment_id = campaigns.creer(cx, experience, reglages)
         threading.Thread(target=travail, daemon=True, name=f"campagne-{experiment_id}").start()
     except BaseException:
         _verrou_campagne.release()  # le fil n'a pas démarré : personne d'autre ne libérera le verrou

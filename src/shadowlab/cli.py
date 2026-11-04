@@ -14,6 +14,11 @@ from .config import charger
 from .journal import configurer
 
 
+def _nettoyer(texte: str) -> str:
+    """Retire les caractères de contrôle pour éviter l'injection d'échappement terminal."""
+    return "".join(c if c.isprintable() else "?" for c in str(texte))
+
+
 def main(argv: list[str] | None = None) -> int:
     parseur = argparse.ArgumentParser(prog="shadowlab", description="Laboratoire local de moteurs de navigation")
     parseur.add_argument("-v", "--verbeux", action="store_true")
@@ -131,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.commande in ("campagne", "reprendre"):
         if args.commande == "campagne":
             experience = campaigns.lire(args.fichier, reglages)
-            experiment_id = campaigns.creer(cx, experience)
+            experiment_id = campaigns.creer(cx, experience, reglages)
             print(f"Expérience {experiment_id} créée (graine {experience.seed}).")
         else:
             experiment_id = args.id
@@ -251,10 +256,9 @@ def main(argv: list[str] | None = None) -> int:
                 consent = " [consentement]" if p["consent_at"] else ""
                 ecran = p["ecran"]
                 res = f"{ecran['largeur']}×{ecran['hauteur']}" if ecran.get("largeur") else "?"
-                print(
-                    f"  #{p['run_id']:>4}  {p['protection']}  {res:<12}"
-                    f"  {(p['plateforme'] or '?'):<10}  {(p['navigateur'] or '?')[:60]}{consent}"
-                )
+                plateforme = _nettoyer(p["plateforme"] or "?")
+                navigateur = _nettoyer((p["navigateur"] or "?")[:60])
+                print(f"  #{p['run_id']:>4}  {p['protection']}  {res:<12}  {plateforme:<10}  {navigateur}{consent}")
         else:
             print("  Aucune session enregistrée. Ouvrir /manuel dans un navigateur.")
         if humains["detecteurs"]:
