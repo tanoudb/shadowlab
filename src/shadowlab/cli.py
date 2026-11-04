@@ -39,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     sous.add_parser("liste", help="lister les expériences")
     p = sous.add_parser("supprimer", help="supprimer une expérience et toutes ses observations")
     p.add_argument("id", type=int)
+    p = sous.add_parser("diagnostic", help="diagnostic par signal d'une expérience")
+    p.add_argument("id", type=int)
+    p.add_argument("--rapport", choices=["signaux", "ablation", "configurations", "chaine", "tous"], default="tous")
     args = parseur.parse_args(argv)
 
     reglages = charger()
@@ -131,6 +134,54 @@ def main(argv: list[str] | None = None) -> int:
         fichiers = reports.exporter(cx, args.id, reglages.sorties / "rapports" / str(args.id), args.formats.split(","))
         for f in fichiers:
             print(f)
+        return 0
+    if args.commande == "diagnostic":
+        import json
+
+        from . import diagnostic as diag
+
+        rapports = [args.rapport] if args.rapport != "tous" else ["signaux", "chaine", "configurations", "ablation"]
+        for nom in rapports:
+            fn = getattr(diag, nom)
+            donnees = fn(cx, args.id)
+            print(f"\n{'=' * 60}")
+            print(f"  {nom.upper()} — expérience {args.id}")
+            print(f"{'=' * 60}")
+            if nom == "signaux":
+                for m in donnees:
+                    print(f"\n  {m['moteur']}:")
+                    for s in m["signaux"]:
+                        print(f"    [{s['detecteur']}] {s['signal']} — {s['description']}")
+            elif nom == "chaine":
+                moteur_prec = ""
+                for d in donnees:
+                    if d["moteur"] != moteur_prec:
+                        print(f"\n  {d['moteur']}:")
+                        moteur_prec = d["moteur"]
+                    motifs_txt = (
+                        ", ".join(s.get("code", "?") for m in d["motifs"] for s in m.get("signaux", []))
+                        if d["motifs"]
+                        else ""
+                    )
+                    print(f"    {d['protection']} → {d['couche_bloquante']:<16} [{d['issue']}] {motifs_txt}")
+            elif nom == "configurations":
+                for c in donnees:
+                    print(f"\n  {c['moteur']}:")
+                    print(f"    UA: {c['user_agent'][:80]}")
+                    print(f"    Accept-Language: {c['accept_language'] or '(absent)'}")
+                    sf = "oui" if c["sec_fetch"] else "non"
+                    ch = "oui" if c["sec_ch_ua"] else "non"
+                    print(f"    Sec-Fetch: {sf}  Sec-CH-UA: {ch}")
+                    print(f"    HTTP: {c['http_version']}  JA4: {c['ja4'] or '?'}  En-têtes: {c['nb_entetes']}")
+                    print(f"    Ordre: {' → '.join(c['ordre_entetes'])}")
+            elif nom == "ablation":
+                for a in donnees:
+                    pct = a["echappes"] / a["total"] * 100 if a["total"] else 0
+                    print(f"\n  Sans « {a['regle_exclue']} » : {a['echappes']}/{a['total']} échappés ({pct:.0f}%)")
+                    if a["moteurs_echappes"]:
+                        print(f"    Moteurs échappés : {', '.join(a['moteurs_echappes'])}")
+            else:
+                print(json.dumps(donnees, ensure_ascii=False, indent=2))
         return 0
     return 1
 

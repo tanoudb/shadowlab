@@ -61,3 +61,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   loguaient les suspicions sans jamais bloquer : tous les moteurs avaient les mêmes résultats qu'en niveau 01.
   Niveau 02 bloque sur signaux HTTP/TLS seuls (attrape les outils HTTP bruts), niveau 03 ajoute les signaux
   JavaScript (attrape l'automation navigateur standard). Niveaux 04-06 gardent `tout`.
+- **D-20 — 04/11/2026 — Patchright reste en configuration standard** (décision d'Ethan). Il est bloqué dès le
+  niveau 02 (HeadlessChrome dans le User-Agent, pas de Accept-Language) mais c'est une mesure de référence
+  précieuse : elle montre ce que les patchs JavaScript seuls changent, sans réglage HTTP. Modifier sa config
+  pour faire passer ses résultats au vert ferait perdre cette mesure.
