@@ -38,6 +38,10 @@ class Classement:
     detector_name: str
     detector_version: str
     classification: str
+    # Score HEURISTIQUE NON CALIBRÉ (somme de poids plafonnée, ou constante 0.6/0.9).
+    # Ce n'est pas une probabilité et il n'est utilisé dans aucun taux ni intervalle
+    # (voir analytics : seuls `classification` compte). Ne pas l'interpréter comme une
+    # confiance calibrée tant qu'aucune calibration empirique n'a été faite (défaut #2).
     confidence: float
     signals: list[Signal] = field(default_factory=list)
 
@@ -82,6 +86,8 @@ def _entetes(obs_http: dict[str, Any]) -> dict[str, str]:
 
 
 def _verdict(nom: str, version: str, signaux: list[Signal], appui_humain: float = 0.6) -> Classement:
+    # `confidence` ici est un score heuristique non calibré (somme de poids plafonnée,
+    # ou `appui_humain` constant). Il sert à trier/afficher, jamais à calculer un taux.
     score = sum(s.poids for s in signaux)
     if score >= SEUIL_AUTOMATISE:
         return Classement(nom, version, "automatise", min(score, 1.0), signaux)

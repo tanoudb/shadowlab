@@ -528,3 +528,58 @@ class TestCampagneMoteurAbsent:
         assert rows, "aucun passage enregistré"
         assert all(r["status"] == "erreur" for r in rows)
         assert all("démarrage impossible" in (r["error"] or "") for r in rows)
+
+
+# ---------------------------------------------------------------------------
+# Défaut #2 — confidence est un score heuristique non calibré, pas une probabilité
+# ---------------------------------------------------------------------------
+
+
+def _exp_confidence(tmp_path, nom, confidence):
+    cx = db.ouvrir(tmp_path / f"{nom}.sqlite3")
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+        " VALUES (1, ?, '2026-01-01', '{}', 'termine', 1)",
+        (nom,),
+    )
+    cx.execute(
+        "INSERT INTO engines (id, name, version, runtime, configuration)"
+        " VALUES (1, 'httpx', '{}', 'python', '{\"label\": \"httpx\"}')"
+    )
+    cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+    for i in range(10):
+        classif = "automatise" if i < 7 else "humain"
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue)"
+            " VALUES (?, 1, 1, 1, ?, ?, 'automatise', '2026-01-01', 'reussi', 1, '01', 'extraction_reussie')",
+            (i + 1, i + 1, f"t-{i}"),
+        )
+        cx.execute(
+            "INSERT INTO detections (run_id, detector_name, detector_version, classification, confidence, signals)"
+            " VALUES (?, 'botd', '2.0.0', ?, ?, '[]')",
+            (i + 1, classif, confidence),
+        )
+    return cx
+
+
+class TestConfidenceNonCalibree:
+    def test_confidence_ninfluence_aucune_statistique(self, tmp_path):
+        """Deux expériences identiques sauf la confidence (0.1 vs 0.99) doivent
+        produire exactement les mêmes taux de détection : confidence n'entre dans
+        aucun calcul."""
+        import json
+
+        from shadowlab.analytics import statistiques
+
+        cx_bas = _exp_confidence(tmp_path, "conf_bas", 0.1)
+        cx_haut = _exp_confidence(tmp_path, "conf_haut", 0.99)
+        det_bas = statistiques(cx_bas, 1)["moteurs"][0]["detection"]
+        det_haut = statistiques(cx_haut, 1)["moteurs"][0]["detection"]
+        assert json.dumps(det_bas, sort_keys=True) == json.dumps(det_haut, sort_keys=True)
+
+    def test_limite_documente_confidence(self):
+        """La limitation sur la confidence non calibrée est explicitement documentée."""
+        from shadowlab.analytics import LIMITES
+
+        assert any("calibr" in limite.lower() for limite in LIMITES)
