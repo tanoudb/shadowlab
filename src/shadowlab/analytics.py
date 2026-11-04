@@ -559,10 +559,71 @@ def _holm_bonferroni(pvaleurs: list[float]) -> list[float]:
     return corrigees
 
 
-def comparer(cx: sqlite3.Connection, id_reference: int, id_nouveau: int) -> dict[str, Any]:
-    """Compare deux expériences avec deltas, tests statistiques et correction pour comparaisons multiples."""
+def _design(configuration: dict[str, Any] | None) -> dict[str, Any]:
+    """Design expérimental extrait de la configuration : scénarios, protections, moteurs."""
+    config = configuration or {}
+    moteurs = {}
+    for e in config.get("engines", []):
+        label = e.get("label") or e.get("name")
+        moteurs[label] = {"name": e.get("name"), "options": e.get("options", {})}
+    return {
+        "scenarios": sorted(config.get("scenarios", [])),
+        "protections": sorted(config.get("protections", [])),
+        "moteurs": moteurs,
+    }
+
+
+def _differences_design(ref: dict[str, Any], nouveau: dict[str, Any]) -> dict[str, Any]:
+    """Différences entre deux designs. Vide = designs équivalents, comparaison licite."""
+    diffs: dict[str, Any] = {}
+    if ref["scenarios"] != nouveau["scenarios"]:
+        diffs["scenarios"] = {"reference": ref["scenarios"], "nouveau": nouveau["scenarios"]}
+    if ref["protections"] != nouveau["protections"]:
+        diffs["protections"] = {"reference": ref["protections"], "nouveau": nouveau["protections"]}
+    moteurs_diff = {}
+    for label in sorted(set(ref["moteurs"]) & set(nouveau["moteurs"])):
+        if ref["moteurs"][label] != nouveau["moteurs"][label]:
+            moteurs_diff[label] = {"reference": ref["moteurs"][label], "nouveau": nouveau["moteurs"][label]}
+    if moteurs_diff:
+        diffs["moteurs"] = moteurs_diff
+    return diffs
+
+
+def comparer(cx: sqlite3.Connection, id_reference: int, id_nouveau: int, forcer: bool = False) -> dict[str, Any]:
+    """Compare deux expériences avec deltas, tests statistiques et correction multiple.
+
+    Refuse par défaut si les designs ne sont pas équivalents (scénarios, protections,
+    configurations de moteurs) : un écart de condition fausserait tout test de
+    significativité (défaut #5). `forcer=True` compare malgré tout, avec avertissement.
+
+    Limite assumée : même à designs équivalents, le test agrège les passages d'un
+    moteur toutes protections et scénarios confondus (risque de paradoxe de Simpson).
+    Une comparaison par cellule (moteur × protection × scénario) reste à faire.
+    """
     ref = statistiques(cx, id_reference)
     nouveau = statistiques(cx, id_nouveau)
+
+    design_ref = _design(ref["experience"]["configuration"])
+    design_new = _design(nouveau["experience"]["configuration"])
+    differences = _differences_design(design_ref, design_new)
+    en_tete = {
+        "reference": {"id": id_reference, "name": ref["experience"]["name"], "passages": ref["passages"]},
+        "nouveau": {"id": id_nouveau, "name": nouveau["experience"]["name"], "passages": nouveau["passages"]},
+        "comparable": not differences,
+        "differences": differences,
+    }
+    if differences and not forcer:
+        en_tete["avertissement"] = (
+            "Designs expérimentaux non équivalents : comparaison statistique refusée. "
+            "Relancez avec forcer=True pour comparer malgré tout (résultats non interprétables "
+            "comme un effet du moteur)."
+        )
+        en_tete["moteurs"] = []
+        return en_tete
+    if differences and forcer:
+        en_tete["avertissement"] = (
+            "Comparaison forcée sur des designs non équivalents : effet du moteur confondu avec l'écart de condition."
+        )
 
     ref_moteurs = {m["label"]: m for m in ref["moteurs"]}
     nouveau_moteurs = {m["label"]: m for m in nouveau["moteurs"]}
@@ -620,11 +681,7 @@ def comparer(cx: sqlite3.Connection, id_reference: int, id_nouveau: int) -> dict
                 comparaisons[idx]["deltas"]["reussite"]["p_value_corrigee"] = round(corrigees[i], 6)
                 comparaisons[idx]["deltas"]["reussite"]["significatif"] = corrigees[i] < 0.05
 
-    return {
-        "reference": {"id": id_reference, "name": ref["experience"]["name"], "passages": ref["passages"]},
-        "nouveau": {"id": id_nouveau, "name": nouveau["experience"]["name"], "passages": nouveau["passages"]},
-        "moteurs": comparaisons,
-    }
+    return {**en_tete, "moteurs": comparaisons}
 
 
 LIMITES = [

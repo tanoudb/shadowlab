@@ -280,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
         nouv = resultat["nouveau"]
         print(f"\nRéférence : {ref['name']} (id {ref['id']}, {ref['passages']} passages)")
         print(f"Nouveau   : {nouv['name']} (id {nouv['id']}, {nouv['passages']} passages)")
+        if not resultat.get("comparable", True):
+            print(f"\nComparaison refusée : {resultat.get('avertissement', 'designs non équivalents')}")
+            for cle, d in resultat.get("differences", {}).items():
+                print(f"  {cle} : référence={d.get('reference')} ≠ nouveau={d.get('nouveau')}")
+            return 2
         print(f"\n{'Moteur':<22} {'Δ réussite':>12} {'p-value':>10} {'p corrigé':>10} {'Sig.':>6} {'Δ durée':>12}")
         print("-" * 76)
         for m in resultat["moteurs"]:
