@@ -209,7 +209,7 @@ def rendre_coraza(profils: Profils) -> str:
             continue
         w = p.waf
         actions = [
-            f"id:{1000 + rang}",
+            f"id:{2000 + rang}",
             "phase:1",
             "pass",
             "nolog",
