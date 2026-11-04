@@ -583,3 +583,28 @@ class TestConfidenceNonCalibree:
         from shadowlab.analytics import LIMITES
 
         assert any("calibr" in limite.lower() for limite in LIMITES)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Isolation de session (évidence partielle pour #7)
+# ---------------------------------------------------------------------------
+
+
+class TestIsolationSession:
+    def test_httpx_jar_cookies_remis_a_zero(self):
+        """httpx : chaque start_session ouvre un client neuf → le jar de cookies ne
+        fuit pas d'une session à l'autre. Isolation vérifiée sur le vrai pilote."""
+        from shadowlab.engines.httpx_engine import DriverHttpx
+
+        d = DriverHttpx(("127.0.0.1",))
+        d.start_session()
+        client_1 = d._client
+        d._client.cookies.set("sid", "secret", domain="127.0.0.1")
+        assert len(d._client.cookies) == 1
+        d.close_session()
+
+        d.start_session()
+        client_2 = d._client
+        assert client_2 is not client_1, "le client httpx est réutilisé entre sessions"
+        assert len(d._client.cookies) == 0, "fuite de cookies entre sessions httpx"
+        d.close_session()

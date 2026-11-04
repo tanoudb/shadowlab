@@ -232,14 +232,15 @@ def passages_json(cx: sqlite3.Connection, experiment_id: int) -> str:
             det_par_run.setdefault(d["run_id"], []).append(
                 {"detecteur": d["detector_name"], "classification": d["classification"], "confiance": d["confidence"]}
             )
-    # Protection config (migration 4, peut être absente)
+    # Protection config (migration 4). Les colonnes existent après `db.ouvrir` (migrations
+    # appliquées) ; on ne tolère que leur absence sur une base non migrée, pas une erreur quelconque.
     config_par_run: dict[int, tuple[str | None, str | None]] = {}
     try:
         for r in cx.execute(
             "SELECT id, protection_config, config_hash FROM runs WHERE experiment_id = ?", (experiment_id,)
         ):
             config_par_run[r["id"]] = (r["protection_config"], r["config_hash"])
-    except Exception:
+    except sqlite3.OperationalError:
         pass
     resultat = []
     for p in passages:
