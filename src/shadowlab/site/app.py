@@ -144,6 +144,12 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     def racine() -> RedirectResponse:
         return RedirectResponse("/tableau")
 
+    @app.get("/lab/sante", tags=["site"])
+    def sante() -> dict[str, str]:
+        """Signature d'identité : permet à une campagne de vérifier qu'elle parle
+        bien au site ShadowLab et non à un service étranger sur le même port."""
+        return {"service": "shadowlab-site", "role": "cible-de-test"}
+
     @app.get("/lab/", response_class=HTMLResponse, tags=["site"])
     def accueil(request: Request) -> str:
         hp = gardien.honeypots_actifs(request.state.sceau)

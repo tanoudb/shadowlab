@@ -224,16 +224,41 @@ def _repond(hote: str, port: int) -> bool:
         return False
 
 
+def _identite_site(reglages: Reglages) -> bool:
+    """Vérifie que le serveur sur le port est bien le site ShadowLab (signature `/lab/sante`).
+
+    Une simple connexion TCP ne suffit pas (défaut #3) : n'importe quel service sur
+    le port serait pris pour le site, et la campagne mesurerait contre le mauvais serveur.
+    """
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{reglages.url_site}/lab/sante", timeout=1.0) as reponse:
+            if reponse.status != 200:
+                return False
+            corps = json.loads(reponse.read().decode("utf-8"))
+        return corps.get("service") == "shadowlab-site"
+    except (OSError, ValueError):
+        return False
+
+
 @contextmanager
 def serveur_local(reglages: Reglages) -> Iterator[None]:
     """Démarre le site de test dans un processus à part si rien n'écoute déjà sur le port configuré.
 
     Processus séparé : sa consommation CPU et mémoire n'entre pas dans la mesure des moteurs.
+    Refuse de réutiliser un serveur dont l'identité n'est pas celle du site ShadowLab.
     """
     if _repond(reglages.hote, reglages.port):
-        journal.info("site de test déjà démarré sur %s", reglages.url_site)
-        yield
-        return
+        if _identite_site(reglages):
+            journal.info("site de test déjà démarré sur %s", reglages.url_site)
+            yield
+            return
+        raise RuntimeError(
+            f"un service étranger répond sur {reglages.url_site} (signature /lab/sante absente ou "
+            "incorrecte) : refus de lancer la campagne contre un serveur non identifié"
+        )
     reglages.sorties.mkdir(parents=True, exist_ok=True)
     sortie = (reglages.sorties / "logs").joinpath("site.log")
     sortie.parent.mkdir(parents=True, exist_ok=True)
@@ -244,13 +269,13 @@ def serveur_local(reglages: Reglages) -> Iterator[None]:
     PIDS_EXCLUS.add(processus.pid)
     try:
         for _ in range(200):
-            if _repond(reglages.hote, reglages.port):
+            if _identite_site(reglages):
                 break
             if processus.poll() is not None:
                 raise RuntimeError(f"le site de test s'est arrêté au démarrage (voir {sortie})")
             time.sleep(0.05)
         else:
-            raise RuntimeError("le site de test n'a pas démarré")
+            raise RuntimeError("le site de test n'a pas démarré (signature /lab/sante non obtenue)")
         yield
     finally:
         processus.terminate()
@@ -580,9 +605,7 @@ def _passage(
         "request_count": mesures.request_count,
         "error_count": mesures.error_count,
     }
-    statut, erreur, succes_final = _resultat_passage(
-        erreur, succes, echantillon.depassement, reglages.memoire_max_mo
-    )
+    statut, erreur, succes_final = _resultat_passage(erreur, succes, echantillon.depassement, reglages.memoire_max_mo)
     passages.finaliser(
         cx,
         run_id,

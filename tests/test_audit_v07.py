@@ -363,3 +363,89 @@ class TestComparerDesignEquivalence:
         assert res["comparable"] is True
         reussite = res["moteurs"][0]["deltas"]["reussite"]
         assert "significatif" in reussite
+
+
+# ---------------------------------------------------------------------------
+# Défaut #3 — serveur_local vérifiait une connexion TCP sans identité
+# ---------------------------------------------------------------------------
+
+
+class TestIdentiteServeur:
+    def test_endpoint_sante_signe(self):
+        """Le site expose /lab/sante avec une signature identifiable."""
+        from fastapi.testclient import TestClient
+
+        from shadowlab.config import charger
+        from shadowlab.site.app import creer_app
+
+        # Host autorisé : le garde anti-DNS-rebinding n'accepte que les noms locaux.
+        client = TestClient(creer_app(charger()), base_url="http://127.0.0.1")
+        r = client.get("/lab/sante")
+        assert r.status_code == 200
+        assert r.json()["service"] == "shadowlab-site"
+
+    def test_serveur_etranger_refuse(self, tmp_path):
+        """Chemin RÉEL : un service étranger écoute sur le port. serveur_local doit
+        refuser (identité /lab/sante absente), au lieu de lancer la campagne contre lui."""
+        import dataclasses
+        import http.server
+        import threading
+
+        from shadowlab.campaigns import serveur_local
+        from shadowlab.config import charger
+
+        class Etranger(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"je ne suis pas shadowlab")
+
+            def log_message(self, *a):
+                pass
+
+        serveur = http.server.HTTPServer(("127.0.0.1", 0), Etranger)
+        port = serveur.server_address[1]
+        fil = threading.Thread(target=serveur.serve_forever, daemon=True)
+        fil.start()
+        try:
+            reglages = dataclasses.replace(
+                charger(), hote="127.0.0.1", port=port, sorties=tmp_path, base_donnees=tmp_path / "db.sqlite3"
+            )
+            with pytest.raises(RuntimeError, match="étranger|non identifié"):
+                with serveur_local(reglages):
+                    pass
+        finally:
+            serveur.shutdown()
+            fil.join(timeout=5)
+
+    def test_identite_site_faux_pour_etranger(self, tmp_path):
+        """_identite_site renvoie False pour un serveur sans la signature."""
+        import dataclasses
+        import http.server
+        import threading
+
+        from shadowlab.campaigns import _identite_site, _repond
+        from shadowlab.config import charger
+
+        class Etranger(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"service": "autre-chose"}')
+
+            def log_message(self, *a):
+                pass
+
+        serveur = http.server.HTTPServer(("127.0.0.1", 0), Etranger)
+        port = serveur.server_address[1]
+        fil = threading.Thread(target=serveur.serve_forever, daemon=True)
+        fil.start()
+        try:
+            reglages = dataclasses.replace(charger(), hote="127.0.0.1", port=port)
+            # Ancien critère (connexion TCP seule) : aurait accepté ce serveur étranger.
+            assert _repond("127.0.0.1", port) is True
+            # Nouveau critère (identité signée) : le rejette.
+            assert _identite_site(reglages) is False
+        finally:
+            serveur.shutdown()
+            fil.join(timeout=5)
