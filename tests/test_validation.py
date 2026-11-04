@@ -8,7 +8,7 @@ import pytest
 
 from shadowlab import database as db
 from shadowlab import reports
-from shadowlab.analytics import comparer, statistiques, wilson
+from shadowlab.analytics import comparer, qualite_metriques, statistiques, wilson
 
 # ---------------------------------------------------------------------------
 # Fixture : base réaliste avec erreurs techniques, blocages, réussites
@@ -404,3 +404,141 @@ class TestMigration6:
         )
         row = cx.execute("SELECT is_warmup FROM runs WHERE session_token = 'tok-1'").fetchone()
         assert row["is_warmup"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Passe 5 : D1 — Matrice croisée moteur × protection × scénario
+# ---------------------------------------------------------------------------
+
+
+class TestMatriceCroisee:
+    def test_matrice_croisee_presente(self, cx):
+        stats = statistiques(cx, 1)
+        assert "matrice_croisee" in stats
+        assert len(stats["matrice_croisee"]) > 0
+
+    def test_matrice_croisee_triplets_complets(self, cx):
+        stats = statistiques(cx, 1)
+        triplets = {(c["moteur"], c["protection"], c["scenario"]) for c in stats["matrice_croisee"]}
+        moteurs = {m["label"] for m in stats["moteurs"]}
+        protections = {p["protection"] for p in stats["par_protection"]}
+        scenarios = {s["scenario"] for s in stats["scenarios"]}
+        for m in moteurs:
+            for p in protections:
+                for s in scenarios:
+                    assert (m, p, s) in triplets, f"triplet manquant: {m} × {p} × {s}"
+
+    def test_matrice_croisee_somme_passages(self, cx):
+        stats = statistiques(cx, 1)
+        total_matrice = sum(c["passages"] for c in stats["matrice_croisee"])
+        assert total_matrice == stats["passages"]
+
+    def test_matrice_croisee_reconciliation_issues(self, cx):
+        stats = statistiques(cx, 1)
+        for c in stats["matrice_croisee"]:
+            total_issues = sum(c["par_issue"].values())
+            assert total_issues == c["passages"], (
+                f"{c['moteur']}×{c['protection']}×{c['scenario']}: {total_issues} != {c['passages']}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Passe 5 : D2 — Taux conditionnel réussite | non-bloqué
+# ---------------------------------------------------------------------------
+
+
+class TestTauxConditionnels:
+    def test_reussite_si_non_bloque_presente(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            assert "reussite_si_non_bloque" in m
+
+    def test_reussite_si_non_bloque_valeur_correcte(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            reussis = m["par_issue"].get("extraction_reussie", 0)
+            bloques = m["par_issue"].get("bloque", 0)
+            evaluables = m["evaluables"]
+            non_bloques = evaluables - bloques
+            if non_bloques > 0:
+                attendu = round(reussis / non_bloques, 4)
+                assert m["reussite_si_non_bloque"] is not None
+                assert m["reussite_si_non_bloque"]["taux"] == pytest.approx(attendu, abs=1e-10)
+            else:
+                assert m["reussite_si_non_bloque"] is None
+
+    def test_reussite_si_non_bloque_wilson_valide(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            ic = m["reussite_si_non_bloque"]
+            if ic is not None:
+                assert 0 <= ic["bas"] <= ic["taux"] <= ic["haut"] <= 1.0
+
+    def test_reussite_si_non_bloque_dans_matrice(self, cx):
+        stats = statistiques(cx, 1)
+        for c in stats["matrice_croisee"]:
+            assert "reussite_si_non_bloque" in c
+
+
+# ---------------------------------------------------------------------------
+# Passe 5 : D6 — Qualité des métriques (observe / estime / limite)
+# ---------------------------------------------------------------------------
+
+
+class TestQualiteMetriques:
+    def test_qualite_presente_dans_moteurs(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            assert "qualite" in m
+            assert isinstance(m["qualite"], dict)
+
+    def test_qualite_presente_dans_matrice(self, cx):
+        stats = statistiques(cx, 1)
+        for c in stats["matrice_croisee"]:
+            assert "qualite" in c
+
+    def test_qualite_valeurs_permises(self, cx):
+        stats = statistiques(cx, 1)
+        valeurs_permises = {"observe", "estime", "limite"}
+        for m in stats["moteurs"]:
+            for cle, val in m["qualite"].items():
+                assert val in valeurs_permises, f"{m['label']}.qualite.{cle} = {val!r}"
+
+    def test_effectifs_toujours_observes(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            for cle in ("passages", "evaluables", "erreurs_techniques", "par_issue"):
+                assert m["qualite"][cle] == "observe"
+
+    def test_taux_estimes_avec_assez_de_donnees(self, cx):
+        stats = statistiques(cx, 1)
+        for m in stats["moteurs"]:
+            if m["evaluables"] >= 10:
+                for cle in ("reussite", "reussite_fonctionnelle"):
+                    if m[cle] is not None:
+                        assert m["qualite"][cle] == "estime", f"{m['label']}.qualite.{cle}"
+
+    def test_qualite_metriques_petit_echantillon(self):
+        bloc_petit = {
+            "passages": 3,
+            "evaluables": 2,
+            "erreurs_techniques": 1,
+            "par_issue": {"extraction_reussie": 2, "erreur_technique": 1},
+            "reussite": wilson(2, 3),
+            "reussite_fonctionnelle": wilson(2, 2),
+            "taux_erreur_technique": wilson(1, 3),
+            "taux_blocage": wilson(0, 2),
+            "reussite_si_non_bloque": wilson(2, 2),
+            "duree_ms": {"n": 3, "moyenne": 100.0},
+            "navigation_ms": {"n": 3, "moyenne": 50.0},
+            "cpu_pct": {"n": 0},
+            "cpu_ms": {"n": 0},
+            "memoire_mo": {"n": 0},
+            "requetes": {"n": 0},
+            "detection": {},
+        }
+        q = qualite_metriques(bloc_petit)
+        for cle in ("reussite", "reussite_fonctionnelle", "taux_blocage", "reussite_si_non_bloque"):
+            assert q[cle] == "limite", f"qualite.{cle} devrait être 'limite' avec n=2 évaluables"
+        assert q["duree_ms"] == "limite"
+        assert q["detection"] == "limite"

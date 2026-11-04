@@ -20,6 +20,7 @@ from . import database as db
 from .passages import EXPERIENCE_MANUELLE
 
 Z95 = 1.959964
+SEUIL_FIABLE = 10
 
 
 def wilson(succes: int, total: int) -> dict[str, float] | None:
@@ -226,6 +227,29 @@ def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, d
     return matrices
 
 
+def qualite_metriques(bloc_stats: dict[str, Any]) -> dict[str, str]:
+    """Qualifie chaque métrique d'un bloc : observe | estime | limite (D6)."""
+    evaluables = bloc_stats.get("evaluables", 0)
+    tags: dict[str, str] = {}
+    for cle in ("passages", "evaluables", "erreurs_techniques", "par_issue"):
+        tags[cle] = "observe"
+    _taux = ("reussite", "reussite_fonctionnelle", "taux_erreur_technique", "taux_blocage", "reussite_si_non_bloque")
+    for cle in _taux:
+        if bloc_stats.get(cle) is None:
+            tags[cle] = "limite"
+        elif evaluables < SEUIL_FIABLE:
+            tags[cle] = "limite"
+        else:
+            tags[cle] = "estime"
+    for cle in ("duree_ms", "navigation_ms", "cpu_pct", "cpu_ms", "memoire_mo", "requetes"):
+        resume = bloc_stats.get(cle, {})
+        n_mesure = resume.get("n", 0) if isinstance(resume, dict) else 0
+        tags[cle] = "observe" if n_mesure >= SEUIL_FIABLE else "limite"
+    detection = bloc_stats.get("detection", {})
+    tags["detection"] = "estime" if detection and evaluables >= SEUIL_FIABLE else "limite"
+    return tags
+
+
 def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
     """Autocorrélation lag-1 du succès entre répétitions consécutives, par (moteur, protection, scénario).
 
@@ -293,11 +317,13 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
     par_moteur: dict[str, list[sqlite3.Row]] = defaultdict(list)
     par_couple: dict[tuple[str, str], list[sqlite3.Row]] = defaultdict(list)
     par_protection: dict[str, list[sqlite3.Row]] = defaultdict(list)
+    par_triplet: dict[tuple[str, str, str], list[sqlite3.Row]] = defaultdict(list)
     for p in passages:
         par_moteur[p["label"]].append(p)
         par_couple[(p["label"], p["scenario"])].append(p)
-        if "protection" in p.keys() and p["protection"]:
-            par_protection[p["protection"]].append(p)
+        protection = p["protection"] if "protection" in p.keys() and p["protection"] else "aucune"
+        par_protection[protection].append(p)
+        par_triplet[(p["label"], protection, p["scenario"])].append(p)
 
     def bloc(lignes: list[sqlite3.Row]) -> dict[str, Any]:
         n = len(lignes)
@@ -312,11 +338,12 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
         )
         bloques = par_issue.get("bloque", 0)
         evaluables = n - erreurs_techniques
+        non_bloques = evaluables - bloques
         par_detecteur: dict[str, list[str]] = defaultdict(list)
         for p in lignes:
             for nom, classement in detections.get(p["id"], {}).items():
                 par_detecteur[nom].append(classement)
-        return {
+        resultat = {
             "passages": n,
             "evaluables": evaluables,
             "erreurs_techniques": erreurs_techniques,
@@ -324,6 +351,7 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "reussite_fonctionnelle": wilson(reussis, evaluables),
             "taux_erreur_technique": wilson(erreurs_techniques, n),
             "taux_blocage": wilson(bloques, evaluables),
+            "reussite_si_non_bloque": wilson(reussis, non_bloques) if non_bloques > 0 else None,
             "par_issue": par_issue,
             "duree_ms": _resume([p["duration_ms"] for p in lignes]),
             "navigation_ms": _resume([p["navigation_time"] for p in lignes]),
@@ -333,6 +361,8 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "requetes": _resume([p["request_count"] for p in lignes]),
             "detection": {nom: _bloc_detection(c) for nom, c in sorted(par_detecteur.items())},
         }
+        resultat["qualite"] = qualite_metriques(resultat)
+        return resultat
 
     moteurs = []
     for label, lignes in par_moteur.items():
@@ -383,6 +413,10 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             for (label, scenario), lignes in sorted(par_couple.items())
         ],
         "par_protection": [{"protection": prot, **bloc(lignes)} for prot, lignes in sorted(par_protection.items())],
+        "matrice_croisee": [
+            {"moteur": m, "protection": pr, "scenario": sc, **bloc(lignes)}
+            for (m, pr, sc), lignes in sorted(par_triplet.items())
+        ],
         "qualite_detecteurs": qualite,
         "matrices_confusion": matrices,
         "sessions_humaines": humains,
