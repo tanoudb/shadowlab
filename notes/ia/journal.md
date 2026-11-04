@@ -6,6 +6,27 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-04 — Claude (Opus 4.8) — ShadowLab v0.7 : audit adversarial et corrections
+
+**Fait** : audit adversarial des 7 défauts v0.6 + Phase 2/3. 15 commits atomiques
+(`dcb0e9f`..`89697f0`), reproduction (test rouge, chemin réel) puis correction pour chacun.
+
+**Défauts** : #4 statut/mémoire (CORRIGÉ), #3 identité serveur via `/lab/sante` (CORRIGÉ),
+#6 campagne `termine_incomplet` si moteur absent (CORRIGÉ), #1 matrice confusion gating
+protection+version+prévalence (PARTIEL), #5 comparer() équivalence des designs (PARTIEL —
+pas de comparaison par cellule), #7 runs test + fin de la surinterprétation lag-1
+(NON DÉMONTRÉE — indépendance non prouvée), #2 confidence documentée non calibrée (labelling).
+
+**Tests** : 187 unitaires + 6 intégration (vrais navigateurs, reproductibilité bout-en-bout). Lint propre.
+
+**Non fait / non testé** : calibration confidence, comparaison par cellule (Simpson),
+intégration Arena automatisée (NON TESTÉ, risque ports/état), isolation Selenium, traçage
+de la complétude des observations.
+
+**Fichier** : `SHADOWLAB_V07_AUDIT.md` (rapport complet, risques classés, priorités).
+
+---
+
 ## 2026-11-04 — Claude (Opus 4.6) — ShadowLab v0.6 : implémentation complète (6 passes)
 
 **Fait** : 6 passes d'implémentation v0.6 avec commits atomiques (649d8b3..d030d57).
