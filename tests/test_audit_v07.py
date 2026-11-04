@@ -449,3 +449,82 @@ class TestIdentiteServeur:
         finally:
             serveur.shutdown()
             fil.join(timeout=5)
+
+
+# ---------------------------------------------------------------------------
+# Défaut #6 — campagne déclarée « termine » alors qu'un moteur n'a pas démarré
+# ---------------------------------------------------------------------------
+
+
+class _FauxMoteurCasse:
+    name = "faux_casse"
+    runtime = "python"
+    categorie = "standard"
+    options_permises: dict = {}
+
+    def __init__(self, hotes, options=None):
+        self.hotes = hotes
+
+    @classmethod
+    def controler_options(cls, options):
+        if options:
+            raise ValueError("aucune option permise")
+
+    @classmethod
+    def manque(cls):
+        return None
+
+    def open(self):
+        raise RuntimeError("binaire introuvable")
+
+    def versions(self):
+        return {}
+
+    def configuration(self):
+        return {}
+
+
+class TestCampagneMoteurAbsent:
+    def test_campagne_incomplete_si_moteur_ne_demarre_pas(self, tmp_path, monkeypatch):
+        """Chemin RÉEL : executer() avec un moteur dont open() échoue ne doit PAS
+        rendre 'termine' mais 'termine_incomplet', tout en enregistrant les passages
+        en erreur 'démarrage impossible'."""
+        import contextlib
+        import dataclasses
+
+        from shadowlab import campaigns
+        from shadowlab import database as db
+        from shadowlab.arena.profils import BASELINE
+        from shadowlab.config import charger
+
+        registre_patche = {"faux_casse": _FauxMoteurCasse}
+        monkeypatch.setattr(campaigns, "registre", lambda: registre_patche)
+        monkeypatch.setattr(campaigns, "serveur_local", lambda reglages: contextlib.nullcontext())
+
+        reglages = dataclasses.replace(
+            charger(),
+            sorties=tmp_path,
+            base_donnees=tmp_path / "db.sqlite3",
+            hotes_autorises=tuple({*charger().hotes_autorises, "127.0.0.1"}),
+        )
+        cx = db.ouvrir(reglages.base_donnees)
+        experience = campaigns.Experience(
+            name="moteur-casse",
+            engines=["faux_casse"],
+            protections=[BASELINE],
+            scenarios=["static_html"],
+            repetitions=2,
+            detectors=[],
+            seed=1,
+        )
+        experiment_id = campaigns.creer(cx, experience, reglages)
+        cx.close()
+
+        statut = campaigns.executer(reglages, experiment_id)
+        assert statut == "termine_incomplet", f"statut trompeur : {statut!r}"
+
+        cx = db.ouvrir(reglages.base_donnees)
+        rows = cx.execute("SELECT status, error FROM runs WHERE experiment_id = ?", (experiment_id,)).fetchall()
+        assert rows, "aucun passage enregistré"
+        assert all(r["status"] == "erreur" for r in rows)
+        assert all("démarrage impossible" in (r["error"] or "") for r in rows)
