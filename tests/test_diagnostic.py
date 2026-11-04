@@ -1,4 +1,4 @@
-"""Tests de régression pour les quatre rapports du module diagnostic."""
+"""Tests de régression pour les cinq rapports du module diagnostic."""
 
 from __future__ import annotations
 
@@ -75,6 +75,9 @@ def cx(tmp_path):
     _decision(cx, "tok-run-6", "defi-js", "emis")
     _decision(cx, "tok-run-6", "defi-js", "valide")
     _decision(cx, "tok-run-6", "turnstile", "emis")
+
+    # --- Playwright : erreur technique à 06 (doit être exclue des taux) ---
+    _run(cx, 7, eng=1, prot="06", success=0, issue="erreur_technique")
 
     # Observations HTTP pour le rapport configurations (niveau 01)
     _obs_http(
@@ -235,3 +238,46 @@ class TestAblation:
             assert "echappes" in r
             assert "moteurs_echappes" in r
             assert r["total"] == r["detectes"] + r["echappes"]
+
+
+# ---- 5. par_protection ----
+
+
+class TestParProtection:
+    def test_erreur_technique_exclue(self, cx):
+        result = diag.par_protection(cx, 1)
+        pw_06 = [r for r in result if r["moteur"] == "playwright" and r["protection"] == "06"]
+        assert len(pw_06) == 0  # seul passage est une erreur → valides=0 → exclu
+
+    def test_taux_detection_playwright_02(self, cx):
+        result = diag.par_protection(cx, 1)
+        pw_02 = next(r for r in result if r["moteur"] == "playwright" and r["protection"] == "02")
+        assert pw_02["taux_detection"] == 100.0
+        assert pw_02["erreurs_exclues"] == 0
+        assert pw_02["bloques"] == 1
+        assert pw_02["valides"] == 1
+
+    def test_reussite_niveau_01(self, cx):
+        result = diag.par_protection(cx, 1)
+        pw_01 = next(r for r in result if r["moteur"] == "playwright" and r["protection"] == "01")
+        assert pw_01["taux_detection"] == 0.0
+        assert pw_01["reussi"] == 1
+
+    def test_couches_presentes(self, cx):
+        result = diag.par_protection(cx, 1)
+        pw_02 = next(r for r in result if r["moteur"] == "playwright" and r["protection"] == "02")
+        couches = {c["couche"] for c in pw_02["couches"]}
+        assert "fingerprinting" in couches
+
+    def test_signaux_dans_couche(self, cx):
+        result = diag.par_protection(cx, 1)
+        pw_02 = next(r for r in result if r["moteur"] == "playwright" and r["protection"] == "02")
+        fp = next(c for c in pw_02["couches"] if c["couche"] == "fingerprinting")
+        assert "ua_headless" in fp["signaux"]
+
+    def test_camoufox_05_turnstile_emis(self, cx):
+        result = diag.par_protection(cx, 1)
+        cam_05 = next(r for r in result if r["moteur"] == "camoufox" and r["protection"] == "05")
+        turnstile = [c for c in cam_05["couches"] if c["couche"] == "turnstile"]
+        assert len(turnstile) == 1
+        assert turnstile[0]["emis"] == 1

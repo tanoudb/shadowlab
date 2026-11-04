@@ -41,7 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("id", type=int)
     p = sous.add_parser("diagnostic", help="diagnostic par signal d'une expérience")
     p.add_argument("id", type=int, nargs="?")
-    p.add_argument("--rapport", choices=["signaux", "ablation", "configurations", "chaine", "tous"], default="tous")
+    p.add_argument(
+        "--rapport",
+        choices=["signaux", "ablation", "configurations", "chaine", "par_protection", "tous"],
+        default="tous",
+    )
     p.add_argument("--generer-ablation", metavar="NIVEAU", help="générer les profils d'ablation pour un niveau")
     args = parseur.parse_args(argv)
 
@@ -153,7 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.id is None:
             print("Erreur : id requis (sauf avec --generer-ablation)", file=sys.stderr)
             return 2
-        rapports = [args.rapport] if args.rapport != "tous" else ["signaux", "chaine", "configurations", "ablation"]
+        rapports = (
+            [args.rapport]
+            if args.rapport != "tous"
+            else ["signaux", "chaine", "configurations", "ablation", "par_protection"]
+        )
         for nom in rapports:
             fn = getattr(diag, nom)
             donnees = fn(cx, args.id)
@@ -193,6 +201,19 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"\n  Sans « {a['regle_exclue']} » : {a['echappes']}/{a['total']} échappés ({pct:.0f}%)")
                     if a["moteurs_echappes"]:
                         print(f"    Moteurs échappés : {', '.join(a['moteurs_echappes'])}")
+            elif nom == "par_protection":
+                moteur_prec = ""
+                for p in donnees:
+                    if p["moteur"] != moteur_prec:
+                        print(f"\n  {p['moteur']}:")
+                        moteur_prec = p["moteur"]
+                    excl = f" ({p['erreurs_exclues']} err. exclues)" if p["erreurs_exclues"] else ""
+                    print(
+                        f"    {p['protection']} : {p['taux_detection']}% bloqué ({p['bloques']}/{p['valides']}){excl}"
+                    )
+                    for c in p["couches"]:
+                        sigs = ", ".join(c["signaux"][:5]) if c["signaux"] else ""
+                        print(f"      {c['couche']:<16} bloque={c['bloque']} emis={c['emis']}  {sigs}")
             else:
                 print(json.dumps(donnees, ensure_ascii=False, indent=2))
         return 0

@@ -1,10 +1,11 @@
 """Diagnostic par signal, tests d'ablation et comparaison des configurations moteurs.
 
-Trois rapports extraits de la base après une campagne :
+Cinq rapports extraits de la base après une campagne :
 1. `signaux` — valeurs HTTP reçues, règle déclenchée, poids, par moteur.
 2. `ablation` — recalcul des verdicts en désactivant chaque règle une par une.
 3. `configurations` — en-têtes HTTP et TLS observés côte à côte.
 4. `chaine` — premier motif de blocage par moteur et niveau de protection.
+5. `par_protection` — taux de détection indépendant de chaque couche, erreurs techniques exclues.
 """
 
 from __future__ import annotations
@@ -214,7 +215,88 @@ def chaine(cx: sqlite3.Connection, experiment_id: int) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Génération de profils d'ablation pour campagne réelle
+# 5. Diagnostic indépendant par protection (niveaux 05-06)
+# ---------------------------------------------------------------------------
+
+
+def par_protection(cx: sqlite3.Connection, experiment_id: int) -> list[dict[str, Any]]:
+    """Pour chaque couche de protection, taux de blocage par moteur (erreurs techniques exclues).
+
+    Répond à : « Quelle couche a bloqué tel moteur, avec quels signaux ? »
+    Les passages en erreur_technique sont exclus du dénominateur.
+    """
+    rows = cx.execute(
+        """
+        SELECT eng.name AS moteur, r.protection, r.issue, r.session_token,
+               d.couche, d.decision, d.motifs
+        FROM runs r
+        JOIN engines eng ON r.engine_id = eng.id
+        LEFT JOIN decisions d ON d.session_token = r.session_token
+        WHERE r.experiment_id = ?
+        ORDER BY eng.name, r.protection
+        """,
+        (experiment_id,),
+    ).fetchall()
+
+    # Structures : par (moteur, protection) → {couche → {bloque, emis, total}}
+    par_mp: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+        lambda: {"total": 0, "erreurs": 0, "reussi": 0, "couches": defaultdict(lambda: {"bloque": 0, "emis": 0})}
+    )
+    sessions_vues: dict[tuple[str, str], set] = defaultdict(set)
+    signaux_couche: dict[tuple[str, str, str], list] = defaultdict(list)
+
+    for moteur, prot, issue, token, couche, decision, motifs_str in rows:
+        key = (moteur, prot)
+        if token not in sessions_vues[key]:
+            sessions_vues[key].add(token)
+            par_mp[key]["total"] += 1
+            if issue == "erreur_technique":
+                par_mp[key]["erreurs"] += 1
+            elif issue == "extraction_reussie":
+                par_mp[key]["reussi"] += 1
+        if couche and decision in ("bloque", "emis"):
+            par_mp[key]["couches"][couche][decision] += 1
+            motifs = json.loads(motifs_str) if motifs_str else []
+            for m in motifs:
+                for s in m.get("signaux", []):
+                    signaux_couche[(moteur, prot, couche)].append(s.get("code", ""))
+
+    resultats = []
+    for (moteur, prot), stats in sorted(par_mp.items()):
+        valides = stats["total"] - stats["erreurs"]
+        if valides == 0:
+            continue
+        bloques = valides - stats["reussi"]
+        couches_detail = []
+        for couche, compteurs in sorted(stats["couches"].items()):
+            sigs = signaux_couche.get((moteur, prot, couche), [])
+            sigs_uniques = sorted(set(sigs))
+            couches_detail.append(
+                {
+                    "couche": couche,
+                    "bloque": compteurs["bloque"],
+                    "emis": compteurs["emis"],
+                    "signaux": sigs_uniques,
+                }
+            )
+        resultats.append(
+            {
+                "moteur": moteur,
+                "protection": prot,
+                "total": stats["total"],
+                "erreurs_exclues": stats["erreurs"],
+                "valides": valides,
+                "bloques": bloques,
+                "reussi": stats["reussi"],
+                "taux_detection": round(bloques / valides * 100, 1) if valides else 0,
+                "couches": couches_detail,
+            }
+        )
+    return resultats
+
+
+# ---------------------------------------------------------------------------
+# 6. Génération de profils d'ablation pour campagne réelle
 # ---------------------------------------------------------------------------
 
 REGLES_FINGERPRINTING = ("regles-http", "tls", "botd", "regles-js", "coherence", "comportement")
