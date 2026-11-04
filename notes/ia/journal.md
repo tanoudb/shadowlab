@@ -30,7 +30,11 @@ type: note
   Les détecteurs JS (BotD, regles-js, coherence) ne parviennent pas à distinguer camoufox/seleniumbase-uc
   d'un vrai navigateur. C'est un résultat utile : il montre que le fingerprinting passif ne suffit pas contre
   les outils modernes, et que les CAPTCHA (niveau 05+) restent la seule barrière efficace.
-- patchright bloqué dès le 02 : à investiguer (signaux HTTP détectables malgré le patch ?).
+- patchright bloqué dès le 02 : cause identifiée — il hérite de DriverPlaywright sans changer le User-Agent
+  (`HeadlessChrome`, signal `ua_headless` = 1.0) ni ajouter `Accept-Language` (signal `langue_absente` = 0.5).
+  Les patchs de patchright portent uniquement sur les APIs JS (navigator.webdriver, etc.), pas sur les en-têtes
+  HTTP. C'est cohérent avec D-04 (config standard). L'option `locale` de Chromium résoudrait les deux signaux
+  mais ce serait un réglage ajouté.
 
 **Reste**
 - Investiguer pourquoi patchright est détecté par les règles HTTP.
