@@ -342,6 +342,23 @@ def _controler_arena(reglages: Reglages, experience: Experience) -> None:
         raise pile.ArenaIndisponible("Arena injoignable : lancez `uv run shadowlab arena demarrer`")
 
 
+def _degrader_si_moteur_absent(cx, experiment_id: int, statut: str) -> str:
+    """Rétrograde « termine » en « termine_incomplet » si un moteur n'a pas démarré.
+
+    Un moteur qui ne démarre pas est enregistré en erreur « démarrage impossible »
+    pour chacun de ses passages (défaut #6) : la campagne ne doit pas se déclarer
+    « termine » sans le signaler, car tous les passages du moteur sont absents.
+    """
+    if statut != "termine":
+        return statut
+    n = cx.execute(
+        "SELECT COUNT(*) FROM runs WHERE experiment_id = ? AND status = 'erreur'"
+        " AND error LIKE 'démarrage impossible%'",
+        (experiment_id,),
+    ).fetchone()[0]
+    return "termine_incomplet" if n else "termine"
+
+
 def executer(reglages: Reglages, experiment_id: int) -> str:
     """Exécute (ou reprend) une campagne. Renvoie son état final."""
     cx = db.ouvrir(reglages.base_donnees)
@@ -373,6 +390,7 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
     except KeyboardInterrupt:
         statut = "interrompu"
     finally:
+        statut = _degrader_si_moteur_absent(cx, experiment_id, statut)
         cx.execute("UPDATE experiments SET status = ? WHERE id = ?", (statut, experiment_id))
         cx.close()
     return statut
