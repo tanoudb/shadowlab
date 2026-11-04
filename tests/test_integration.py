@@ -58,3 +58,36 @@ def test_campagne_complete_tous_moteurs(reglages, tmp_path):
     nb_detecteurs = len(__import__("shadowlab.detection", fromlist=["registre"]).registre())
     assert cx.execute("SELECT COUNT(*) FROM detections").fetchone()[0] == 16 * nb_detecteurs
     assert cx.execute("SELECT COUNT(*) FROM metrics WHERE cpu_time_ms IS NOT NULL").fetchone()[0] == 16
+
+
+def test_reproductibilite_bout_en_bout(reglages, tmp_path):
+    """E6 réel : deux campagnes identiques (même seed, moteur déterministe httpx)
+    produisent le même plan ET les mêmes résultats, bout en bout sur le site réel."""
+    config = (
+        "experiment:\n  name: {nom}\n  engines: [httpx]\n"
+        "  scenarios: [static_html, api_json, session_cookies]\n  repetitions: 3\n  seed: 7\n"
+    )
+
+    def lancer(nom):
+        chemin = tmp_path / f"{nom}.yaml"
+        chemin.write_text(config.format(nom=nom), encoding="utf-8")
+        experience = campaigns.lire(chemin, reglages)
+        cx = db.ouvrir(reglages.base_donnees)
+        experiment_id = campaigns.creer(cx, experience)
+        statut = campaigns.executer(reglages, experiment_id)
+        sequence = cx.execute(
+            "SELECT s.name AS scenario, r.repetition, r.status, r.success"
+            " FROM runs r JOIN scenarios s ON s.id = r.scenario_id"
+            " WHERE r.experiment_id = ? ORDER BY r.id",
+            (experiment_id,),
+        ).fetchall()
+        return statut, [(r["scenario"], r["repetition"], r["status"], r["success"]) for r in sequence]
+
+    with campaigns.serveur_local(reglages):
+        statut_a, seq_a = lancer("repro-a")
+        statut_b, seq_b = lancer("repro-b")
+
+    assert statut_a == "termine" and statut_b == "termine"
+    assert len(seq_a) == 9  # 3 scénarios × 3 répétitions
+    # Même plan (ordre scénario×répétition) ET mêmes résultats : reproductibilité réelle.
+    assert seq_a == seq_b, f"résultats non reproductibles :\n{seq_a}\n{seq_b}"
