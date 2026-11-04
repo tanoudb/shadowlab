@@ -489,9 +489,9 @@ def _resultat_passage(
     intégré *avant* le calcul du statut, faute de quoi un passage réussi mais
     hors budget mémoire serait étiqueté « reussi » (défaut #4).
     """
-    statut = "erreur" if erreur else ("reussi" if succes else "echec")
     if depassement:
         erreur = (erreur or "") + f" plafond mémoire dépassé ({plafond_mo} Mo)"
+    statut = "erreur" if erreur else ("reussi" if succes else "echec")
     succes_final = bool(succes) if not erreur else False
     return statut, erreur, succes_final
 
