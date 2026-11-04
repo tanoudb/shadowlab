@@ -401,11 +401,15 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         protection = (champs.get("protection") or [BASELINE])[0]
         if protection not in profils:
             raise HTTPException(422, "protection inconnue")
+        consentement = (champs.get("consentement") or [None])[0]
+        if consentement != "oui":
+            raise HTTPException(422, "consentement requis pour enregistrer une session humaine")
         with base() as cx:
             experience = passages.experience_manuelle(cx)
             moteur = db.engine_id(cx, "navigateur-manuel", "n/a", "humain", {})
             scenario = db.scenario_id(cx, "navigation_manuelle", "Navigation libre par une personne")
             _, jeton = passages.demarrer(cx, experience, moteur, scenario, 1, "humain", protection=protection)
+            cx.execute("UPDATE runs SET consent_at = ? WHERE session_token = ?", (db.maintenant(), jeton))
         if protection == BASELINE:
             return RedirectResponse(f"/lab/?sl={jeton}", status_code=303)
         # Une page et non une redirection : la politique `form-action 'self'` interdit de changer d'origine.

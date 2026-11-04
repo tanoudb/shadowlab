@@ -152,6 +152,10 @@ MIGRATIONS: list[str] = [
     ALTER TABLE runs ADD COLUMN protection_config TEXT;
     ALTER TABLE runs ADD COLUMN config_hash TEXT;
     """,
+    # 5 — v0.6 : consentement explicite pour les sessions humaines de référence
+    """
+    ALTER TABLE runs ADD COLUMN consent_at TEXT;
+    """,
 ]
 
 

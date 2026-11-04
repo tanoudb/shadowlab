@@ -163,6 +163,10 @@ les faux positifs des détecteurs et ce que les protections coûtent à une vrai
 <option value="05">05 — Protection avancée</option>
 <option value="06">06 — Défense multicouche</option>
 </select></label>
+<label class="consentement"><input type="checkbox" name="consentement" value="oui" required>
+J'accepte que ma session de navigation soit enregistrée comme référence humaine pour cette recherche.
+Les données collectées (empreinte navigateur, séquence de pages, verdicts des détecteurs)
+restent sur ce serveur local et ne sont pas transmises à l'extérieur.</label>
 <button type="submit">Commencer une session manuelle</button></form>"""
     return gabarit("Session manuelle", corps, "")
 

@@ -129,6 +129,102 @@ def sessions_humaines(cx: sqlite3.Connection) -> dict[str, Any]:
     return {"n": len(runs), "detecteurs": detecteurs}
 
 
+def profils_humains(cx: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Profils de référence des sessions humaines : navigateur, propriétés, protection."""
+    ligne = cx.execute("SELECT id FROM experiments WHERE name = ?", (EXPERIENCE_MANUELLE,)).fetchone()
+    if not ligne:
+        return []
+    profils = []
+    for r in cx.execute(
+        "SELECT r.id, r.protection, r.consent_at, r.started_at, r.duration_ms,"
+        " f.browser_properties, f.http_properties, f.tls_properties, f.session_properties"
+        " FROM runs r LEFT JOIN fingerprints f ON f.run_id = r.id"
+        " WHERE r.experiment_id = ? AND r.status = 'reussi'"
+        " ORDER BY r.id",
+        (ligne["id"],),
+    ):
+        browser = db.lj(r["browser_properties"]) or {}
+        http = db.lj(r["http_properties"]) or {}
+        profils.append(
+            {
+                "run_id": r["id"],
+                "protection": r["protection"],
+                "consent_at": r["consent_at"],
+                "started_at": r["started_at"],
+                "duration_ms": r["duration_ms"],
+                "user_agent": http.get("user_agent"),
+                "accept_language": http.get("accept_language"),
+                "navigateur": browser.get("userAgent"),
+                "plateforme": browser.get("platform"),
+                "langues": browser.get("languages"),
+                "ecran": {
+                    "largeur": browser.get("screenWidth"),
+                    "hauteur": browser.get("screenHeight"),
+                    "pixel_ratio": browser.get("devicePixelRatio"),
+                },
+            }
+        )
+    return profils
+
+
+def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, dict[str, Any]]:
+    """Matrice de confusion 2×2 par détecteur avec Wilson CI sur toutes les métriques.
+
+    VP/FN viennent des passages automatisés de l'expérience.
+    FP/VN viennent des sessions humaines (expérience « sessions-manuelles »).
+    Les indéterminés sont comptés à part, jamais mélangés.
+    """
+    passages = _passages(cx, experiment_id)
+    detections_auto = _detections(cx, [p["id"] for p in passages])
+    humains = sessions_humaines(cx)
+
+    par_detecteur_auto: dict[str, list[str]] = defaultdict(list)
+    for p in passages:
+        for nom, classement in detections_auto.get(p["id"], {}).items():
+            par_detecteur_auto[nom].append(classement)
+
+    matrices: dict[str, dict[str, Any]] = {}
+    for nom, classements in par_detecteur_auto.items():
+        ca = _comptes(classements, "automatise")
+        vp, fn = ca["vp"], ca["fn"]
+        ind_auto = ca["indetermine"]
+
+        h = humains["detecteurs"].get(nom)
+        if h:
+            fp, vn = h["fp"], h["vn"]
+            ind_humain = h["indetermine"]
+            n_humain = h["n"]
+        else:
+            fp = vn = ind_humain = n_humain = 0
+
+        n_auto = vp + fn
+
+        rappel = wilson(vp, n_auto)
+        specificite = wilson(vn, fp + vn) if (fp + vn) else None
+        precision = wilson(vp, vp + fp) if (vp + fp) else None
+        taux_fp = wilson(fp, fp + vn) if (fp + vn) else None
+
+        # F1 avec IC bootstrap simplifié : IC sur rappel et précision propagés
+        if rappel and precision and rappel["taux"] + precision["taux"] > 0:
+            f1_val = 2 * rappel["taux"] * precision["taux"] / (rappel["taux"] + precision["taux"])
+            f1 = {"taux": round(f1_val, 4)}
+        else:
+            f1 = None
+
+        matrices[nom] = {
+            "matrice": {"vp": vp, "fn": fn, "fp": fp, "vn": vn},
+            "indetermines": {"automatise": ind_auto, "humain": ind_humain},
+            "n_automatise": ca["n"],
+            "n_humain": n_humain,
+            "rappel": rappel,
+            "specificite": specificite,
+            "precision": precision,
+            "taux_faux_positifs": taux_fp,
+            "f1": f1,
+        }
+    return matrices
+
+
 def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
     experience = cx.execute("SELECT * FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
     if experience is None:
@@ -194,32 +290,15 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             }
         )
 
-    # Précision, rappel et F1 par détecteur, sur l'ensemble des passages de l'expérience
-    # face aux sessions humaines. Dépend de la proportion humains / automatisés : à lire avec prudence.
+    matrices = matrice_confusion(cx, experiment_id)
     qualite = {}
-    tous = defaultdict(list)
-    for p in passages:
-        for nom, classement in detections.get(p["id"], {}).items():
-            tous[nom].append(classement)
-    for nom, classements in tous.items():
-        c = _comptes(classements, "automatise")
-        h = humains["detecteurs"].get(nom)
-        rappel = c["vp"] / (c["vp"] + c["fn"]) if c["vp"] + c["fn"] else None
-        if h and (h["fp"] + h["vn"]):
-            precision = c["vp"] / (c["vp"] + h["fp"]) if c["vp"] + h["fp"] else None
-            f1 = (
-                2 * precision * rappel / (precision + rappel)
-                if precision is not None and rappel is not None and precision + rappel
-                else None
-            )
-        else:
-            precision = f1 = None
+    for nom, mc in matrices.items():
         qualite[nom] = {
-            "rappel": round(rappel, 4) if rappel is not None else None,
-            "precision": round(precision, 4) if precision is not None else None,
-            "f1": round(f1, 4) if f1 is not None else None,
-            "faux_positifs": h["taux_faux_positifs"] if h else None,
-            "sessions_humaines": h["n"] if h else 0,
+            "rappel": mc["rappel"]["taux"] if mc["rappel"] else None,
+            "precision": mc["precision"]["taux"] if mc["precision"] else None,
+            "f1": mc["f1"]["taux"] if mc["f1"] else None,
+            "faux_positifs": mc["taux_faux_positifs"],
+            "sessions_humaines": mc["n_humain"],
         }
 
     return {
@@ -241,6 +320,7 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
         ],
         "par_protection": [{"protection": prot, **bloc(lignes)} for prot, lignes in sorted(par_protection.items())],
         "qualite_detecteurs": qualite,
+        "matrices_confusion": matrices,
         "sessions_humaines": humains,
         "limites": LIMITES,
     }

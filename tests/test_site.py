@@ -96,15 +96,21 @@ def test_honeypot_absent_sans_arena(client):
 
 
 def test_session_manuelle_de_bout_en_bout(client, reglages):
-    r = client.post("/manuel/commencer", follow_redirects=False)
+    r = client.post("/manuel/commencer", data={"consentement": "oui"}, follow_redirects=False)
     assert r.status_code == 303
     jeton = r.headers["location"].split("sl=")[1]
     client.get(r.headers["location"])
     r = client.get("/manuel/terminer")
     assert r.status_code == 200 and "Session enregistrée" in r.text
     cx = db.ouvrir(reglages.base_donnees)
-    run = cx.execute("SELECT truth, status FROM runs WHERE session_token = ?", (jeton,)).fetchone()
+    run = cx.execute("SELECT truth, status, consent_at FROM runs WHERE session_token = ?", (jeton,)).fetchone()
     assert (run["truth"], run["status"]) == ("humain", "reussi")
+    assert run["consent_at"] is not None
+
+
+def test_session_manuelle_refuse_sans_consentement(client):
+    r = client.post("/manuel/commencer", follow_redirects=False)
+    assert r.status_code == 422
 
 
 def test_api_ecriture_exige_l_entete_anti_csrf(client):

@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="vérifier les configs de protection enregistrées pour une expérience",
     )
+    sous.add_parser("manuel", help="lister les sessions humaines de référence et leurs profils")
     p = sous.add_parser("comparer", help="comparer deux expériences (Fisher exact + Holm-Bonferroni)")
     p.add_argument("reference", type=int, help="id de l'expérience de référence")
     p.add_argument("nouveau", type=int, help="id de la nouvelle expérience")
@@ -238,6 +239,30 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"      {c['couche']:<16} bloque={c['bloque']} emis={c['emis']}  {sigs}")
             else:
                 print(json.dumps(donnees, ensure_ascii=False, indent=2))
+        return 0
+    if args.commande == "manuel":
+        from . import analytics
+
+        profils = analytics.profils_humains(cx)
+        humains = analytics.sessions_humaines(cx)
+        print(f"\nSessions humaines de référence : {humains['n']}")
+        if profils:
+            for p in profils:
+                consent = " [consentement]" if p["consent_at"] else ""
+                ecran = p["ecran"]
+                res = f"{ecran['largeur']}×{ecran['hauteur']}" if ecran.get("largeur") else "?"
+                print(
+                    f"  #{p['run_id']:>4}  {p['protection']}  {res:<12}"
+                    f"  {(p['plateforme'] or '?'):<10}  {(p['navigateur'] or '?')[:60]}{consent}"
+                )
+        else:
+            print("  Aucune session enregistrée. Ouvrir /manuel dans un navigateur.")
+        if humains["detecteurs"]:
+            print(f"\n{'Détecteur':<22} {'FP':>4} {'VN':>4} {'Taux FP':>10}")
+            print("-" * 44)
+            for nom, d in sorted(humains["detecteurs"].items()):
+                tfp = f"{d['taux_faux_positifs']['taux'] * 100:.1f}%" if d["taux_faux_positifs"] else "n. m."
+                print(f"  {nom:<20} {d['fp']:>4} {d['vn']:>4} {tfp:>10}")
         return 0
     if args.commande == "comparer":
         from . import analytics
