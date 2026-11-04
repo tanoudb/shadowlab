@@ -250,11 +250,39 @@ def qualite_metriques(bloc_stats: dict[str, Any]) -> dict[str, str]:
     return tags
 
 
-def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
-    """Autocorrélation lag-1 du succès entre répétitions consécutives, par (moteur, protection, scénario).
+def _test_des_runs(valeurs: list[int]) -> dict[str, Any] | None:
+    """Test de Wald–Wolfowitz (runs) sur une suite binaire.
 
-    Une autocorrélation proche de 0 indique l'indépendance des répétitions.
-    Une valeur positive suggère que le résultat d'une répétition influence la suivante.
+    Mesure si les réussites et échecs s'enchaînent en groupes (trop peu de runs,
+    z < 0) ou alternent (trop de runs, z > 0). Indéfini si la suite est constante.
+    Comme l'autocorrélation lag-1, c'est un *diagnostic* : il ne prouve pas
+    l'indépendance, il peut seulement en révéler l'absence.
+    """
+    n = len(valeurs)
+    n1 = sum(valeurs)
+    n0 = n - n1
+    if n1 == 0 or n0 == 0:
+        return None
+    runs = 1 + sum(1 for i in range(1, n) if valeurs[i] != valeurs[i - 1])
+    attendu = 2 * n1 * n0 / n + 1
+    variance = 2 * n1 * n0 * (2 * n1 * n0 - n) / (n**2 * (n - 1))
+    if variance <= 0:
+        return None
+    z = (runs - attendu) / math.sqrt(variance)
+    p = math.erfc(abs(z) / math.sqrt(2))  # bilatéral, approximation normale
+    return {"runs": runs, "attendu": round(attendu, 2), "z": round(z, 4), "p_value": round(p, 4)}
+
+
+def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
+    """Diagnostics de dépendance entre répétitions, par (moteur, protection, scénario).
+
+    Deux diagnostics complémentaires sont fournis par groupe :
+    - `autocorrelation_lag1` : corrélation du succès entre répétitions consécutives ;
+    - `runs_test` : test de Wald–Wolfowitz sur la suite des succès (groupement/alternance).
+
+    AUCUN de ces tests ne prouve l'indépendance : une valeur proche de 0 au lag-1
+    est compatible avec une dépendance d'ordre supérieur (tendance, périodicité).
+    Ils ne peuvent que *révéler* une dépendance, jamais la réfuter. Voir `limites`.
     """
     passages = _passages(cx, experiment_id)
     groupes: dict[tuple[str, str, str], list[tuple[int, int]]] = defaultdict(list)
@@ -268,31 +296,23 @@ def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[s
         n = len(valeurs)
         if n < 4:
             continue
+        entree: dict[str, Any] = {
+            "moteur": moteur,
+            "protection": protection,
+            "scenario": scenario,
+            "n": n,
+            "runs_test": _test_des_runs(valeurs),
+        }
         moyenne = sum(valeurs) / n
         variance = sum((v - moyenne) ** 2 for v in valeurs) / n
         if variance == 0:
-            resultats.append(
-                {
-                    "moteur": moteur,
-                    "protection": protection,
-                    "scenario": scenario,
-                    "n": n,
-                    "autocorrelation_lag1": None,
-                    "note": "variance nulle (résultats identiques)",
-                }
-            )
-            continue
-        covariance = sum((valeurs[i] - moyenne) * (valeurs[i + 1] - moyenne) for i in range(n - 1)) / (n - 1)
-        r1 = round(covariance / variance, 4)
-        resultats.append(
-            {
-                "moteur": moteur,
-                "protection": protection,
-                "scenario": scenario,
-                "n": n,
-                "autocorrelation_lag1": r1,
-            }
-        )
+            entree["autocorrelation_lag1"] = None
+            entree["note"] = "variance nulle (résultats identiques)"
+        else:
+            covariance = sum((valeurs[i] - moyenne) * (valeurs[i + 1] - moyenne) for i in range(n - 1)) / (n - 1)
+            entree["autocorrelation_lag1"] = round(covariance / variance, 4)
+        resultats.append(entree)
+    runs_suspects = sum(1 for r in resultats if r["runs_test"] is not None and r["runs_test"]["p_value"] < 0.05)
     return {
         "groupes": resultats,
         "resume": {
@@ -301,6 +321,12 @@ def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[s
             "max_absolu": max(
                 (abs(r["autocorrelation_lag1"]) for r in resultats if r["autocorrelation_lag1"] is not None),
                 default=None,
+            ),
+            "groupes_runs_suspects": runs_suspects,
+            "avertissement": (
+                "Ces diagnostics peuvent révéler une dépendance mais ne prouvent jamais "
+                "l'indépendance des répétitions. Un lag-1 proche de 0 reste compatible avec "
+                "une dépendance d'ordre supérieur."
             ),
         },
     }
@@ -535,4 +561,8 @@ LIMITES = [
     "CPU et mémoire couvrent l'arbre de processus du lanceur ; un navigateur partagé entre passages compte dans "
     "chacun.",
     "La règle « aucune observation JavaScript » classe automatisé un visiteur réel qui aurait coupé JavaScript.",
+    "Les diagnostics de dépendance (autocorrélation lag-1, test des runs) ne prouvent pas l'indépendance des "
+    "répétitions : ils ne peuvent que révéler une dépendance. Un résultat non significatif n'est pas une garantie.",
+    "Les scores de confiance des détecteurs (`confidence`) sont des heuristiques non calibrées empiriquement : "
+    "ce ne sont pas des probabilités. Ils ne sont utilisés nulle part dans les taux ou intervalles.",
 ]
