@@ -110,14 +110,36 @@ def _detections(cx: sqlite3.Connection, run_ids: list[int]) -> dict[int, dict[st
     return resultat
 
 
-def sessions_humaines(cx: sqlite3.Connection) -> dict[str, Any]:
-    """Faux positifs mesurés sur les sessions manuelles terminées (toutes expériences confondues)."""
+def _versions_detecteurs(cx: sqlite3.Connection, run_ids: list[int]) -> dict[str, set[str]]:
+    """Versions de chaque détecteur rencontrées sur un ensemble de passages."""
+    resultat: dict[str, set[str]] = defaultdict(set)
+    for i in range(0, len(run_ids), 500):
+        lot = run_ids[i : i + 500]
+        marques = ",".join("?" * len(lot))
+        for d in cx.execute(
+            f"SELECT DISTINCT detector_name, detector_version FROM detections WHERE run_id IN ({marques})", lot
+        ):
+            resultat[d["detector_name"]].add(d["detector_version"])
+    return resultat
+
+
+def sessions_humaines(cx: sqlite3.Connection, protections: set[str] | None = None) -> dict[str, Any]:
+    """Faux positifs mesurés sur les sessions manuelles terminées.
+
+    `protections` restreint les sessions à ces protections (pour une comparaison
+    à population appariée). None = toutes les sessions, toutes protections confondues.
+    Le champ `protections` renvoyé donne les protections effectivement couvertes.
+    """
     ligne = cx.execute("SELECT id FROM experiments WHERE name = ?", (EXPERIENCE_MANUELLE,)).fetchone()
     if not ligne:
-        return {"n": 0, "detecteurs": {}}
-    runs = [
-        r["id"] for r in cx.execute("SELECT id FROM runs WHERE experiment_id = ? AND status = 'reussi'", (ligne["id"],))
-    ]
+        return {"n": 0, "detecteurs": {}, "protections": set()}
+    lignes = cx.execute(
+        "SELECT id, protection FROM runs WHERE experiment_id = ? AND status = 'reussi'", (ligne["id"],)
+    ).fetchall()
+    if protections is not None:
+        lignes = [r for r in lignes if r["protection"] in protections]
+    runs = [r["id"] for r in lignes]
+    protections_couvertes = {r["protection"] for r in lignes}
     detections = _detections(cx, runs)
     par_detecteur: dict[str, list[str]] = defaultdict(list)
     for run in runs:
@@ -128,7 +150,12 @@ def sessions_humaines(cx: sqlite3.Connection) -> dict[str, Any]:
         c = _comptes(classements, "humain")
         tranches = c["fp"] + c["vn"]
         detecteurs[nom] = {**c, "taux_faux_positifs": wilson(c["fp"], tranches)}
-    return {"n": len(runs), "detecteurs": detecteurs}
+    return {
+        "n": len(runs),
+        "detecteurs": detecteurs,
+        "protections": protections_couvertes,
+        "run_ids": runs,
+    }
 
 
 def profils_humains(cx: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -170,15 +197,33 @@ def profils_humains(cx: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, dict[str, Any]]:
-    """Matrice de confusion 2×2 par détecteur avec Wilson CI sur toutes les métriques.
+    """Matrice de confusion 2×2 par détecteur avec Wilson CI.
 
     VP/FN viennent des passages automatisés de l'expérience.
-    FP/VN viennent des sessions humaines (expérience « sessions-manuelles »).
-    Les indéterminés sont comptés à part, jamais mélangés.
+    FP/VN viennent des sessions humaines, RESTREINTES aux mêmes protections que
+    l'expérience, pour que les deux populations soient comparables (défaut #1).
+
+    Précision et F1 combinent les deux populations : ils ne sont calculés QUE si
+    les populations sont comparables (une session humaine pour chaque protection
+    de l'expérience et des données de détection côté humain). Sinon ils valent
+    None, pour ne pas produire une précision artificiellement parfaite lorsqu'il
+    n'existe aucune session humaine appariée (VP/(VP+0) = 1.0).
+
+    Le rappel (population automatisée seule), la spécificité et le taux de faux
+    positifs (population humaine seule) restent valides dans leur population.
+    Restent non contrôlés : scénario, navigateur, moment — voir `limites`.
     """
     passages = _passages(cx, experiment_id)
-    detections_auto = _detections(cx, [p["id"] for p in passages])
-    humains = sessions_humaines(cx)
+    run_ids_auto = [p["id"] for p in passages]
+    detections_auto = _detections(cx, run_ids_auto)
+    versions_auto = _versions_detecteurs(cx, run_ids_auto)
+    protections_auto = {p["protection"] for p in passages if p["protection"]}
+    humains = sessions_humaines(cx, protections=protections_auto)
+    protections_humaines = humains.get("protections", set())
+    runs_humains = humains.get("run_ids", [])
+    versions_humaines = _versions_detecteurs(cx, runs_humains)
+    # Couverture : au moins une session humaine pour CHAQUE protection de l'expérience.
+    couverture_protections = bool(protections_auto) and protections_auto <= protections_humaines
 
     par_detecteur_auto: dict[str, list[str]] = defaultdict(list)
     for p in passages:
@@ -200,17 +245,41 @@ def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, d
             fp = vn = ind_humain = n_humain = 0
 
         n_auto = vp + fn
-
-        rappel = wilson(vp, n_auto)
+        rappel = wilson(vp, n_auto)  # TPR — indépendant de la prévalence
         specificite = wilson(vn, fp + vn) if (fp + vn) else None
-        precision = wilson(vp, vp + fp) if (vp + fp) else None
-        taux_fp = wilson(fp, fp + vn) if (fp + vn) else None
+        taux_fp = wilson(fp, fp + vn) if (fp + vn) else None  # FPR — indépendant de la prévalence
 
-        # F1 avec IC bootstrap simplifié : IC sur rappel et précision propagés
-        if rappel and precision and rappel["taux"] + precision["taux"] > 0:
-            f1_val = 2 * rappel["taux"] * precision["taux"] / (rappel["taux"] + precision["taux"])
-            f1 = {"taux": round(f1_val, 4)}
+        # Compatibilité de version du détecteur entre les deux populations.
+        v_auto = versions_auto.get(nom, set())
+        v_humain = versions_humaines.get(nom, set())
+        versions_compatibles = bool(v_auto) and bool(v_humain) and v_auto == v_humain
+
+        # Précision/F1 combinent deux populations et DÉPENDENT de la prévalence assemblée
+        # (le rapport n_auto/n_humain est un choix expérimental, pas une base réelle).
+        # On ne les calcule que si protections ET versions concordent, et jamais comme
+        # une précision généralisable.
+        if not couverture_protections:
+            raison = "protections humaines ne couvrant pas l'expérience"
+        elif (fp + vn) == 0:
+            raison = "aucune session humaine de détection pour ces protections"
+        elif not versions_compatibles:
+            raison = f"versions de détecteur incompatibles (auto={sorted(v_auto)}, humain={sorted(v_humain)})"
         else:
+            raison = None
+        comparable = raison is None
+
+        prevalence = round(n_auto / (n_auto + (fp + vn)), 4) if (n_auto + fp + vn) else None
+        if comparable:
+            precision = wilson(vp, vp + fp) if (vp + fp) else None
+            if rappel and precision and rappel["taux"] + precision["taux"] > 0:
+                f1_val = 2 * rappel["taux"] * precision["taux"] / (rappel["taux"] + precision["taux"])
+                f1 = {"taux": round(f1_val, 4), "prevalence_dependante": True}
+            else:
+                f1 = None
+            if precision is not None:
+                precision = {**precision, "prevalence_dependante": True}
+        else:
+            precision = None
             f1 = None
 
         matrices[nom] = {
@@ -218,6 +287,13 @@ def matrice_confusion(cx: sqlite3.Connection, experiment_id: int) -> dict[str, d
             "indetermines": {"automatise": ind_auto, "humain": ind_humain},
             "n_automatise": ca["n"],
             "n_humain": n_humain,
+            "protections_automatisees": sorted(protections_auto),
+            "protections_humaines": sorted(protections_humaines),
+            "versions_automatisees": sorted(v_auto),
+            "versions_humaines": sorted(v_humain),
+            "populations_comparables": comparable,
+            "comparabilite": raison,
+            "prevalence_assemblee": prevalence,
             "rappel": rappel,
             "specificite": specificite,
             "precision": precision,

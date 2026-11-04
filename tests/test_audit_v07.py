@@ -125,7 +125,7 @@ class TestDependanceRepetitions:
 # ---------------------------------------------------------------------------
 
 
-def _matrice_confusion_base(tmp_path, nom, *, prot_auto, prot_humain):
+def _matrice_confusion_base(tmp_path, nom, *, prot_auto, prot_humain, version_auto="2.0.0", version_humain="2.0.0"):
     """Expérience automatisée sous `prot_auto` et sessions humaines sous `prot_humain`.
 
     Détecteur 'botd' : 8 VP + 2 FN côté auto ; 5 VN + 1 FP côté humain.
@@ -145,7 +145,7 @@ def _matrice_confusion_base(tmp_path, nom, *, prot_auto, prot_humain):
     cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
     rid = 0
 
-    def ajouter(exp, prot, classif, rep):
+    def ajouter(exp, prot, classif, rep, version="2.0.0"):
         nonlocal rid
         rid += 1
         cx.execute(
@@ -156,17 +156,17 @@ def _matrice_confusion_base(tmp_path, nom, *, prot_auto, prot_humain):
         )
         cx.execute(
             "INSERT INTO detections (run_id, detector_name, detector_version, classification, confidence, signals)"
-            " VALUES (?, 'botd', '2.0.0', ?, 0.5, '[]')",
-            (rid, classif),
+            " VALUES (?, 'botd', ?, ?, 0.5, '[]')",
+            (rid, version, classif),
         )
 
     for i in range(8):
-        ajouter(1, prot_auto, "automatise", i + 1)  # VP
+        ajouter(1, prot_auto, "automatise", i + 1, version=version_auto)  # VP
     for i in range(2):
-        ajouter(1, prot_auto, "humain", i + 9)  # FN
+        ajouter(1, prot_auto, "humain", i + 9, version=version_auto)  # FN
     for i in range(5):
-        ajouter(2, prot_humain, "humain", i + 1)  # VN
-    ajouter(2, prot_humain, "automatise", 6)  # FP
+        ajouter(2, prot_humain, "humain", i + 1, version=version_humain)  # VN
+    ajouter(2, prot_humain, "automatise", 6, version=version_humain)  # FP
     return cx
 
 
@@ -194,3 +194,22 @@ class TestMatriceConfusionComparabilite:
         assert m["precision"] is not None
         assert m["precision"]["taux"] == round(8 / 9, 4)  # VP / (VP + FP)
         assert m["f1"] is not None
+        # La précision reste étiquetée dépendante de la prévalence assemblée.
+        assert m["precision"]["prevalence_dependante"] is True
+        assert m["f1"]["prevalence_dependante"] is True
+        assert m["prevalence_assemblee"] == round(10 / 16, 4)  # n_auto=10, fp+vn=6
+
+    def test_versions_detecteur_incompatibles(self, tmp_path):
+        """Même protection mais versions de détecteur différentes : precision/F1 neutralisés."""
+        from shadowlab.analytics import matrice_confusion
+
+        cx = _matrice_confusion_base(
+            tmp_path, "mc3", prot_auto="06", prot_humain="06", version_auto="2.0.0", version_humain="1.0.0"
+        )
+        m = matrice_confusion(cx, 1)["botd"]
+        assert m["populations_comparables"] is False
+        assert "versions" in (m["comparabilite"] or "")
+        assert m["precision"] is None
+        # Le rappel (population auto seule) et le FPR (population humaine seule) restent calculés.
+        assert m["rappel"] is not None
+        assert m["taux_faux_positifs"] is not None
