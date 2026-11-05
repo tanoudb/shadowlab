@@ -436,11 +436,13 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             [{"detector_name": c.detector_name, "classification": c.classification} for c in classements]
         )
 
-    # --- API et tableau de bord ---------------------------------------------------------------------
+    # --- API, interface du laboratoire, ancien tableau de bord --------------------------------------
     from ..api import routeur as routeur_api
+    from ..labo import routeur as routeur_labo
     from ..tableau import routeur as routeur_tableau
 
     app.include_router(routeur_api)
+    app.include_router(routeur_labo)
     app.include_router(routeur_tableau)
 
     @app.exception_handler(sqlite3.OperationalError)

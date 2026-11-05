@@ -6,6 +6,42 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-05 — Claude (Opus 4.8) — Refonte de l'interface : laboratoire utilisable (parcours produit)
+
+**Fait** : remise à plat orientée produit. Nouvelle interface web (React + TypeScript + Vite,
+branche `refonte-labo`, 8 commits vérifiables) organisée par **parcours** — Configurer → Lancer →
+Suivre en direct → Comprendre → Comparer — et non plus par type de donnée. Le front vit dans
+`frontend/` (séparation nette), consomme la seule API `/api`, et est servi par `labo.py` sous `/labo`.
+
+**Les 8 actions du cahier des charges marchent**, démontrées sur de vraies campagnes :
+- Configurer une campagne **sans YAML** (moteurs/protections/scénarios/répétitions), validation serveur en direct.
+- Lancer, suivre en **temps réel** (flux SSE + repli polling), arrêter, **reprendre** une campagne interrompue.
+- Ouvrir un passage et **comprendre** : verdict (issue/cause), décisions par couche, chaque détecteur avec
+  ses signaux précis, déroulé des requêtes, captures d'écran, empreinte, mesures.
+- **Comparer** les moteurs d'une même expérience, stratifié par protection, taux de réussite avec
+  intervalles de Wilson, erreurs techniques exclues, durées (avec caveat concurrence).
+
+**Backend ajouté** (`api.py`) : `/protections`, `/experiences/valider`, `/experiences/{id}/progression`,
+`/experiences/{id}/flux` (SSE), `/experiences/{id}/matrice`, `/experiences/{id}/reprendre`, `/artefacts/{id}`
+(garde anti-traversée). `/api/moteurs` expose la disponibilité réelle. Le détail d'un passage expose les
+décisions par couche et le déroulé des requêtes (le jeton de session ne fuit jamais).
+
+**Tests** : 193 unitaires + intégration + **e2e Playwright** (parcours complet piloté dans un vrai
+navigateur) côté Python ; 8 tests **vitest** côté front (Wilson, taux, client API). Lint et format propres.
+
+**Bilan défauts v0.7 (#5 du cahier)** : comparaisons **stratifiées** par protection → FAIT ;
+**complétude** des observations (erreurs techniques séparées et exclues des taux) → FAIT ;
+**reprise après interruption** exposée dans l'UI → FAIT. Restent à traiter en profondeur :
+isolation navigateurs (garde httpx déjà en place, à auditer sur les autres), campagnes **Arena réelles**
+(exige Docker lancé, non re-vérifié cette session), indépendance tests/statistiques (déjà entamée en v0.7).
+
+**Reste** : retirer l'ancien `/tableau` (marqué déprécié, non supprimé — règle « signaler le code mort ») ;
+alertes `npm audit` sur dépendances de dev (Vite/esbuild) ; moteur expérimental propre ; couche IA.
+
+**Fichiers** : `frontend/**` (nouveau), `src/shadowlab/api.py`, `src/shadowlab/labo.py` (nouveau),
+`src/shadowlab/site/app.py`, `src/shadowlab/cli.py`, `tests/test_api_parcours.py`, `tests/test_labo.py`,
+`tests/test_e2e_labo.py`, `AGENTS.md`.
+
 ## 2026-11-04 — Claude (Opus 4.8) — ShadowLab v0.7 : audit adversarial et corrections
 
 **Fait** : audit adversarial des 7 défauts v0.6 + Phase 2/3. 15 commits atomiques

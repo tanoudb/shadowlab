@@ -9,18 +9,22 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
+import json
 import threading
+import time
 from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from pydantic import ValidationError
 
 from . import campaigns, reports
 from . import database as db
 from .analytics import comparer as comparer_experiences
 from .analytics import statistiques
+from .arena import profils as module_profils
+from .arena.profils import BASELINE
 from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre as registre_moteurs
@@ -88,8 +92,11 @@ def moteurs(request: Request) -> dict:
         {
             "name": nom,
             "runtime": classe.runtime,
+            "categorie": classe.categorie,
             "javascript": classe.executes_javascript,
             "description": (classe.__doc__ or "").strip().split("\n")[0],
+            "pret": classe.manque() is None,
+            "manque": classe.manque(),
         }
         for nom, classe in sorted(registre_moteurs().items())
     ]
@@ -184,6 +191,30 @@ def passage(run_id: int, request: Request) -> dict:
             raise HTTPException(404, "passage introuvable")
         empreinte = cx.execute("SELECT * FROM fingerprints WHERE run_id = ?", (run_id,)).fetchone()
         mesures = cx.execute("SELECT * FROM metrics WHERE run_id = ?", (run_id,)).fetchone()
+        jeton = run["session_token"]
+        decisions_couches = [
+            {"couche": d["couche"], "decision": d["decision"], "chemin": d["chemin"], "motifs": db.lj(d["motifs"])}
+            for d in cx.execute(
+                "SELECT couche, decision, chemin, motifs FROM decisions WHERE session_token = ? ORDER BY id",
+                (jeton,),
+            )
+        ]
+        requetes = [
+            {
+                "received_at": o["received_at"],
+                "method": o["method"],
+                "path": o["path"],
+                "http_version": o["http_version"],
+                "status": o["status"],
+                "source": o["source"],
+                "nb_entetes": len(db.lj(o["headers"]) or []),
+            }
+            for o in cx.execute(
+                "SELECT received_at, method, path, http_version, status, source, headers FROM observations_http"
+                " WHERE session_token = ? ORDER BY id LIMIT 200",
+                (jeton,),
+            )
+        ]
         return {
             "passage": {k: run[k] for k in run.keys() if k != "session_token"},
             "empreinte": {
@@ -202,9 +233,16 @@ def passage(run_id: int, request: Request) -> dict:
             ],
             "mesures": dict(mesures) if mesures else None,
             "artefacts": [
-                dict(a)
-                for a in cx.execute("SELECT artifact_type, created_at FROM artifacts WHERE run_id = ?", (run_id,))
+                {
+                    "id": a["id"],
+                    "type": a["artifact_type"],
+                    "url": f"/api/artefacts/{a['id']}",
+                    "created_at": a["created_at"],
+                }
+                for a in cx.execute("SELECT id, artifact_type, created_at FROM artifacts WHERE run_id = ?", (run_id,))
             ],
+            "decisions_couches": decisions_couches,
+            "requetes": requetes,
         }
 
 
@@ -287,6 +325,36 @@ async def creer(request: Request) -> dict:
         _verrou_campagne.release()  # le fil n'a pas démarré : personne d'autre ne libérera le verrou
         raise
     return {"id": experiment_id, "statut": "lancee"}
+
+
+@routeur.post("/experiences/{experiment_id}/reprendre", dependencies=[Depends(ecriture)])
+def reprendre(experiment_id: int, request: Request) -> dict:
+    """Reprend une campagne interrompue ou incomplète : rejoue les passages manquants, en arrière-plan."""
+    reglages = _reglages(request)
+    with _base(request) as cx:
+        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+    if ligne is None:
+        raise HTTPException(404, f"expérience {experiment_id} introuvable")
+    experience = campaigns.Experience.model_validate_json(ligne["configuration"])
+    if not _verrou_campagne.acquire(blocking=False):
+        raise HTTPException(409, "une campagne est déjà en cours")
+
+    def travail() -> None:
+        try:
+            campaigns.executer(reglages, experiment_id)
+            with request.app.state.base() as cx:
+                reports.exporter(
+                    cx, experiment_id, reglages.sorties / "rapports" / str(experiment_id), experience.output
+                )
+        finally:
+            _verrou_campagne.release()
+
+    try:
+        threading.Thread(target=travail, daemon=True, name=f"reprise-{experiment_id}").start()
+    except BaseException:
+        _verrou_campagne.release()
+        raise
+    return {"id": experiment_id, "statut": "reprise"}
 
 
 @routeur.post("/arret", dependencies=[Depends(ecriture)])
@@ -392,4 +460,211 @@ def signaux(experiment_id: int, request: Request) -> dict:
             {"moteur": m, "detecteur": det, "code": code, **v}
             for (m, det, code), v in sorted(compte.items(), key=lambda kv: (kv[0][0], kv[0][1], -kv[1]["n"]))
         ],
+    }
+
+
+# --- Parcours expérimental : catalogue, validation, progression, flux, artefacts -----------------
+
+
+@routeur.get("/protections")
+def catalogue_protections() -> dict:
+    """Liste les niveaux de protection de l'Arena et ce que chacun active (constructeur de campagne et doc)."""
+    profils = module_profils.charger()
+    niveaux = [
+        {
+            "code": code,
+            "nom": p.nom or ("Baseline" if code == BASELINE else code),
+            "description": p.description,
+            "baseline": code == BASELINE,
+            "limitation": {"debit": p.limitation.debit, "rafale": p.limitation.rafale},
+            "waf": {"mode": p.waf.mode, "paranoia": p.waf.paranoia, "seuil": p.waf.seuil},
+            "defi_js": {"actif": p.defi_js.actif, "difficulte": p.defi_js.difficulte, "lier_tls": p.defi_js.lier_tls},
+            "captcha": p.captcha.actif,
+            "fingerprinting": {"actif": p.fingerprinting.actif, "bloquer": p.fingerprinting.bloquer},
+            "honeypots": p.honeypots.actif,
+            "turnstile": p.turnstile.actif,
+            "recaptcha": p.recaptcha.actif,
+        }
+        for code, p in profils.items()
+    ]
+    return {"protections": niveaux}
+
+
+def _experience_depuis_corps(texte: str) -> campaigns.Experience:
+    if len(texte) > 32_000:
+        raise ValueError("définition trop longue")
+    brut = campaigns.charger_yaml(texte)  # YAML est un sur-ensemble de JSON : le front envoie du JSON
+    return campaigns.FichierCampagne.model_validate(brut).experiment
+
+
+@routeur.post("/experiences/valider")
+async def valider(request: Request) -> dict:
+    """Valide une définition d'expérience (JSON) sans la lancer, et renvoie le nombre de passages prévus."""
+    reglages = _reglages(request)
+    texte = (await request.body()).decode("utf-8", "replace")
+    try:
+        experience = _experience_depuis_corps(texte)
+        if experience.base_url:
+            campaigns.verifier_url(experience.base_url, reglages.hotes_autorises)
+        if experience.concurrency > reglages.concurrence_max:
+            raise ValueError(f"concurrence {experience.concurrency} > plafond {reglages.concurrence_max}")
+    except (yaml.YAMLError, ValidationError, ValueError) as erreur:
+        return {"valide": False, "erreur": str(erreur)}
+    total = len(experience.engines) * len(experience.protections) * len(experience.scenarios) * experience.repetitions
+    return {
+        "valide": True,
+        "nom": experience.name,
+        "seed": experience.seed,
+        "total": total,
+        "moteurs": [m.nom_affiche for m in experience.engines],
+        "protections": experience.protections,
+        "scenarios": experience.scenarios,
+    }
+
+
+def _progression(cx, experiment_id: int) -> dict:
+    """État d'avancement d'une campagne : total prévu (depuis la config), passages faits, par statut et par issue."""
+    ligne = cx.execute("SELECT configuration, status FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+    if ligne is None:
+        raise LookupError(f"expérience {experiment_id} introuvable")
+    experience = campaigns.Experience.model_validate_json(ligne["configuration"])
+    total = len(experience.engines) * len(experience.protections) * len(experience.scenarios) * experience.repetitions
+    par_statut = {
+        r["status"]: r["n"]
+        for r in cx.execute(
+            "SELECT status, COUNT(*) n FROM runs WHERE experiment_id = ? AND is_warmup = 0 GROUP BY status",
+            (experiment_id,),
+        )
+    }
+    par_issue = {
+        r["issue"]: r["n"]
+        for r in cx.execute(
+            "SELECT COALESCE(issue, 'inconnue') issue, COUNT(*) n FROM runs"
+            " WHERE experiment_id = ? AND is_warmup = 0 AND status IN ('reussi', 'echec', 'erreur') GROUP BY issue",
+            (experiment_id,),
+        )
+    }
+    faits = sum(par_statut.get(s, 0) for s in ("reussi", "echec", "erreur"))
+    moyenne = cx.execute(
+        "SELECT AVG(duration_ms) m FROM runs WHERE experiment_id = ? AND is_warmup = 0 AND duration_ms IS NOT NULL",
+        (experiment_id,),
+    ).fetchone()["m"]
+    restant = max(0, total - faits)
+    eta = round(moyenne * restant / max(1, experience.concurrency) / 1000, 1) if (moyenne and restant) else None
+    return {
+        "experience": experiment_id,
+        "etat": ligne["status"],
+        "total": total,
+        "faits": faits,
+        "restant": restant,
+        "pourcentage": round(faits / total * 100, 1) if total else 0.0,
+        "en_cours": par_statut.get("en_cours", 0),
+        "par_statut": par_statut,
+        "par_issue": par_issue,
+        "duree_moyenne_ms": round(moyenne, 1) if moyenne else None,
+        "eta_secondes": eta,
+    }
+
+
+@routeur.get("/experiences/{experiment_id}/progression")
+def progression(experiment_id: int, request: Request) -> dict:
+    with _base(request) as cx:
+        try:
+            return _progression(cx, experiment_id)
+        except LookupError as erreur:
+            raise HTTPException(404, str(erreur)) from erreur
+
+
+@routeur.get("/experiences/{experiment_id}/flux")
+def flux(experiment_id: int, request: Request) -> StreamingResponse:
+    """Flux SSE : émet la progression chaque seconde tant que la campagne tourne, puis se ferme."""
+    base = request.app.state.base
+    with base() as cx:
+        try:
+            initial = _progression(cx, experiment_id)
+        except LookupError as erreur:
+            raise HTTPException(404, str(erreur)) from erreur
+
+    def evenements():
+        progres = initial
+        for _ in range(3600):  # plafond d'une heure : jamais de fil infini
+            yield f"data: {json.dumps(progres, ensure_ascii=False)}\n\n"
+            if progres["etat"] not in ("creee", "en_cours"):
+                break
+            time.sleep(1.0)
+            with base() as cx:
+                try:
+                    progres = _progression(cx, experiment_id)
+                except LookupError:
+                    break
+
+    return StreamingResponse(
+        evenements(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+@routeur.get("/artefacts/{artifact_id}")
+def artefact(artifact_id: int, request: Request) -> FileResponse:
+    """Sert un artefact (capture d'écran) en vérifiant qu'il reste sous le dossier des sorties (anti-traversée)."""
+    reglages = _reglages(request)
+    with _base(request) as cx:
+        ligne = cx.execute("SELECT file_path FROM artifacts WHERE id = ?", (artifact_id,)).fetchone()
+    if ligne is None:
+        raise HTTPException(404, "artefact introuvable")
+    chemin = Path(ligne["file_path"]).resolve()
+    racine = (reglages.sorties / "artefacts").resolve()
+    if not chemin.is_file() or not chemin.is_relative_to(racine):
+        raise HTTPException(404, "artefact introuvable")
+    media = "image/png" if chemin.suffix.lower() == ".png" else "application/octet-stream"
+    return FileResponse(chemin, media_type=media, headers={"Cache-Control": "no-store"})
+
+
+@routeur.get("/experiences/{experiment_id}/matrice")
+def matrice(experiment_id: int, request: Request) -> dict:
+    """Matrice moteur × protection : réussis/échecs/erreurs séparés, pour une comparaison honnête.
+
+    Les erreurs techniques sont comptées à part (jamais confondues avec un échec de contournement) ;
+    la durée moyenne les exclut. Le front en tire les taux et les intervalles de Wilson.
+    """
+    with _base(request) as cx:
+        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+        if ligne is None:
+            raise HTTPException(404, f"expérience {experiment_id} introuvable")
+        experience = campaigns.Experience.model_validate_json(ligne["configuration"])
+        lignes = cx.execute(
+            """SELECT r.protection AS protection,
+                      COALESCE(json_extract(e.configuration, '$.label'), e.name) AS moteur,
+                      COUNT(*) AS total,
+                      SUM(r.status = 'reussi') AS reussis,
+                      SUM(r.status = 'echec') AS echecs,
+                      SUM(r.status = 'erreur') AS erreurs,
+                      AVG(CASE WHEN r.status != 'erreur' THEN r.duration_ms END) AS duree_moy
+               FROM runs r JOIN engines e ON e.id = r.engine_id
+               WHERE r.experiment_id = ? AND r.is_warmup = 0 AND r.status IN ('reussi', 'echec', 'erreur')
+               GROUP BY r.protection, moteur
+               ORDER BY r.protection, moteur""",
+            (experiment_id,),
+        ).fetchall()
+    cellules: dict[str, dict[str, dict]] = {}
+    moteurs: set[str] = set()
+    protections: set[str] = set()
+    for r in lignes:
+        moteurs.add(r["moteur"])
+        protections.add(r["protection"])
+        cellules.setdefault(r["protection"], {})[r["moteur"]] = {
+            "total": r["total"],
+            "reussis": r["reussis"],
+            "echecs": r["echecs"],
+            "erreurs": r["erreurs"],
+            "duree_moy": round(r["duree_moy"], 1) if r["duree_moy"] is not None else None,
+        }
+    return {
+        "experience": experiment_id,
+        "nom": experience.name,
+        "concurrence": experience.concurrency,
+        "moteurs": sorted(moteurs),
+        "protections": sorted(protections),
+        "cellules": cellules,
     }

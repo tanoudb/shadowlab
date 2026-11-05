@@ -8,3 +8,7 @@ __pycache__/
 *.sqlite3*
 *.db
 downloaded_files/
+
+# Front du laboratoire (Vite + React)
+frontend/node_modules/
+frontend/dist/
