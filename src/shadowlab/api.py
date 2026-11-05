@@ -191,6 +191,30 @@ def passage(run_id: int, request: Request) -> dict:
             raise HTTPException(404, "passage introuvable")
         empreinte = cx.execute("SELECT * FROM fingerprints WHERE run_id = ?", (run_id,)).fetchone()
         mesures = cx.execute("SELECT * FROM metrics WHERE run_id = ?", (run_id,)).fetchone()
+        jeton = run["session_token"]
+        decisions_couches = [
+            {"couche": d["couche"], "decision": d["decision"], "chemin": d["chemin"], "motifs": db.lj(d["motifs"])}
+            for d in cx.execute(
+                "SELECT couche, decision, chemin, motifs FROM decisions WHERE session_token = ? ORDER BY id",
+                (jeton,),
+            )
+        ]
+        requetes = [
+            {
+                "received_at": o["received_at"],
+                "method": o["method"],
+                "path": o["path"],
+                "http_version": o["http_version"],
+                "status": o["status"],
+                "source": o["source"],
+                "nb_entetes": len(db.lj(o["headers"]) or []),
+            }
+            for o in cx.execute(
+                "SELECT received_at, method, path, http_version, status, source, headers FROM observations_http"
+                " WHERE session_token = ? ORDER BY id LIMIT 200",
+                (jeton,),
+            )
+        ]
         return {
             "passage": {k: run[k] for k in run.keys() if k != "session_token"},
             "empreinte": {
@@ -217,6 +241,8 @@ def passage(run_id: int, request: Request) -> dict:
                 }
                 for a in cx.execute("SELECT id, artifact_type, created_at FROM artifacts WHERE run_id = ?", (run_id,))
             ],
+            "decisions_couches": decisions_couches,
+            "requetes": requetes,
         }
 
 

@@ -88,6 +88,75 @@ export interface Progression {
   eta_secondes: number | null;
 }
 
+export interface Signal {
+  code: string;
+  description: string;
+  poids: number;
+}
+
+export interface Detection {
+  detector_name: string;
+  detector_version: string;
+  classification: string;
+  confidence: number;
+  signals: Signal[];
+}
+
+export interface Artefact {
+  id: number;
+  type: string;
+  url: string;
+  created_at: string;
+}
+
+export interface DecisionCouche {
+  couche: string;
+  decision: string;
+  chemin: string;
+  motifs: { code?: string; description?: string }[] | null;
+}
+
+export interface RequeteObs {
+  received_at: string;
+  method: string;
+  path: string;
+  http_version: string | null;
+  status: number | null;
+  source: string;
+  nb_entetes: number;
+}
+
+export interface PassageInfo {
+  id: number;
+  moteur: string;
+  engine: string;
+  scenario: string;
+  repetition: number;
+  status: string;
+  duration_ms: number | null;
+  error: string | null;
+  issue: string | null;
+  cause: string | null;
+  protection: string;
+}
+
+export interface Empreinte {
+  browser_properties: unknown;
+  http_properties: unknown;
+  tls_properties: unknown;
+  session_properties: unknown;
+}
+
+export interface PassageDetail {
+  passage: PassageInfo;
+  empreinte: Empreinte | null;
+  detections: Detection[];
+  mesures: Record<string, number | null> | null;
+  artefacts: Artefact[];
+  decisions_couches: DecisionCouche[];
+  requetes: RequeteObs[];
+}
+
 export interface PassageLigne {
   id: number;
   moteur: string;

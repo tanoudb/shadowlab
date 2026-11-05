@@ -495,3 +495,65 @@ code {
 .issues {
   margin: 8px 0 4px;
 }
+
+/* --- Passage détaillé --- */
+.carte h2 {
+  margin-top: 0;
+}
+.carte + .carte {
+  margin-top: 14px;
+}
+.carte.verdict {
+  border-left: 3px solid var(--accent);
+}
+.detection {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bord);
+}
+.detection:last-child {
+  border-bottom: none;
+}
+.detection-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.signaux {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--texte-2);
+  font-size: 13px;
+}
+.signaux code,
+.detection-tete code {
+  font-family: var(--mono);
+  background: var(--fond-3);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.repli {
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.repli summary {
+  cursor: pointer;
+  color: var(--texte-2);
+}
+.json {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--fond);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  max-height: 340px;
+}
+.capture {
+  max-width: 100%;
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  margin-top: 8px;
+}

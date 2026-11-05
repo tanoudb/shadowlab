@@ -127,3 +127,37 @@ def test_artefact_sert_le_png_et_refuse_hors_sorties(client, reglages, tmp_path)
     assert ok.status_code == 200
     assert ok.headers["content-type"] == "image/png"
     assert client.get(f"/api/artefacts/{ids[1]}").status_code == 404
+
+
+def test_passage_detail_inclut_decisions_requetes_et_cache_le_jeton(client, reglages):
+    cx = db.ouvrir(reglages.base_donnees)
+    exp_id = campaigns.creer(cx, _mini_experience(), reglages)
+    eng = db.engine_id(cx, "httpx", "1", "client", {})
+    scn = db.scenario_id(cx, "static_html", "")
+    jeton = "d" * 32
+    _insérer_passage(cx, exp_id, eng, scn, repetition=1, statut="echec", jeton=jeton, issue="bloque_waf")
+    run_id = cx.execute("SELECT id FROM runs WHERE session_token = ?", (jeton,)).fetchone()[0]
+    motifs = db.j([{"code": "sqli", "description": "motif WAF"}])
+    cx.execute(
+        "INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs) VALUES (?, ?, ?, ?, ?, ?)",
+        (jeton, db.maintenant(), "waf", "bloque", "/lab/statique", motifs),
+    )
+    cx.execute(
+        "INSERT INTO observations_http (session_token, received_at, method, path, http_version, headers, cookies,"
+        " status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (jeton, db.maintenant(), "GET", "/lab/statique", "HTTP/2", db.j([["user-agent", "x"]]), db.j([]), 403, "site"),
+    )
+    cx.commit()
+    cx.close()
+
+    d = client.get(f"/api/passages/{run_id}").json()
+    assert d["passage"]["issue"] == "bloque_waf"
+    assert "session_token" not in d["passage"]  # le jeton de session ne fuite jamais
+    assert d["decisions_couches"][0] == {
+        "couche": "waf",
+        "decision": "bloque",
+        "chemin": "/lab/statique",
+        "motifs": [{"code": "sqli", "description": "motif WAF"}],
+    }
+    assert d["requetes"][0]["status"] == 403
+    assert d["requetes"][0]["nb_entetes"] == 1
