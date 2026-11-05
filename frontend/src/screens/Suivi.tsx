@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { obtenir, poster } from "../api";
 import { terminal, usePousseeProgression } from "../hooks";
@@ -40,6 +41,12 @@ export default function Suivi() {
     mutationFn: () => poster("/arret"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["progression", eid] }),
   });
+
+  // Rafraîchir la table des passages à chaque avancement (y compris le dernier, une fois terminé).
+  const faits = progQ.data?.faits ?? 0;
+  useEffect(() => {
+    if (eid > 0) qc.invalidateQueries({ queryKey: ["passages", eid] });
+  }, [faits, eid, qc]);
 
   return (
     <section>

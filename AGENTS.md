@@ -54,19 +54,24 @@ recommander des optimisations.
 
 ## Commandes vérifiées
 ```bash
-uv sync                                                    # installer
-uv run shadowlab site                                      # http://127.0.0.1:8770/tableau
+uv sync                                                    # installer le backend
+npm --prefix frontend install                              # installer l'interface (une fois)
+npm --prefix frontend run build                            # construire l'interface → frontend/dist
+uv run shadowlab site                                      # http://127.0.0.1:8770/labo (interface) + /lab/ (site de test)
 uv run shadowlab arena demarrer                            # docker compose (Coraza + Nginx)
 uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
-uv run pytest                                              # ~54 tests, ~15 s (navigateurs réels)
-uv run pytest -m "not integration"                         # < 1 s
+uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
+uv run pytest -m "not integration"                         # < 3 s, sans navigateur
 uv run ruff check src tests && uv run ruff format --check src tests
+npm --prefix frontend test                                 # tests front (vitest)
+npm --prefix frontend run dev                              # dev UI : http://localhost:5173/labo (proxy /api → 8770)
 ```
-Prérequis : Python 3.12, `uv`, Google Chrome (Selenium), Chromium de Playwright (`uv run playwright install chromium`),
-OrbStack/Docker (Arena).
+Prérequis : Python 3.12, `uv`, Node 22 (`mise`), Google Chrome (Selenium), Chromium de Playwright
+(`uv run playwright install chromium`), OrbStack/Docker (Arena). L'interface doit être construite
+(`npm --prefix frontend run build`) pour que `shadowlab site` la serve sous `/labo` ; sinon, mode dev.
 
 ## Carte du code
 ```
@@ -83,16 +88,22 @@ src/shadowlab/
 ├── database.py      # SQLite + migrations
 ├── analytics.py     # Statistiques (Wilson, p95/p99)
 ├── config.py        # Configuration centrale
-├── api.py           # API REST
+├── api.py           # API REST (parcours : /protections, /experiences/.../progression|flux|matrice, /artefacts)
 ├── cli.py           # Interface ligne de commande
 ├── reports.py       # Rapports HTML/CSV/JSON
-└── tableau.py       # Tableau de bord
+├── labo.py          # Sert l'interface construite (frontend/dist) sous /labo
+└── tableau.py       # Ancien tableau de bord (déprécié, remplacé par /labo)
+frontend/            # Interface React + TypeScript (Vite), consomme /api
+│   ├── src/screens/ # Configurer, Experiences, Suivi, Passage, Comparer, Moteurs, Protections
+│   └── src/         # api.ts, stats.ts (Wilson), hooks.ts (SSE), ui.tsx, types.ts
 configs/             # Profils Arena + campagnes YAML
 docker/              # Coraza WAF + Nginx (Docker Compose)
 docs/                # Architecture, décisions, recherche
 moteurs_isoles/      # pyproject.toml par environnement isolé
 ```
 Décisions : `docs/DECISIONS.md`. Architecture : `docs/architecture.md`.
+Interface : front séparé dans `frontend/` (parcours Configurer → Lancer → Suivre → Comprendre → Comparer),
+servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité via `/api`.
 
 ## Règles
 - Tout nouveau moteur passe par `engines/base.Driver` et respecte le périmètre (`self.verifier(url)` avant
