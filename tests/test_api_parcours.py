@@ -202,3 +202,11 @@ def test_matrice_separe_reussis_echecs_erreurs(client, reglages):
     sel = m["cellules"]["01"]["selenium"]
     assert (sel["reussis"], sel["echecs"], sel["erreurs"]) == (1, 1, 1)
     assert sel["duree_moy"] == 150.0  # l'erreur (999 ms) est exclue
+
+
+def test_reprendre_exige_entete_ecriture_et_existence(client):
+    # sans l'en-tête d'écriture : refusé (403)
+    assert client.post("/api/experiences/9999/reprendre").status_code == 403
+    # avec l'en-tête mais expérience inexistante : 404 (avant toute prise de verrou)
+    r = client.post("/api/experiences/9999/reprendre", headers={"X-ShadowLab": "1"})
+    assert r.status_code == 404

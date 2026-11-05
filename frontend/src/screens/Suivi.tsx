@@ -41,6 +41,10 @@ export default function Suivi() {
     mutationFn: () => poster("/arret"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["progression", eid] }),
   });
+  const reprendre = useMutation({
+    mutationFn: () => poster(`/experiences/${eid}/reprendre`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["progression", eid] }),
+  });
 
   // Rafraîchir la table des passages à chaque avancement (y compris le dernier, une fois terminé).
   const faits = progQ.data?.faits ?? 0;
@@ -70,7 +74,13 @@ export default function Suivi() {
                     {arreter.isPending ? "Arrêt demandé…" : "Arrêter"}
                   </button>
                 )}
+                {(p.etat === "interrompu" || p.etat === "termine_incomplet") && (
+                  <button type="button" className="primaire" onClick={() => reprendre.mutate()} disabled={reprendre.isPending}>
+                    {reprendre.isPending ? "Reprise…" : "Reprendre"}
+                  </button>
+                )}
                 {arreter.isSuccess && <span className="info">Arrêt demandé : la campagne s'arrête après le passage en cours.</span>}
+                {reprendre.isError && <span className="champ-erreur">Reprise impossible (campagne déjà en cours ?).</span>}
               </div>
 
               <div className="barre-progression" role="progressbar" aria-valuenow={p.pourcentage}>

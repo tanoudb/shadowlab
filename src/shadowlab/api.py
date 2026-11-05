@@ -327,6 +327,36 @@ async def creer(request: Request) -> dict:
     return {"id": experiment_id, "statut": "lancee"}
 
 
+@routeur.post("/experiences/{experiment_id}/reprendre", dependencies=[Depends(ecriture)])
+def reprendre(experiment_id: int, request: Request) -> dict:
+    """Reprend une campagne interrompue ou incomplète : rejoue les passages manquants, en arrière-plan."""
+    reglages = _reglages(request)
+    with _base(request) as cx:
+        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+    if ligne is None:
+        raise HTTPException(404, f"expérience {experiment_id} introuvable")
+    experience = campaigns.Experience.model_validate_json(ligne["configuration"])
+    if not _verrou_campagne.acquire(blocking=False):
+        raise HTTPException(409, "une campagne est déjà en cours")
+
+    def travail() -> None:
+        try:
+            campaigns.executer(reglages, experiment_id)
+            with request.app.state.base() as cx:
+                reports.exporter(
+                    cx, experiment_id, reglages.sorties / "rapports" / str(experiment_id), experience.output
+                )
+        finally:
+            _verrou_campagne.release()
+
+    try:
+        threading.Thread(target=travail, daemon=True, name=f"reprise-{experiment_id}").start()
+    except BaseException:
+        _verrou_campagne.release()
+        raise
+    return {"id": experiment_id, "statut": "reprise"}
+
+
 @routeur.post("/arret", dependencies=[Depends(ecriture)])
 def arret(request: Request) -> dict:
     chemin: Path = campaigns.fichier_arret(_reglages(request))
