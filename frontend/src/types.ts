@@ -61,3 +61,45 @@ export interface Validation {
   protections?: string[];
   scenarios?: string[];
 }
+
+export interface ExperienceListe {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  status: string;
+  seed: number | null;
+  passages: number;
+  reussis: number | null;
+  erreurs: number | null;
+}
+
+export interface Progression {
+  experience: number;
+  etat: string;
+  total: number;
+  faits: number;
+  restant: number;
+  pourcentage: number;
+  en_cours: number;
+  par_statut: Record<string, number>;
+  par_issue: Record<string, number>;
+  duree_moyenne_ms: number | null;
+  eta_secondes: number | null;
+}
+
+export interface PassageLigne {
+  id: number;
+  moteur: string;
+  engine: string;
+  scenario: string;
+  repetition: number;
+  status: string;
+  duration_ms: number | null;
+  error: string | null;
+  cpu_usage: number | null;
+  cpu_time_ms: number | null;
+  memory_usage: number | null;
+  request_count: number | null;
+  detections: number;
+}

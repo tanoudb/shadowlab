@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { obtenir } from "./api";
 import Configurer from "./screens/Configurer";
+import Experiences from "./screens/Experiences";
 import Moteurs from "./screens/Moteurs";
 import Protections from "./screens/Protections";
+import Suivi from "./screens/Suivi";
 
 function Sante() {
   const q = useQuery({
@@ -74,8 +76,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/configurer" replace />} />
           <Route path="/configurer" element={<Configurer />} />
-          <Route path="/experiences" element={<AVenir titre="Expériences" />} />
-          <Route path="/experiences/:id" element={<AVenir titre="Suivi de campagne" />} />
+          <Route path="/experiences" element={<Experiences />} />
+          <Route path="/experiences/:id" element={<Suivi />} />
           <Route path="/passages/:id" element={<AVenir titre="Passage" />} />
           <Route path="/comparer" element={<AVenir titre="Comparer" />} />
           <Route path="/moteurs" element={<Moteurs />} />
