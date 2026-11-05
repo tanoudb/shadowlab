@@ -589,3 +589,52 @@ def artefact(artifact_id: int, request: Request) -> FileResponse:
         raise HTTPException(404, "artefact introuvable")
     media = "image/png" if chemin.suffix.lower() == ".png" else "application/octet-stream"
     return FileResponse(chemin, media_type=media, headers={"Cache-Control": "no-store"})
+
+
+@routeur.get("/experiences/{experiment_id}/matrice")
+def matrice(experiment_id: int, request: Request) -> dict:
+    """Matrice moteur × protection : réussis/échecs/erreurs séparés, pour une comparaison honnête.
+
+    Les erreurs techniques sont comptées à part (jamais confondues avec un échec de contournement) ;
+    la durée moyenne les exclut. Le front en tire les taux et les intervalles de Wilson.
+    """
+    with _base(request) as cx:
+        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+        if ligne is None:
+            raise HTTPException(404, f"expérience {experiment_id} introuvable")
+        experience = campaigns.Experience.model_validate_json(ligne["configuration"])
+        lignes = cx.execute(
+            """SELECT r.protection AS protection,
+                      COALESCE(json_extract(e.configuration, '$.label'), e.name) AS moteur,
+                      COUNT(*) AS total,
+                      SUM(r.status = 'reussi') AS reussis,
+                      SUM(r.status = 'echec') AS echecs,
+                      SUM(r.status = 'erreur') AS erreurs,
+                      AVG(CASE WHEN r.status != 'erreur' THEN r.duration_ms END) AS duree_moy
+               FROM runs r JOIN engines e ON e.id = r.engine_id
+               WHERE r.experiment_id = ? AND r.is_warmup = 0 AND r.status IN ('reussi', 'echec', 'erreur')
+               GROUP BY r.protection, moteur
+               ORDER BY r.protection, moteur""",
+            (experiment_id,),
+        ).fetchall()
+    cellules: dict[str, dict[str, dict]] = {}
+    moteurs: set[str] = set()
+    protections: set[str] = set()
+    for r in lignes:
+        moteurs.add(r["moteur"])
+        protections.add(r["protection"])
+        cellules.setdefault(r["protection"], {})[r["moteur"]] = {
+            "total": r["total"],
+            "reussis": r["reussis"],
+            "echecs": r["echecs"],
+            "erreurs": r["erreurs"],
+            "duree_moy": round(r["duree_moy"], 1) if r["duree_moy"] is not None else None,
+        }
+    return {
+        "experience": experiment_id,
+        "nom": experience.name,
+        "concurrence": experience.concurrency,
+        "moteurs": sorted(moteurs),
+        "protections": sorted(protections),
+        "cellules": cellules,
+    }

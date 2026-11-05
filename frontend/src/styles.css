@@ -557,3 +557,20 @@ code {
   border-radius: 8px;
   margin-top: 8px;
 }
+
+/* --- Comparer --- */
+.ci {
+  font-size: 11px;
+  color: var(--texte-2);
+  margin-left: 6px;
+  font-weight: 400;
+}
+td.meilleur {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+td.meilleur b {
+  color: var(--ok);
+}
+.avert-point {
+  color: var(--attention);
+}

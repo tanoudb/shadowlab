@@ -157,6 +157,23 @@ export interface PassageDetail {
   requetes: RequeteObs[];
 }
 
+export interface Cellule {
+  total: number;
+  reussis: number;
+  echecs: number;
+  erreurs: number;
+  duree_moy: number | null;
+}
+
+export interface Matrice {
+  experience: number;
+  nom: string;
+  concurrence: number;
+  moteurs: string[];
+  protections: string[];
+  cellules: Record<string, Record<string, Cellule>>;
+}
+
 export interface PassageLigne {
   id: number;
   moteur: string;

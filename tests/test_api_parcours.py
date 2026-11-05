@@ -161,3 +161,44 @@ def test_passage_detail_inclut_decisions_requetes_et_cache_le_jeton(client, regl
     }
     assert d["requetes"][0]["status"] == 403
     assert d["requetes"][0]["nb_entetes"] == 1
+
+
+def test_matrice_separe_reussis_echecs_erreurs(client, reglages):
+    cx = db.ouvrir(reglages.base_donnees)
+    exp = campaigns.Experience.model_validate(
+        {
+            "name": "cmp",
+            "engines": ["httpx", "selenium"],
+            "protections": ["01"],
+            "scenarios": ["static_html"],
+            "repetitions": 3,
+            "seed": 1,
+        }
+    )
+    exp_id = campaigns.creer(cx, exp, reglages)
+    scn = db.scenario_id(cx, "static_html", "")
+    httpx = db.engine_id(cx, "httpx", "1", "client", {})
+    selenium = db.engine_id(cx, "selenium", "1", "navigateur", {})
+    # httpx : 2 réussis, 1 échec ; durée moyenne = (100+200+300)/3 = 200
+    _insérer_passage(cx, exp_id, httpx, scn, repetition=1, statut="reussi", jeton="h" + "1" * 31, duree=100.0)
+    _insérer_passage(cx, exp_id, httpx, scn, repetition=2, statut="reussi", jeton="h" + "2" * 31, duree=200.0)
+    _insérer_passage(cx, exp_id, httpx, scn, repetition=3, statut="echec", jeton="h" + "3" * 31, duree=300.0)
+    # selenium : 1 réussi, 1 échec, 1 erreur (exclue de la durée) ; durée = (100+200)/2 = 150
+    _insérer_passage(cx, exp_id, selenium, scn, repetition=1, statut="reussi", jeton="s" + "1" * 31, duree=100.0)
+    _insérer_passage(cx, exp_id, selenium, scn, repetition=2, statut="echec", jeton="s" + "2" * 31, duree=200.0)
+    _insérer_passage(cx, exp_id, selenium, scn, repetition=3, statut="erreur", jeton="s" + "3" * 31, duree=999.0)
+    cx.commit()
+    cx.close()
+
+    m = client.get(f"/api/experiences/{exp_id}/matrice").json()
+    assert m["moteurs"] == ["httpx", "selenium"]
+    assert m["cellules"]["01"]["httpx"] == {
+        "total": 3,
+        "reussis": 2,
+        "echecs": 1,
+        "erreurs": 0,
+        "duree_moy": 200.0,
+    }
+    sel = m["cellules"]["01"]["selenium"]
+    assert (sel["reussis"], sel["echecs"], sel["erreurs"]) == (1, 1, 1)
+    assert sel["duree_moy"] == 150.0  # l'erreur (999 ms) est exclue

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { obtenir } from "./api";
+import Comparer from "./screens/Comparer";
 import Configurer from "./screens/Configurer";
 import Experiences from "./screens/Experiences";
 import Moteurs from "./screens/Moteurs";
@@ -80,7 +81,7 @@ export default function App() {
           <Route path="/experiences" element={<Experiences />} />
           <Route path="/experiences/:id" element={<Suivi />} />
           <Route path="/passages/:id" element={<Passage />} />
-          <Route path="/comparer" element={<AVenir titre="Comparer" />} />
+          <Route path="/comparer" element={<Comparer />} />
           <Route path="/moteurs" element={<Moteurs />} />
           <Route path="/protections" element={<Protections />} />
           <Route path="*" element={<AVenir titre="Page introuvable" />} />
