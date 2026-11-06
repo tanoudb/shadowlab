@@ -36,7 +36,7 @@ HORS_PROTECTION = (
 )
 # Règles consultées en direct : celles qui peuvent trancher dès la requête, puis celles qui lisent le JavaScript.
 REGLES_REQUETE = ("regles-http", "tls")
-REGLES_JAVASCRIPT = ("botd", "regles-js", "coherence")
+REGLES_JAVASCRIPT = ("botd", "regles-js", "coherence", "comportement")
 
 
 @dataclass(frozen=True)

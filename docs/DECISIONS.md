@@ -65,3 +65,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   niveau 02 (HeadlessChrome dans le User-Agent, pas de Accept-Language) mais c'est une mesure de référence
   précieuse : elle montre ce que les patchs JavaScript seuls changent, sans réglage HTTP. Modifier sa config
   pour faire passer ses résultats au vert ferait perdre cette mesure.
+- **D-21 — 05/11/2026 — Plan v0.7 « Fiabilité scientifique »** (`docs/plan-v07.md`). L'audit de la campagne #17
+  a montré 8 défauts structurels (classification fausse, chaîne de blocage qui occulte les détecteurs JS, biais
+  des scénarios mono-page, absence de faux positifs). Priorité P0 = corriger ce qui fausse les résultats avant
+  d'ajouter des fonctionnalités. Plan détaillé dans `docs/plan-v07.md`.

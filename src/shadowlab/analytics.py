@@ -81,7 +81,8 @@ def _passages(cx: sqlite3.Connection, experiment_id: int, inclure_warmup: bool =
     return cx.execute(
         f"""
         SELECT r.id, r.status, r.success, r.duration_ms, r.truth, r.repetition,
-               r.protection, r.issue, r.cause, COALESCE(r.is_warmup, 0) AS is_warmup,
+               r.protection, r.issue, r.cause, r.drapeaux,
+               COALESCE(r.is_warmup, 0) AS is_warmup,
                s.name AS scenario,
                e.name AS engine, e.version AS versions, e.runtime,
                COALESCE(json_extract(e.configuration, '$.label'), e.name) AS label,
@@ -309,7 +310,16 @@ def qualite_metriques(bloc_stats: dict[str, Any]) -> dict[str, str]:
     tags: dict[str, str] = {}
     for cle in ("passages", "evaluables", "erreurs_techniques", "par_issue"):
         tags[cle] = "observe"
-    _taux = ("reussite", "reussite_fonctionnelle", "taux_erreur_technique", "taux_blocage", "reussite_si_non_bloque")
+    _taux = (
+        "reussite",
+        "reussite_fonctionnelle",
+        "taux_erreur_technique",
+        "taux_detection",
+        "taux_challenge",
+        "taux_challenge_non_valide",
+        "taux_blocage",
+        "reussite_si_non_bloque",
+    )
     for cle in _taux:
         if bloc_stats.get(cle) is None:
             tags[cle] = "limite"
@@ -441,10 +451,19 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
         bloques = par_issue.get("bloque", 0)
         evaluables = n - erreurs_techniques
         non_bloques = evaluables - bloques
+        detectes = 0
+        challenges = 0
+        challenges_non_valides = par_issue.get("challenge_non_valide", 0)
         par_detecteur: dict[str, list[str]] = defaultdict(list)
         for p in lignes:
-            for nom, classement in detections.get(p["id"], {}).items():
+            dets = detections.get(p["id"], {})
+            for nom, classement in dets.items():
                 par_detecteur[nom].append(classement)
+            if any(c == "automatise" for c in dets.values()):
+                detectes += 1
+            drp = db.lj(p["drapeaux"]) if p["drapeaux"] else None
+            if drp and drp.get("challenge_declenche"):
+                challenges += 1
         resultat = {
             "passages": n,
             "evaluables": evaluables,
@@ -452,6 +471,9 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "reussite": wilson(reussis, n),
             "reussite_fonctionnelle": wilson(reussis, evaluables),
             "taux_erreur_technique": wilson(erreurs_techniques, n),
+            "taux_detection": wilson(detectes, evaluables),
+            "taux_challenge": wilson(challenges, evaluables),
+            "taux_challenge_non_valide": wilson(challenges_non_valides, evaluables),
             "taux_blocage": wilson(bloques, evaluables),
             "reussite_si_non_bloque": wilson(reussis, non_bloques) if non_bloques > 0 else None,
             "par_issue": par_issue,

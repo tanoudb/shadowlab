@@ -6,6 +6,97 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-06 — Claude (Opus 4.6) — Phase P0 complète (v0.7)
+
+**Fait** : les 3 corrections P0 du plan v0.7 sont implémentées et testées.
+
+- **P0.1** : `COUCHES_CHALLENGE` corrigé dans `issues.py:21` → `("captcha", "turnstile", "recaptcha", "defi-js")`. 4 tests.
+- **P0.2** : 3 nouveaux taux Wilson séparés dans `analytics.py` : `taux_detection`, `taux_challenge`, `taux_challenge_non_valide`, en plus de `reussite` et `taux_blocage` existants. `qualite_metriques()` étendu. `_passages()` inclut `r.drapeaux`. 6 tests.
+- **P0.3** : migration 7 — `engine_version TEXT` sur `runs`, `schema_version INTEGER` sur `experiments`. `SCHEMA_VERSION = 7` dans `database.py`. `passages.demarrer()` accepte `engine_version`. `campaigns.creer()` enregistre `schema_version`. `campaigns._passage()` passe la version. 5 tests.
+
+**Résultat** : 208 tests verts (+11), lint propre, 0 régression.
+
+**Fichiers modifiés** : `src/shadowlab/analytics.py`, `src/shadowlab/database.py`, `src/shadowlab/passages.py`, `src/shadowlab/campaigns.py`, `src/shadowlab/issues.py`, `tests/test_audit_v07.py`.
+**Décisions** : aucune nouvelle (P0 suit le plan D-21).
+**Reste** : P1 (ablation, comparaison, scénarios multi-pages, faux positifs multi-sessions).
+
+---
+
+## 2026-11-05 (soir) — Claude (Opus 4.6) — Audit campagne #17 + plan v0.7
+
+**Fait** : audit structurel complet de la campagne #17 (4 200 passages).
+- 8 défauts identifiés (D1–D8 dans `docs/audit-campagne-17.md`)
+- Bug code : `COUCHES_CHALLENGE` dans `issues.py:21` manque Turnstile et reCAPTCHA → 90 % des échecs niveaux 05-06 mal classifiés
+- Chaîne séquentielle : 5/7 moteurs bloqués par regles-http dès niveau 02, détecteurs JS jamais testés
+- 8/10 scénarios mono-page : détecteur comportemental (seul efficace) ne voit que burst_crawl + pagination
+- F2 (canvas_erreur) : 0 déclenchements sur 4 200 passages (code mort)
+- F8 (CDP) : attrape selenium (déjà bloqué), rien sur anti-détection
+- camoufox = scrapling-furtif : résultats identiques non pas parce que équivalents, mais parce que le banc ne discrimine pas
+
+**Plan v0.7** produit (`docs/plan-v07.md`) : P0 corrections (COUCHES_CHALLENGE, métriques séparées, versionnement), P1 rigueur (ablation, comparaison, scénarios, faux positifs), P2 instrumentation, P3 adversarial. Décision D-21.
+
+**Fichiers** : `docs/audit-campagne-17.md`, `docs/plan-v07.md`, `docs/DECISIONS.md`.
+**Reste** : validation du plan par Ethan, puis implémentation P0.
+
+---
+
+## 2026-11-05 — Claude (Opus 4.6) — Corrections F1/F2/F8 + campagne post-corrections #17
+
+**Fait** : 3 corrections appliquées, campagne comparative de 4 200 passages lancée et analysée.
+
+**Corrections** :
+- F1 : `comportement` ajouté à `REGLES_JAVASCRIPT` dans `gardien.py:39` — le détecteur
+  comportemental est maintenant consulté pour le blocage fingerprinting.
+- F2 : `canvas_erreur` ajouté à `detection.py` (regles-js v2) — détecte un hash canvas en erreur.
+- F8 : détection CDP/automation dans `observateur.js` (fonction `automation()`) et
+  `detection.py` — cherche `cdc_*`, `__playwright`, `__selenium`, `webdriver_patched`, `callPhantom`.
+
+**Résultats campagne #17** (7 moteurs × 6 niveaux × 10 scénarios × 10 reps) :
+- camoufox et scrapling-furtif : **100% → 80% sur niveaux 03-04** (−20pp).
+  Seuls `burst_crawl` (0/10) et `pagination` (0/10) sont bloqués par `comportement`
+  (rythme_soutenu, pages_eclair, aucune_interaction). Les 8 scénarios à page unique passent.
+- F2 (canvas) : aucun impact — tous les moteurs rendent un canvas valide.
+- F8 (CDP) : détecte selenium (7 globals `cdc_*`) mais les anti-détection cachent leurs globals.
+- Aucune régression sur les autres moteurs ni les autres niveaux.
+
+**Fichiers** : `gardien.py`, `detection.py`, `observateur.js`, `configs/experiments/post-corrections-v1.yaml`,
+`docs/audit-arena-protections.md` (section 8 ajoutée).
+
+**Décisions** : aucune nouvelle (corrections issues de l'audit, pas de changement d'architecture).
+
+**Reste** : les corrections réduisent le score de 20pp mais 80% des scénarios passent encore.
+Pistes : corrélation temporelle, fingerprinting passif renforcé, détection dès la première page.
+
+---
+
+## 2026-11-05 — Claude (Opus 4.6) — Audit des protections Arena (niveaux 01-06)
+
+**Fait** : audit systématique de chaque détecteur et de chaque niveau de l'Arena, à partir
+des campagnes #15 (1800 passages, niveaux 01-03) et #16 (1080 passages, niveaux 04-06).
+
+**Constats principaux** :
+1. **Détecteur `comportement` déconnecté** : il classe camoufox/scrapling comme `automatise`
+   (rythme 5-12 p/s, aucune interaction, pages < 500 ms) mais n'est pas dans la chaîne de
+   blocage du gardien (absent de REGLES_REQUETE et REGLES_JAVASCRIPT).
+2. **Données collectées mais inexploitées** : canvas fingerprint, FingerprintJS complet,
+   APIs exposées, infos écran — tout est collecté par observateur.js, rien n'est utilisé
+   pour les décisions de blocage.
+3. **Résultats 100% déterministes** : 2880 passages tous à 30/30 ou 0/30. Les protections
+   sont des règles binaires, pas des heuristiques probabilistes.
+4. **Chaîne séquentielle** : Turnstile masque reCAPTCHA et demo CAPTCHA (jamais atteints).
+5. **Niveaux 02-03** : seuls 3-4 signaux triviaux (UA, Accept-Language, TLS structure) font
+   toute la différence. Tout moteur qui les masque passe à 100%.
+6. **Niveaux 04-06** : defi-js trivial (SHA-256 résolu à 100%), Turnstile bloque parce que
+   les moteurs ne gèrent pas le flux challenge, pas grâce à la détection.
+
+**Fichiers** : `docs/audit-arena-protections.md` (rapport complet avec 8 faiblesses
+structurelles, résumé par moteur, démontré/probable/non testé).
+
+**Reste** : appliquer les corrections (connecter comportement, exploiter les données
+collectées, ajouter détection CDP), puis relancer des campagnes comparables.
+
+---
+
 ## 2026-11-05 — Claude (Opus 4.8) — Refonte de l'interface : laboratoire utilisable (parcours produit)
 
 **Fait** : remise à plat orientée produit. Nouvelle interface web (React + TypeScript + Vite,
@@ -541,4 +632,34 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - reCAPTCHA placé après Turnstile dans la chaîne du gardien (deux challenges externes successifs en 05-06).
 
 ### Reste
+- Cloudflare sur domaine test, moteur expérimental propre, couche IA.
+
+## 2026-11-05 — Fusion refonte-labo + validation Arena réelle
+
+### Fait
+- Branche `refonte-labo` (8 commits) fusionnée dans `master` (merge --no-ff) et poussée sur origin.
+- Branche locale `refonte-labo` supprimée.
+- Campagne Arena réelle #13 : httpx + playwright × protections 01/02/03 × 2 répétitions.
+  - 12/12 passages, 0 erreur technique.
+  - 01 : 100% (les deux moteurs passent le baseline).
+  - 02-03 : 0% (fingerprinting bloque httpx sur UA/Accept-Language/TLS, playwright aussi bloqué).
+  - Décisions par couche visibles dans l'UI (fingerprinting=bloque, waf=passe, limitation=passe).
+- Parcours complet vérifié via /labo : Configurer → Expériences → Suivi → Passage → Comparer.
+
+### Observations
+- Les protections 02-03 bloquent efficacement les deux moteurs testés : les défenses fonctionnent.
+- L'intervalle de confiance Wilson est très large sur n=2 (34-100%) — attendu et honnêtement affiché.
+- Le champ `protection` ne remonte pas dans la liste des passages (endpoint /passages) — à enrichir.
+
+### Campagne anti-détection #14
+- patchright + camoufox + scrapling-furtif × protections 01/02/03 × 2 reps = 18 passages, 0 erreur.
+- **camoufox : 6/6** (passe tout, y compris fingerprinting niveau 03).
+- **scrapling-furtif : 6/6** (idem).
+- **patchright : 2/6** (bloqué 02-03 : UA HeadlessChrome + Accept-Language absent).
+- Combiné avec campagne #13 : seuls camoufox et scrapling-furtif passent 02-03 parmi les 5 moteurs testés.
+
+### Reste
+- Tester niveaux 04-06 (challenges, WAF paranoia, multicouche) avec les moteurs qui passent 03.
+- Auditer l'isolation navigateurs sur tous les moteurs.
+- Enrichir l'endpoint /passages pour remonter le champ `protection` dans la liste.
 - Cloudflare sur domaine test, moteur expérimental propre, couche IA.

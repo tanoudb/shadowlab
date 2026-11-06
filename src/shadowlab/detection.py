@@ -168,7 +168,7 @@ class DetecteurReglesJs:
     """Règles sur les propriétés exposées au JavaScript de la page."""
 
     name = "regles-js"
-    version = "1"
+    version = "2"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -202,6 +202,20 @@ class DetecteurReglesJs:
         renderer = (p.get("webgl") or {}).get("renderer") or ""
         if "swiftshader" in renderer.lower():
             signaux.append(Signal("webgl_logiciel", f"rendu WebGL logiciel : {renderer[:60]}", 0.25))
+        canvas = p.get("canvas") or ""
+        if isinstance(canvas, str) and canvas.startswith("erreur"):
+            signaux.append(Signal("canvas_erreur", f"empreinte canvas en erreur : {canvas[:60]}", 0.5))
+        auto = p.get("automation") or {}
+        if auto.get("cdc"):
+            signaux.append(Signal("cdc_global", f"globales ChromeDriver : {auto['cdc']}", 1.0))
+        if auto.get("playwright"):
+            signaux.append(Signal("playwright_global", "__playwright détecté dans window", 1.0))
+        if auto.get("selenium"):
+            signaux.append(Signal("selenium_global", "globales Selenium détectées", 1.0))
+        if auto.get("webdriver_patched") is True:
+            signaux.append(Signal("webdriver_patche", "navigator.webdriver redéfini (getter non natif)", 0.5))
+        if auto.get("callPhantom"):
+            signaux.append(Signal("phantom_global", "callPhantom ou _phantom détecté", 1.0))
         return _verdict(self.name, self.version, signaux)
 
 

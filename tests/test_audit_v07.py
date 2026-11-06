@@ -590,6 +590,271 @@ class TestConfidenceNonCalibree:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Défaut D1 (audit campagne #17) — COUCHES_CHALLENGE manque turnstile et recaptcha
+# ---------------------------------------------------------------------------
+
+
+class TestCouchesChallenge:
+    def test_turnstile_emis_non_valide_donne_challenge_non_valide(self):
+        """Un passage où Turnstile est émis mais jamais validé doit être classé
+        challenge_non_valide, pas echec_fonctionnel."""
+        from shadowlab.issues import evaluer
+
+        decisions = [
+            {"couche": "defi-js", "decision": "emis", "motifs": []},
+            {"couche": "defi-js", "decision": "valide", "motifs": []},
+            {"couche": "turnstile", "decision": "emis", "motifs": []},
+        ]
+        result = evaluer(
+            success=False,
+            erreur=None,
+            http=[{"status": 200}],
+            decisions=decisions,
+            classements=[],
+            sous_arena=True,
+            motif_echec="page de protection à la place de https://localhost:8743/lab/statique",
+        )
+        assert result.issue == "challenge_non_valide", (
+            f"Turnstile émis sans validation : attendu challenge_non_valide, obtenu {result.issue!r}"
+        )
+        assert "turnstile" in result.cause
+
+    def test_recaptcha_emis_non_valide_donne_challenge_non_valide(self):
+        """Même vérification pour reCAPTCHA."""
+        from shadowlab.issues import evaluer
+
+        decisions = [
+            {"couche": "recaptcha", "decision": "emis", "motifs": []},
+        ]
+        result = evaluer(
+            success=False,
+            erreur=None,
+            http=[{"status": 200}],
+            decisions=decisions,
+            classements=[],
+            sous_arena=True,
+            motif_echec="page de protection",
+        )
+        assert result.issue == "challenge_non_valide"
+        assert "recaptcha" in result.cause
+
+    def test_turnstile_valide_ne_bloque_pas_classification(self):
+        """Si Turnstile est émis ET validé, il ne doit pas produire challenge_non_valide."""
+        from shadowlab.issues import evaluer
+
+        decisions = [
+            {"couche": "turnstile", "decision": "emis", "motifs": []},
+            {"couche": "turnstile", "decision": "valide", "motifs": []},
+        ]
+        result = evaluer(
+            success=False,
+            erreur=None,
+            http=[{"status": 200}],
+            decisions=decisions,
+            classements=[],
+            sous_arena=True,
+            motif_echec="résultat attendu non obtenu",
+        )
+        assert result.issue != "challenge_non_valide"
+
+    def test_couches_challenge_contient_turnstile_et_recaptcha(self):
+        """Vérification directe : COUCHES_CHALLENGE inclut les 4 types de challenge."""
+        from shadowlab.issues import COUCHES_CHALLENGE
+
+        assert "turnstile" in COUCHES_CHALLENGE
+        assert "recaptcha" in COUCHES_CHALLENGE
+        assert "captcha" in COUCHES_CHALLENGE
+        assert "defi-js" in COUCHES_CHALLENGE
+
+
+# ---------------------------------------------------------------------------
+# P0.2 — Métriques séparées : détection, challenge, challenge non validé
+# ---------------------------------------------------------------------------
+
+
+def _exp_metriques(tmp_path):
+    """Expérience avec 6 passages couvrant les 4 issues utiles aux taux P0.2."""
+    import json
+
+    cx = db.ouvrir(tmp_path / "metriques.sqlite3")
+    cx.execute(
+        "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+        " VALUES (1, 'metriques', '2026-01-01', '{}', 'termine', 1)"
+    )
+    cx.execute(
+        "INSERT INTO engines (id, name, version, runtime, configuration)"
+        " VALUES (1, 'httpx', '{}', 'python', '{\"label\": \"httpx\"}')"
+    )
+    cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+
+    passages = [
+        # (id, success, issue, drapeaux_dict, has_detection)
+        (1, 1, "extraction_reussie", {"challenge_declenche": False}, False),
+        (2, 0, "bloque", {"challenge_declenche": False}, True),
+        (3, 0, "challenge_non_valide", {"challenge_declenche": True}, True),
+        (4, 0, "erreur_technique", {"challenge_declenche": False}, False),
+        (5, 0, "bloque", {"challenge_declenche": False}, True),
+        (6, 1, "extraction_reussie", {"challenge_declenche": True}, True),
+    ]
+    for rid, succ, issue, drp, has_det in passages:
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue, drapeaux)"
+            " VALUES (?, 1, 1, 1, ?, ?, 'automatise', '2026-01-01', ?, ?, '01', ?, ?)",
+            (rid, rid, f"t-{rid}", "reussi" if succ else "echec", succ, issue, json.dumps(drp)),
+        )
+        if has_det:
+            cx.execute(
+                "INSERT INTO detections (run_id, detector_name, detector_version, classification, confidence, signals)"
+                " VALUES (?, 'botd', '2.0.0', 'automatise', 0.8, '[]')",
+                (rid,),
+            )
+    return cx
+
+
+class TestMetriquesSeparees:
+    def test_quatre_taux_presents_et_distincts(self, tmp_path):
+        """statistiques() renvoie 4 taux Wilson séparés : succès, détection, challenge, blocage."""
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        stats = statistiques(cx, 1)
+        m = stats["moteurs"][0]
+        for cle in ("reussite", "taux_detection", "taux_challenge", "taux_challenge_non_valide", "taux_blocage"):
+            assert cle in m, f"taux manquant : {cle}"
+            assert m[cle] is not None, f"{cle} est None"
+            assert "taux" in m[cle] and "bas" in m[cle] and "haut" in m[cle], f"{cle} sans IC Wilson"
+
+    def test_taux_detection_correct(self, tmp_path):
+        """taux_detection = passages classés automatisé par ≥1 détecteur / évaluables."""
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        m = statistiques(cx, 1)["moteurs"][0]
+        # 6 passages, 1 erreur technique → 5 évaluables
+        # Passages avec détection automatisé : 2, 3, 5, 6 → 4
+        assert m["taux_detection"]["taux"] == round(4 / 5, 4)
+
+    def test_taux_challenge_correct(self, tmp_path):
+        """taux_challenge = passages avec challenge déclenché / évaluables."""
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        m = statistiques(cx, 1)["moteurs"][0]
+        # Passages avec challenge_declenche=True : 3, 6 → 2
+        assert m["taux_challenge"]["taux"] == round(2 / 5, 4)
+
+    def test_taux_challenge_non_valide_correct(self, tmp_path):
+        """taux_challenge_non_valide = passages issue=challenge_non_valide / évaluables."""
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        m = statistiques(cx, 1)["moteurs"][0]
+        # Passage 3 seul a issue=challenge_non_valide → 1
+        assert m["taux_challenge_non_valide"]["taux"] == round(1 / 5, 4)
+
+    def test_qualite_taux_nouveaux(self, tmp_path):
+        """Les 3 nouveaux taux ont une qualification de qualité dans le bloc."""
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        m = statistiques(cx, 1)["moteurs"][0]
+        for cle in ("taux_detection", "taux_challenge", "taux_challenge_non_valide"):
+            assert cle in m["qualite"], f"qualite manquante pour {cle}"
+
+    def test_sans_drapeaux_challenge_zero(self, tmp_path):
+        """Passages sans colonne drapeaux : taux_challenge doit être 0, pas une erreur."""
+        from shadowlab.analytics import statistiques
+
+        cx = db.ouvrir(tmp_path / "no_drp.sqlite3")
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+            " VALUES (1, 'nd', '2026-01-01', '{}', 'termine', 1)"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration)"
+            " VALUES (1, 'httpx', '{}', 'python', '{\"label\": \"httpx\"}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        cx.execute(
+            "INSERT INTO runs (id, experiment_id, engine_id, scenario_id, repetition,"
+            " session_token, truth, started_at, status, success, protection, issue)"
+            " VALUES (1, 1, 1, 1, 1, 't-1', 'automatise', '2026-01-01', 'reussi', 1, '01', 'extraction_reussie')"
+        )
+        m = statistiques(cx, 1)["moteurs"][0]
+        assert m["taux_challenge"]["taux"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# P0.3 — Versionnement des détecteurs et moteurs
+# ---------------------------------------------------------------------------
+
+
+class TestVersionnement:
+    def test_schema_version_dans_experiments(self, tmp_path):
+        """creer() enregistre le numéro de schéma courant dans schema_version."""
+        from shadowlab import campaigns
+        from shadowlab.campaigns import Experience
+
+        cx = db.ouvrir(tmp_path / "ver.sqlite3")
+        experience = Experience(
+            name="ver", engines=["httpx"], scenarios=["static_html"], repetitions=1, detectors=[], seed=1
+        )
+        exp_id = campaigns.creer(cx, experience)
+        row = cx.execute("SELECT schema_version FROM experiments WHERE id = ?", (exp_id,)).fetchone()
+        assert row["schema_version"] == db.SCHEMA_VERSION
+        assert row["schema_version"] >= 7
+
+    def test_engine_version_dans_run(self, tmp_path):
+        """demarrer() enregistre engine_version sur le run."""
+        from shadowlab.passages import demarrer
+
+        cx = db.ouvrir(tmp_path / "ev.sqlite3")
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+            " VALUES (1, 'ev', '2026-01-01', '{}', 'en_cours', 1)"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        run_id, _ = demarrer(cx, 1, 1, 1, 1, "automatise", engine_version='{"httpx": "0.28.1"}')
+        row = cx.execute("SELECT engine_version FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["engine_version"] == '{"httpx": "0.28.1"}'
+
+    def test_engine_version_defaut_vide(self, tmp_path):
+        """Sans engine_version, la colonne vaut '' (pas NULL)."""
+        from shadowlab.passages import demarrer
+
+        cx = db.ouvrir(tmp_path / "ev2.sqlite3")
+        cx.execute(
+            "INSERT INTO experiments (id, name, created_at, configuration, status, seed)"
+            " VALUES (1, 'ev2', '2026-01-01', '{}', 'en_cours', 1)"
+        )
+        cx.execute(
+            "INSERT INTO engines (id, name, version, runtime, configuration) VALUES (1, 'httpx', '{}', 'python', '{}')"
+        )
+        cx.execute("INSERT INTO scenarios (id, name) VALUES (1, 'static_html')")
+        run_id, _ = demarrer(cx, 1, 1, 1, 1, "automatise")
+        row = cx.execute("SELECT engine_version FROM runs WHERE id = ?", (run_id,)).fetchone()
+        assert row["engine_version"] == ""
+
+    def test_detector_version_existe_deja(self, tmp_path):
+        """La colonne detector_version existe sur detections depuis la migration 1."""
+        cx = db.ouvrir(tmp_path / "col.sqlite3")
+        colonnes = [r[1] for r in cx.execute("PRAGMA table_info(detections)")]
+        assert "detector_version" in colonnes
+
+    def test_migration_7_ajoute_colonnes(self, tmp_path):
+        """Migration 7 ajoute engine_version sur runs et schema_version sur experiments."""
+        cx = db.ouvrir(tmp_path / "mig.sqlite3")
+        colonnes_runs = [r[1] for r in cx.execute("PRAGMA table_info(runs)")]
+        assert "engine_version" in colonnes_runs
+        colonnes_exp = [r[1] for r in cx.execute("PRAGMA table_info(experiments)")]
+        assert "schema_version" in colonnes_exp
+
+
 class TestIsolationSession:
     def test_httpx_jar_cookies_remis_a_zero(self):
         """httpx : chaque start_session ouvre un client neuf → le jar de cookies ne

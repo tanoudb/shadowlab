@@ -160,7 +160,15 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE runs ADD COLUMN is_warmup INTEGER NOT NULL DEFAULT 0;
     """,
+    # 7 — v0.7 : version du moteur sur chaque passage, version du schéma sur chaque expérience
+    """
+    ALTER TABLE runs ADD COLUMN engine_version TEXT NOT NULL DEFAULT '';
+    ALTER TABLE experiments ADD COLUMN schema_version INTEGER;
+    """,
 ]
+
+
+SCHEMA_VERSION = len(MIGRATIONS)
 
 
 def maintenant() -> str:

@@ -18,7 +18,7 @@ ERREUR = "erreur_technique"
 ECHEC = "echec_fonctionnel"
 INDETERMINE = "indetermine"
 ISSUES = (REUSSIE, BLOQUE, CHALLENGE_NON_VALIDE, ERREUR, ECHEC, INDETERMINE)
-COUCHES_CHALLENGE = ("captcha", "defi-js")  # la plus forte d'abord : c'est elle qui explique l'échec
+COUCHES_CHALLENGE = ("captcha", "turnstile", "recaptcha", "defi-js")
 
 
 @dataclass

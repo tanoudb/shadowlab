@@ -55,6 +55,31 @@ function webgl() {
   }
 }
 
+function automation() {
+  const indices = {};
+  try {
+    const cdc = Object.keys(window).filter((k) => k.startsWith('cdc_') || k.startsWith('$cdc_'));
+    if (cdc.length) indices.cdc = cdc;
+  } catch (_) { /* ignore */ }
+  indices.playwright = typeof window.__playwright !== 'undefined';
+  indices.selenium = typeof window.__selenium_unwrapped !== 'undefined'
+    || typeof window.__webdriver_evaluate !== 'undefined'
+    || typeof window.__driver_evaluate !== 'undefined'
+    || typeof document.__selenium_unwrapped !== 'undefined';
+  try {
+    const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
+    indices.webdriver_patched = !!(desc && typeof desc.get === 'function' && /native code/.test(desc.get.toString()) === false);
+  } catch (_) {
+    indices.webdriver_patched = 'erreur';
+  }
+  try {
+    indices.permissions_patched = /native code/.test(Notification.permission) === false
+      && typeof Notification.permission === 'string';
+  } catch (_) { /* ignore */ }
+  indices.callPhantom = typeof window.callPhantom !== 'undefined' || typeof window._phantom !== 'undefined';
+  return indices;
+}
+
 async function permissions() {
   const resultat = { notification: typeof Notification !== 'undefined' ? Notification.permission : 'absent' };
   try {
@@ -135,6 +160,7 @@ async function collecter() {
     permissions: await permissions(),
     webgl: webgl(),
     canvas: await empreinteCanvas(),
+    automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),
     duree_collecte_ms: Math.round(performance.now() - debut),

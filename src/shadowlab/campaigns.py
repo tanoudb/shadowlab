@@ -295,8 +295,9 @@ def fichier_arret(reglages: Reglages) -> Path:
 
 def creer(cx, experience: Experience, reglages: Reglages | None = None) -> int:
     curseur = cx.execute(
-        "INSERT INTO experiments (name, description, created_at, configuration, status, seed, environment)"
-        " VALUES (?, ?, ?, ?, 'creee', ?, ?)",
+        "INSERT INTO experiments (name, description, created_at, configuration,"
+        " status, seed, environment, schema_version)"
+        " VALUES (?, ?, ?, ?, 'creee', ?, ?, ?)",
         (
             experience.name,
             experience.description,
@@ -304,6 +305,7 @@ def creer(cx, experience: Experience, reglages: Reglages | None = None) -> int:
             experience.model_dump_json(),
             experience.seed,
             db.j(environnement(reglages)),
+            db.SCHEMA_VERSION,
         ),
     )
     return int(curseur.lastrowid)
@@ -512,6 +514,7 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                         base,
                         random.Random(graine),
                         dossier_artefacts,
+                        engine_version=db.j(versions),
                     )
         except (KeyboardInterrupt, MemoryError) as erreur:
             journal.error("arrêt : %s", erreur)
@@ -553,6 +556,7 @@ def _passage(
     base,
     rng,
     dossier_artefacts,
+    engine_version: str = "",
 ) -> None:
     profil = module_profils.charger().de(protection)
     protection_config = (
@@ -575,6 +579,7 @@ def _passage(
         protection,
         protection_config=protection_config,
         is_warmup=repetition <= experience.warmup,
+        engine_version=engine_version,
     )
     pilote.mesures = type(pilote.mesures)()
     erreur: str | None = None
