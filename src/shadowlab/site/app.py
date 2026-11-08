@@ -41,7 +41,8 @@ CSP_TURNSTILE = (
     "style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 CSP_RECAPTCHA = (
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
+    "default-src 'self'; script-src 'self' 'unsafe-inline'"
+    " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
     "connect-src 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
     "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
