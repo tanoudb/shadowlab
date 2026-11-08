@@ -36,7 +36,7 @@ const (
 // déclenchent des faux positifs CRS aux niveaux de paranoia élevés, par ex. 942120 sur sl_session).
 const exclusions = `
 SecRule REQUEST_URI "@beginsWith /lab/collecte" "id:1010,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
-SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier" "id:1011,phase:1,pass,nolog,ctl:requestBodyAccess=Off,ctl:ruleRemoveById=942120"
+SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier$" "id:1011,phase:1,pass,nolog,ctl:ruleRemoveById=942120"
 `
 
 type regle struct {

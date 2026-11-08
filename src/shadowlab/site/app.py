@@ -326,7 +326,8 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             if motif:
                 db.enregistrer_decision(cx, jeton, "captcha", "echec", request.url.path, [{"code": motif}])
                 nouveau = defis.creer_captcha(secret, jeton)
-                return HTMLResponse(pages.page_captcha(nouveau, retour_brut, erreur=True), status_code=403)
+                retour_enc = gardien.encoder_retour(retour)
+                return HTMLResponse(pages.page_captcha(nouveau, retour_enc, erreur=True), status_code=403)
             db.enregistrer_decision(cx, jeton, "captcha", "valide", request.url.path)
         reponse = RedirectResponse(retour, status_code=303)
         reponse.set_cookie(
@@ -353,7 +354,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 codes = resultat.get("error-codes", [])
                 db.enregistrer_decision(cx, jeton, "turnstile", "echec", request.url.path, [{"codes": codes}])
                 site_key = defis.turnstile_site_key("pass")
-                reponse = HTMLResponse(pages.page_turnstile(site_key, retour_brut), status_code=403)
+                reponse = HTMLResponse(pages.page_turnstile(site_key, gardien.encoder_retour(retour)), status_code=403)
                 reponse.headers["X-ShadowLab-Turnstile"] = "1"
                 return reponse
             db.enregistrer_decision(cx, jeton, "turnstile", "captcha_test", request.url.path)
@@ -382,7 +383,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 codes = resultat.get("error-codes", [])
                 db.enregistrer_decision(cx, jeton, "recaptcha", "echec", request.url.path, [{"codes": codes}])
                 site_key = defis.recaptcha_site_key()
-                reponse = HTMLResponse(pages.page_recaptcha(site_key, retour_brut), status_code=403)
+                reponse = HTMLResponse(pages.page_recaptcha(site_key, gardien.encoder_retour(retour)), status_code=403)
                 reponse.headers["X-ShadowLab-Recaptcha"] = "1"
                 return reponse
             db.enregistrer_decision(cx, jeton, "recaptcha", "captcha_test", request.url.path)

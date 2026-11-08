@@ -19,6 +19,22 @@ type: note
 **Fichiers modifiés** : `src/shadowlab/analytics.py`, `src/shadowlab/database.py`, `src/shadowlab/passages.py`, `src/shadowlab/campaigns.py`, `src/shadowlab/issues.py`, `tests/test_audit_v07.py`.
 **Décisions** : aucune nouvelle (P0 suit le plan D-21).
 
+## 2026-11-08 (nuit) — Claude (Opus 4.6) — Sécurité : retour_brut reflété + WAF affiné
+
+**Fait** : revue de sécurité suite aux corrections WAF.
+
+**Corrections** :
+- `app.py` : les 3 endpoints de vérification (captcha, turnstile, recaptcha) ne reflètent plus
+  `retour_brut` brut dans les pages d'erreur. Le cycle decode → sanitize → ré-encode
+  (`gardien.encoder_retour(gardien.decoder_retour(...))`) neutralise toute valeur arbitraire.
+- `coraza/main.go` : règle 1011 affinée — regex ancré avec `$`, inspection du corps maintenue
+  (seule la règle 942120 est retirée, pas `requestBodyAccess`).
+
+**Fichiers** : `src/shadowlab/site/app.py`, `docker/arena/coraza/main.go`.
+**Tests** : 208 verts, lint propre.
+
+---
+
 ## 2026-11-08 (soir) — Claude (Opus 4.6) — NOEZIA v3 : 5/6 niveaux Arena, scraping, reCAPTCHA
 
 **Fait** : diagnostic et correction des échecs niveaux 05-06, ajout de scénarios scraping/scalping, campagne complète #22 validée.
