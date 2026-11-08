@@ -37,35 +37,43 @@ HOTES_CHALLENGES = (
 # Script injecté avant tout JavaScript de la page pour masquer les signaux headless.
 SCRIPT_ANTI_DETECTION = """
 (() => {
-  // --- Plugins : Chrome natif expose 5 plugins PDF/NaCl ---
+  // --- Plugins : Chrome moderne expose les viewers PDF (Native Client retiré depuis Chrome 117) ---
   const noms = [
-    ['PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'],
-    ['Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer'],
-    ['Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'],
-    ['Native Client', '', 'internal-nacl-plugin'],
-    ['Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'],
+    ['PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'],
+    ['Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'],
+    ['Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'],
+    ['Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'],
   ];
-  const faux = noms.map(([nom, desc, fichier]) => {
+  const faux = noms.map(([nom, desc, fichier, mime]) => {
+    const mt = Object.create(MimeType.prototype);
+    Object.defineProperties(mt, {
+      type: {get: () => mime}, description: {get: () => desc},
+      suffixes: {get: () => 'pdf'}, enabledPlugin: {get: () => p},
+    });
     const p = Object.create(Plugin.prototype);
     Object.defineProperties(p, {
-      name: {get: () => nom},
-      description: {get: () => desc},
-      filename: {get: () => fichier},
-      length: {get: () => 0},
+      name: {get: () => nom}, description: {get: () => desc},
+      filename: {get: () => fichier}, length: {get: () => 1},
+      0: {get: () => mt},
     });
     return p;
   });
-  Object.defineProperty(navigator, 'plugins', {
-    get() {
-      const a = Object.create(PluginArray.prototype);
-      faux.forEach((p, i) => Object.defineProperty(a, i, {value: p}));
-      Object.defineProperty(a, 'length', {value: faux.length});
-      a.item = i => faux[i] || null;
-      a.namedItem = n => faux.find(p => p.name === n) || null;
-      a.refresh = () => {};
-      return a;
-    },
-  });
+  const pluginArr = Object.create(PluginArray.prototype);
+  faux.forEach((p, i) => Object.defineProperty(pluginArr, i, {value: p}));
+  Object.defineProperty(pluginArr, 'length', {value: faux.length});
+  pluginArr.item = i => faux[i] || null;
+  pluginArr.namedItem = n => faux.find(p => p.name === n) || null;
+  pluginArr.refresh = () => {};
+  Object.defineProperty(navigator, 'plugins', {get: () => pluginArr});
+
+  // --- MimeTypes cohérents avec les plugins ---
+  const mimes = faux.map(p => p[0]);
+  const mimeArr = Object.create(MimeTypeArray.prototype);
+  mimes.forEach((m, i) => Object.defineProperty(mimeArr, i, {value: m}));
+  Object.defineProperty(mimeArr, 'length', {value: mimes.length});
+  mimeArr.item = i => mimes[i] || null;
+  mimeArr.namedItem = t => mimes.find(m => m.type === t) || null;
+  Object.defineProperty(navigator, 'mimeTypes', {get: () => mimeArr});
 
   // --- Notification.permission : "default" au lieu de "denied" (headless) ---
   try {
@@ -146,6 +154,10 @@ class DriverNoeziaExperimental(DriverPlaywright):
             "eviter_pieges": True,
             "interaction_post_page": True,
             "locale": "fr-FR",
+            "viewport": "1920x1080",
+            "ua_spoof": True,
+            "plugins_spoof": True,
+            "webgl_spoof": "Apple M5 Pro",
             **self.options,
         }
 
@@ -188,7 +200,13 @@ class DriverNoeziaExperimental(DriverPlaywright):
 
     def _filtrer(self, route) -> None:
         url = route.request.url
-        if est_autorisee(url, self.hotes_autorises) or est_autorisee(url, HOTES_CHALLENGES):
+        autorise = est_autorisee(url, self.hotes_autorises)
+        challenge = not autorise and est_autorisee(url, HOTES_CHALLENGES)
+        if challenge and route.request.is_navigation_request():
+            self.mesures.details["requetes_bloquees"] += 1
+            route.abort("blockedbyclient")
+            return
+        if autorise or challenge:
             headers = {**route.request.headers}
             ua = headers.get("user-agent", "")
             if "HeadlessChrome" in ua:
@@ -227,6 +245,8 @@ class DriverNoeziaExperimental(DriverPlaywright):
             self._deplacer_vers(selector)
         if self.configuration().get("simuler_frappe", True):
             self._page.click(selector)
+            self._page.keyboard.press("Control+a")
+            self._page.keyboard.press("Backspace")
             for caractere in value:
                 self._page.keyboard.type(caractere, delay=random.randint(40, 140))
         else:
