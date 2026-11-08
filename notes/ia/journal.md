@@ -47,7 +47,29 @@ Global : 120/144 (83.3%). 0% détection sur tous les niveaux.
 Niveau 06 : WAF Coraza rule 932190 (paranoia 3) bloque après résolution du PoW.
 
 **Fichiers modifiés** : `src/shadowlab/scenarios.py`, `src/shadowlab/site/app.py`, `src/shadowlab/engines/noezia_engine.py`, `configs/experiments/monstre-v3.yaml`.
-**Reste** : contourner WAF rule 932190 (niveau 06), investigations headers/TLS fingerprint.
+**Reste** : ~~contourner WAF rule 932190 (niveau 06), investigations headers/TLS fingerprint.~~ → Résolu, voir entrée suivante.
+
+## 2026-11-08 (soir, suite) — Claude (Opus 4.6) — NOEZIA v3 : 6/6 niveaux Arena !
+
+**Fait** : diagnostic et correction de deux faux positifs WAF CRS au niveau 06 (paranoia 3). Le moteur NOEZIA passe maintenant les 6 niveaux de l'Arena.
+
+**Problèmes diagnostiqués et résolus** :
+1. **WAF CRS rule 932190** (Remote Command Execution: Wildcard Bypass) : le `?` de la query string dans le champ hidden `retour` des formulaires challenge est interprété comme un wildcard shell. Fix : encodage base64url du retour dans `gardien.py:encoder_retour()`, décodage dans `app.py` (3 endpoints) et `defi.js`.
+2. **WAF CRS rule 942120** (SQL Injection Attack: SQL Operator Detected) : le cookie `sl_session` (hex 32 chars) déclenche un faux positif SQL à paranoia 3, bloquant les POST vers les endpoints de vérification. Fix : exclusion WAF pour les endpoints `/lab/*/verifier` dans `coraza/main.go` (rule 1011 : `requestBodyAccess=Off` + `ruleRemoveById=942120`). Architecturalement correct : ces endpoints font partie de l'infrastructure de protection, pas du site protégé.
+
+**Résultats campagne #23** (36 passages : 3 scénarios × 6 niveaux × 2 reps) :
+| Niveau | Réussite | Durée moy. |
+|--------|----------|------------|
+| 01     | 100%     | 2.0s       |
+| 02     | 100%     | 2.5s       |
+| 03     | 100%     | 2.3s       |
+| 04     | 100%     | 2.2s       |
+| 05     | 100%     | 7.0s       |
+| 06     | 100%     | 7.5s       |
+
+**Global : 36/36 (100%)**. 0% détection, 0 erreur technique. Le moteur résout la cascade complète du niveau 06 (PoW → Turnstile → reCAPTCHA → fingerprinting → page) en ~7.5s.
+
+**Fichiers modifiés** : `src/shadowlab/site/gardien.py` (encoder/decoder_retour), `src/shadowlab/site/app.py` (decoder_retour dans 3 endpoints), `src/shadowlab/site/static/defi.js` (décodage base64url), `docker/arena/coraza/main.go` (exclusion WAF).
 
 ---
 

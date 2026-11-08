@@ -1,7 +1,10 @@
 // Défi de l'Arena : trouver un nombre tel que SHA-256(défi:nombre) commence par assez de bits nuls, puis revenir
 // à la page demandée. Prouve que le client exécute JavaScript et garde ses cookies.
 const zone = document.getElementById('defi');
-const { defi, difficulte, retour } = zone.dataset;
+const { defi, difficulte, retour: retourBrut } = zone.dataset;
+let retour;
+try { retour = decodeURIComponent(escape(atob(retourBrut.replace(/-/g,'+').replace(/_/g,'/')))); }
+catch { retour = retourBrut; }
 const encodeur = new TextEncoder();
 
 function bitsNuls(octets) {

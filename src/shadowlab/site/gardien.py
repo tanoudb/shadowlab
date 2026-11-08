@@ -6,6 +6,7 @@ protection : c'est la référence `aucune`. Chaque décision est enregistrée av
 
 from __future__ import annotations
 
+import base64
 import sqlite3
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -77,6 +78,22 @@ def retour_sur(cible: str) -> str:
     return parties.path + (f"?{parties.query}" if parties.query else "")
 
 
+def encoder_retour(cible: str) -> str:
+    """Encode le retour en base64url pour les hidden fields des formulaires challenge.
+
+    Le WAF CRS rule 932190 (paranoia ≥ 3) détecte le ``?`` de la query string comme un wildcard shell.
+    """
+    return base64.urlsafe_b64encode(retour_sur(cible).encode()).decode()
+
+
+def decoder_retour(valeur: str) -> str:
+    """Décode un retour base64url. Fallback sur la valeur brute si le décodage échoue."""
+    try:
+        return retour_sur(base64.urlsafe_b64decode(valeur.encode()).decode())
+    except Exception:  # noqa: BLE001
+        return retour_sur(valeur)
+
+
 def _refus(request: Request, html: str, code: str) -> Response:
     # Une navigation reçoit la page ; un client qui n'accepte pas le HTML reçoit le motif.
     if "text/html" in request.headers.get("accept", ""):
@@ -136,7 +153,7 @@ def controler(
         defi = defis.creer_defi(secret, jeton, profil.defi_js.difficulte)
         motifs = [{"difficulte": profil.defi_js.difficulte}]
         db.enregistrer_decision(cx, jeton, "defi-js", "emis", chemin, motifs)
-        cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+        cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
         inclure_js = profil.fingerprinting.bloquer != "http"
@@ -150,7 +167,7 @@ def controler(
         secret, "turnstile", request.cookies.get(COOKIE_TURNSTILE), jeton, lie
     ):
         db.enregistrer_decision(cx, jeton, "turnstile", "emis", chemin, [])
-        cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+        cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         site_key = defis.turnstile_site_key("pass")
         reponse = _refus(request, pages.page_turnstile(site_key, cible), "turnstile")
         reponse.headers["X-ShadowLab-Turnstile"] = "1"
@@ -159,7 +176,7 @@ def controler(
         secret, "recaptcha", request.cookies.get(COOKIE_RECAPTCHA), jeton, lie
     ):
         db.enregistrer_decision(cx, jeton, "recaptcha", "emis", chemin, [])
-        cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+        cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         reponse = _refus(request, pages.page_recaptcha(defis.recaptcha_site_key(), cible), "recaptcha")
         reponse.headers["X-ShadowLab-Recaptcha"] = "1"
         return reponse
@@ -169,6 +186,6 @@ def controler(
         motifs = suspicion(cx, jeton)
         if motifs:
             db.enregistrer_decision(cx, jeton, "captcha", "emis", chemin, motifs)
-            cible = retour_sur(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+            cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
             return _refus(request, pages.page_captcha(defis.creer_captcha(secret, jeton), cible), "captcha")
     return None

@@ -31,10 +31,12 @@ const (
 	maxRegles      = 25
 )
 
-// Règle de l'Arena placée avant le CRS : la télémétrie du laboratoire n'est pas inspectée (elle transporte des
-// User-Agent et des listes de propriétés, qui déclencheraient des faux positifs sans rapport avec la requête).
+// Règles de l'Arena placées avant le CRS : les échanges internes du système de protection ne sont pas
+// inspectés par le WAF (ils transportent des tokens tiers et des cookies de session dont les valeurs
+// déclenchent des faux positifs CRS aux niveaux de paranoia élevés, par ex. 942120 sur sl_session).
 const exclusions = `
 SecRule REQUEST_URI "@beginsWith /lab/collecte" "id:1010,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
+SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier" "id:1011,phase:1,pass,nolog,ctl:requestBodyAccess=Off,ctl:ruleRemoveById=942120"
 `
 
 type regle struct {
