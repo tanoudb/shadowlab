@@ -1,0 +1,26 @@
+# Campagne NOEZIA v3 : monstre vs 6 niveaux Arena × 6 scénarios × 3 reps = 108 passages.
+experiment:
+  name: monstre_v3_arena
+  description: "Moteur NOEZIA v3 anti-détection totale vs 6 niveaux de protection Arena."
+  environment: local
+  engines:
+    - noezia-experimental
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+    - api_json
+    - scrape_catalogue
+    - scrape_rapide
+  repetitions: 3
+  seed: 2026
+  output: [json]

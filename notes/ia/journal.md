@@ -19,6 +19,38 @@ type: note
 **Fichiers modifiés** : `src/shadowlab/analytics.py`, `src/shadowlab/database.py`, `src/shadowlab/passages.py`, `src/shadowlab/campaigns.py`, `src/shadowlab/issues.py`, `tests/test_audit_v07.py`.
 **Décisions** : aucune nouvelle (P0 suit le plan D-21).
 
+## 2026-11-08 (soir) — Claude (Opus 4.6) — NOEZIA v3 : 5/6 niveaux Arena, scraping, reCAPTCHA
+
+**Fait** : diagnostic et correction des échecs niveaux 05-06, ajout de scénarios scraping/scalping, campagne complète #22 validée.
+
+**Corrections appliquées** :
+- **CSP Turnstile/reCAPTCHA** (`app.py`) : ajout `'unsafe-inline'` dans `script-src` et `style-src` des pages challenge — les callbacks Turnstile/reCAPTCHA sont des `<script>` inline bloqués par CSP sans ça.
+- **reCAPTCHA checkbox** (`scenarios.py:_resoudre_challenge`) : ajout `frame_locator("iframe[title='reCAPTCHA']").locator(".recaptcha-checkbox-border").click()` — Turnstile auto-valide avec test keys, mais reCAPTCHA v2 exige un clic sur la checkbox dans l'iframe.
+- **Filtre iframe** (`noezia_engine.py:_filtrer`) : navigations main-frame vers hôtes CAPTCHA bloquées, sous-ressources iframe autorisées — le filtre bloquait les iframes de challenge.
+- **Init script hostname** (`noezia_engine.py`) : garde `location.hostname` conditionné pour éviter erreurs sur `about:blank`.
+
+**Scénarios scraping ajoutés** (`scenarios.py`) :
+- `scrape_catalogue` : parcours complet du catalogue (5 pages, 50 articles, vérification exhaustive)
+- `scrape_rapide` : scalping — 5 pages enchaînées sans pause, extraction rapide
+
+**Résultats campagne #22** (144 passages : 8 scénarios × 6 niveaux × 3 reps) :
+| Niveau | Réussite | Détection | Challenge | Blocage |
+|--------|----------|-----------|-----------|---------|
+| 01     | 100%     | 0%        | 0%        | 0%      |
+| 02     | 100%     | 0%        | 0%        | 0%      |
+| 03     | 100%     | 0%        | 0%        | 0%      |
+| 04     | 100%     | 0%        | 100%      | 0%      |
+| 05     | 100%     | 0%        | 100%      | 0%      |
+| 06     | 0%       | 0%        | 100%      | 100%    |
+
+Global : 120/144 (83.3%). 0% détection sur tous les niveaux.
+Niveau 06 : WAF Coraza rule 932190 (paranoia 3) bloque après résolution du PoW.
+
+**Fichiers modifiés** : `src/shadowlab/scenarios.py`, `src/shadowlab/site/app.py`, `src/shadowlab/engines/noezia_engine.py`, `configs/experiments/monstre-v3.yaml`.
+**Reste** : contourner WAF rule 932190 (niveau 06), investigations headers/TLS fingerprint.
+
+---
+
 ## 2026-11-08 — Claude (Opus 4.6) — Moteur NOEZIA expérimental v2
 
 **Fait** : moteur anti-détection « monstre » créé et testé. Passe 5/6 détecteurs en « humain », 0 détection.
@@ -46,7 +78,15 @@ type: note
 | tls v1 | ⚠️ indéterminé | Pas d'Arena Docker |
 
 **Fichiers modifiés** : `src/shadowlab/engines/noezia_engine.py` (créé), `src/shadowlab/engines/__init__.py`, `src/shadowlab/scenarios.py`.
-**Reste** : test avec Arena Docker (TLS frontal, 6 niveaux de protection, challenges réels), campagne matricielle complète, avis Codex/agy.
+**Revue Codex (GPT-6 Astra)** — 4 corrections appliquées (commit f8c3f78) :
+1. Sécurité périmètre : `_filtrer()` bloque navigations vers hôtes CAPTCHA (sous-ressources seules).
+2. Plugins : retiré Native Client (obsolète Chrome 117), ajouté MimeType, singleton pluginArr.
+3. `fill()` : Ctrl+A + Backspace avant frappe (vidait pas le champ).
+4. `configuration()` : déclare viewport, ua_spoof, plugins_spoof, webgl_spoof.
+
+Re-test après corrections : 5/6 humain, 0 signal — le monstre tient.
+
+**Reste** : test avec Arena Docker (TLS frontal, 6 niveaux de protection, challenges réels), campagne matricielle complète.
 **Reste** : P1 (ablation, comparaison, scénarios multi-pages, faux positifs multi-sessions).
 
 ---

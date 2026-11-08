@@ -35,13 +35,13 @@ CSP = (
     "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 CSP_TURNSTILE = (
-    "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; "
     "connect-src 'self' https://challenges.cloudflare.com; "
     "frame-src https://challenges.cloudflare.com; img-src 'self' data:; "
-    "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    "style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 CSP_RECAPTCHA = (
-    "default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
     "connect-src 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
     "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"

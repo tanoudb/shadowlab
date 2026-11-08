@@ -38,6 +38,11 @@ HOTES_CHALLENGES = (
 # v3 — toString() natif, canvas, audio, WebGL complet, permissions, window.chrome.
 SCRIPT_ANTI_DETECTION = """
 (() => {
+  // Ne pas modifier les iframes de widgets tiers (Turnstile, reCAPTCHA)
+  try { const h = location.hostname;
+    if (h !== 'localhost' && h !== '127.0.0.1') return;
+  } catch(e) { return; }
+
   // ─── 1. toString() natif : tous nos overrides passent /native code/.test() ───
   const _ts = Function.prototype.toString;
   const _natifs = new WeakMap();
@@ -323,9 +328,11 @@ class DriverNoeziaExperimental(DriverPlaywright):
         autorise = est_autorisee(url, self.hotes_autorises)
         challenge = not autorise and est_autorisee(url, HOTES_CHALLENGES)
         if challenge and route.request.is_navigation_request():
-            self.mesures.details["requetes_bloquees"] += 1
-            route.abort("blockedbyclient")
-            return
+            frame = route.request.frame
+            if frame is not None and frame.parent_frame is None:
+                self.mesures.details["requetes_bloquees"] += 1
+                route.abort("blockedbyclient")
+                return
         if autorise or challenge:
             headers = {**route.request.headers}
             ua = headers.get("user-agent", "")

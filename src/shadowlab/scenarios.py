@@ -39,11 +39,12 @@ def _resoudre_challenge(d: Driver) -> None:
     """Résout les challenges de l'Arena que le navigateur peut traiter sans intervention humaine.
 
     - defi (PoW) : résolution automatique par le script defi.js, redirection incluse
-    - turnstile (test keys) : le widget valide, le moteur clique Envoyer
-    - recaptcha (test keys) : idem
+    - turnstile (test keys) : le widget auto-valide, le moteur clique Envoyer
+    - recaptcha (test keys) : clic sur la checkbox iframe puis Envoyer
     - captcha / blocage : aucune résolution automatique (retour → RefusProtection dans aller)
     """
     limite = time.monotonic() + DELAI_DEFI_S
+    recaptcha_clique = False
     while time.monotonic() < limite:
         try:
             if not d.texts("body[data-arena]"):
@@ -54,6 +55,7 @@ def _resoudre_challenge(d: Driver) -> None:
                 if etat and "reçue" in etat[0].lower():
                     d.click("#turnstile-envoyer")
                     time.sleep(0.5)
+                    recaptcha_clique = False
                     continue
                 time.sleep(0.1)
                 continue
@@ -62,8 +64,16 @@ def _resoudre_challenge(d: Driver) -> None:
                 if etat and "reçue" in etat[0].lower():
                     d.click("#recaptcha-envoyer")
                     time.sleep(0.5)
+                    recaptcha_clique = False
                     continue
-                time.sleep(0.1)
+                if not recaptcha_clique and hasattr(d, "_page"):
+                    try:
+                        fl = d._page.frame_locator("iframe[title='reCAPTCHA']")
+                        fl.locator(".recaptcha-checkbox-border").click(timeout=3000)
+                        recaptcha_clique = True
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+                time.sleep(0.2)
                 continue
             if d.texts("body[data-arena='defi']"):
                 time.sleep(0.05)
@@ -256,6 +266,65 @@ def synthetic_browse(d: Driver, base: str, jeton: str, rng: random.Random) -> Is
     return Issue(texte == attendu, {"attendu": attendu, "obtenu": texte})
 
 
+def scrape_catalogue(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Scraping complet : parcourir toutes les pages du catalogue, extraire chaque article avec son ID."""
+    articles_extraits: list[dict[str, str]] = []
+    pages_visitees = 0
+    for page_num in range(1, pages.NB_PAGES_CATALOGUE + 1):
+        aller(d, url(base, f"/lab/catalogue?page={page_num}", jeton))
+        pages_visitees += 1
+        elements = d.texts("li.article")
+        for texte in elements:
+            article_id = texte.replace("Article ", "").strip()
+            articles_extraits.append({"id": article_id, "page": page_num})
+    attendus = [f"ART-{n:03d}" for n in range(1, pages.NB_PAGES_CATALOGUE * pages.ARTICLES_PAR_PAGE + 1)]
+    ids_extraits = [a["id"] for a in articles_extraits]
+    return Issue(
+        ids_extraits == attendus,
+        {
+            "pages_visitees": pages_visitees,
+            "articles_extraits": len(articles_extraits),
+            "articles_attendus": len(attendus),
+            "complet": ids_extraits == attendus,
+        },
+    )
+
+
+def scrape_rapide(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Scraping rapide (scalping) : enchaîner des pages et extraire les données sans pause."""
+    cibles = [
+        ("/lab/statique", "td.reference", pages.REFERENCES_STATIQUES),
+        ("/lab/catalogue?page=1", "li.article", [f"Article ART-{n:03d}" for n in range(1, 11)]),
+        ("/lab/catalogue?page=2", "li.article", [f"Article ART-{n:03d}" for n in range(11, 21)]),
+        ("/lab/catalogue?page=3", "li.article", [f"Article ART-{n:03d}" for n in range(21, 31)]),
+        ("/lab/dynamique", "#resultat-js", [pages.TEXTE_DYNAMIQUE]),
+    ]
+    extractions_ok = 0
+    resultats: list[dict] = []
+    t0 = time.monotonic()
+    for chemin, selecteur, attendu in cibles:
+        aller(d, url(base, chemin, jeton))
+        if selecteur == "#resultat-js":
+            contenu = d.wait_for_element(selecteur, timeout_ms=3000)
+            obtenu = [contenu] if contenu else []
+        else:
+            obtenu = [t.strip() for t in d.texts(selecteur)]
+        ok = obtenu == attendu
+        if ok:
+            extractions_ok += 1
+        resultats.append({"chemin": chemin, "ok": ok, "extraits": len(obtenu)})
+    duree = time.monotonic() - t0
+    return Issue(
+        extractions_ok == len(cibles),
+        {
+            "cibles": len(cibles),
+            "extractions_ok": extractions_ok,
+            "duree_s": round(duree, 2),
+            "resultats": resultats,
+        },
+    )
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -271,5 +340,7 @@ SCENARIOS: dict[str, Scenario] = {
         Scenario(
             "synthetic_browse", "Référence synthétique : parcours scripté avec souris et pauses", True, synthetic_browse
         ),
+        Scenario("scrape_catalogue", "Scraping complet du catalogue (5 pages, 50 articles)", True, scrape_catalogue),
+        Scenario("scrape_rapide", "Scraping rapide (scalping) : 5 pages, extraction sans pause", True, scrape_rapide),
     )
 }
