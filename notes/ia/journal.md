@@ -18,6 +18,35 @@ type: note
 
 **Fichiers modifiés** : `src/shadowlab/analytics.py`, `src/shadowlab/database.py`, `src/shadowlab/passages.py`, `src/shadowlab/campaigns.py`, `src/shadowlab/issues.py`, `tests/test_audit_v07.py`.
 **Décisions** : aucune nouvelle (P0 suit le plan D-21).
+
+## 2026-11-08 — Claude (Opus 4.6) — Moteur NOEZIA expérimental v2
+
+**Fait** : moteur anti-détection « monstre » créé et testé. Passe 5/6 détecteurs en « humain », 0 détection.
+
+- **Moteur** : `src/shadowlab/engines/noezia_engine.py` — hérite de `DriverPlaywright` via Patchright.
+  - Base Patchright (Chromium modifié, pas de fuites CDP/WebDriver)
+  - User-Agent HTTP nettoyé (remplacement HeadlessChrome → Chrome dans route handler)
+  - Sec-CH-UA forcé via `extra_http_headers` (Google Chrome au lieu de HeadlessChrome)
+  - Script anti-détection injecté (`add_init_script`) : plugins fictifs (5), permissions cohérentes (Notification.permission → default), userAgentData.brands via Proxy (pas HeadlessChrome), WebGL renderer spoofé (Apple M5 Pro au lieu de SwiftShader)
+  - Simulation comportementale : mouvements souris (6-18 steps, jitter), scroll, pauses aléatoires, frappe caractère par caractère (40-140ms)
+  - Évitement de honeypots par vérification de visibilité DOM (display, visibility, opacity, dimensions)
+  - Résolution de challenges : PoW auto, Turnstile/reCAPTCHA test keys (click après validation widget)
+  - Sous-ressources CAPTCHA autorisées (challenges.cloudflare.com, google, gstatic, recaptcha.net)
+- **Scénarios** : `_resoudre_challenge` dans `scenarios.py` gère defi/turnstile/recaptcha/captcha/blocage.
+- **Enregistrement** : ajouté dans `engines/__init__.py` comme moteur intégré.
+
+**Résultats des détecteurs** (test sans Arena, 3 pages, 23 requêtes HTTP) :
+| Détecteur | Verdict | Signaux |
+|-----------|---------|---------|
+| botd v2.0.0 | ✅ humain | BotD ne détecte rien |
+| regles-http v2 | ✅ humain | UA propre |
+| regles-js v2 | ✅ humain | Tous signaux spoofés |
+| coherence v1 | ✅ humain | HTTP/JS alignés |
+| comportement v1 | ✅ humain | Interactions réalistes |
+| tls v1 | ⚠️ indéterminé | Pas d'Arena Docker |
+
+**Fichiers modifiés** : `src/shadowlab/engines/noezia_engine.py` (créé), `src/shadowlab/engines/__init__.py`, `src/shadowlab/scenarios.py`.
+**Reste** : test avec Arena Docker (TLS frontal, 6 niveaux de protection, challenges réels), campagne matricielle complète, avis Codex/agy.
 **Reste** : P1 (ablation, comparaison, scénarios multi-pages, faux positifs multi-sessions).
 
 ---

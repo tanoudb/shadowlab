@@ -35,17 +35,43 @@ def url(base: str, chemin: str, jeton: str) -> str:
     return f"{base}{chemin}{separateur}sl={jeton}"
 
 
-def _attendre_fin_du_defi(d: Driver) -> None:
-    """Un navigateur résout seul le défi, comme pour une personne, puis revient à la page demandée."""
+def _resoudre_challenge(d: Driver) -> None:
+    """Résout les challenges de l'Arena que le navigateur peut traiter sans intervention humaine.
+
+    - defi (PoW) : résolution automatique par le script defi.js, redirection incluse
+    - turnstile (test keys) : le widget valide, le moteur clique Envoyer
+    - recaptcha (test keys) : idem
+    - captcha / blocage : aucune résolution automatique (retour → RefusProtection dans aller)
+    """
     limite = time.monotonic() + DELAI_DEFI_S
     while time.monotonic() < limite:
         try:
-            if not d.texts("body[data-arena='defi']"):
+            if not d.texts("body[data-arena]"):
                 d.attendre_chargement()
                 return
+            if d.texts("body[data-arena='turnstile']"):
+                etat = d.texts("#turnstile-etat")
+                if etat and "reçue" in etat[0].lower():
+                    d.click("#turnstile-envoyer")
+                    time.sleep(0.5)
+                    continue
+                time.sleep(0.1)
+                continue
+            if d.texts("body[data-arena='recaptcha']"):
+                etat = d.texts("#recaptcha-etat")
+                if etat and "reçue" in etat[0].lower():
+                    d.click("#recaptcha-envoyer")
+                    time.sleep(0.5)
+                    continue
+                time.sleep(0.1)
+                continue
+            if d.texts("body[data-arena='defi']"):
+                time.sleep(0.05)
+                continue
+            return  # captcha, blocage : pas de résolution automatique
         except Exception:  # noqa: BLE001, S110 — document remplacé pendant la lecture : on relit
             pass
-        time.sleep(0.02)
+        time.sleep(0.05)
 
 
 def aller(d: Driver, cible: str) -> ResultatNavigation:
@@ -54,7 +80,7 @@ def aller(d: Driver, cible: str) -> ResultatNavigation:
     if resultat.status not in (403, None):
         return resultat
     if d.executes_javascript:
-        _attendre_fin_du_defi(d)
+        _resoudre_challenge(d)
     if d.texts("body[data-arena]"):
         raise RefusProtection(f"page de protection à la place de {cible.split('?')[0]}")
     if not d.executes_javascript and resultat.status == 403:

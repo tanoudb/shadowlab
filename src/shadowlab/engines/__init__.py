@@ -8,6 +8,7 @@ from importlib.metadata import entry_points
 from .base import Driver, FonctionIndisponible, MesuresSession, RefusProtection, ResultatNavigation
 from .curl_cffi_engine import DriverCurlCffi
 from .httpx_engine import DriverHttpx
+from .noezia_engine import DriverNoeziaExperimental
 from .patchright_engine import DriverPatchright
 from .playwright_engine import DriverPlaywright
 from .pont import moteurs_isoles
@@ -23,6 +24,7 @@ INTEGRES: dict[str, type[Driver]] = {
     DriverCurlCffi.name: DriverCurlCffi,
     DriverPatchright.name: DriverPatchright,
     DriverScraplingFurtif.name: DriverScraplingFurtif,
+    DriverNoeziaExperimental.name: DriverNoeziaExperimental,
 }
 
 
