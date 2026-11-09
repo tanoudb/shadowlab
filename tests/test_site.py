@@ -190,3 +190,31 @@ def test_interface_exposee_exige_un_jeton(reglages, monkeypatch):
         assert c.get("/tableau").status_code == 401
         ok = c.get("/api/experiences", headers={"Authorization": "Bearer secret-de-test"})
         assert ok.status_code == 200
+
+
+def test_connexion_page_et_succes(client):
+    r = client.get(f"/lab/connexion?sl={JETON}")
+    assert r.status_code == 200 and "formulaire-connexion" in r.text
+    # espace protégé : sans cookie d'auth, on est renvoyé vers la connexion
+    r = client.get("/lab/espace", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/lab/connexion"
+    # login correct (compte de test) → espace privé avec le bon compte
+    r = client.post("/lab/connexion", data={"identifiant": "demo", "mot_de_passe": "arena-demo-2026"})
+    assert r.status_code == 200 and 'id="espace-prive"' in r.text and 'data-compte="demo"' in r.text
+
+
+def test_connexion_mauvais_identifiants(client):
+    r = client.post(
+        "/lab/connexion", data={"identifiant": "demo", "mot_de_passe": "faux"}, follow_redirects=False
+    )
+    assert r.status_code == 401
+    assert client.get("/lab/espace", follow_redirects=False).status_code == 303
+
+
+def test_connexion_honeypot_rempli_refuse(client):
+    r = client.post(
+        "/lab/connexion",
+        data={"identifiant": "demo", "mot_de_passe": "arena-demo-2026", "sl_site": "http://x"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 403

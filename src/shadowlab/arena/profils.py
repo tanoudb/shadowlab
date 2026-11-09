@@ -63,6 +63,18 @@ class Recaptcha(_Strict):
     actif: bool
 
 
+class Connexion(_Strict):
+    """Niveau authentifié : un login protégé par détection comportementale.
+
+    `actif` enclenche la porte anti-bot sur la soumission du formulaire (mêmes règles
+    que le reste de l'Arena, via `suspicion()`), plus un champ piège et une limite de
+    tentatives. Les comptes sont des fixtures de test locales (voir site/comptes.py).
+    """
+
+    actif: bool
+    tentatives_max: int = Field(default=5, ge=1, le=100)
+
+
 class Profil(_Strict):
     nom: str = ""
     description: str = ""
@@ -74,6 +86,7 @@ class Profil(_Strict):
     honeypots: Honeypots = Honeypots(actif=False)
     turnstile: Turnstile = Turnstile(actif=False)
     recaptcha: Recaptcha = Recaptcha(actif=False)
+    connexion: Connexion = Connexion(actif=False)
 
 
 class Profils:

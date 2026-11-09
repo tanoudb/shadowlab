@@ -40,10 +40,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   local ou autorisé (contre le « DNS rebinding »). Alias YAML refusés (expansion d'un petit fichier). Verrou de
   campagne libéré si la création échoue. Non corrigé, documenté : le DNS résolu au contrôle n'est pas épinglé
   pour la connexion (voir `docs/architecture.md`, Limites).
-- **D-15 — 03/11/2026 — Outils anti-détection et modification d'empreinte autorisés contre nos propres protections**
+- ~~**D-15 — 03/11/2026 — Outils anti-détection et modification d'empreinte autorisés contre nos propres protections**
   (décision d'Ethan, remplace D-05). Sans adversaire réel, un taux de détection de 100 % ne prouve rien : il ne
   mesure que des outils naïfs. Restent exclus : toute destination non autorisée, tout solveur de CAPTCHA, tout
-  contournement écrit sur mesure contre un détecteur commercial ou un service tiers.
+  contournement écrit sur mesure contre un détecteur commercial ou un service tiers.~~ **Révisée par D-30.**
 - **D-16 — 03/11/2026 — Le projet est une plateforme de R&D à long terme, pas un benchmark ponctuel** (décision
   d'Ethan). Trois axes : Arena (défenses configurables à difficulté progressive), catalogue + moteur expérimental
   propre (combinaison modulaire des meilleures techniques open source), mesure scientifique. À terme, couche IA
@@ -131,3 +131,14 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `tempo.py` réécris pour déléguer à `humain.py`. Résultat campagne 37 : 108 passages × 24 détecteurs,
   0 détection automatise. Données v9 : CV=3.43 (seuil=0.15), médiane=25ms, max=6049ms, queue lourde
   typique d'un humain. Les distributions sont correctes par construction — aucun seuil à tuner.
+- **D-30 — 09/11/2026 — Phase interne : périmètre illimité débrayable, et moteur universel.** (décision
+  d'Ethan, révise D-15.) Objectif assumé : un moteur qui se connecte à n'importe quel site et franchit
+  n'importe quel détecteur. Pour ne pas brider l'expérimentation : **périmètre illimité par défaut**
+  (`SHADOWLAB_HOTES_AUTORISES=*`), mais le rejet-par-défaut reste **débrayable** (mécanisme conservé,
+  pas supprimé) — le durcissement final est différé et documenté dans `docs/securite-a-finaliser.md`.
+  Non responsable de l'usage ; en interne on ne pointe que nos propres cibles. Contournement d'un
+  détecteur commercial : autorisé **sur cibles autorisées + divulgation coordonnée** (plus « jamais »).
+  **Restent non négociables** : aucun solveur de CAPTCHA réel (reCAPTCHA/hCaptcha/Turnstile prod — le
+  démo Arena et les test keys restent permis ; le but est de *ne pas déclencher* le CAPTCHA), aucune
+  mesure inventée, étiquetage des résultats en test keys. Implémentation : `perimetre.ILLIMITE`,
+  `base.liste_directe`, défaut `config.charger`, filtrage du `*` côté serveur de test (`site/app.py`).

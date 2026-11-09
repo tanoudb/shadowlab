@@ -2,9 +2,28 @@ import socket
 
 import pytest
 
-from shadowlab.perimetre import DestinationRefusee, est_autorisee, verifier_url
+from shadowlab.engines.base import liste_directe
+from shadowlab.perimetre import ILLIMITE, DestinationRefusee, est_autorisee, verifier_url
 
 AUTORISES = ("127.0.0.1", "localhost", "::1")
+
+
+@pytest.mark.parametrize("url", ["https://example.com/", "http://n-importe-quoi.test/x", "https://1.2.3.4/"])
+def test_mode_illimite_accepte_tout(url):
+    """Avec ``*`` dans la liste (phase interne), toute destination http/https passe."""
+    assert verifier_url(url, (ILLIMITE,)) == url
+    assert est_autorisee(url, ("127.0.0.1", ILLIMITE))
+
+
+def test_mode_illimite_garde_le_controle_de_schema():
+    """Illimité ne veut pas dire n'importe quel schéma : file:// reste refusé."""
+    with pytest.raises(DestinationRefusee):
+        verifier_url("file:///etc/passwd", (ILLIMITE,))
+
+
+def test_liste_directe_leve_le_verrou_en_illimite():
+    assert liste_directe((ILLIMITE,)) == ["*"]
+    assert liste_directe(("127.0.0.1", "localhost")) == ["127.0.0.1", "localhost"]
 
 
 @pytest.mark.parametrize(

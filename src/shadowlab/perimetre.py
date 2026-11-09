@@ -1,8 +1,12 @@
-"""Périmètre du laboratoire : seules les destinations explicitement autorisées sont joignables.
+"""Périmètre du laboratoire : destinations joignables par les moteurs.
 
-Règle par défaut : rejet. Une adresse IP n'est acceptée que si elle figure dans la liste ou si c'est
-le bouclage local ; un nom d'hôte doit figurer dans la liste et ne pas résoudre vers un réseau interne
-(privé, lien local, réservé), sauf le bouclage.
+Deux modes :
+- **strict** (durcissement final) : rejet par défaut. Une IP n'est acceptée que si elle figure dans
+  la liste ou si c'est le bouclage ; un nom d'hôte doit figurer dans la liste et ne pas résoudre vers
+  un réseau interne (privé, lien local, réservé), sauf le bouclage.
+- **illimité** : si la liste contient le jeton ``*`` (`ILLIMITE`), toute destination http/https passe.
+  C'est le mode de la phase interne/expérimentale (voir docs/securite-a-finaliser.md). Le durcissement
+  final consiste à retirer ``*`` de `SHADOWLAB_HOTES_AUTORISES` pour revenir au mode strict.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ import socket
 from urllib.parse import urlsplit
 
 BOUCLAGE = frozenset({"127.0.0.1", "localhost", "::1"})
+ILLIMITE = "*"  # dans la liste des hôtes : périmètre illimité (phase interne, débrayable)
 
 
 class DestinationRefusee(ValueError):
@@ -30,6 +35,10 @@ def verifier_url(url: str, hotes_autorises: tuple[str, ...] | frozenset[str]) ->
     parties = urlsplit(url)
     if parties.scheme not in ("http", "https"):
         raise DestinationRefusee(f"schéma refusé : {parties.scheme or '(aucun)'} ({url})")
+    # Mode illimité (phase interne) : toute destination http/https passe. Le durcissement final
+    # retire ``*`` de la liste pour rétablir les contrôles ci-dessous. Voir docs/securite-a-finaliser.md.
+    if ILLIMITE in {h.strip() for h in hotes_autorises}:
+        return url
     if parties.username or parties.password:
         raise DestinationRefusee(f"identifiants dans l'URL refusés ({url})")
     hote = (parties.hostname or "").lower()

@@ -16,6 +16,7 @@ NAVIGATION = [
     ("/lab/dynamique", "JavaScript"),
     ("/lab/catalogue", "Pagination"),
     ("/lab/formulaire", "Formulaire"),
+    ("/lab/connexion", "Connexion"),
     ("/lab/session", "Session"),
     ("/lab/empreinte", "Empreinte"),
     ("/lab/detection", "Détection"),
@@ -125,6 +126,38 @@ def formulaire(jeton: str, honeypot: bool = False) -> str:
 def confirmation(jeton: str, nom: str, modele: str) -> str:
     corps = f'<p id="confirmation">Merci {escape(nom)} — modèle {escape(modele)}</p>'
     return gabarit("Formulaire envoyé", corps, jeton)
+
+
+# Champ piège du formulaire de connexion : un humain ne le remplit jamais (invisible).
+HONEYPOT_CONNEXION = (
+    '<label class="sl-hp" aria-hidden="true">Site web '
+    '<input name="sl_site" tabindex="-1" autocomplete="off"></label>'
+)
+
+
+def connexion(jeton: str, honeypot: bool = False, erreur: str = "") -> str:
+    """Formulaire de connexion du niveau authentifié (porte la furtivité via l'observateur)."""
+    piege = HONEYPOT_CONNEXION if honeypot else ""
+    alerte = f'<p id="connexion-erreur" class="erreur" role="alert">{escape(erreur)}</p>' if erreur else ""
+    corps = f"""{alerte}<form id="formulaire-connexion" method="post" action="/lab/connexion">
+<label>Identifiant <input id="champ-identifiant" name="identifiant" required maxlength="60"
+ autocomplete="username"></label>
+<label>Mot de passe <input id="champ-mot-de-passe" name="mot_de_passe" type="password" required
+ maxlength="120" autocomplete="current-password"></label>
+{piege}
+<button id="bouton-connexion" type="submit">Se connecter</button>
+</form>
+<p class="indice">Comptes de test : <code>demo</code>, <code>analyste</code>.</p>"""
+    return gabarit("Connexion", corps, jeton, honeypot=honeypot)
+
+
+def espace(jeton: str, identifiant: str) -> str:
+    """Zone réservée servie après une connexion réussie."""
+    corps = f"""<p id="espace-prive" data-compte="{escape(identifiant)}">Bienvenue dans l'espace privé,
+ {escape(identifiant)}.</p>
+<p>Contenu réservé aux sessions authentifiées de l'Arena.</p>
+<p><a id="lien-deconnexion" href="/lab/deconnexion">Se déconnecter</a></p>"""
+    return gabarit("Espace privé", corps, jeton)
 
 
 def session(jeton: str, visites: int) -> str:

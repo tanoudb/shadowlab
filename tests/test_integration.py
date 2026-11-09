@@ -13,8 +13,10 @@ MOTEURS = ["playwright", "selenium", "scrapling", "httpx"]
 
 @pytest.mark.parametrize("moteur", MOTEURS)
 def test_moteur_refuse_une_redirection_hors_perimetre(reglages, moteur):
+    # Mode strict explicite (sans ``*``) : vérifie que le verrou de périmètre tient quand il est armé,
+    # indépendamment du défaut illimité de la phase interne.
     with campaigns.serveur_local(reglages):
-        pilote = registre()[moteur](reglages.hotes_autorises)
+        pilote = registre()[moteur](("127.0.0.1", "localhost"))
         pilote.open()
         try:
             pilote.start_session()

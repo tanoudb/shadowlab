@@ -24,6 +24,7 @@ COOKIE_DEFI = "sl_defi"
 COOKIE_CAPTCHA = "sl_captcha"
 COOKIE_TURNSTILE = "sl_turnstile"
 COOKIE_RECAPTCHA = "sl_recaptcha"
+COOKIE_CONNEXION = "sl_connexion"  # session authentifiée (niveau connexion)
 # Échanges techniques du laboratoire et des protections : ils ne sont pas des pages à protéger.
 HORS_PROTECTION = (
     "/lab/static",

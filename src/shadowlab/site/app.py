@@ -22,7 +22,7 @@ from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
 from ..config import Reglages, charger
 from ..detection import Observations, classer
-from . import gardien, pages
+from . import comptes, gardien, pages
 
 STATIQUES = Path(__file__).parent / "static"
 JETON_VALIDE = re.compile(r"^[0-9a-f]{32}$")
@@ -126,7 +126,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     # Contre le « DNS rebinding » : en écoute locale (sans jeton), une page tierce dont le nom pointerait vers
     # 127.0.0.1 enverrait son propre nom dans `Host`. Seuls les noms locaux et les hôtes autorisés sont servis.
     # Déclaré après `observer`, ce contrôle passe avant lui : une requête refusée n'est pas enregistrée.
-    hotes_servis = NOMS_LOCAUX | set(reglages.hotes_autorises) if _local(reglages.hote) else None
+    # Le ``*`` du périmètre moteur (illimité) ne s'applique PAS au serveur de test : sa protection
+    # anti-DNS-rebinding reste stricte (correspondance exacte d'hôte), on filtre donc le ``*``.
+    hotes_servis = NOMS_LOCAUX | {h for h in reglages.hotes_autorises if h != "*"} if _local(reglages.hote) else None
 
     @app.middleware("http")
     async def controler_hote(request: Request, call_next):
@@ -191,6 +193,103 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if not nom or modele not in pages.MODELES:
             raise HTTPException(422, "formulaire incomplet")
         return pages.confirmation(jeton, nom, modele)
+
+    # --- Niveau authentifié : login protégé par détection comportementale ---------------------------
+
+    @app.get("/lab/connexion", response_class=HTMLResponse, tags=["site"])
+    def connexion_page(request: Request) -> str:
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.connexion(jeton_de(request), honeypot=hp)
+
+    @app.post("/lab/connexion", tags=["site"])
+    async def connexion_envoyee(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        champs = parse_qs((await request.body()).decode("utf-8", "replace"))
+        identifiant = (champs.get("identifiant") or [""])[0].strip()[:60]
+        mot_de_passe = (champs.get("mot_de_passe") or [""])[0][:120]
+        piege = (champs.get("sl_site") or [""])[0]
+        profil = charger_profils().de(sceau.profil) if sceau else None
+        porte = bool(profil and profil.connexion.actif)
+        hp_actif = gardien.honeypots_actifs(sceau)
+
+        def journal(decision: str, motifs: list[dict]) -> None:
+            if jeton:
+                with base() as cx:
+                    db.enregistrer_decision(cx, jeton, "connexion", decision, "/lab/connexion", motifs)
+
+        def refus(message: str, motifs: list[dict]) -> Response:
+            journal("refuse", motifs)
+            return HTMLResponse(pages.connexion(jeton, honeypot=hp_actif, erreur=message), status_code=403)
+
+        # 1) Champ piège rempli → robot aveugle (même sans porte active, un humain ne le remplit pas)
+        if piege:
+            return refus("Accès refusé.", [{"code": "honeypot", "type": "champ"}])
+
+        # 2) Limite de tentatives (anti force brute)
+        if porte and jeton:
+            with base() as cx:
+                tentatives = cx.execute(
+                    "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'connexion'"
+                    " AND decision IN ('refuse', 'tentative')",
+                    (jeton,),
+                ).fetchone()[0]
+            if tentatives >= profil.connexion.tentatives_max:
+                return refus("Trop de tentatives.", [{"code": "rate-limit", "tentatives": tentatives}])
+
+        # 3) Porte comportementale : signaux de bot connus à cet instant (empreinte, comportement, honeypot…)
+        if porte and jeton:
+            with base() as cx:
+                motifs = gardien.suspicion(cx, jeton)
+            if motifs:
+                return refus("Accès refusé.", motifs)
+
+        # 4) Vérification des identifiants (comptes de test)
+        if not comptes.verifier(identifiant, mot_de_passe):
+            journal("tentative", [{"code": "identifiants"}])
+            return HTMLResponse(
+                pages.connexion(jeton, honeypot=hp_actif, erreur="Identifiants incorrects."), status_code=401
+            )
+
+        # 5) Succès : cookie de session authentifiée, lié à l'empreinte si le niveau l'exige
+        journal("valide", [{"compte": identifiant}])
+        reponse = RedirectResponse("/lab/espace", status_code=303)
+        lie = gardien.empreinte_liee(sceau) if sceau else ""
+        reponse.set_cookie(
+            gardien.COOKIE_CONNEXION,
+            defis.creer_cookie(secret, "connexion", jeton, lie),
+            httponly=True,
+            samesite="lax",
+            path="/lab",
+        )
+        return reponse
+
+    @app.get("/lab/espace", tags=["site"])
+    def espace(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        lie = gardien.empreinte_liee(sceau) if sceau else ""
+        cookie = request.cookies.get(gardien.COOKIE_CONNEXION)
+        if not defis.cookie_valide(secret, "connexion", cookie, jeton, lie):
+            return RedirectResponse("/lab/connexion", status_code=303)
+        identifiant = "?"
+        if jeton:
+            with base() as cx:
+                ligne = cx.execute(
+                    "SELECT motifs FROM decisions WHERE session_token = ? AND couche = 'connexion'"
+                    " AND decision = 'valide' ORDER BY id DESC LIMIT 1",
+                    (jeton,),
+                ).fetchone()
+            if ligne and ligne["motifs"]:
+                try:
+                    identifiant = (json.loads(ligne["motifs"]) or [{}])[0].get("compte", "?")
+                except (ValueError, TypeError, AttributeError, IndexError):
+                    pass
+        return HTMLResponse(pages.espace(jeton, identifiant))
+
+    @app.get("/lab/deconnexion", tags=["site"])
+    def deconnexion() -> Response:
+        reponse = RedirectResponse("/lab/connexion", status_code=303)
+        reponse.delete_cookie(gardien.COOKIE_CONNEXION, path="/lab")
+        return reponse
 
     @app.get("/lab/piege", status_code=204, tags=["site"])
     def piege(request: Request) -> Response:

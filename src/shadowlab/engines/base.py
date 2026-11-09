@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..perimetre import verifier_url
+from ..perimetre import ILLIMITE, verifier_url
 
 # Verrou réseau des navigateurs : toute destination hors liste est envoyée vers ce mandataire, une adresse
 # locale fermée (port « discard »), et échoue. Il sert uniquement à bloquer, jamais à faire sortir du trafic.
@@ -20,7 +20,13 @@ MANDATAIRE_BLOQUANT = "http://127.0.0.1:9"
 
 
 def liste_directe(hotes_autorises: tuple[str, ...]) -> list[str]:
-    """Hôtes joints en direct (hors mandataire bloquant), au format des règles de Chrome."""
+    """Hôtes joints en direct (hors mandataire bloquant), au format des règles de Chrome.
+
+    En mode illimité (``*`` dans la liste), tout passe en direct : ``["*"]`` lève le verrou réseau
+    pour tous les moteurs d'un seul point. Le durcissement final retire ``*`` et le verrou revient.
+    """
+    if ILLIMITE in hotes_autorises:
+        return ["*"]
     return [f"[{h}]" if ":" in h else h for h in hotes_autorises]
 
 

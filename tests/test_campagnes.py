@@ -51,8 +51,13 @@ def test_definitions_invalides_refusees(tmp_path, reglages, remplacement):
 
 
 def test_url_exterieure_refusee(tmp_path, reglages):
+    import dataclasses
+
+    # Mode strict explicite (sans ``*``) : vérifie que la validation refuse une base_url hors périmètre
+    # quand le verrou est armé, indépendamment du défaut illimité de la phase interne.
+    strict = dataclasses.replace(reglages, hotes_autorises=("127.0.0.1", "localhost"))
     with pytest.raises(DestinationRefusee):
-        lire(ecrire(tmp_path, VALIDE + "  base_url: https://example.com\n"), reglages)
+        lire(ecrire(tmp_path, VALIDE + "  base_url: https://example.com\n"), strict)
 
 
 def test_meme_graine_meme_ordre():

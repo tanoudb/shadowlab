@@ -17,13 +17,21 @@ Trois axes :
 À terme : couche IA pour planifier les campagnes, analyser les résultats, proposer des hypothèses et
 recommander des optimisations.
 
-## Périmètre (D-15, D-16)
-- **Permis** : outils anti-détection, modification d'empreinte, combinaisons de techniques — **contre nos
-  propres protections** et sur nos domaines de test autorisés.
+## Périmètre (révisé D-30, phase interne — révise D-15)
+- **Permis** : outils anti-détection, modification d'empreinte, combinaisons de techniques — moteur
+  universel, capable de franchir n'importe quel détecteur et n'importe quel login.
+- **Phase interne / expérimentale (actuelle)** :
+  - **Périmètre illimité par défaut** : `SHADOWLAB_HOTES_AUTORISES=*` (défaut). Le rejet-par-défaut
+    reste **débrayable** (liste explicite d'hôtes) — le durcissement final est différé, voir
+    [`docs/securite-a-finaliser.md`](docs/securite-a-finaliser.md). **Non responsable de l'usage ;
+    en interne on ne pointe que nos propres cibles.**
+  - Contournement d'un détecteur commercial : **autorisé sur cibles autorisées** (notre Arena, un
+    périmètre de bug bounty, un système qu'on possède) **+ divulgation coordonnée** au fournisseur.
+    Pas d'exploit sur la prod d'un tiers sans autorisation.
 - **Maintenu, non négociable** :
-  - Destinations locales ou explicitement autorisées seulement, rejet par défaut.
-  - Aucun solveur de CAPTCHA (une personne seule valide un CAPTCHA).
-  - Aucun contournement écrit sur mesure contre un détecteur commercial ou un service tiers.
+  - **Aucun solveur de CAPTCHA réel** (reCAPTCHA / hCaptcha / Turnstile de production). Le CAPTCHA
+    démo de l'Arena (fixture maison) et les flux en test keys restent permis ; le but du moteur est
+    de **ne pas déclencher** le CAPTCHA, pas de le résoudre à la place d'un humain.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 

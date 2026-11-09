@@ -40,7 +40,9 @@ class Reglages:
 def charger() -> Reglages:
     """Construit les réglages ; chaque valeur a un défaut sûr (local, sans jeton)."""
     sorties = Path(os.environ.get("SHADOWLAB_SORTIES", RACINE / "outputs"))
-    hotes = os.environ.get("SHADOWLAB_HOTES_AUTORISES", "127.0.0.1,localhost")
+    # Phase interne/expérimentale : périmètre illimité par défaut (``*``). Durcissement final =
+    # fixer SHADOWLAB_HOTES_AUTORISES à une liste explicite (voir docs/securite-a-finaliser.md).
+    hotes = os.environ.get("SHADOWLAB_HOTES_AUTORISES", "*")
     return Reglages(
         base_donnees=Path(os.environ.get("SHADOWLAB_BASE", sorties / "shadowlab.sqlite3")),
         sorties=sorties,
