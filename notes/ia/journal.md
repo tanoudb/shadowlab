@@ -1513,3 +1513,26 @@ Les deux piliers demandés, chacun testé et validé sur le lab :
 ### Bilan capacités « meilleur scraper » (toutes testées)
 Vitesse (mode rapide), robustesse (retry/backoff), échelle (proxy), extraction adaptative, concurrence.
 295 tests rapides verts, lint propre. Branche `niveau-authentifie-perimetre`, 16 commits, non poussée.
+
+## 2026-11-09 (suite 7, autonome) — « Taper Scrapling » : le parser adaptatif fetcher-agnostique
+
+Décision (Ethan) : viser Scrapling. Son vrai edge n'est pas la furtivité (on est à son niveau) mais
+son PARSER. Construit `engines/noezia/analyseur.py` :
+- Sur `parsel` (sélecteur de Scrapy/lxml, déjà en dépendances) : css/xpath/attribut/tout_le_texte.
+- Notre différenciateur : `extraire_adaptatif` qui relocalise un élément par ressemblance quand le
+  sélecteur casse, en **Python pur sur le HTML parsé** → fetcher-agnostique (marche sur le HTTP brut,
+  SANS navigateur, ultra-rapide), là où `moteur.extraire_adaptatif` était navigateur-only.
+- `moteur.analyser()` : rend un Analyseur sur la page courante, partageant la mémoire de signatures.
+  Archi façon Scrapling : fetcher furtif + parser rapide découplés.
+Validé sur le lab (10 références, relocalisation OK) + 5 tests sans navigateur. 300 tests verts.
+
+Sur Scrapy (question d'Ethan) : c'est une autre couche (framework de crawling, pas un parser), et sa
+faiblesse = aucune furtivité. Stratégie : ne pas cloner Scrapy ; être le moteur furtif qu'il n'a pas,
+et ajouter plus tard une couche crawling légère par-dessus (on a déjà `recolte`).
+
+### Suite « taper Scrapling »
+- Brancher l'Analyseur aux moteurs HTTP (httpx/curl) → scraping adaptatif sans navigateur, ultra-rapide.
+- Ergonomie parser (find_all par ressemblance, chaînage) + CLI + doc.
+
+### État branche
+`niveau-authentifie-perimetre`, 19 commits, non poussée. 300 tests verts, lint propre.
