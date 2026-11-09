@@ -35,11 +35,17 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (03/11/2026)
+## État (09/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **6 niveaux progressifs** (01 baseline → 06 multicouche, D-18). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 24 détecteurs, honeypots (lien piège + champ piège), fingerprinting actif,
   Turnstile Cloudflare (test keys, niveaux 05-06), reCAPTCHA v2 Google (test keys, niveaux 05-06).
+- **Niveau authentifié** (05-06) : login `/lab/connexion` gardé par une porte comportementale
+  (empreinte + comportement + honeypot + limite de tentatives), espace privé `/lab/espace`, comptes de
+  test locaux. Scénario `connexion` (le moteur franchit le login).
+- **Démo reCAPTCHA v3 RÉEL** : `/lab/recaptcha-v3` charge le vrai v3 et relève le score attribué au
+  moteur (clés dans `.env`, secret jamais exposé). Passer = être perçu comme humain (v3 ne fait que noter).
+- **Moteur NOEZIA** : GPU Metal réel en headless (anti-SwiftShader), profils cohérents avec l'OS hôte.
 - **Dashboard avancé** : vue Arena (décisions par couche, matrice moteur × protection, durées).
 - **11 moteurs** : 7 intégrés (playwright, selenium, scrapling, httpx, curl-cffi, patchright, scrapling-furtif),
   4 isolés opérationnels (camoufox, seleniumbase, seleniumbase-uc, undetected-chromedriver),
@@ -47,8 +53,10 @@ recommander des optimisations.
 - **Campagnes matricielles** : moteur × protection × scénario × répétitions, exécution parallèle (spawn),
   classification en 6 issues, intervalles de Wilson, mesures CPU/mémoire.
 - **Catalogue recherche** : 52 projets open source analysés (`docs/recherche/catalogue.yaml`).
-- **265 tests verts**, lint propre.
-- **Pas encore** : Cloudflare sur domaine test, moteur expérimental propre, couche IA.
+- **Périmètre** : illimité par défaut en phase interne (D-30, débrayable — `docs/securite-a-finaliser.md`).
+- **275 tests rapides verts** (hors intégration), lint propre.
+- **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
+  auto-résolution (test keys flaky), moteur expérimental propre, couche IA.
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
@@ -57,8 +65,8 @@ recommander des optimisations.
 | 02 | Détection simple | User-Agent, cookies, rate limit léger |
 | 03 | Fingerprinting | FingerprintJS, BotD, détecteur comportemental, signaux JS |
 | 04 | Challenges | JS proof-of-work, CAPTCHA demo, WAF en mode blocage |
-| 05 | Protection avancée | Turnstile + reCAPTCHA (test keys), WAF paranoia élevée, TLS binding |
-| 06 | Défense multicouche | Tout combiné, honeypots, corrélation de signaux, adaptation |
+| 05 | Protection avancée | Turnstile + reCAPTCHA (test keys), WAF paranoia élevée, TLS binding, login anti-bot |
+| 06 | Défense multicouche | Tout combiné, honeypots, corrélation de signaux, adaptation, login anti-bot |
 
 ## Commandes vérifiées
 ```bash
@@ -70,6 +78,7 @@ uv run shadowlab arena demarrer                            # docker compose (Cor
 uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
 uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTCHA v3 réel (clés v3 dans .env)
+uv run shadowlab campagne configs/experiments/connexion-arena.yaml  # le moteur franchit le login (01/05/06)
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
