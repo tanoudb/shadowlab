@@ -315,6 +315,237 @@ class DetecteurComportement:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurPrototypes:
+    """Détection d'altération des chaînes de prototypes et de Function.prototype.toString.
+
+    Tout moteur qui modifie toString pour masquer ses overrides doit patcher
+    toString elle-même. Si toString.toString() ne renvoie pas [native code] de la
+    bonne manière, ou si les descripteurs de propriété sont incohérents, c'est un signal.
+    """
+
+    name = "prototypes"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        proto = p.get("prototypes") or {}
+        signaux: list[Signal] = []
+
+        # toString de toString elle-même
+        ts_self = proto.get("toString_self", "")
+        if ts_self and "native code" not in str(ts_self):
+            signaux.append(
+                Signal(
+                    "toString_patche",
+                    "Function.prototype.toString ne renvoie pas [native code] pour elle-même",
+                    1.0,
+                )
+            )
+
+        # Canvas toDataURL : si la source n'a pas [native code], le canvas est patché
+        if proto.get("canvas_natif") is False:
+            signaux.append(Signal("canvas_patche", "HTMLCanvasElement.toDataURL patché (toString ≠ native code)", 0.75))
+
+        # WebGL getParameter patché
+        if proto.get("webgl_getParameter_natif") is False:
+            signaux.append(Signal("webgl_patche", "WebGLRenderingContext.getParameter patché", 0.75))
+
+        # navigator.plugins défini sur l'instance plutôt que le prototype
+        if proto.get("plugins_propre") is True and proto.get("plugins_getter_natif") is False:
+            signaux.append(Signal("plugins_patche", "navigator.plugins a un getter non natif", 0.5))
+
+        # hardwareConcurrency sur l'instance plutôt que le prototype
+        if proto.get("hwc_instance") is True:
+            signaux.append(Signal("hwc_instance", "hardwareConcurrency défini sur navigator (pas le prototype)", 0.5))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurCoherenceProfonde:
+    """Vérifications de cohérence que les patchs simples ne couvrent pas.
+
+    - screen.availWidth doit être ≤ screen.width
+    - outerWidth doit être ≥ innerWidth (barre de titre, bordures)
+    - devicePixelRatio doit correspondre au type d'écran
+    - hardwareConcurrency doit être une puissance de 2 ≤ 128
+    - deviceMemory doit être dans {0.25, 0.5, 1, 2, 4, 8}
+    """
+
+    name = "coherence-profonde"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        signaux: list[Signal] = []
+
+        ecran = p.get("ecran") or {}
+        fenetre = p.get("fenetre") or {}
+        nav = p.get("navigateur") or {}
+
+        # screen.availWidth > screen.width → impossible
+        sw, aw = ecran.get("width", 0), ecran.get("availWidth", 0)
+        sh, ah = ecran.get("height", 0), ecran.get("availHeight", 0)
+        if aw and sw and aw > sw:
+            signaux.append(Signal("avail_gt_screen", f"availWidth {aw} > width {sw}", 0.75))
+        if ah and sh and ah > sh:
+            signaux.append(Signal("avail_gt_screen_h", f"availHeight {ah} > height {sh}", 0.75))
+
+        # outerWidth/outerHeight : un vrai navigateur a toujours outer ≥ inner (cadre + barre d'adresse)
+        ow = fenetre.get("outerWidth", 0)
+        iw = fenetre.get("innerWidth", 0)
+        oh = fenetre.get("outerHeight", 0)
+        ih = fenetre.get("innerHeight", 0)
+        if ow and iw and ow < iw:
+            signaux.append(Signal("outer_lt_inner_w", f"outerWidth {ow} < innerWidth {iw}", 0.5))
+        if oh and ih and oh < ih:
+            signaux.append(Signal("outer_lt_inner_h", f"outerHeight {oh} < innerHeight {ih}", 0.5))
+        # En headless : outerWidth == innerWidth (pas de chrome de fenêtre)
+        if ow and iw and ow == iw and oh and ih and oh == ih:
+            signaux.append(
+                Signal(
+                    "outer_eq_inner",
+                    "outer == inner (pas de chrome de fenêtre = probable headless)",
+                    0.5,
+                )
+            )
+
+        # hardwareConcurrency : doit être puissance de 2 entre 1 et 128
+        hwc = nav.get("hardwareConcurrency")
+        if isinstance(hwc, int) and hwc > 0:
+            if hwc & (hwc - 1) != 0:
+                signaux.append(
+                    Signal(
+                        "hwc_non_puissance2",
+                        f"hardwareConcurrency={hwc} n'est pas une puissance de 2",
+                        0.25,
+                    )
+                )
+            if hwc > 128:
+                signaux.append(Signal("hwc_excessif", f"hardwareConcurrency={hwc} > 128", 0.5))
+
+        # deviceMemory : doit être dans {0.25, 0.5, 1, 2, 4, 8}
+        dm = nav.get("deviceMemory")
+        if isinstance(dm, (int, float)) and dm not in (0.25, 0.5, 1, 2, 4, 8, "unknown"):
+            signaux.append(Signal("device_memory_invalide", f"deviceMemory={dm} invalide", 0.5))
+
+        # colorDepth : doit être 24 ou 30 (HDR)
+        cd = ecran.get("colorDepth")
+        if isinstance(cd, int) and cd not in (24, 30, 32):
+            signaux.append(Signal("color_depth_suspect", f"colorDepth={cd} inattendu", 0.25))
+
+        # DPR cohérence grossière : DPR > 3 est suspect sur desktop
+        dpr = ecran.get("devicePixelRatio")
+        if isinstance(dpr, (int, float)) and dpr > 3.0 and nav.get("maxTouchPoints", 0) == 0:
+            signaux.append(Signal("dpr_excessif", f"DPR={dpr} > 3 sur un appareil sans tactile", 0.5))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurEntropieInteraction:
+    """Analyse l'entropie temporelle des interactions souris.
+
+    Un humain a une distribution de délais entre mouvements souris qui suit
+    approximativement une loi log-normale. Un robot a des délais trop réguliers
+    (faible écart-type) ou trop uniformément distribués.
+    """
+
+    name = "entropie-interaction"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+
+        releves = [o["payload"] for o in obs.js if o["kind"] == "comportement"]
+        if not releves:
+            return _indetermine(self.name, self.version, "sans_releve", "aucun relevé")
+
+        signaux: list[Signal] = []
+        for r in releves:
+            delais = r.get("delais_souris_ms") or []
+            if len(delais) < 10:
+                continue
+
+            import statistics
+
+            moyenne = statistics.mean(delais)
+            ecart = statistics.stdev(delais) if len(delais) > 1 else 0
+
+            # Coefficient de variation trop faible → timing trop régulier
+            if moyenne > 0:
+                cv = ecart / moyenne
+                if cv < 0.15:
+                    signaux.append(
+                        Signal("timing_trop_regulier", f"CV des délais souris = {cv:.2f} (< 0.15 = machine)", 0.75)
+                    )
+
+            # Vérifier si les délais sont quantifiés (multiples d'une même valeur)
+            delais_arrondis = [round(d, 1) for d in delais]
+            uniques = len(set(delais_arrondis))
+            ratio_unique = uniques / len(delais_arrondis)
+            if ratio_unique < 0.3 and len(delais) > 15:
+                signaux.append(
+                    Signal("timing_quantifie", f"{ratio_unique:.0%} de délais uniques ({uniques}/{len(delais)})", 0.5)
+                )
+
+            # Aucun délai long (> 500ms) → pas de pause humaine
+            if len(delais) > 20 and max(delais) < 80:
+                signaux.append(
+                    Signal("pas_de_pause", f"max délai souris = {max(delais):.0f}ms (pas de pause humaine)", 0.5)
+                )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurEmpreinteCanvas:
+    """Vérifie l'empreinte canvas pour détecter le bruit artificiel.
+
+    Si l'empreinte canvas est identique à celle d'un Chrome headless connu,
+    le bruit n'a pas fonctionné. Si elle change à chaque session pour un même
+    profil déclaré, c'est du bruit aléatoire non lié à un vrai matériel.
+    """
+
+    name = "canvas-empreinte"
+    version = "1"
+
+    # Hash connu du canvas sans bruit (Chromium headless par défaut, mesurable)
+    HEADLESS_CONNUS: set[str] = set()
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+
+        canvas = p.get("canvas")
+        signaux: list[Signal] = []
+
+        if isinstance(canvas, str) and canvas.startswith("erreur"):
+            signaux.append(Signal("canvas_erreur", f"collecte canvas échouée : {canvas[:60]}", 0.5))
+        elif canvas and canvas in self.HEADLESS_CONNUS:
+            signaux.append(Signal("canvas_headless_connu", "empreinte canvas identique à un headless connu", 1.0))
+
+        # Vérifier la cohérence avec le WebGL déclaré
+        proto = p.get("prototypes") or {}
+
+        # Canvas + WebGL patchés ensemble → forte suspicion d'anti-détection
+        if proto.get("canvas_natif") is False and proto.get("webgl_getParameter_natif") is False:
+            signaux.append(
+                Signal("canvas_webgl_patches", "canvas ET WebGL patchés : probable moteur anti-détection", 0.75)
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -333,6 +564,10 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurCoherence(),
         DetecteurTls(),
         DetecteurComportement(),
+        DetecteurPrototypes(),
+        DetecteurCoherenceProfonde(),
+        DetecteurEntropieInteraction(),
+        DetecteurEmpreinteCanvas(),
     )
 }
 

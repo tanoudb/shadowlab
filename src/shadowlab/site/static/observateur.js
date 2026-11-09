@@ -6,10 +6,19 @@ const jeton = document.querySelector('meta[name="sl-session"]')?.content || '';
 const debut = performance.now();
 const evenements = { mousemove: 0, click: 0, keydown: 0, scroll: 0, touchstart: 0 };
 let premiereInteraction = null;
+const delais_souris = [];
+let dernierMouvementMs = null;
 for (const type of Object.keys(evenements)) {
   addEventListener(type, () => {
+    const maintenant = performance.now() - debut;
     evenements[type] += 1;
-    if (premiereInteraction === null) premiereInteraction = Math.round(performance.now() - debut);
+    if (premiereInteraction === null) premiereInteraction = Math.round(maintenant);
+    if (type === 'mousemove' && delais_souris.length < 50) {
+      if (dernierMouvementMs !== null) {
+        delais_souris.push(Math.round((maintenant - dernierMouvementMs) * 100) / 100);
+      }
+      dernierMouvementMs = maintenant;
+    }
   }, { passive: true });
 }
 
@@ -125,6 +134,54 @@ async function fingerprintjs() {
   }
 }
 
+function prototypes() {
+  const resultats = {};
+  try {
+    const toStr = Function.prototype.toString;
+    resultats.toString_self = toStr.call(toStr);
+    resultats.toString_natif = /\[native code\]/.test(resultats.toString_self);
+  } catch (_) { resultats.toString_self = 'erreur'; }
+  try {
+    const desc = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'toDataURL');
+    resultats.canvas_writable = desc ? desc.writable : 'absent';
+    resultats.canvas_configurable = desc ? desc.configurable : 'absent';
+    const src = HTMLCanvasElement.prototype.toDataURL.toString();
+    resultats.canvas_toString = src.length > 80 ? src.slice(0, 80) : src;
+    resultats.canvas_natif = /\[native code\]/.test(src);
+  } catch (_) { resultats.canvas_toString = 'erreur'; }
+  try {
+    const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency');
+    resultats.hwc_propre = desc ? (typeof desc.get === 'function') : 'absent';
+    resultats.hwc_prototype = 'hardwareConcurrency' in Navigator.prototype;
+    resultats.hwc_instance = navigator.hasOwnProperty('hardwareConcurrency');
+  } catch (_) { /* ignore */ }
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (gl) {
+      const src = gl.getParameter.toString();
+      resultats.webgl_getParameter_natif = /\[native code\]/.test(src);
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const desc = Object.getOwnPropertyDescriptor(navigator, 'plugins');
+    resultats.plugins_propre = !!desc;
+    if (desc && desc.get) {
+      resultats.plugins_getter_natif = /\[native code\]/.test(desc.get.toString());
+    }
+  } catch (_) { /* ignore */ }
+  return resultats;
+}
+
+function timing() {
+  return {
+    performance_now: typeof performance.now === 'function',
+    date_now: Date.now(),
+    perf_timeOrigin: performance.timeOrigin,
+    perf_now: performance.now(),
+    navigation_type: performance.getEntriesByType?.('navigation')?.[0]?.type || 'unknown',
+  };
+}
+
 async function collecter() {
   const nav = navigator;
   return {
@@ -160,6 +217,8 @@ async function collecter() {
     permissions: await permissions(),
     webgl: webgl(),
     canvas: await empreinteCanvas(),
+    prototypes: prototypes(),
+    timing: timing(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),
@@ -181,6 +240,7 @@ async function demarrer() {
 addEventListener('pagehide', () => {
   envoyer('comportement', {
     evenements, premiere_interaction_ms: premiereInteraction, duree_page_ms: Math.round(performance.now() - debut),
+    delais_souris_ms: delais_souris,
   }, true);
 });
 

@@ -6,6 +6,72 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-08 (nuit) — Claude (Opus 4.6) — NOEZIA v4 : moteur modulaire + durcissement Arena
+
+**Fait** : refonte complète du moteur NOEZIA (v3 monolithique → v4 modulaire) et durcissement de l'Arena avec 4 nouveaux détecteurs.
+
+**Moteur NOEZIA v4** (`src/shadowlab/engines/noezia/`) — ~2000 lignes, 20+ fichiers :
+- **Profils** : `ProfilNavigateur` dataclass avec GPU/OS/résolution/fonts/locale/timezone cohérents,
+  générateur à graine reproductible, validateur de cohérence (14 contrôles), stockage JSON.
+- **Comportement** : trajectoire souris minimum-jerk (`s(t) = 10t³ - 15t⁴ + 6t⁵`) + loi de Fitts
+  (`MT = a + b * log₂(D/W + 1)`), frappe clavier avec erreurs de voisinage QWERTY, défilement
+  inertiel, pauses de lecture adaptatives.
+- **Furtivité** : 5 scripts JS injectés — profil navigateur (navigator, screen, hwc, deviceMemory),
+  canvas noise (xorshift32 PRNG par profil), WebGL spoofing (vendor/renderer), audio noise,
+  patches navigator (plugins, permissions, webdriver, userAgentData).
+- **Défis** : handlers séparés PoW, Turnstile (test keys), reCAPTCHA (test keys), CAPTCHA demo.
+- **Orchestrateur** (`moteur.py`) : `DriverNoezia` hérite de `Driver`, lance Patchright avec profil,
+  injecte furtivité, filtre réseau (périmètre + hôtes CAPTCHA en sous-ressources), cascade de
+  résolution de défis, évitement de honeypots (vérification visibilité DOM).
+- **Options** : 10 options typées dans `options_permises` (headless, profil, locale, simuler_souris,
+  simuler_frappe, simuler_defilement, eviter_pieges, interaction_post_page, resoudre_defis).
+
+**Durcissement Arena** — 4 nouveaux détecteurs dans `detection.py` (10 total) :
+- `DetecteurPrototypes` : vérifie intégrité chaîne prototype (toString, canvas, webgl, plugins, hwc).
+- `DetecteurCoherenceProfonde` : screen dimensions, outer vs inner, hwc puissance de 2, deviceMemory, colorDepth, DPR.
+- `DetecteurEntropieInteraction` : CV des délais souris < 0.15, détection quantification, absence de pauses.
+- `DetecteurEmpreinteCanvas` : hashes headless connus, canvas+webgl patchés simultanément.
+
+**Observateur enrichi** (`observateur.js`) : collecte prototypes (toString natif, canvas writable/configurable,
+hwc propre/prototype/instance, webgl getParameter natif, plugins getter natif), timing (performance.now,
+timeOrigin, navigation type), délais souris inter-mouvements (50 échantillons).
+
+**Tests** : 27 tests unitaires v4 (profils, cohérence, stockage, souris, clavier, tempo, config, furtivité, moteur).
+**Lint** : propre (ruff check + ruff format).
+**Moteurs** : 13 enregistrés (7 intégrés dont noezia + noezia-experimental, 4 isolés, 2 à venir).
+**Détecteurs** : 10 enregistrés (6 existants + 4 nouveaux).
+
+**Fichiers créés** : `src/shadowlab/engines/noezia/` (20+ fichiers), `tests/test_noezia_v4.py`,
+`docs/superpowers/specs/2026-11-08-noezia-v4-design.md`.
+**Fichiers modifiés** : `src/shadowlab/engines/__init__.py`, `src/shadowlab/detection.py`,
+`src/shadowlab/site/static/observateur.js`.
+
+**Décision** : D-22 (architecture modulaire v4).
+
+**Campagne d'intégration #24** (18 passages : 3 scénarios × 6 niveaux × 1 rép) :
+| Niveau | Réussite | Profil |
+|--------|----------|--------|
+| 01     | 3/3 100% | profil-92d12ec4 (Windows, RTX 3070) |
+| 02     | 3/3 100% | profil-06f61baa (macOS, M2 Pro) |
+| 03     | 3/3 100% | profil-a07312ce (Windows, RTX 4070) |
+| 04     | 3/3 100% | profil-b977be99 (macOS, M1 Pro) |
+| 05     | 3/3 100% | profil-11e51bb7 (Linux, Intel Xe) |
+| 06     | 2/3  67% | profil-3daf618c (Windows, UHD 770) |
+
+**Global : 17/18 (94.4%).** 0% détection, 0 erreur technique. Le seul échec est un faux positif
+WAF CRS rule 920272 au niveau 06 (paranoia 3) : caractère `é` de "Chloé" dans le formulaire
+bloqué comme « caractère hors ASCII 127 ». Ce n'est pas une détection de bot — c'est une règle
+WAF trop stricte sur les accents. Le v4 passe toute la cascade de défis (PoW → Turnstile →
+reCAPTCHA → fingerprinting) sur les 6 niveaux.
+
+Chaque profil est unique et cohérent (GPU/OS/résolution/fonts/locale/timezone alignés),
+démontrant que le système de profils modulaire fonctionne.
+
+**Reste** : campagne comparative v4 vs v3 vs autres moteurs, affiner WAF pour accents UTF-8,
+campagne plus large (10+ scénarios, 5 reps) pour résultats statistiquement significatifs.
+
+---
+
 ## 2026-11-06 — Claude (Opus 4.6) — Phase P0 complète (v0.7)
 
 **Fait** : les 3 corrections P0 du plan v0.7 sont implémentées et testées.

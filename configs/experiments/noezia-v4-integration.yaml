@@ -1,0 +1,21 @@
+# Test d'intégration NOEZIA v4 contre Arena (6 niveaux)
+experiment:
+  name: noezia_v4_integration
+  description: "Test d'intégration NOEZIA v4 modulaire contre Arena (6 niveaux)"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+  repetitions: 1
+  seed: 20261108
+  output: [json]

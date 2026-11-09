@@ -69,3 +69,11 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   a montré 8 défauts structurels (classification fausse, chaîne de blocage qui occulte les détecteurs JS, biais
   des scénarios mono-page, absence de faux positifs). Priorité P0 = corriger ce qui fausse les résultats avant
   d'ajouter des fonctionnalités. Plan détaillé dans `docs/plan-v07.md`.
+- **D-22 — 08/11/2026 — NOEZIA v4 : architecture modulaire à la place du wrapper monolithique.** Le v3
+  (`noezia_engine.py`, 464 lignes) était un wrapper Patchright avec tout dans un fichier : profil en dur
+  (M5 Pro), spoofing par init script unique, comportement minimal. Le v4 (`engines/noezia/`, ~2000 lignes,
+  20+ fichiers) sépare profils cohérents (générateur + validateur + stockage), comportement humain (souris
+  minimum-jerk + Fitts, clavier QWERTY, défilement inertiel, tempo adaptatif), furtivité (5 scripts JS
+  modulaires avec PRNG par profil), et défis (3 handlers indépendants). L'ancien moteur reste sous le nom
+  `noezia-experimental` pour comparaison. Le v4 est conçu pour évoluer : chaque module est testable et
+  remplaçable indépendamment, les profils sont persistants et reproductibles par graine.
