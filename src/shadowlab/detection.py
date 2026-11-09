@@ -1444,9 +1444,7 @@ class DetecteurStackGetter:
         signaux: list[Signal] = []
 
         if sg.get("stack_has_getter") and sg.get("stack_getter_natif") is False:
-            signaux.append(
-                Signal("stack_getter_patche", "Error.prototype.stack getter non natif", 0.5)
-            )
+            signaux.append(Signal("stack_getter_patche", "Error.prototype.stack getter non natif", 0.5))
 
         if sg.get("stack_has_patchright"):
             signaux.append(Signal("stack_patchright", "patchright visible dans stack trace", 0.9))
@@ -1476,9 +1474,7 @@ class DetecteurRAFTiming:
         signaux: list[Signal] = []
 
         if rt.get("all_zero"):
-            signaux.append(
-                Signal("raf_all_zero", "tous les deltas rAF à 0 (headless sans vsync)", 0.6)
-            )
+            signaux.append(Signal("raf_all_zero", "tous les deltas rAF à 0 (headless sans vsync)", 0.6))
 
         if rt.get("all_same") and not rt.get("all_zero"):
             signaux.append(
@@ -1491,9 +1487,7 @@ class DetecteurRAFTiming:
 
         mean = rt.get("mean_delta")
         if isinstance(mean, (int, float)) and mean > 0 and mean < 4:
-            signaux.append(
-                Signal("raf_trop_rapide", f"rAF moyen {mean}ms (< 4ms, pas de vsync)", 0.5)
-            )
+            signaux.append(Signal("raf_trop_rapide", f"rAF moyen {mean}ms (< 4ms, pas de vsync)", 0.5))
 
         return _verdict(self.name, self.version, signaux)
 
@@ -1514,9 +1508,7 @@ class DetecteurWorkerConsistency:
         signaux: list[Signal] = []
 
         if not wc.get("available"):
-            return _indetermine(
-                self.name, self.version, "worker_indisponible", "Worker non supporté ou timeout"
-            )
+            return _indetermine(self.name, self.version, "worker_indisponible", "Worker non supporté ou timeout")
 
         if wc.get("hc_match") is False:
             signaux.append(
@@ -1532,8 +1524,7 @@ class DetecteurWorkerConsistency:
             signaux.append(
                 Signal(
                     "worker_dm_mismatch",
-                    f"deviceMemory main={wc.get('main_deviceMemory')} "
-                    f"vs worker={wc.get('worker_deviceMemory')}",
+                    f"deviceMemory main={wc.get('main_deviceMemory')} vs worker={wc.get('worker_deviceMemory')}",
                     0.8,
                 )
             )
@@ -1542,8 +1533,7 @@ class DetecteurWorkerConsistency:
             signaux.append(
                 Signal(
                     "worker_platform_mismatch",
-                    f"platform main={wc.get('main_platform')} "
-                    f"vs worker={wc.get('worker_platform')}",
+                    f"platform main={wc.get('main_platform')} vs worker={wc.get('worker_platform')}",
                     0.9,
                 )
             )
@@ -1567,26 +1557,101 @@ class DetecteurConnectionDynamic:
         signaux: list[Signal] = []
 
         if not cd.get("available"):
-            return _indetermine(
-                self.name, self.version, "api_absente", "NetworkInformation non disponible"
-            )
+            return _indetermine(self.name, self.version, "api_absente", "NetworkInformation non disponible")
 
         if cd.get("rtt_type") != "number":
             signaux.append(Signal("rtt_non_number", f"rtt type={cd.get('rtt_type')}", 0.5))
         if cd.get("downlink_type") != "number":
-            signaux.append(
-                Signal("downlink_non_number", f"downlink type={cd.get('downlink_type')}", 0.5)
-            )
+            signaux.append(Signal("downlink_non_number", f"downlink type={cd.get('downlink_type')}", 0.5))
 
         rtt = cd.get("rtt_1")
         if isinstance(rtt, (int, float)):
             if rtt == 0:
-                signaux.append(
-                    Signal("rtt_zero", "rtt=0 (valeur par défaut headless)", 0.4)
-                )
+                signaux.append(Signal("rtt_zero", "rtt=0 (valeur par défaut headless)", 0.4))
             if rtt > 500:
+                signaux.append(Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurProxyUAData:
+    """Détection de Proxy sur navigator.userAgentData.
+
+    Un Proxy sur NavigatorUAData est détectable via :
+    - Object.prototype.toString.call() ≠ "[object NavigatorUAData]"
+    - instanceof NavigatorUAData ≠ true
+    - Symbol.toStringTag absent ou différent
+    """
+
+    name = "proxy-uadata"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        ua = p.get("uadata_integrity") or {}
+        signaux: list[Signal] = []
+
+        if not ua:
+            return _indetermine(self.name, self.version, "non_collecte", "données intégrité UA non collectées")
+
+        if ua.get("toString") and "NavigatorUAData" not in str(ua.get("toString", "")):
+            signaux.append(
+                Signal(
+                    "toString_proxy",
+                    f"toString retourne {ua['toString']!r} au lieu de [object NavigatorUAData]",
+                    0.75,
+                )
+            )
+
+        if ua.get("instanceof") is False:
+            signaux.append(Signal("instanceof_proxy", "userAgentData instanceof NavigatorUAData = false", 0.75))
+
+        if ua.get("toStringTag") and ua["toStringTag"] != "NavigatorUAData":
+            signaux.append(
+                Signal(
+                    "toStringTag_proxy",
+                    f"Symbol.toStringTag = {ua['toStringTag']!r}",
+                    0.5,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurEnumerableProps:
+    """Vérifie que les propriétés navigator/screen ont les bons flags enumerable.
+
+    Les patches maladroits oublient souvent enumerable:true sur les getters,
+    ce qui les rend invisibles à for..in et Object.keys.
+    """
+
+    name = "enumerable-props"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        ep = p.get("enumerable_props") or {}
+        signaux: list[Signal] = []
+
+        if not ep:
+            return _indetermine(self.name, self.version, "non_collecte", "données enumerable non collectées")
+
+        for prop, is_enum in ep.items():
+            if is_enum is False:
                 signaux.append(
-                    Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3)
+                    Signal(
+                        f"{prop}_non_enum",
+                        f"{prop} n'est pas enumerable (patch visible)",
+                        0.3,
+                    )
                 )
 
         return _verdict(self.name, self.version, signaux)
@@ -1635,6 +1700,8 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurRAFTiming(),
         DetecteurWorkerConsistency(),
         DetecteurConnectionDynamic(),
+        DetecteurProxyUAData(),
+        DetecteurEnumerableProps(),
     )
 }
 

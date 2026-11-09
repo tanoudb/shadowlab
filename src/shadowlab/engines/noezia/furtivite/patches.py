@@ -55,6 +55,7 @@ def scripts_furtivite(
     headless: bool = True,
     automation: bool = True,
     workers: bool = True,
+    cdp: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -92,6 +93,9 @@ def scripts_furtivite(
 
     if workers:
         scripts.append(_charger_script("workers.js"))
+
+    if cdp:
+        scripts.append(_charger_script("cdp.js"))
 
     if automation:
         scripts.append(_charger_script("automation.js"))

@@ -803,6 +803,43 @@ function rafTimingTest() {
   });
 }
 
+function uadataIntegrityTest() {
+  const r = {};
+  try {
+    if (!navigator.userAgentData) { r.available = false; return r; }
+    r.available = true;
+    r.toString = Object.prototype.toString.call(navigator.userAgentData);
+    r.instanceof = navigator.userAgentData instanceof NavigatorUAData;
+    r.toStringTag = navigator.userAgentData[Symbol.toStringTag] || null;
+    r.protoMatch = Object.getPrototypeOf(navigator.userAgentData) === NavigatorUAData.prototype;
+  } catch(e) { r.error = e.message; }
+  return r;
+}
+
+function enumerablePropsTest() {
+  const r = {};
+  try {
+    const navProps = ['hardwareConcurrency', 'deviceMemory', 'webdriver',
+                      'plugins', 'mimeTypes', 'languages', 'language',
+                      'platform', 'vendor', 'maxTouchPoints'];
+    for (const prop of navProps) {
+      const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, prop);
+      if (desc) r['nav_' + prop] = desc.enumerable === true;
+    }
+    const winProps = ['devicePixelRatio', 'outerWidth', 'outerHeight'];
+    for (const prop of winProps) {
+      const desc = Object.getOwnPropertyDescriptor(Window.prototype, prop);
+      if (desc) r['win_' + prop] = desc.enumerable === true;
+    }
+    const screenProps = ['width', 'height', 'availWidth', 'availHeight', 'colorDepth'];
+    for (const prop of screenProps) {
+      const desc = Object.getOwnPropertyDescriptor(Screen.prototype, prop);
+      if (desc) r['screen_' + prop] = desc.enumerable === true;
+    }
+  } catch(e) { r.error = e.message; }
+  return r;
+}
+
 async function collecter() {
   const nav = navigator;
   return {
@@ -860,6 +897,8 @@ async function collecter() {
     domrect_stability: domRectStabilityTest(),
     worker_consistency: await workerConsistencyTest(),
     connection_dynamic: connectionDynamicTest(),
+    uadata_integrity: uadataIntegrityTest(),
+    enumerable_props: enumerablePropsTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),

@@ -123,7 +123,7 @@
     });
   } catch(e) {}
 
-  // ─── Permissions API : toutes les requêtes → état réaliste ───
+  // ─── Permissions API : PermissionStatus réaliste (hérite EventTarget) ───
   if (navigator.permissions) {
     const origQuery = navigator.permissions.query.bind(navigator.permissions);
     const PERM_PROMPT = new Set([
@@ -135,45 +135,82 @@
       'storage-access', 'window-management', 'local-fonts',
     ]);
     const PERM_GRANTED = new Set(['accelerometer', 'gyroscope', 'magnetometer']);
+
+    function _fauxPermissionStatus(etat) {
+      const target = new EventTarget();
+      Object.setPrototypeOf(target, PermissionStatus.prototype);
+      Object.defineProperty(target, 'state', {
+        get: natif(() => etat, 'get state'), enumerable: true, configurable: true,
+      });
+      Object.defineProperty(target, 'onchange', {
+        value: null, writable: true, enumerable: true, configurable: true,
+      });
+      return target;
+    }
+
     navigator.permissions.query = natif(function query(desc) {
       if (!desc || !desc.name) return origQuery(desc);
       const nom = desc.name;
       if (PERM_PROMPT.has(nom))
-        return Promise.resolve({state: 'prompt', onchange: null});
+        return Promise.resolve(_fauxPermissionStatus('prompt'));
       if (PERM_GRANTED.has(nom))
-        return Promise.resolve({state: 'granted', onchange: null});
+        return Promise.resolve(_fauxPermissionStatus('granted'));
       return origQuery(desc);
     }, 'query');
   }
 
   // ─── userAgentData (HeadlessChrome → Google Chrome) ───
+  // Patches directs sur le prototype NavigatorUAData (pas de Proxy — un Proxy est
+  // détectable via instanceof, Symbol.toStringTag, Object.prototype.toString).
   if (navigator.userAgentData) {
     const nettoyer = liste => liste.map(b => ({
       brand: b.brand.replace('HeadlessChrome', 'Google Chrome'), version: b.version,
     }));
     const uaOrig = navigator.userAgentData;
-    const uaProxy = new Proxy(uaOrig, {
-      get(target, prop) {
-        if (prop === 'brands') return nettoyer(target.brands);
-        if (prop === 'getHighEntropyValues') {
-          return natif(async function getHighEntropyValues(hints) {
-            const r = await target.getHighEntropyValues.call(target, hints);
-            if (r.brands) r.brands = nettoyer(r.brands);
-            if (r.fullVersionList) r.fullVersionList = nettoyer(r.fullVersionList);
-            if (P.platform) r.platform = P.platform_name || r.platform;
-            return r;
-          }, 'getHighEntropyValues');
-        }
-        if (prop === 'toJSON') return natif(function toJSON() {
-          return {...target.toJSON(), brands: nettoyer(target.brands)};
-        }, 'toJSON');
-        if (prop === 'platform') return P.platform_name || Reflect.get(target, prop);
-        const v = Reflect.get(target, prop);
-        return typeof v === 'function' ? v.bind(target) : v;
-      },
+    const origBrands = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(uaOrig), 'brands'
+    );
+    const origPlatform = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(uaOrig), 'platform'
+    );
+    const origGHEV = uaOrig.getHighEntropyValues.bind(uaOrig);
+    const origToJSON = uaOrig.toJSON.bind(uaOrig);
+    const UAProto = Object.getPrototypeOf(uaOrig);
+
+    Object.defineProperty(UAProto, 'brands', {
+      get: natif(function brands() {
+        const raw = origBrands && origBrands.get ? origBrands.get.call(this) : [];
+        return nettoyer(raw);
+      }, 'get brands'),
+      configurable: true, enumerable: true,
     });
-    Object.defineProperty(navigator, 'userAgentData', {
-      get: natif(() => uaProxy, 'get userAgentData'), configurable: true,
+
+    if (P.platform_name) {
+      Object.defineProperty(UAProto, 'platform', {
+        get: natif(function platform() { return P.platform_name; }, 'get platform'),
+        configurable: true, enumerable: true,
+      });
+    }
+
+    Object.defineProperty(UAProto, 'getHighEntropyValues', {
+      value: natif(async function getHighEntropyValues(hints) {
+        const r = await origGHEV(hints);
+        if (r.brands) r.brands = nettoyer(r.brands);
+        if (r.fullVersionList) r.fullVersionList = nettoyer(r.fullVersionList);
+        if (P.platform_name) r.platform = P.platform_name;
+        return r;
+      }, 'getHighEntropyValues'),
+      writable: true, configurable: true,
+    });
+
+    Object.defineProperty(UAProto, 'toJSON', {
+      value: natif(function toJSON() {
+        const j = origToJSON();
+        j.brands = nettoyer(j.brands);
+        if (P.platform_name) j.platform = P.platform_name;
+        return j;
+      }, 'toJSON'),
+      writable: true, configurable: true,
     });
   }
 
