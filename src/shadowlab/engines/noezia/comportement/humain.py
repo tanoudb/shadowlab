@@ -174,11 +174,19 @@ def delai_inter_touche(caractere: str, precedent: str | None = None,
 # ── Pauses page (lecture, navigation) ─────────────────────────────────
 
 def pause_lecture_ms(mots_page: int = 200) -> float:
-    """Temps de scan d'une page (ms). Log-normale basée sur le contenu."""
-    mots_lus = mots_page * random.uniform(0.25, 0.55)
-    wpm_scan = random.uniform(200, 350)
+    """Temps de scan d'une page (ms). Log-normale basée sur le contenu.
+
+    Un humain scan une page web à 200-400 WPM (titres, structure)
+    et ne lit que 20-40% du contenu. Résultat : ~1s pour 50 mots,
+    ~3s pour 200 mots, ~8s pour 500 mots.
+    """
+    fraction_lue = random.uniform(0.15, 0.35)
+    mots_lus = max(5, mots_page * fraction_lue)
+    wpm_scan = random.uniform(250, 400)
     base_ms = (mots_lus / wpm_scan) * 60_000
-    return log_normale(max(300, base_ms), 0.4, borne_min=200, borne_max=15_000)
+    base_ms = max(300, base_ms)
+    plafond = min(15_000, base_ms * 2.0)
+    return log_normale(base_ms, 0.3, borne_min=200, borne_max=plafond)
 
 
 def pause_avant_action_ms() -> float:

@@ -27,7 +27,7 @@ from ..base import (
     ResultatNavigation,
     liste_directe,
 )
-from .comportement import tempo
+from .comportement import humain, tempo
 from .comportement.clavier import SimulateurClavier
 from .comportement.defilement import SimulateurDefilement
 from .comportement.souris import SimulateurSouris
@@ -197,6 +197,13 @@ class DriverNoezia(Driver):
                 "sec-ch-ua": profil.sec_ch_ua,
                 "sec-ch-ua-platform": profil.sec_ch_ua_platform,
                 "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-full-version-list": profil.sec_ch_ua.replace(
+                    f'v="{profil.chrome_major}"',
+                    f'v="{profil.chrome_full}"',
+                ),
+                "sec-ch-ua-model": '""',
+                "sec-ch-ua-arch": '"x86"' if profil.os != "macos" else '"arm"',
+                "sec-ch-ua-bitness": '"64"',
                 "accept-language": profil.accept_language,
             },
         )
@@ -242,9 +249,8 @@ class DriverNoezia(Driver):
         cfg_d = self._config.defilement
         self._defilement = SimulateurDefilement(
             self._page,
+            mode=cfg_d.mode,
             pixels_par_tick=cfg_d.pixels_par_tick,
-            ticks_min=cfg_d.ticks_min,
-            ticks_max=cfg_d.ticks_max,
         )
 
     def close_session(self) -> None:
@@ -325,8 +331,8 @@ class DriverNoezia(Driver):
                 self._souris.mouvement_aleatoire()
                 tempo.pause_avant_clic()
             if self._config.defilement.actif and self._defilement:
-                self._defilement.defiler_bas(random.randint(60, 350))
-                time.sleep(random.uniform(0.1, 0.4))
+                self._defilement.defiler_bas()
+                time.sleep(humain.pause_reflexion_ms() / 1000.0)
             # Comportement oisif : 2-4 micro-interactions (lecture + exploration)
             if self._config.souris.actif and self._souris:
                 n_idle = random.randint(2, 4)
@@ -334,7 +340,7 @@ class DriverNoezia(Driver):
                     tempo.pause_reflexion()
                     self._souris.mouvement_aleatoire()
                     if random.random() < 0.3 and self._defilement:
-                        self._defilement.defiler_bas(random.randint(40, 200))
+                        self._defilement.defiler_bas()
         except Exception:
             pass
 
@@ -356,7 +362,7 @@ class DriverNoezia(Driver):
                     tempo.pause_reflexion()
                     self._souris.mouvement_aleatoire()
                 if self._config.defilement.actif and self._defilement and random.random() < 0.4:
-                    self._defilement.defiler_bas(random.randint(30, 150))
+                    self._defilement.defiler_bas()
                 tempo.hesitation(proba=0.20)
         except Exception:
             pass

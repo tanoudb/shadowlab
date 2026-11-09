@@ -27,10 +27,8 @@ class ConfigClavier:
 @dataclass(frozen=True)
 class ConfigDefilement:
     actif: bool = True
-    inertie: bool = True
+    mode: str = "trackpad"
     pixels_par_tick: int = 120
-    ticks_min: int = 1
-    ticks_max: int = 8
 
 
 @dataclass(frozen=True)

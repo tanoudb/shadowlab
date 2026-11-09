@@ -1,7 +1,9 @@
 """Génération de profils navigateur réalistes et cohérents.
 
 Chaque profil est un ensemble de propriétés qui doivent être cohérentes entre elles :
-le GPU annoncé doit correspondre à l'OS, la résolution à l'appareil, les fonts à l'OS, etc.
+le GPU annoncé correspond à l'OS et au nombre de cœurs, la résolution au type de machine,
+les fonts à l'OS, la mémoire au GPU, etc. Un détecteur qui corrèle ces signaux ne doit
+trouver aucune incohérence.
 """
 
 from __future__ import annotations
@@ -10,72 +12,93 @@ import hashlib
 import random
 from dataclasses import dataclass
 
-OS_VERSIONS: dict[str, list[str]] = {
-    "macos": ["10_15_7", "13_6_1", "14_2_1", "14_4_1", "14_6", "15_0", "15_1"],
-    "windows": ["10.0", "10.0", "10.0", "10.0"],  # Windows 10/11 both report 10.0
-    "linux": ["x86_64"],
-}
+
+# ── Machines réalistes (OS + GPU + cœurs + mémoire + écran) ───────────
+
+@dataclass(frozen=True)
+class ProfilMachine:
+    """Configuration matérielle cohérente d'une vraie machine."""
+    os: str
+    os_versions: list[str]
+    gpu_vendor: str
+    gpu_renderer: str
+    hw_concurrency: int
+    device_memory: int
+    resolutions: list[tuple[int, int, float]]
+
+
+MACHINES: list[ProfilMachine] = [
+    # ── macOS ─────────────────────────────────────────────────────────
+    ProfilMachine("macos", ["14_4_1", "14_6", "15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+                  8, 8, [(1440, 900, 2.0), (1920, 1080, 2.0), (2560, 1440, 2.0)]),
+    ProfilMachine("macos", ["14_4_1", "14_6", "15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)",
+                  10, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (1920, 1080, 2.0), (2560, 1440, 2.0)]),
+    ProfilMachine("macos", ["14_6", "15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+                  8, 8, [(1440, 900, 2.0), (1512, 982, 2.0), (1920, 1080, 2.0)]),
+    ProfilMachine("macos", ["14_6", "15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)",
+                  12, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (2560, 1440, 2.0)]),
+    ProfilMachine("macos", ["14_6", "15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+                  8, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (1920, 1080, 2.0)]),
+    ProfilMachine("macos", ["15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+                  12, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (2560, 1440, 2.0)]),
+    ProfilMachine("macos", ["15_0", "15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+                  10, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (2560, 1440, 2.0)]),
+    ProfilMachine("macos", ["15_1"],
+                  "Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+                  14, 8, [(1512, 982, 2.0), (1728, 1117, 2.0), (2560, 1440, 2.0)]),
+
+    # ── Windows — desktop NVIDIA ──────────────────────────────────────
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  8, 8, [(1920, 1080, 1.0), (1920, 1080, 1.25), (2560, 1440, 1.0)]),
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  8, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0), (2560, 1440, 1.25)]),
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  16, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0), (2560, 1440, 1.25)]),
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  16, 8, [(2560, 1440, 1.0), (2560, 1440, 1.25), (3840, 2160, 1.5)]),
+
+    # ── Windows — desktop AMD ─────────────────────────────────────────
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (AMD)", "ANGLE (AMD, AMD Radeon RX 7600 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  8, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0)]),
+
+    # ── Windows — laptop Intel ────────────────────────────────────────
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (Intel)", "ANGLE (Intel, Intel(R) UHD Graphics 770 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  8, 8, [(1920, 1080, 1.0), (1920, 1080, 1.25)]),
+    ProfilMachine("windows", ["10.0"],
+                  "Google Inc. (Intel)", "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                  4, 4, [(1366, 768, 1.0), (1536, 864, 1.25), (1920, 1080, 1.0)]),
+
+    # ── Linux ─────────────────────────────────────────────────────────
+    ProfilMachine("linux", ["x86_64"],
+                  "Mesa", "Mesa Intel(R) UHD Graphics 630 (CFL GT2)",
+                  8, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0)]),
+    ProfilMachine("linux", ["x86_64"],
+                  "Mesa", "Mesa Intel(R) Xe Graphics (TGL GT2)",
+                  8, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0)]),
+    ProfilMachine("linux", ["x86_64"],
+                  "Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.6.0)",
+                  16, 8, [(1920, 1080, 1.0), (2560, 1440, 1.0), (3840, 2160, 2.0)]),
+]
 
 CHROME_VERSIONS = [
-    ("128", "128.0.6613.137"),
     ("129", "129.0.6668.100"),
     ("130", "130.0.6723.116"),
     ("131", "131.0.6778.85"),
     ("132", "132.0.6834.57"),
 ]
-
-GPUS: dict[str, list[tuple[str, str]]] = {
-    "macos": [
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"),
-        ("Google Inc. (Apple)", "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"),
-    ],
-    "windows": [
-        ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (AMD)", "ANGLE (AMD, AMD Radeon RX 7600 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) UHD Graphics 770 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-        ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ],
-    "linux": [
-        ("Mesa", "Mesa Intel(R) UHD Graphics 630 (CFL GT2)"),
-        ("Mesa", "Mesa Intel(R) Xe Graphics (TGL GT2)"),
-        ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.6.0)"),
-    ],
-}
-
-RESOLUTIONS: dict[str, list[tuple[int, int, float]]] = {
-    "macos": [
-        (1440, 900, 2.0),
-        (1680, 1050, 2.0),
-        (1920, 1080, 2.0),
-        (2560, 1440, 2.0),
-        (1512, 982, 2.0),
-        (1728, 1117, 2.0),
-    ],
-    "windows": [
-        (1920, 1080, 1.0),
-        (1920, 1080, 1.25),
-        (1920, 1080, 1.5),
-        (2560, 1440, 1.0),
-        (2560, 1440, 1.25),
-        (3840, 2160, 1.5),
-        (1366, 768, 1.0),
-        (1536, 864, 1.25),
-    ],
-    "linux": [
-        (1920, 1080, 1.0),
-        (2560, 1440, 1.0),
-        (3840, 2160, 2.0),
-    ],
-}
 
 LOCALES: list[tuple[str, str, str]] = [
     ("fr-FR", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7", "Europe/Paris"),
@@ -89,110 +112,38 @@ LOCALES: list[tuple[str, str, str]] = [
 
 FONTS_PAR_OS: dict[str, list[str]] = {
     "macos": [
-        "Arial",
-        "Helvetica",
-        "Helvetica Neue",
-        "Times New Roman",
-        "Courier New",
-        "Georgia",
-        "Verdana",
-        "Trebuchet MS",
-        "Lucida Grande",
-        "Menlo",
-        "Monaco",
-        "SF Pro",
-        "SF Mono",
-        "Futura",
-        "Optima",
-        "Palatino",
-        "American Typewriter",
-        "Avenir",
-        "Avenir Next",
-        "Gill Sans",
+        "Arial", "Helvetica", "Helvetica Neue", "Times New Roman", "Courier New",
+        "Georgia", "Verdana", "Trebuchet MS", "Lucida Grande", "Menlo", "Monaco",
+        "SF Pro", "SF Mono", "Futura", "Optima", "Palatino", "American Typewriter",
+        "Avenir", "Avenir Next", "Gill Sans",
     ],
     "windows": [
-        "Arial",
-        "Helvetica",
-        "Times New Roman",
-        "Courier New",
-        "Georgia",
-        "Verdana",
-        "Trebuchet MS",
-        "Tahoma",
-        "Segoe UI",
-        "Calibri",
-        "Cambria",
-        "Consolas",
-        "Lucida Console",
-        "Impact",
-        "Comic Sans MS",
-        "Candara",
-        "Constantia",
-        "Corbel",
-        "Franklin Gothic Medium",
+        "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia",
+        "Verdana", "Trebuchet MS", "Tahoma", "Segoe UI", "Calibri", "Cambria",
+        "Consolas", "Lucida Console", "Impact", "Comic Sans MS", "Candara",
+        "Constantia", "Corbel", "Franklin Gothic Medium",
     ],
     "linux": [
-        "Arial",
-        "Helvetica",
-        "Times New Roman",
-        "Courier New",
-        "DejaVu Sans",
-        "DejaVu Serif",
-        "DejaVu Sans Mono",
-        "Liberation Sans",
-        "Liberation Serif",
-        "Liberation Mono",
-        "Noto Sans",
-        "Noto Serif",
-        "Ubuntu",
-        "Ubuntu Mono",
+        "Arial", "Helvetica", "Times New Roman", "Courier New", "DejaVu Sans",
+        "DejaVu Serif", "DejaVu Sans Mono", "Liberation Sans", "Liberation Serif",
+        "Liberation Mono", "Noto Sans", "Noto Serif", "Ubuntu", "Ubuntu Mono",
     ],
 }
 
 WEBGL_EXTENSIONS = [
-    "ANGLE_instanced_arrays",
-    "EXT_blend_minmax",
-    "EXT_color_buffer_half_float",
-    "EXT_disjoint_timer_query",
-    "EXT_float_blend",
-    "EXT_frag_depth",
-    "EXT_shader_texture_lod",
-    "EXT_texture_compression_bptc",
-    "EXT_texture_compression_rgtc",
-    "EXT_texture_filter_anisotropic",
-    "EXT_sRGB",
-    "KHR_parallel_shader_compile",
-    "OES_element_index_uint",
-    "OES_fbo_render_mipmap",
-    "OES_standard_derivatives",
-    "OES_texture_float",
-    "OES_texture_float_linear",
-    "OES_texture_half_float",
-    "OES_texture_half_float_linear",
-    "OES_vertex_array_object",
-    "WEBGL_color_buffer_float",
-    "WEBGL_compressed_texture_s3tc",
-    "WEBGL_compressed_texture_s3tc_srgb",
-    "WEBGL_debug_renderer_info",
-    "WEBGL_debug_shaders",
-    "WEBGL_depth_texture",
-    "WEBGL_draw_buffers",
-    "WEBGL_lose_context",
-    "WEBGL_multi_draw",
+    "ANGLE_instanced_arrays", "EXT_blend_minmax", "EXT_color_buffer_half_float",
+    "EXT_disjoint_timer_query", "EXT_float_blend", "EXT_frag_depth",
+    "EXT_shader_texture_lod", "EXT_texture_compression_bptc",
+    "EXT_texture_compression_rgtc", "EXT_texture_filter_anisotropic",
+    "EXT_sRGB", "KHR_parallel_shader_compile", "OES_element_index_uint",
+    "OES_fbo_render_mipmap", "OES_standard_derivatives", "OES_texture_float",
+    "OES_texture_float_linear", "OES_texture_half_float",
+    "OES_texture_half_float_linear", "OES_vertex_array_object",
+    "WEBGL_color_buffer_float", "WEBGL_compressed_texture_s3tc",
+    "WEBGL_compressed_texture_s3tc_srgb", "WEBGL_debug_renderer_info",
+    "WEBGL_debug_shaders", "WEBGL_depth_texture", "WEBGL_draw_buffers",
+    "WEBGL_lose_context", "WEBGL_multi_draw",
 ]
-
-HARDWARE_CONCURRENCY: dict[str, list[int]] = {
-    "macos": [8, 8, 8, 16, 16],
-    "windows": [4, 8, 8, 16, 16],
-    "linux": [4, 8, 8, 16],
-}
-
-# navigator.deviceMemory : valeurs Chrome valides (puissances de 2, max 8)
-DEVICE_MEMORY: dict[str, list[int]] = {
-    "macos": [4, 8, 8, 8],
-    "windows": [4, 8, 8, 8],
-    "linux": [4, 8, 8],
-}
 
 
 @dataclass
@@ -268,12 +219,10 @@ class ProfilNavigateur:
         return {"width": w, "height": h}
 
     def digest(self) -> str:
-        """Hash court du profil, pour identifier les sessions d'un même profil."""
         cle = f"{self.nom}:{self.canvas_seed}:{self.audio_seed}"
         return hashlib.sha256(cle.encode()).hexdigest()[:16]
 
     def en_dict(self) -> dict:
-        """Sérialisation complète pour persistance."""
         return {
             "nom": self.nom,
             "os": self.os,
@@ -306,18 +255,23 @@ class ProfilNavigateur:
 
 
 def generer_profil(nom: str | None = None, os: str | None = None, rng: random.Random | None = None) -> ProfilNavigateur:
-    """Génère un profil navigateur complet et cohérent."""
+    """Génère un profil navigateur complet et cohérent.
+
+    Tous les signaux sont corrélés via la table MACHINES : le GPU, les cœurs,
+    la mémoire et la résolution d'écran correspondent à une vraie configuration.
+    """
     r = rng or random.Random()
-    os_choisi = os or r.choice(list(OS_VERSIONS))
-    os_version = r.choice(OS_VERSIONS[os_choisi])
+
+    # Filtrer par OS si demandé
+    candidates = [m for m in MACHINES if m.os == os] if os else MACHINES
+    machine = r.choice(candidates)
+
+    os_version = r.choice(machine.os_versions)
     chrome_major, chrome_full = r.choice(CHROME_VERSIONS)
-    gpu_vendor, gpu_renderer = r.choice(GPUS[os_choisi])
-    screen_w, screen_h, dpr = r.choice(RESOLUTIONS[os_choisi])
+    screen_w, screen_h, dpr = r.choice(machine.resolutions)
     locale, accept_lang, tz = r.choice(LOCALES)
-    fonts = FONTS_PAR_OS[os_choisi][:]
+    fonts = FONTS_PAR_OS[machine.os][:]
     r.shuffle(fonts)
-    hw_conc = r.choice(HARDWARE_CONCURRENCY[os_choisi])
-    dev_mem = r.choice(DEVICE_MEMORY[os_choisi])
     canvas_seed = r.randint(0, 0x7FFFFFFF)
     audio_seed = r.randint(0, 0x7FFFFFFF)
 
@@ -326,12 +280,12 @@ def generer_profil(nom: str | None = None, os: str | None = None, rng: random.Ra
 
     return ProfilNavigateur(
         nom=nom,
-        os=os_choisi,
+        os=machine.os,
         os_version=os_version,
         chrome_major=chrome_major,
         chrome_full=chrome_full,
-        gpu_vendor=gpu_vendor,
-        gpu_renderer=gpu_renderer,
+        gpu_vendor=machine.gpu_vendor,
+        gpu_renderer=machine.gpu_renderer,
         screen_width=screen_w,
         screen_height=screen_h,
         device_pixel_ratio=dpr,
@@ -340,8 +294,8 @@ def generer_profil(nom: str | None = None, os: str | None = None, rng: random.Ra
         timezone=tz,
         fonts=fonts,
         webgl_extensions=WEBGL_EXTENSIONS[:],
-        hardware_concurrency=hw_conc,
-        device_memory=dev_mem,
+        hardware_concurrency=machine.hw_concurrency,
+        device_memory=machine.device_memory,
         canvas_seed=canvas_seed,
         audio_seed=audio_seed,
     )

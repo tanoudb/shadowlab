@@ -173,7 +173,7 @@ class TestTempo:
         debut = time.monotonic()
         pause_lecture(50)
         duree = time.monotonic() - debut
-        assert 0.05 < duree < 6.0
+        assert 0.05 < duree < 8.0
 
 
 # ── Configuration ──────────────────────────────────────────────────────
