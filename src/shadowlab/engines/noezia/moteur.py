@@ -30,6 +30,7 @@ from ..base import (
     proxy_verrou,
 )
 from . import extraction
+from .analyseur import Analyseur
 from .comportement import humain, tempo
 from .comportement.clavier import SimulateurClavier
 from .comportement.defilement import SimulateurDefilement
@@ -609,6 +610,11 @@ class DriverNoezia(Driver):
 
     def texts(self, selector: str) -> list[str]:
         return self._page.locator(selector).all_text_contents()
+
+    def analyser(self) -> Analyseur:
+        """Analyseur rapide (parsel) sur le HTML de la page courante, partageant la mémoire de
+        signatures du moteur. Le moteur récolte (furtif), l'analyseur extrait (css/xpath/adaptatif)."""
+        return Analyseur(self._page.content(), url=self._page.url, signatures=self._signatures)
 
     def extraire_adaptatif(self, selecteur: str, cle: str) -> str | None:
         """Extrait le texte d'un élément. Si le sélecteur a cassé (site changé), relocalise
