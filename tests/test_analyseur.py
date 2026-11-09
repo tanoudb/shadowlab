@@ -49,3 +49,14 @@ def test_extraction_adaptative_sans_navigateur(tmp_path):
 def test_adaptatif_sans_store_renvoie_none_si_casse(tmp_path):
     a = Analyseur("<div><b>x</b></div>", url="http://exemple.test/")
     assert a.extraire_adaptatif("span.absent", "k") is None
+
+
+def test_recuperer_respecte_le_perimetre():
+    # Le périmètre est vérifié AVANT tout fetch (pas de réseau nécessaire pour ce test).
+    import pytest
+
+    from shadowlab.engines.noezia.rapide import recuperer
+    from shadowlab.perimetre import DestinationRefusee
+
+    with pytest.raises(DestinationRefusee):
+        recuperer("https://example.com/", hotes=("127.0.0.1", "localhost"))
