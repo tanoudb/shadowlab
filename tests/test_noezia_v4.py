@@ -661,3 +661,27 @@ class TestRetryNavigation:
         rep = d._naviguer_avec_essais("http://x/", "load")
         assert rep.status == 404
         assert d.mesures.details["navigations_retentees"] == 0
+
+
+class TestProxyNavigateur:
+    """Scraping via proxy : en illimité, SHADOWLAB_PROXY route le navigateur (rotation d'IP)."""
+
+    def _moteur(self, hotes):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        return DriverNoezia(hotes, {})
+
+    def test_mode_strict_garde_le_verrou(self):
+        d = self._moteur(("127.0.0.1", "localhost"))
+        p = d._proxy_navigateur(("127.0.0.1", "localhost"))
+        assert p and "127.0.0.1:9" in p["server"]
+
+    def test_illimite_sans_proxy_aucun(self, monkeypatch):
+        monkeypatch.delenv("SHADOWLAB_PROXY", raising=False)
+        d = self._moteur(("*",))
+        assert d._proxy_navigateur(("*",)) is None
+
+    def test_illimite_avec_proxy_env(self, monkeypatch):
+        monkeypatch.setenv("SHADOWLAB_PROXY", "http://proxy.example:8080")
+        d = self._moteur(("*",))
+        assert d._proxy_navigateur(("*",)) == {"server": "http://proxy.example:8080"}

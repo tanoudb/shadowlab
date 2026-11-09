@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import logging
+import os
 import platform
 import random
 import time
@@ -172,7 +173,7 @@ class DriverNoezia(Driver):
         # Démarrer Patchright avec verrou réseau
         self._pw = sync_playwright().start()
         tous_hotes = tuple(self.hotes_autorises) + HOTES_CHALLENGES
-        verrou = proxy_verrou(tous_hotes)  # None en périmètre illimité (pas de mandataire)
+        verrou = self._proxy_navigateur(tous_hotes)
         args = [
             "--disable-blink-features=AutomationControlled",
             "--enable-features=NetworkService,NetworkServiceInProcess",
@@ -340,6 +341,20 @@ class DriverNoezia(Driver):
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
 
     # ── Navigation ─────────────────────────────────────────────────────
+
+    def _proxy_navigateur(self, tous_hotes: tuple[str, ...]) -> dict[str, str] | None:
+        """Proxy de lancement du navigateur.
+
+        - Mode strict : verrou réseau (mandataire bloquant, tout hors liste échoue).
+        - Mode illimité : un proxy utilisateur (`SHADOWLAB_PROXY`, pour scraper via proxy / rotation
+          d'IP) s'il est défini, sinon aucun proxy. Le proxy vient de l'environnement, jamais du code.
+        """
+        verrou = proxy_verrou(tous_hotes)
+        if verrou is None:
+            proxy_user = os.environ.get("SHADOWLAB_PROXY")
+            if proxy_user:
+                return {"server": proxy_user}
+        return verrou
 
     @staticmethod
     def _backoff(essai: int) -> float:
