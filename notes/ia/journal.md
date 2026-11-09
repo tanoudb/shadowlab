@@ -1451,3 +1451,27 @@ Site de test relancé avec le code à jour (la route `/lab/recaptcha-v3` répond
 ### Reste (inchangé)
 - Ethan : clé reCAPTCHA v3 (localhost autorisé) → `cp .env.example .env` + remplir → relancer la
   campagne pour le score réel.
+
+## 2026-11-09 (suite 4, autonome) — Scénario login moteur + finding Turnstile
+
+Sur « avance sans moi » : livré le scénario `connexion` (le monstre se connecte au niveau
+authentifié et atteint l'espace privé). Commit 8ef82a8.
+- Validé en direct (baseline) : login bout-en-bout OK, espace privé atteint (compte demo).
+- Campagne 01/05/06 (`connexion-arena.yaml`, l'Arena tournait déjà) : réussi au 01.
+- Au 05/06 : échec, mais la cause est **Turnstile** (« émis, jamais validé »), **PAS** la porte
+  de login — et `classe_automatise=false, detecte_par=[]` : le moteur n'est jamais détecté, sa
+  furtivité tient. Le blocage est à la couche Turnstile, en amont du login.
+
+### Finding : fiabilité de l'auto-résolution Turnstile (test keys)
+Historique noezia au 05/06 : 197/185 passages réussis → Turnstile EST franchissable, mais son
+auto-résolution est flaky (mes 4 reps sont tous tombés sur l'échec). Deux handlers se chevauchent
+(`scenarios._resoudre_challenge` via #turnstile-etat, et `moteur._resoudre_defis` →
+`defis/turnstile.resoudre` via l'iframe cloudflare), et le warning « Iframe Turnstile non trouvée
+en 20s » montre que le widget cloudflare n'apparaît parfois pas dans le délai (timing/charge).
+À traiter comme une tâche de fiabilité dédiée (pas en test keys à l'aveugle) : c'est test keys,
+ça ne prouve rien du réel, et le vrai gain serait sur la robustesse du handler, pas sur le moteur.
+
+### État branche
+Branche `niveau-authentifie-perimetre`, non poussée. Commits du jour : GPU, niveau authentifié +
+périmètre (D-30), démo reCAPTCHA v3, chargeur .env, 2 correctifs (verrou illimité + collision URL),
+scénario connexion. Démo v3 en attente de la clé d'Ethan.
