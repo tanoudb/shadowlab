@@ -71,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--similaires", action="store_true", help="auto-match : trouver tous les éléments similaires")
     p.add_argument("--seuil", type=float, default=0.5, help="seuil de ressemblance pour --similaires (défaut 0.5)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
+    p.add_argument(
+        "--insecure", action="store_true", help="désactiver la vérification TLS (cert auto-signé, ex. Arena locale)"
+    )
     args = parseur.parse_args(argv)
 
     reglages = charger()
@@ -139,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         from .engines.noezia.rapide import recuperer
 
         try:
-            analyseur = recuperer(args.url, verifier_tls=False)
+            analyseur = recuperer(args.url, verifier_tls=not args.insecure)
         except Exception as exc:  # noqa: BLE001
             print(f"Erreur : {exc}", file=sys.stderr)
             return 1
@@ -164,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.format_json:
                 print(json_mod.dumps({"texte": texte[:5000]}, ensure_ascii=False, indent=2))
             else:
-                print(texte[:3000])
+                print(_nettoyer(texte[:3000]))
         return 0
 
     cx = db.ouvrir(reglages.base_donnees)
