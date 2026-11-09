@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..perimetre import est_autorisee
-from .base import MANDATAIRE_BLOQUANT, Driver, ResultatNavigation, liste_directe
+from .base import Driver, ResultatNavigation, proxy_verrou
 
 
 class DriverPlaywright(Driver):
@@ -48,7 +48,7 @@ class DriverPlaywright(Driver):
     def open(self) -> None:
         config = self.configuration()
         self._pw = self._api()().start()
-        verrou = {"server": MANDATAIRE_BLOQUANT, "bypass": ",".join(liste_directe(self.hotes_autorises))}
+        verrou = proxy_verrou(self.hotes_autorises)  # None en périmètre illimité
         self._navigateur = self._pw.chromium.launch(
             headless=config["headless"], channel=config.get("channel"), proxy=verrou
         )

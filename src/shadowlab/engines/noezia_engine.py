@@ -23,7 +23,7 @@ import time
 from typing import Any
 
 from ..perimetre import est_autorisee
-from .base import MANDATAIRE_BLOQUANT, ResultatNavigation, liste_directe
+from .base import ResultatNavigation, proxy_verrou
 from .playwright_engine import DriverPlaywright
 
 # Hôtes des widgets CAPTCHA en mode test — sous-ressources uniquement, jamais cibles de navigation.
@@ -298,7 +298,7 @@ class DriverNoeziaExperimental(DriverPlaywright):
         config = self.configuration()
         self._pw = self._api()().start()
         tous_hotes = tuple(self.hotes_autorises) + HOTES_CHALLENGES
-        verrou = {"server": MANDATAIRE_BLOQUANT, "bypass": ",".join(liste_directe(tous_hotes))}
+        verrou = proxy_verrou(tous_hotes)  # None en périmètre illimité
         self._navigateur = self._pw.chromium.launch(headless=config["headless"], proxy=verrou)
 
     def _nouveau_contexte(self):

@@ -20,14 +20,25 @@ MANDATAIRE_BLOQUANT = "http://127.0.0.1:9"
 
 
 def liste_directe(hotes_autorises: tuple[str, ...]) -> list[str]:
-    """Hôtes joints en direct (hors mandataire bloquant), au format des règles de Chrome.
-
-    En mode illimité (``*`` dans la liste), tout passe en direct : ``["*"]`` lève le verrou réseau
-    pour tous les moteurs d'un seul point. Le durcissement final retire ``*`` et le verrou revient.
-    """
-    if ILLIMITE in hotes_autorises:
-        return ["*"]
+    """Hôtes joints en direct (hors mandataire bloquant), au format des règles de Chrome."""
     return [f"[{h}]" if ":" in h else h for h in hotes_autorises]
+
+
+def perimetre_illimite(hotes_autorises: tuple[str, ...]) -> bool:
+    """Vrai si le périmètre est illimité (``*`` dans la liste) : aucun verrou réseau."""
+    return ILLIMITE in hotes_autorises
+
+
+def proxy_verrou(hotes_autorises: tuple[str, ...]) -> dict[str, str] | None:
+    """Config proxy du verrou réseau pour un navigateur Playwright, ou None en illimité.
+
+    En illimité on NE met PAS de mandataire bloquant (un bypass ``*`` n'est pas honoré par
+    Chromium et enverrait tout vers le mandataire mort). Le durcissement final retire ``*``
+    et le verrou (rejet de tout hôte hors liste) revient.
+    """
+    if perimetre_illimite(hotes_autorises):
+        return None
+    return {"server": MANDATAIRE_BLOQUANT, "bypass": ",".join(liste_directe(hotes_autorises))}
 
 
 class FonctionIndisponible(RuntimeError):

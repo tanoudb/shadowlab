@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib.metadata
 from typing import Any
 
-from .base import MANDATAIRE_BLOQUANT, liste_directe
+from .base import MANDATAIRE_BLOQUANT, liste_directe, perimetre_illimite
 from .playwright_engine import DriverPlaywright
 
 
@@ -31,10 +31,12 @@ class DriverScraplingFurtif(DriverPlaywright):
     def open(self) -> None:
         from scrapling.fetchers import StealthySession
 
-        drapeaux = (
-            f"--proxy-server={MANDATAIRE_BLOQUANT}",
-            f"--proxy-bypass-list={';'.join(liste_directe(self.hotes_autorises))}",
-        )
+        drapeaux: tuple[str, ...] = ()
+        if not perimetre_illimite(self.hotes_autorises):  # pas de verrou réseau en illimité
+            drapeaux = (
+                f"--proxy-server={MANDATAIRE_BLOQUANT}",
+                f"--proxy-bypass-list={';'.join(liste_directe(self.hotes_autorises))}",
+            )
         self._session = StealthySession(
             **{"headless": True, **self.options},
             extra_flags=drapeaux,

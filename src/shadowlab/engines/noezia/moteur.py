@@ -21,12 +21,11 @@ from typing import Any
 
 from ...perimetre import est_autorisee
 from ..base import (
-    MANDATAIRE_BLOQUANT,
     Driver,
     FonctionIndisponible,
     MesuresSession,
     ResultatNavigation,
-    liste_directe,
+    proxy_verrou,
 )
 from .comportement import humain, tempo
 from .comportement.clavier import SimulateurClavier
@@ -163,10 +162,7 @@ class DriverNoezia(Driver):
         # Démarrer Patchright avec verrou réseau
         self._pw = sync_playwright().start()
         tous_hotes = tuple(self.hotes_autorises) + HOTES_CHALLENGES
-        verrou = {
-            "server": MANDATAIRE_BLOQUANT,
-            "bypass": ",".join(liste_directe(tous_hotes)),
-        }
+        verrou = proxy_verrou(tous_hotes)  # None en périmètre illimité (pas de mandataire)
         args = [
             "--disable-blink-features=AutomationControlled",
             "--enable-features=NetworkService,NetworkServiceInProcess",
@@ -420,8 +416,8 @@ class DriverNoezia(Driver):
                 self._resoudre_defis()
             return
 
-        # reCAPTCHA
-        if "/lab/recaptcha" in url:
+        # reCAPTCHA (défi v2 de l'Arena — surtout pas la démo /lab/recaptcha-v3, qui n'est pas un défi)
+        if "/lab/recaptcha" in url and "/lab/recaptcha-v3" not in url:
             log.debug("Défi reCAPTCHA détecté")
             tempo.pause_reflexion()
             if defi_recaptcha.resoudre(self._page, self._souris):

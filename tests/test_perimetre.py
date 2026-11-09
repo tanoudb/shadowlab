@@ -2,7 +2,7 @@ import socket
 
 import pytest
 
-from shadowlab.engines.base import liste_directe
+from shadowlab.engines.base import liste_directe, perimetre_illimite, proxy_verrou
 from shadowlab.perimetre import ILLIMITE, DestinationRefusee, est_autorisee, verifier_url
 
 AUTORISES = ("127.0.0.1", "localhost", "::1")
@@ -21,8 +21,14 @@ def test_mode_illimite_garde_le_controle_de_schema():
         verifier_url("file:///etc/passwd", (ILLIMITE,))
 
 
-def test_liste_directe_leve_le_verrou_en_illimite():
-    assert liste_directe((ILLIMITE,)) == ["*"]
+def test_verrou_reseau_absent_en_illimite():
+    # En illimité : aucun mandataire bloquant (un bypass ``*`` n'étant pas honoré par Chromium).
+    assert perimetre_illimite((ILLIMITE,)) is True
+    assert proxy_verrou((ILLIMITE,)) is None
+    # En strict : mandataire + liste de contournement explicite.
+    assert perimetre_illimite(("127.0.0.1",)) is False
+    v = proxy_verrou(("127.0.0.1", "localhost"))
+    assert v and v["server"] and v["bypass"] == "127.0.0.1,localhost"
     assert liste_directe(("127.0.0.1", "localhost")) == ["127.0.0.1", "localhost"]
 
 

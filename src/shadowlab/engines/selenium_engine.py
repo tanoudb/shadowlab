@@ -11,7 +11,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .base import MANDATAIRE_BLOQUANT, Driver, FonctionIndisponible, ResultatNavigation, liste_directe
+from .base import (
+    MANDATAIRE_BLOQUANT,
+    Driver,
+    FonctionIndisponible,
+    ResultatNavigation,
+    liste_directe,
+    perimetre_illimite,
+)
 
 SCRIPT_NAVIGUE = "const e = arguments[0]; return (e.tagName === 'A' && !!e.href) || (e.type === 'submit' && !!e.form);"
 
@@ -39,9 +46,10 @@ class DriverSelenium(Driver):
         options = webdriver.ChromeOptions()
         if self.configuration()["headless"]:
             options.add_argument("--headless=new")
-        contournement = ";".join(liste_directe(self.hotes_autorises))
-        options.add_argument(f"--proxy-server={MANDATAIRE_BLOQUANT}")
-        options.add_argument(f"--proxy-bypass-list={contournement}")
+        if not perimetre_illimite(self.hotes_autorises):  # pas de verrou réseau en illimité
+            contournement = ";".join(liste_directe(self.hotes_autorises))
+            options.add_argument(f"--proxy-server={MANDATAIRE_BLOQUANT}")
+            options.add_argument(f"--proxy-bypass-list={contournement}")
         options.add_argument("--ignore-certificate-errors")  # certificat local de l'Arena
         self._pilote = webdriver.Chrome(options=options)
         self._pilote.set_page_load_timeout(30)
