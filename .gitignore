@@ -12,3 +12,6 @@ downloaded_files/
 # Front du laboratoire (Vite + React)
 frontend/node_modules/
 frontend/dist/
+
+# Secrets locaux (ne jamais commiter)
+.env

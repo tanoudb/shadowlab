@@ -37,8 +37,31 @@ class Reglages:
         return self.sorties / "arena"
 
 
+def _charger_env(chemin: Path | None = None) -> None:
+    """Charge un fichier `.env` (KEY=VALUE) dans l'environnement s'il existe.
+
+    Les secrets vivent dans `.env` (ignoré par git), jamais dans le code. Une variable déjà
+    définie dans l'environnement a priorité (un `export` explicite l'emporte sur `.env`).
+    """
+    fichier = chemin or (RACINE / ".env")
+    try:
+        contenu = fichier.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for brut in contenu.splitlines():
+        ligne = brut.strip()
+        if not ligne or ligne.startswith("#") or "=" not in ligne:
+            continue
+        cle, _, valeur = ligne.partition("=")
+        cle = cle.strip().removeprefix("export ").strip()
+        valeur = valeur.strip().strip('"').strip("'")
+        if cle:
+            os.environ.setdefault(cle, valeur)
+
+
 def charger() -> Reglages:
     """Construit les réglages ; chaque valeur a un défaut sûr (local, sans jeton)."""
+    _charger_env()
     sorties = Path(os.environ.get("SHADOWLAB_SORTIES", RACINE / "outputs"))
     # Phase interne/expérimentale : périmètre illimité par défaut (``*``). Durcissement final =
     # fixer SHADOWLAB_HOTES_AUTORISES à une liste explicite (voir docs/securite-a-finaliser.md).
