@@ -1,0 +1,178 @@
+// Nettoyage des marqueurs d'automation et cohérence CSS/timing.
+// Supprime les globales trahissant Playwright/Puppeteer/Selenium/ChromeDriver,
+// normalise les media queries headless, et aligne la précision des timers.
+(() => {
+  const P = window.__NOEZIA_PROFIL__;
+  if (!P) return;
+  const natif = window.__NOEZIA_NATIF__ || (fn => fn);
+
+  try { const h = location.hostname;
+    if (h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.localhost') && !h.endsWith('.test')) return;
+  } catch(e) { return; }
+
+  // ─── Nettoyage des globales d'automation ───
+  const GLOBALES_SUSPECTES = [
+    '__playwright', '__pw_manual', '__playwright_evaluation_script__',
+    '__pwright_target__', '__playwright_routeHandler',
+    '__selenium_unwrapped', '__webdriver_evaluate', '__driver_evaluate',
+    '__webdriver_script_fn', '__fxdriver_evaluate', '__driver_unwrapped',
+    '__webdriver_script_func', '__lastWatirAlert', '__lastWatirConfirm',
+    '__lastWatirPrompt', '_Selenium_IDE_Recorder', '_WEBDRIVER_ELEM_CACHE',
+    'callPhantom', '_phantom', '__nightmare',
+    'domAutomation', 'domAutomationController',
+  ];
+
+  for (const nom of GLOBALES_SUSPECTES) {
+    try {
+      if (nom in window) {
+        delete window[nom];
+        if (nom in window) {
+          Object.defineProperty(window, nom, {
+            get: () => undefined,
+            set: () => {},
+            configurable: true,
+          });
+        }
+      }
+    } catch(e) {}
+  }
+
+  // cdc_ et $cdc_ (ChromeDriver) : préfixes dynamiques
+  try {
+    for (const k of Object.keys(window)) {
+      if (k.startsWith('cdc_') || k.startsWith('$cdc_')) {
+        try { delete window[k]; } catch(e) {}
+      }
+    }
+  } catch(e) {}
+
+  // document aussi
+  const DOC_SUSPECTES = [
+    '__selenium_unwrapped', '__webdriver_evaluate',
+    '$chrome_asyncScriptInfo', '$cdc_asdjflasutopfhvcZLmcfl_',
+  ];
+  for (const nom of DOC_SUSPECTES) {
+    try {
+      if (nom in document) {
+        delete document[nom];
+      }
+    } catch(e) {}
+  }
+
+  // ─── CSS media queries : cohérence headless → headed ───
+  // Headless Chrome : prefers-color-scheme = light (correct)
+  //                   prefers-reduced-motion = no-preference (correct)
+  //                   forced-colors = none (correct)
+  // Mais matchMedia peut trahir un écran absent via des queries obscures.
+  const origMatchMedia = window.matchMedia;
+  if (origMatchMedia) {
+    window.matchMedia = natif(function matchMedia(query) {
+      const q = typeof query === 'string' ? query : '';
+      // display-mode: standalone/fullscreen = false en navigateur normal
+      // Headless peut répondre différemment à 'hover' et 'pointer'
+      // Un vrai navigateur desktop : hover=hover, pointer=fine
+      if (/\(hover:\s*none\)/.test(q)) {
+        const result = origMatchMedia.call(window, q);
+        if (result.matches) {
+          return {
+            matches: false,
+            media: result.media,
+            onchange: null,
+            addListener: natif(function addListener() {}, 'addListener'),
+            removeListener: natif(function removeListener() {}, 'removeListener'),
+            addEventListener: natif(function addEventListener() {}, 'addEventListener'),
+            removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
+            dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
+          };
+        }
+      }
+      if (/\(pointer:\s*none\)/.test(q)) {
+        const result = origMatchMedia.call(window, q);
+        if (result.matches) {
+          return {
+            matches: false,
+            media: result.media,
+            onchange: null,
+            addListener: natif(function addListener() {}, 'addListener'),
+            removeListener: natif(function removeListener() {}, 'removeListener'),
+            addEventListener: natif(function addEventListener() {}, 'addEventListener'),
+            removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
+            dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
+          };
+        }
+      }
+      return origMatchMedia.call(window, q);
+    }, 'matchMedia');
+  }
+
+  // ─── Prototype chain : propriétés propres inattendues sur navigator ───
+  // Les détecteurs vérifient que navigator n'a PAS de propriétés propres
+  // pour hardwareConcurrency, deviceMemory etc. (elles doivent être sur le prototype).
+  // Nos patches dans navigateur.js les mettent déjà sur le prototype,
+  // mais d'autres injections (Patchright lui-même) peuvent en ajouter.
+  const PROPS_PROTOTYPE_ONLY = [
+    'webdriver', 'hardwareConcurrency', 'deviceMemory',
+    'languages', 'language', 'vendor', 'plugins', 'mimeTypes',
+  ];
+  for (const prop of PROPS_PROTOTYPE_ONLY) {
+    try {
+      const desc = Object.getOwnPropertyDescriptor(navigator, prop);
+      if (desc) {
+        // Propriété propre inattendue : la supprimer (le prototype la fournit)
+        delete navigator[prop];
+      }
+    } catch(e) {}
+  }
+
+  // Même chose pour screen : les dimensions doivent être sur Screen.prototype
+  const SCREEN_PROTO = ['width', 'height', 'availWidth', 'availHeight', 'colorDepth', 'pixelDepth'];
+  for (const prop of SCREEN_PROTO) {
+    try {
+      const desc = Object.getOwnPropertyDescriptor(screen, prop);
+      if (desc && !Object.getOwnPropertyDescriptor(Screen.prototype, prop)) {
+        // Si c'est sur l'instance mais pas sur le prototype, c'est suspect
+        // Ne rien faire ici : nos patches les mettent sur le prototype
+      } else if (desc) {
+        delete screen[prop];
+      }
+    } catch(e) {}
+  }
+
+  // ─── Performance.now() : normalisation de la précision ───
+  // Headless Chrome peut avoir une précision de timer différente.
+  // Un navigateur standard avec cross-origin isolation off arrondit à 100µs.
+  // On s'assure que la précision est cohérente.
+  try {
+    const origPerfNow = performance.now.bind(performance);
+    performance.now = natif(function now() {
+      // Arrondir à 100µs (0.1ms) — comportement standard sans SharedArrayBuffer
+      return Math.round(origPerfNow() * 10) / 10;
+    }, 'now');
+  } catch(e) {}
+
+  // ─── Date.now() : micro-jitter pour masquer les patterns d'automation ───
+  // Les bots appellent Date.now() à intervalles très réguliers.
+  // On n'ajoute PAS de bruit (ça casserait les mesures), mais on s'assure
+  // que la fonction reste native.
+  // (natif() suffit pour passer le toString test)
+
+  // ─── Cleanup : supprimer notre propre marqueur après initialisation ───
+  // __NOEZIA_PROFIL__ et __NOEZIA_NATIF__ sont visibles sur window.
+  // On les rend non-énumérables et non-détectables.
+  try {
+    const profilVal = window.__NOEZIA_PROFIL__;
+    const natifVal = window.__NOEZIA_NATIF__;
+    Object.defineProperty(window, '__NOEZIA_PROFIL__', {
+      get: () => profilVal,
+      set: () => {},
+      enumerable: false,
+      configurable: true,
+    });
+    Object.defineProperty(window, '__NOEZIA_NATIF__', {
+      get: () => natifVal,
+      set: () => {},
+      enumerable: false,
+      configurable: true,
+    });
+  } catch(e) {}
+})();

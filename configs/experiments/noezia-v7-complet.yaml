@@ -1,26 +1,26 @@
 # Campagne NOEZIA v7 — validation complète avec tous les collecteurs
 # Exercer les 20 détecteurs Arena + nouveaux collecteurs observateur
 # (stack trace, performance memory, Intl coherence)
-description: "NOEZIA v7 : 10 scripts furtivité, 20 détecteurs, validation complète"
-
-moteurs:
-  - noezia
-
-niveaux:
-  - "01"
-  - "02"
-  - "03"
-  - "04"
-  - "05"
-  - "06"
-
-scenarios:
-  - accueil
-  - navigation
-  - extraction
-  - empreinte
-  - detection
-  - exploration
-
-repetitions: 3
-seed: 20261109
+experiment:
+  name: noezia_v7_complet
+  description: "NOEZIA v7 : 10 scripts furtivité, 20 détecteurs, validation complète"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]

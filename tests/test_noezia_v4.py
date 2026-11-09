@@ -207,7 +207,8 @@ class TestFurtivite:
 
         p = generer_profil("test-furtif")
         scripts = scripts_furtivite(p)
-        assert len(scripts) == 10  # profil + nav + iframes + env + canvas + webgl + audio + codecs + polices + headless
+        # profil + nav + iframes + env + canvas + webgl + audio + codecs + polices + headless + automation
+        assert len(scripts) == 11
 
     def test_scripts_contiennent_profil(self):
         from shadowlab.engines.noezia.furtivite.patches import scripts_furtivite
@@ -224,7 +225,7 @@ class TestFurtivite:
 
         p = generer_profil("test-selective")
         scripts = scripts_furtivite(p, canvas=False, audio=False)
-        assert len(scripts) == 8  # profil + nav + iframes + env + webgl + codecs + polices + headless
+        assert len(scripts) == 9  # profil + nav + iframes + env + webgl + codecs + polices + headless + automation
 
 
 # ── Moteur (sans navigateur) ──────────────────────────────────────────
@@ -452,8 +453,89 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_20_detecteurs(self):
+    def test_automation_globals_detecte(self):
+        from shadowlab.detection import DetecteurAutomationGlobals
+
+        d = DetecteurAutomationGlobals()
+        obs = _obs_avec_empreinte({"automation_globals": {"globales_trouvees": ["__playwright"], "cdc_keys": []}})
+        r = d.classer(obs)
+        assert any(s.code == "globales_automation" for s in r.signals)
+
+    def test_automation_globals_propre(self):
+        from shadowlab.detection import DetecteurAutomationGlobals
+
+        d = DetecteurAutomationGlobals()
+        obs = _obs_avec_empreinte(
+            {"automation_globals": {"globales_trouvees": [], "cdc_keys": [], "noezia_enumerable": []}}
+        )
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_css_media_headless(self):
+        from shadowlab.detection import DetecteurCSSMedia
+
+        d = DetecteurCSSMedia()
+        obs = _obs_avec_empreinte(
+            {"css_media": {"hover_none": True, "hover_hover": False, "pointer_none": True, "pointer_fine": False}}
+        )
+        r = d.classer(obs)
+        assert any(s.code == "hover_none" for s in r.signals)
+
+    def test_css_media_normal(self):
+        from shadowlab.detection import DetecteurCSSMedia
+
+        d = DetecteurCSSMedia()
+        obs = _obs_avec_empreinte(
+            {"css_media": {"hover_none": False, "hover_hover": True, "pointer_none": False, "pointer_fine": True}}
+        )
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_prototype_chain_propre(self):
+        from shadowlab.detection import DetecteurPrototypeChain
+
+        d = DetecteurPrototypeChain()
+        obs = _obs_avec_empreinte(
+            {
+                "prototype_chain": {
+                    "navigator_own": {
+                        "webdriver": {"own": False, "prototype": True},
+                        "languages": {"own": False, "prototype": True},
+                    },
+                    "screen_own_width": False,
+                    "screen_own_height": False,
+                }
+            }
+        )
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_prototype_chain_fuite(self):
+        from shadowlab.detection import DetecteurPrototypeChain
+
+        d = DetecteurPrototypeChain()
+        obs = _obs_avec_empreinte(
+            {
+                "prototype_chain": {
+                    "navigator_own": {
+                        "webdriver": {"own": True, "prototype": False},
+                    },
+                }
+            }
+        )
+        r = d.classer(obs)
+        assert any(s.code == "nav_own_webdriver" for s in r.signals)
+
+    def test_timing_precision_normal(self):
+        from shadowlab.detection import DetecteurTimingPrecision
+
+        d = DetecteurTimingPrecision()
+        obs = _obs_avec_empreinte({"timing_precision": {"perf_now_natif": True, "min_delta": 0.1}})
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_registre_24_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 20
+        assert len(r) == 24

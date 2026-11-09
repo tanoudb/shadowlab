@@ -54,6 +54,7 @@ def scripts_furtivite(
     codecs: bool = True,
     polices: bool = True,
     headless: bool = True,
+    automation: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -88,6 +89,9 @@ def scripts_furtivite(
 
     if headless:
         scripts.append(_charger_script("headless.js"))
+
+    if automation:
+        scripts.append(_charger_script("automation.js"))
 
     return scripts
 

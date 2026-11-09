@@ -464,6 +464,107 @@ function stackTraceTest() {
   return r;
 }
 
+function automationGlobals() {
+  const r = {};
+  // Globales d'automation connues
+  const SUSPECTS = [
+    '__playwright', '__pw_manual', '__playwright_evaluation_script__',
+    '__pwright_target__', '__selenium_unwrapped', '__webdriver_evaluate',
+    '__driver_evaluate', '__webdriver_script_fn', 'callPhantom', '_phantom',
+    '__nightmare', 'domAutomation', 'domAutomationController',
+  ];
+  r.globales_trouvees = [];
+  for (const nom of SUSPECTS) {
+    try {
+      if (nom in window && window[nom] !== undefined) {
+        r.globales_trouvees.push(nom);
+      }
+    } catch (_) { /* ignore */ }
+  }
+  // cdc_/\$cdc_ (ChromeDriver)
+  try {
+    const cdc = Object.keys(window).filter(k => k.startsWith('cdc_') || k.startsWith('$cdc_'));
+    if (cdc.length) r.cdc_keys = cdc;
+  } catch (_) { /* ignore */ }
+  // Noms NOEZIA visibles dans Object.keys ?
+  try {
+    const noezia = Object.keys(window).filter(k => k.includes('NOEZIA'));
+    r.noezia_enumerable = noezia;
+  } catch (_) { /* ignore */ }
+  // Document markers
+  try {
+    const docSuspects = ['__selenium_unwrapped', '__webdriver_evaluate', '$chrome_asyncScriptInfo'];
+    r.doc_trouvees = docSuspects.filter(n => { try { return n in document; } catch(_) { return false; } });
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function cssMediaTest() {
+  const r = {};
+  try {
+    // hover: none = pas de souris (mobile ou headless)
+    r.hover_none = window.matchMedia('(hover: none)').matches;
+    r.hover_hover = window.matchMedia('(hover: hover)').matches;
+    r.pointer_none = window.matchMedia('(pointer: none)').matches;
+    r.pointer_fine = window.matchMedia('(pointer: fine)').matches;
+    // prefers-color-scheme
+    r.prefers_dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    r.prefers_light = window.matchMedia('(prefers-color-scheme: light)').matches;
+    // prefers-reduced-motion
+    r.reduced_motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // matchMedia natif ?
+    r.matchMedia_natif = /\[native code\]/.test(window.matchMedia.toString());
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function prototypeChainTest() {
+  const r = {};
+  // navigator : propriétés propres vs prototype
+  try {
+    const props = ['webdriver', 'hardwareConcurrency', 'deviceMemory', 'languages', 'language', 'plugins'];
+    r.navigator_own = {};
+    for (const p of props) {
+      const own = Object.getOwnPropertyDescriptor(navigator, p);
+      const proto = Object.getOwnPropertyDescriptor(Navigator.prototype, p);
+      r.navigator_own[p] = {
+        own: !!own,
+        prototype: !!proto,
+      };
+    }
+  } catch (_) { /* ignore */ }
+  // screen : propres ?
+  try {
+    r.screen_own_width = screen.hasOwnProperty('width');
+    r.screen_own_height = screen.hasOwnProperty('height');
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function timingPrecisionTest() {
+  const r = {};
+  try {
+    // Mesurer la précision de performance.now()
+    const samples = [];
+    let last = performance.now();
+    for (let i = 0; i < 20; i++) {
+      const now = performance.now();
+      if (now !== last) {
+        samples.push(now - last);
+        last = now;
+      }
+    }
+    r.precision_samples = samples.slice(0, 10);
+    // Précision minimale observée (delta minimum non-nul)
+    if (samples.length > 0) {
+      r.min_delta = Math.min(...samples);
+    }
+    // performance.now natif ?
+    r.perf_now_natif = /\[native code\]/.test(performance.now.toString());
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
 function performanceMemoryTest() {
   const r = {};
   try {
@@ -534,6 +635,10 @@ async function collecter() {
     headless_signals: await headlessSignals(),
     stack_trace_test: stackTraceTest(),
     performance_memory: performanceMemoryTest(),
+    automation_globals: automationGlobals(),
+    css_media: cssMediaTest(),
+    prototype_chain: prototypeChainTest(),
+    timing_precision: timingPrecisionTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),

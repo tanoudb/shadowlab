@@ -1086,6 +1086,145 @@ class DetecteurPositionFenetre:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurAutomationGlobals:
+    """Détecte les globales d'automation laissées par Playwright/Selenium/ChromeDriver."""
+
+    name = "automation-globals"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        ag = p.get("automation_globals") or {}
+        signaux: list[Signal] = []
+
+        trouvees = ag.get("globales_trouvees") or []
+        if trouvees:
+            signaux.append(
+                Signal(
+                    "globales_automation",
+                    f"globales d'automation trouvées : {', '.join(trouvees[:5])}",
+                    0.9,
+                )
+            )
+
+        cdc = ag.get("cdc_keys") or []
+        if cdc:
+            signaux.append(Signal("cdc_keys", f"clés ChromeDriver trouvées : {', '.join(cdc[:3])}", 0.9))
+
+        noezia_enum = ag.get("noezia_enumerable") or []
+        if noezia_enum:
+            signaux.append(
+                Signal(
+                    "noezia_enumerable",
+                    f"marqueurs NOEZIA énumérables : {', '.join(noezia_enum[:3])}",
+                    0.5,
+                )
+            )
+
+        doc_trouvees = ag.get("doc_trouvees") or []
+        if doc_trouvees:
+            signaux.append(Signal("doc_automation", f"marqueurs sur document : {', '.join(doc_trouvees[:3])}", 0.8))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurCSSMedia:
+    """Détecte les incohérences CSS media queries typiques de headless."""
+
+    name = "css-media"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        cm = p.get("css_media") or {}
+        signaux: list[Signal] = []
+
+        if cm.get("hover_none") and not cm.get("hover_hover"):
+            signaux.append(Signal("hover_none", "hover:none — pas de souris (headless ou mobile)", 0.5))
+
+        if cm.get("pointer_none") and not cm.get("pointer_fine"):
+            signaux.append(Signal("pointer_none", "pointer:none — pas de périphérique de pointage", 0.5))
+
+        if cm.get("matchMedia_natif") is False:
+            signaux.append(Signal("matchMedia_patche", "matchMedia surchargé", 0.3))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurPrototypeChain:
+    """Détecte les propriétés propres inattendues sur navigator/screen."""
+
+    name = "prototype-chain"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        pc = p.get("prototype_chain") or {}
+        signaux: list[Signal] = []
+
+        nav_own = pc.get("navigator_own") or {}
+        for prop, info in nav_own.items():
+            if isinstance(info, dict) and info.get("own") and not info.get("prototype"):
+                signaux.append(
+                    Signal(
+                        f"nav_own_{prop}",
+                        f"navigator.{prop} est une propriété propre sans prototype",
+                        0.4,
+                    )
+                )
+
+        if pc.get("screen_own_width"):
+            signaux.append(Signal("screen_own_width", "screen.width est une propriété propre", 0.3))
+        if pc.get("screen_own_height"):
+            signaux.append(Signal("screen_own_height", "screen.height est une propriété propre", 0.3))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurTimingPrecision:
+    """Détecte les anomalies de précision temporelle (timer headless)."""
+
+    name = "timing-precision"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        tp = p.get("timing_precision") or {}
+        signaux: list[Signal] = []
+
+        if tp.get("perf_now_natif") is False:
+            signaux.append(Signal("perf_now_patche", "performance.now() surchargé", 0.3))
+
+        min_delta = tp.get("min_delta")
+        if min_delta is not None and min_delta > 0:
+            if min_delta < 0.005:
+                signaux.append(
+                    Signal(
+                        "timer_haute_precision",
+                        f"timer avec précision {min_delta:.4f}ms (cross-origin isolation ?)",
+                        0.2,
+                    )
+                )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1118,6 +1257,10 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurWebRTC(),
         DetecteurStackTrace(),
         DetecteurPositionFenetre(),
+        DetecteurAutomationGlobals(),
+        DetecteurCSSMedia(),
+        DetecteurPrototypeChain(),
+        DetecteurTimingPrecision(),
     )
 }
 
