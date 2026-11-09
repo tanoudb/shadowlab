@@ -1,0 +1,14 @@
+# Démo reCAPTCHA v3 RÉEL : mesure le score que Google attribue au moteur NOEZIA.
+# Prérequis : SHADOWLAB_RECAPTCHA_V3_SITE et SHADOWLAB_RECAPTCHA_V3_SECRET dans .env
+# (clé v3 avec localhost autorisé). v3 ne fait que noter — aucun puzzle résolu.
+experiment:
+  name: recaptcha_v3
+  description: Score reCAPTCHA v3 réel obtenu par le moteur NOEZIA (perçu humain = score élevé)
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - recaptcha_v3
+  repetitions: 3
+  seed: 42
+  output: [json, html]

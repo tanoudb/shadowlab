@@ -69,6 +69,7 @@ uv run shadowlab site                                      # http://127.0.0.1:87
 uv run shadowlab arena demarrer                            # docker compose (Coraza + Nginx)
 uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
+uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTCHA v3 réel (clés v3 dans .env)
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)

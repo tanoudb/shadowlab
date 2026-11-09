@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from html import escape
 
 NB_PAGES_CATALOGUE = 5
@@ -158,6 +159,68 @@ def espace(jeton: str, identifiant: str) -> str:
 <p>Contenu réservé aux sessions authentifiées de l'Arena.</p>
 <p><a id="lien-deconnexion" href="/lab/deconnexion">Se déconnecter</a></p>"""
     return gabarit("Espace privé", corps, jeton)
+
+
+def recaptcha_v3(jeton: str, site_key: str) -> str:
+    """Démo reCAPTCHA v3 RÉEL : charge le v3 de Google et affiche le score attribué au navigateur.
+
+    v3 est purement scoré (aucun puzzle) : passer = être perçu comme humain. Les clés viennent
+    de l'environnement (`SHADOWLAB_RECAPTCHA_V3_SITE` / `_SECRET`), jamais du code.
+    """
+    sess = escape(jeton)
+    if not site_key:
+        bloc = (
+            '<div id="v3-resultat" data-pret="0"><p>État : <span id="v3-etat">clés absentes</span></p>'
+            '<p>Score : <span id="v3-score"></span></p></div>'
+            '<p class="indice">Configure <code>SHADOWLAB_RECAPTCHA_V3_SITE</code> et '
+            '<code>SHADOWLAB_RECAPTCHA_V3_SECRET</code> dans <code>.env</code>, autorise '
+            '<code>localhost</code> sur la clé, puis recharge.</p>'
+        )
+        script = ""
+    else:
+        sk_url = escape(site_key)
+        sk_js = json.dumps(site_key)
+        bloc = (
+            '<div id="v3-resultat" data-pret="0"><p>État : <span id="v3-etat">en cours…</span></p>'
+            '<p>Score reCAPTCHA v3 : <span id="v3-score"></span></p></div>'
+        )
+        script = (
+            f'<script src="https://www.google.com/recaptcha/api.js?render={sk_url}"></script>\n'
+            "<script>\n"
+            "grecaptcha.ready(function(){\n"
+            f"  grecaptcha.execute({sk_js}, {{action: 'demo'}}).then(function(token){{\n"
+            "    fetch('/lab/recaptcha-v3/verifier', {method:'POST',"
+            " headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: token})})\n"
+            "      .then(function(r){return r.json();}).then(function(d){\n"
+            "        var box=document.getElementById('v3-resultat');\n"
+            "        document.getElementById('v3-etat').textContent ="
+            " d.success ? 'ok' : ('échec : ' + (d.erreur||''));\n"
+            "        document.getElementById('v3-score').textContent ="
+            " (d.score==null?'':String(d.score));\n"
+            "        if(box){box.dataset.pret='1'; box.dataset.score=(d.score==null?'':String(d.score));"
+            " box.dataset.success=String(!!d.success);}\n"
+            "      }).catch(function(){document.getElementById('v3-etat').textContent='erreur réseau';});\n"
+            "  });\n"
+            "});\n"
+            "</script>"
+        )
+    return f"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="sl-session" content="{sess}">
+<title>reCAPTCHA v3 — ShadowLab</title>
+<link rel="stylesheet" href="/lab/static/lab.css"></head>
+<body>
+<header><strong>ShadowLab · démo reCAPTCHA v3 réel</strong></header>
+<main data-page="recaptcha-v3">
+<h1>reCAPTCHA v3 (score réel)</h1>
+<p>Cette page charge le vrai reCAPTCHA v3 et affiche le score que Google attribue à ce navigateur.
+Score élevé = perçu comme humain. Aucune résolution de puzzle : v3 ne fait que noter.</p>
+{bloc}
+</main>
+<script type="module" src="/lab/static/observateur.js"></script>
+{script}
+</body></html>"""
 
 
 def session(jeton: str, visites: int) -> str:

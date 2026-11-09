@@ -218,3 +218,18 @@ def test_connexion_honeypot_rempli_refuse(client):
         follow_redirects=False,
     )
     assert r.status_code == 403
+
+
+def test_recaptcha_v3_page_sans_cles(client, monkeypatch):
+    monkeypatch.delenv("SHADOWLAB_RECAPTCHA_V3_SITE", raising=False)
+    r = client.get(f"/lab/recaptcha-v3?sl={JETON}")
+    assert r.status_code == 200 and 'id="v3-resultat"' in r.text and "clés absentes" in r.text
+    # CSP de la page autorise le script Google reCAPTCHA
+    assert "www.google.com/recaptcha/" in r.headers["content-security-policy"]
+
+
+def test_recaptcha_v3_verifier_sans_secret(client, monkeypatch):
+    monkeypatch.delenv("SHADOWLAB_RECAPTCHA_V3_SECRET", raising=False)
+    r = client.post(f"/lab/recaptcha-v3/verifier?sl={JETON}", content=json.dumps({"token": "x"}))
+    body = r.json()
+    assert r.status_code == 200 and body["success"] is False and body["score"] is None

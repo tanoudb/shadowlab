@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +47,14 @@ CSP_RECAPTCHA = (
     " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
     "connect-src 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
     "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+CSP_RECAPTCHA_V3 = (
+    "default-src 'self'; script-src 'self' 'unsafe-inline'"
+    " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
+    "connect-src 'self' https://www.google.com/recaptcha/; "
+    "frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
+    "img-src 'self' data: https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 
@@ -108,11 +118,22 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if chemin.startswith("/lab") or chemin.startswith("/manuel"):
             est_turnstile = "X-ShadowLab-Turnstile" in reponse.headers
             est_recaptcha = "X-ShadowLab-Recaptcha" in reponse.headers
+            est_v3 = "X-ShadowLab-RecaptchaV3" in reponse.headers
             if est_turnstile:
                 del reponse.headers["X-ShadowLab-Turnstile"]
             if est_recaptcha:
                 del reponse.headers["X-ShadowLab-Recaptcha"]
-            csp = CSP_TURNSTILE if est_turnstile else CSP_RECAPTCHA if est_recaptcha else CSP
+            if est_v3:
+                del reponse.headers["X-ShadowLab-RecaptchaV3"]
+            csp = (
+                CSP_RECAPTCHA_V3
+                if est_v3
+                else CSP_TURNSTILE
+                if est_turnstile
+                else CSP_RECAPTCHA
+                if est_recaptcha
+                else CSP
+            )
             reponse.headers["Content-Security-Policy"] = csp
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "same-origin"
@@ -495,6 +516,58 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             path="/lab",
         )
         return reponse
+
+    # --- Démo reCAPTCHA v3 RÉEL (score, pas de puzzle) — clés dans .env ----------------------------
+
+    @app.get("/lab/recaptcha-v3", response_class=HTMLResponse, tags=["arena"])
+    def recaptcha_v3_page(request: Request) -> Response:
+        site = os.environ.get("SHADOWLAB_RECAPTCHA_V3_SITE", "")
+        reponse = HTMLResponse(pages.recaptcha_v3(jeton_de(request), site))
+        reponse.headers["X-ShadowLab-RecaptchaV3"] = "1"
+        return reponse
+
+    @app.post("/lab/recaptcha-v3/verifier", tags=["arena"])
+    async def recaptcha_v3_verifier(request: Request) -> Response:
+        """Vérifie le token v3 auprès de Google et renvoie le score. Le secret ne sort jamais."""
+        jeton = jeton_de(request)
+        secret = os.environ.get("SHADOWLAB_RECAPTCHA_V3_SECRET", "")
+        if not secret:
+            return JSONResponse({"success": False, "score": None, "erreur": "clé secrète absente (.env)"})
+        try:
+            corps = json.loads(await request.body())
+            token = str(corps["token"])[:4000]
+        except (ValueError, KeyError, TypeError) as erreur:
+            raise HTTPException(400, "token illisible") from erreur
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.post(
+                    "https://www.google.com/recaptcha/api/siteverify",
+                    data={"secret": secret, "response": token},
+                )
+            res = r.json()
+        except (httpx.HTTPError, ValueError) as erreur:
+            raise HTTPException(502, "vérification Google indisponible") from erreur
+        score = res.get("score")
+        succes = bool(res.get("success"))
+        if jeton:
+            with base() as cx:
+                db.enregistrer_decision(
+                    cx,
+                    jeton,
+                    "recaptcha-v3",
+                    "mesure",
+                    "/lab/recaptcha-v3",
+                    [{"score": score, "success": succes, "action": res.get("action")}],
+                )
+        return JSONResponse(
+            {
+                "success": succes,
+                "score": score,
+                "action": res.get("action"),
+                "hostname": res.get("hostname"),
+                "erreur": None if succes else res.get("error-codes"),
+            }
+        )
 
     app.mount("/lab/static", StaticFiles(directory=STATIQUES), name="lab-static")
 

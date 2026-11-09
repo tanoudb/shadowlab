@@ -325,6 +325,32 @@ def scrape_rapide(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue
     )
 
 
+def recaptcha_v3(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Démo : charge le vrai reCAPTCHA v3 et relève le score que Google attribue au moteur.
+
+    Aucun puzzle résolu — v3 ne fait que noter. Un score élevé = le moteur est perçu comme humain.
+    Nécessite `SHADOWLAB_RECAPTCHA_V3_SITE`/`_SECRET` dans l'environnement du site.
+    """
+    aller(d, url(base, "/lab/recaptcha-v3", jeton))
+    limite = time.monotonic() + 20.0
+    score_txt, etat = "", ""
+    while time.monotonic() < limite:
+        et = d.texts("#v3-etat")
+        etat = et[0].strip() if et else ""
+        sc = d.texts("#v3-score")
+        if sc and sc[0].strip():
+            score_txt = sc[0].strip()
+            break
+        if etat.startswith("échec") or etat.startswith("erreur") or etat == "clés absentes":
+            break
+        time.sleep(0.3)
+    try:
+        score = float(score_txt) if score_txt else None
+    except ValueError:
+        score = None
+    return Issue(score is not None, {"score": score, "etat": etat})
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -342,5 +368,6 @@ SCENARIOS: dict[str, Scenario] = {
         ),
         Scenario("scrape_catalogue", "Scraping complet du catalogue (5 pages, 50 articles)", True, scrape_catalogue),
         Scenario("scrape_rapide", "Scraping rapide (scalping) : 5 pages, extraction sans pause", True, scrape_rapide),
+        Scenario("recaptcha_v3", "Démo reCAPTCHA v3 réel : relever le score attribué au moteur", True, recaptcha_v3),
     )
 }

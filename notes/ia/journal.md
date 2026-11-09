@@ -1407,3 +1407,27 @@ pas supprimé (re-durcir = une ligne).
 ### Reste
 - Côté moteur : scénario `connexion` (le monstre franchit le login) + le rendre multi-domaine (SSO).
 - Avant sortie de l'interne : suivre `docs/securite-a-finaliser.md`.
+
+## 2026-11-09 (suite 2) — Démo reCAPTCHA v3 réel (score, sans solveur)
+
+### Fait
+Démo légitime « passer Cloudflare/Google en ayant l'air humain » appliquée à reCAPTCHA v3 (purement
+scoré, aucun puzzle). Sur notre propre page, clés dans `.env` (jamais dans le code).
+- `site/pages.py` : `recaptcha_v3(jeton, site_key)` — charge le vrai `api.js?render=<clé>`, exécute
+  v3, POST le token à notre endpoint, affiche le score (textContent). Dégradation propre sans clés.
+- `site/app.py` : `GET /lab/recaptcha-v3` (clé site depuis `SHADOWLAB_RECAPTCHA_V3_SITE`),
+  `POST /lab/recaptcha-v3/verifier` (vérifie chez Google avec `SHADOWLAB_RECAPTCHA_V3_SECRET`, renvoie
+  le score ; le secret ne sort jamais). CSP dédiée `CSP_RECAPTCHA_V3`. Décision enregistrée (couche
+  `recaptcha-v3`, score en motif).
+- `scenarios.py` : scénario `recaptcha_v3` (le moteur relève le score). `configs/experiments/recaptcha-v3.yaml`.
+- Tests : rendu sans clés + endpoint sans secret (2 nouveaux). Structure « avec clé » vérifiée (script
+  Google + execute + fetch + observateur + CSP). 273 tests rapides verts, lint propre.
+
+### Usage (quand les clés v3 sont dans .env, localhost autorisé)
+`uv run shadowlab site` puis visiter `/lab/recaptcha-v3`, ou
+`uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml` (moteur NOEZIA, 3 répétitions).
+Score élevé = Google nous prend pour un humain. Ligne tenue : pas de solveur de puzzle (v3 n'en a pas).
+
+### Reste
+- Ethan : enregistrer une clé reCAPTCHA v3 (localhost autorisé), la mettre dans `.env`.
+- Ensuite : lancer la campagne et lire le score réel.
