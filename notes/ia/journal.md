@@ -1475,3 +1475,25 @@ en 20s » montre que le widget cloudflare n'apparaît parfois pas dans le délai
 Branche `niveau-authentifie-perimetre`, non poussée. Commits du jour : GPU, niveau authentifié +
 périmètre (D-30), démo reCAPTCHA v3, chargeur .env, 2 correctifs (verrou illimité + collision URL),
 scénario connexion. Démo v3 en attente de la clé d'Ethan.
+
+## 2026-11-09 (suite 5, autonome) — Virage « meilleur scraper » : vitesse, robustesse, proxy
+
+Recentrage sur le cœur (moteur de scraping indétectable ET rapide), pas le CAPTCHA. Trois
+piliers ajoutés au moteur NOEZIA, chacun testé :
+- **Vitesse — mode rapide** (`bloquer_ressources`) : coupe images/médias/polices sans les
+  télécharger, et `navigate` attend `domcontentloaded` au lieu de `load`. ~17 % plus rapide sur
+  le lab (sans images) ; gros gain attendu sur un vrai site chargé. Compteur `ressources_bloquees`.
+- **Robustesse — retry** (`nb_essais`) : nouvelles tentatives sur échec transitoire (exception
+  réseau, 429, 5xx), backoff exponentiel + gigue, jamais sur 4xx. Compteur `navigations_retentees`.
+- **Échelle — proxy** : en mode illimité, `SHADOWLAB_PROXY` (env/.env, jamais en dur) route le
+  navigateur → scraping via proxy / rotation d'IP. Helper `_proxy_navigateur`.
+Options déclarées dans `options_permises` + `configuration()`. 10 nouveaux tests unitaires.
+285 tests rapides verts, lint propre.
+
+### Piliers restants (à concevoir avec Ethan)
+- Concurrence / débit (plusieurs pages en parallèle dans une session).
+- Extraction adaptative (style Scrapling : relocaliser les éléments quand le site change).
+- Démo v3 réelle (attend une clé), fiabilité Turnstile.
+
+### État branche
+`niveau-authentifie-perimetre`, 13 commits, non poussée.
