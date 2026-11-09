@@ -76,15 +76,19 @@ class DriverNoezia(Driver):
         "interaction_post_page": bool,
         "resoudre_defis": bool,
         "bloquer_ressources": bool,
+        "nb_essais": int,
     }
 
     # Types de ressources coupées en mode rapide (gros gain de vitesse sur un vrai site chargé).
     RESSOURCES_LOURDES = frozenset({"image", "media", "font"})
+    # Statuts transitoires qui justifient une nouvelle tentative (jamais 4xx client sauf 429).
+    STATUTS_TRANSITOIRES = frozenset({429, 500, 502, 503, 504})
 
     def __init__(self, hotes_autorises: tuple[str, ...], options: dict[str, Any] | None = None) -> None:
         super().__init__(hotes_autorises, options)
         self._config = self._construire_config(self.options)
         self._bloquer_ressources = bool(self.options.get("bloquer_ressources", False))
+        self._nb_essais = max(1, int(self.options.get("nb_essais", 1)))
         self._profil: ProfilNavigateur | None = None
         self._pw = None
         self._navigateur = None
@@ -208,6 +212,7 @@ class DriverNoezia(Driver):
         self.mesures = MesuresSession()
         self.mesures.details["requetes_bloquees"] = 0
         self.mesures.details["ressources_bloquees"] = 0
+        self.mesures.details["navigations_retentees"] = 0
         self.mesures.details["defis_resolus"] = []
 
         profil = self._profil
@@ -336,12 +341,38 @@ class DriverNoezia(Driver):
 
     # ── Navigation ─────────────────────────────────────────────────────
 
+    @staticmethod
+    def _backoff(essai: int) -> float:
+        """Attente exponentielle plafonnée, avec gigue (évite les rafales synchronisées)."""
+        return min(0.5 * (2**essai), 8.0) + random.uniform(0, 0.3)
+
+    def _naviguer_avec_essais(self, url: str, attente: str):
+        """goto avec nouvelles tentatives sur échec transitoire (exception réseau, 429, 5xx)."""
+        derniere_exc: Exception | None = None
+        for essai in range(self._nb_essais):
+            try:
+                reponse = self._page.goto(url, wait_until=attente)
+            except Exception as exc:  # noqa: BLE001 — erreurs réseau Playwright : on retente
+                derniere_exc = exc
+                if essai + 1 >= self._nb_essais:
+                    raise
+                self.mesures.details["navigations_retentees"] += 1
+                time.sleep(self._backoff(essai))
+                continue
+            status = reponse.status if reponse is not None else None
+            if status in self.STATUTS_TRANSITOIRES and essai + 1 < self._nb_essais:
+                self.mesures.details["navigations_retentees"] += 1
+                time.sleep(self._backoff(essai))
+                continue
+            return reponse
+        raise derniere_exc  # pragma: no cover
+
     def navigate(self, url: str) -> ResultatNavigation:
         self.verifier(url)
         debut = time.perf_counter()
         # Mode rapide : DOM prêt suffit (on n'attend pas les ressources, déjà coupées).
         attente = "domcontentloaded" if self._bloquer_ressources else "load"
-        reponse = self._page.goto(url, wait_until=attente)
+        reponse = self._naviguer_avec_essais(url, attente)
         duree = (time.perf_counter() - debut) * 1000
         self.mesures.navigation_time += duree
         status = reponse.status if reponse is not None else None

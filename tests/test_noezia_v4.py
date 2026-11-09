@@ -606,3 +606,58 @@ class TestBlocageRessources:
         route, actions = self._faux_route("image")
         d._filtrer(route)
         assert actions[0][0] == "continue"
+
+
+class _Rep:
+    def __init__(self, status):
+        self.status = status
+
+
+class _FakePage:
+    def __init__(self, resultats):
+        self.resultats = list(resultats)
+        self.appels = 0
+
+    def goto(self, url, wait_until=None):
+        self.appels += 1
+        r = self.resultats.pop(0)
+        if r == "exc":
+            raise RuntimeError("net::ERR_TEST")
+        return _Rep(r)
+
+
+class TestRetryNavigation:
+    """Robustesse : retry avec backoff sur échec transitoire (réseau, 429, 5xx), jamais sur 4xx."""
+
+    def _moteur(self, nb_essais, resultats, monkeypatch):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        monkeypatch.setattr("shadowlab.engines.noezia.moteur.time.sleep", lambda *a: None)
+        d = DriverNoezia(("127.0.0.1", "localhost"), {"nb_essais": nb_essais})
+        d.mesures.details["navigations_retentees"] = 0
+        d._page = _FakePage(resultats)
+        return d
+
+    def test_retente_exception_puis_reussit(self, monkeypatch):
+        d = self._moteur(3, ["exc", "exc", 200], monkeypatch)
+        rep = d._naviguer_avec_essais("http://x/", "load")
+        assert rep.status == 200
+        assert d.mesures.details["navigations_retentees"] == 2
+        assert d._page.appels == 3
+
+    def test_epuise_les_essais_leve(self, monkeypatch):
+        d = self._moteur(2, ["exc", "exc"], monkeypatch)
+        with pytest.raises(RuntimeError):
+            d._naviguer_avec_essais("http://x/", "load")
+
+    def test_retente_sur_statut_transitoire(self, monkeypatch):
+        d = self._moteur(2, [503, 200], monkeypatch)
+        rep = d._naviguer_avec_essais("http://x/", "load")
+        assert rep.status == 200
+        assert d.mesures.details["navigations_retentees"] == 1
+
+    def test_pas_de_retente_sur_404(self, monkeypatch):
+        d = self._moteur(3, [404], monkeypatch)
+        rep = d._naviguer_avec_essais("http://x/", "load")
+        assert rep.status == 404
+        assert d.mesures.details["navigations_retentees"] == 0
