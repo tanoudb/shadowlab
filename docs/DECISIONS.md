@@ -105,3 +105,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   WebGL cohérent avec le GPU déclaré, collecteurs observateur enrichis (stack_trace_test,
   performance_memory). 4 nouveaux détecteurs Arena : stack-trace, position-fenetre, webrtc, permissions-etendu.
   Total : 10 scripts furtivité (944 lignes JS), 20 détecteurs Arena, moteur NOEZIA 2 756 lignes.
+- **D-27 — 09/11/2026 — NOEZIA v7 : nettoyage automation, CSS/timing, 24 détecteurs.** Nouveau 11e script
+  `automation.js` (dernier dans le pipeline) : suppression systématique des globales d'automation
+  (Playwright, Selenium, ChromeDriver, Puppeteer, PhantomJS, Nightmare), nettoyage document, correction
+  `matchMedia` pour hover/pointer headless (desktop = hover:hover, pointer:fine), suppression des propriétés
+  propres inattendues sur `navigator` (webdriver, hardwareConcurrency etc. doivent être sur le prototype),
+  normalisation `performance.now()` à 100µs (comportement standard cross-origin sans SharedArrayBuffer),
+  marqueurs `__NOEZIA_PROFIL__`/`__NOEZIA_NATIF__` rendus non-énumérables. 4 nouveaux détecteurs Arena
+  (automation-globals, css-media, prototype-chain, timing-precision) avec collecteurs dans observateur.js.
+  Total : 11 scripts furtivité (~1 100 lignes JS), 24 détecteurs Arena, 265 tests.

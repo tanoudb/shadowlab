@@ -1020,3 +1020,42 @@ detection.py, issues.py, passages.py, config.py, database.py, cli.py, api.py), `
 - Auditer l'isolation navigateurs sur tous les moteurs.
 - Enrichir l'endpoint /passages pour remonter le champ `protection` dans la liste.
 - Cloudflare sur domaine test, moteur expérimental propre, couche IA.
+
+---
+
+## 09/11/2026 — NOEZIA v7 : nettoyage automation, CSS/timing, 24 détecteurs
+
+### Fait
+- **Nouveau script `automation.js`** (11e et dernier dans le pipeline furtivité) :
+  - Suppression systématique des globales d'automation (Playwright, Selenium, ChromeDriver, Puppeteer,
+    PhantomJS, Nightmare, cdc_* dynamiques, marqueurs document).
+  - Correction `matchMedia` : headless Chrome retourne hover:none/pointer:none, corrigé pour desktop.
+  - Nettoyage chaîne prototype navigator : suppression propriétés propres inattendues
+    (webdriver, hardwareConcurrency, deviceMemory, languages, language, vendor, plugins, mimeTypes).
+  - Normalisation `performance.now()` à 100µs (standard cross-origin sans SharedArrayBuffer).
+  - Marqueurs `__NOEZIA_PROFIL__` / `__NOEZIA_NATIF__` rendus non-énumérables.
+- **4 nouveaux détecteurs Arena** : automation-globals, css-media, prototype-chain, timing-precision.
+- **4 nouveaux collecteurs observateur.js** : automationGlobals, cssMediaTest, prototypeChainTest,
+  timingPrecisionTest.
+- **265 tests verts** (259 unitaires + 6 intégration), lint propre.
+- Commit `311a102`, décision D-27.
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/furtivite/automation.js` (créé, ~179 lignes)
+- `src/shadowlab/engines/noezia/furtivite/patches.py` (automation.js ajouté au pipeline)
+- `src/shadowlab/site/static/observateur.js` (4 collecteurs)
+- `src/shadowlab/detection.py` (4 détecteurs, 24 total)
+- `tests/test_noezia_v4.py` (7 nouveaux tests, compteurs mis à jour)
+- `configs/experiments/noezia-v7-complet.yaml` (format corrigé)
+- `AGENTS.md` (24 détecteurs, 265 tests)
+- `docs/DECISIONS.md` (D-27)
+
+### Campagne 32 (v7 complète)
+- Lancée, en cours (42/108 passages au dernier check). Exerce les 20 détecteurs v6+ avec le code site
+  corrigé. Les 4 nouveaux détecteurs v7 (automation-globals, css-media, prototype-chain, timing-precision)
+  ne sont pas encore dans le site de test → campagne 33 à lancer.
+
+### Reste
+- Analyser résultats campagne 32.
+- Lancer campagne 33 avec les 24 détecteurs actifs dans le site de test.
+- Continuer le durcissement (couche IA, Cloudflare domaine test).
