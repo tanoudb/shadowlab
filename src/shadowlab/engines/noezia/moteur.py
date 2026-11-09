@@ -75,11 +75,16 @@ class DriverNoezia(Driver):
         "eviter_pieges": bool,
         "interaction_post_page": bool,
         "resoudre_defis": bool,
+        "bloquer_ressources": bool,
     }
+
+    # Types de ressources coupées en mode rapide (gros gain de vitesse sur un vrai site chargé).
+    RESSOURCES_LOURDES = frozenset({"image", "media", "font"})
 
     def __init__(self, hotes_autorises: tuple[str, ...], options: dict[str, Any] | None = None) -> None:
         super().__init__(hotes_autorises, options)
         self._config = self._construire_config(self.options)
+        self._bloquer_ressources = bool(self.options.get("bloquer_ressources", False))
         self._profil: ProfilNavigateur | None = None
         self._pw = None
         self._navigateur = None
@@ -124,6 +129,7 @@ class DriverNoezia(Driver):
             "furtivite_navigateur": self._config.furtivite.navigator_patches,
             "eviter_pieges": self._config.eviter_pieges,
             "interaction_post_page": self._config.interaction_post_page,
+            "bloquer_ressources": self._bloquer_ressources,
         }
         if self._profil:
             conf["profil"] = self._profil.nom
@@ -201,6 +207,7 @@ class DriverNoezia(Driver):
     def start_session(self) -> None:
         self.mesures = MesuresSession()
         self.mesures.details["requetes_bloquees"] = 0
+        self.mesures.details["ressources_bloquees"] = 0
         self.mesures.details["defis_resolus"] = []
 
         profil = self._profil
@@ -304,6 +311,11 @@ class DriverNoezia(Driver):
                 return
 
         if autorise or challenge:
+            # Mode rapide : couper les ressources lourdes (images, médias, polices) sans les télécharger.
+            if self._bloquer_ressources and route.request.resource_type in self.RESSOURCES_LOURDES:
+                self.mesures.details["ressources_bloquees"] += 1
+                route.abort()
+                return
             # Nettoyer les en-têtes qui trahissent Headless
             headers = {**route.request.headers}
             for cle in ("user-agent", "sec-ch-ua"):
@@ -327,7 +339,9 @@ class DriverNoezia(Driver):
     def navigate(self, url: str) -> ResultatNavigation:
         self.verifier(url)
         debut = time.perf_counter()
-        reponse = self._page.goto(url, wait_until="load")
+        # Mode rapide : DOM prêt suffit (on n'attend pas les ressources, déjà coupées).
+        attente = "domcontentloaded" if self._bloquer_ressources else "load"
+        reponse = self._page.goto(url, wait_until=attente)
         duree = (time.perf_counter() - debut) * 1000
         self.mesures.navigation_time += duree
         status = reponse.status if reponse is not None else None

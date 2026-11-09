@@ -551,3 +551,58 @@ class TestDetecteursV4:
         assert "connection-dynamic" in r
         assert "proxy-uadata" in r
         assert "enumerable-props" in r
+
+
+class TestBlocageRessources:
+    """Mode rapide : couper images/médias/polices sans les télécharger (gain de vitesse scraping)."""
+
+    def _faux_route(self, resource_type, url="http://127.0.0.1:8770/a"):
+        actions = []
+
+        class Req:
+            def __init__(s):
+                s.url = url
+                s.resource_type = resource_type
+                s.headers = {}
+
+            def is_navigation_request(s):
+                return False
+
+        class Route:
+            request = Req()
+
+            def abort(s, *a):
+                actions.append(("abort", a))
+
+            def continue_(s, **k):
+                actions.append(("continue", k))
+
+        return Route(), actions
+
+    def _moteur(self, **opts):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        d = DriverNoezia(("127.0.0.1", "localhost"), opts)
+        d.mesures.details["requetes_bloquees"] = 0
+        d.mesures.details["ressources_bloquees"] = 0
+        return d
+
+    def test_image_coupee_en_mode_rapide(self):
+        d = self._moteur(bloquer_ressources=True)
+        route, actions = self._faux_route("image")
+        d._filtrer(route)
+        assert actions[0][0] == "abort"
+        assert d.mesures.details["ressources_bloquees"] == 1
+
+    def test_document_jamais_coupe(self):
+        d = self._moteur(bloquer_ressources=True)
+        route, actions = self._faux_route("document")
+        d._filtrer(route)
+        assert actions[0][0] == "continue"
+        assert d.mesures.details["ressources_bloquees"] == 0
+
+    def test_option_off_laisse_passer_les_images(self):
+        d = self._moteur(bloquer_ressources=False)
+        route, actions = self._faux_route("image")
+        d._filtrer(route)
+        assert actions[0][0] == "continue"
