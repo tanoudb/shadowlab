@@ -685,3 +685,26 @@ class TestProxyNavigateur:
         monkeypatch.setenv("SHADOWLAB_PROXY", "http://proxy.example:8080")
         d = self._moteur(("*",))
         assert d._proxy_navigateur(("*",)) == {"server": "http://proxy.example:8080"}
+
+
+class TestRecolteRepartir:
+    """Répartition des URLs en lots pour la récolte parallèle (logique pure)."""
+
+    def test_repartit_equitablement(self):
+        from shadowlab.engines.noezia.recolte import repartir
+
+        lots = repartir([f"u{i}" for i in range(5)], 2)
+        assert len(lots) == 2
+        assert sorted(len(x) for x in lots) == [2, 3]
+        assert sum(len(x) for x in lots) == 5
+
+    def test_concurrence_plafonnee_au_nombre_durls(self):
+        from shadowlab.engines.noezia.recolte import repartir
+
+        lots = repartir(["a", "b"], 10)
+        assert len(lots) == 2 and all(len(x) == 1 for x in lots)
+
+    def test_vide(self):
+        from shadowlab.engines.noezia.recolte import repartir
+
+        assert repartir([], 4) == []
