@@ -1536,3 +1536,18 @@ et ajouter plus tard une couche crawling légère par-dessus (on a déjà `recol
 
 ### État branche
 `niveau-authentifie-perimetre`, 19 commits, non poussée. 300 tests verts, lint propre.
+
+## 2026-11-09 (suite 8, autonome) — Scraping browserless furtif + branche poussée
+
+- `engines/noezia/rapide.py` : `recuperer(url)` = StealthyFetcher browserless. curl_cffi rejoue le
+  TLS/HTTP2 d'un vrai Chrome (impersonate) → passe la détection TLS SANS navigateur → ~59 ms fetch+parse
+  sur le lab (vs ~250 ms pour la seule navigation navigateur). Rend un `Analyseur`. Périmètre respecté.
+  TLS vérifié par défaut (verifier_tls=True ; off seulement pour cert auto-signé connu).
+- **Branche poussée** sur origin (`niveau-authentifie-perimetre`) — 21 commits sauvegardés. Pas de PR
+  créée (laissée à Ethan).
+
+NOEZIA a désormais les 2 piliers de Scrapling : furtivité (navigateur + TLS browserless) + parser
+adaptatif rapide, découplés. 301 tests verts, lint propre.
+
+### Reste pour égaler Scrapling (largeur)
+Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'Analyseur aux moteurs HTTP.
