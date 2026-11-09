@@ -6,6 +6,30 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.8) — Analyseur : auto-match de liste (façon Scrapling)
+
+### Fait
+- **`Analyseur.similaires(selecteur)`** (`engines/noezia/analyseur.py`) — à partir d'UN élément
+  exemple, retrouve toutes les sœurs de même structure (cartes produit, `<li>`, lignes de tableau),
+  même sans classe commune exploitable par un sélecteur. Réutilise `extraction.score` (balise +
+  classes Jaccard + id + texte + profondeur), seuil par défaut 0.5, ordre du document conservé.
+- **Vue `Element`** — texte, `attribut(nom)`, `css`/`css_un` pour descendre dans une carte retenue
+  (chaînage ergonomique). C'est la brique « find_all par ressemblance » de Scrapling.
+- **Tests** — 4 nouveaux dans `tests/test_analyseur.py` (liste complète depuis un exemple, rejet des
+  éléments sans ressemblance, sélecteur absent → vide, lecture texte/attribut via `Element`).
+- Rappel contexte : juste avant, fix anti-SSRF de `rapide.recuperer()` (contrôle de périmètre par
+  saut sur les redirections) — commit 2cf21ba, poussé.
+
+### Fichiers
+`src/shadowlab/engines/noezia/analyseur.py`, `tests/test_analyseur.py`.
+
+### Vérifié
+Lint propre, 305 tests rapides verts (+4).
+
+### Reste
+Brancher `similaires`/`Analyseur` dans les moteurs HTTP (httpx/curl-cffi) côté scénarios, une
+commande CLI de récolte, doc d'usage. Score v3 réel attend toujours une clé (Ethan à distance).
+
 ## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v15 : Fix critique scripts furtifs, anti-CDP, 33 détecteurs
 
 ### Fait

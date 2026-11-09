@@ -14,6 +14,16 @@ HTML = """<html><body>
 <span class="titre">Produit</span></div>
 </body></html>"""
 
+# Liste « réelle » : des cartes de même structure, sans classe commune exploitable par un sélecteur.
+HTML_LISTE = """<html><body>
+<nav class="menu"><a>Accueil</a><a>Contact</a></nav>
+<div class="grille">
+  <article class="carte"><h3>Studio Paris</h3><span class="prix">250000</span></article>
+  <article class="carte"><h3>T2 Lyon</h3><span class="prix">190000</span></article>
+  <article class="carte"><h3>T3 Lille</h3><span class="prix">165000</span></article>
+</div>
+</body></html>"""
+
 
 def test_css_textes():
     a = Analyseur(HTML)
@@ -49,6 +59,35 @@ def test_extraction_adaptative_sans_navigateur(tmp_path):
 def test_adaptatif_sans_store_renvoie_none_si_casse(tmp_path):
     a = Analyseur("<div><b>x</b></div>", url="http://exemple.test/")
     assert a.extraire_adaptatif("span.absent", "k") is None
+
+
+def test_similaires_recupere_toute_la_liste_depuis_un_exemple():
+    a = Analyseur(HTML_LISTE)
+    cartes = a.similaires("article.carte")
+    assert len(cartes) == 3  # on pointe UNE carte, on récupère les trois
+    titres = [c.css_un("h3") for c in cartes]
+    assert titres == ["Studio Paris", "T2 Lyon", "T3 Lille"]
+    prix = [c.css_un("span.prix") for c in cartes]
+    assert prix == ["250000", "190000", "165000"]
+
+
+def test_similaires_ignore_les_elements_sans_ressemblance():
+    a = Analyseur(HTML)
+    # On pointe un <li> d'article : les <span> de la fiche ne doivent pas remonter.
+    items = a.similaires("li.article")
+    assert [i.attribut("data-id") for i in items] == ["A1", "A2"]
+
+
+def test_similaires_selecteur_absent_renvoie_vide():
+    a = Analyseur(HTML_LISTE)
+    assert a.similaires("table.absente") == []
+
+
+def test_element_texte_et_attribut():
+    a = Analyseur(HTML_LISTE)
+    carte = a.similaires("article.carte")[0]
+    assert "Studio Paris" in carte.texte and "250000" in carte.texte
+    assert a.similaires("article.carte")[1].css_un("h3") == "T2 Lyon"
 
 
 def test_recuperer_respecte_le_perimetre():
