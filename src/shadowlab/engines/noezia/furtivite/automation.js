@@ -112,7 +112,7 @@
   // mais d'autres injections (Patchright lui-même) peuvent en ajouter.
   const PROPS_PROTOTYPE_ONLY = [
     'webdriver', 'hardwareConcurrency', 'deviceMemory',
-    'languages', 'language', 'vendor', 'plugins', 'mimeTypes',
+    'languages', 'language', 'platform', 'vendor', 'plugins', 'mimeTypes',
   ];
   for (const prop of PROPS_PROTOTYPE_ONLY) {
     try {

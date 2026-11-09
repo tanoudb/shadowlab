@@ -329,6 +329,7 @@ class ProfilNavigateur:
     audio_seed: int
     user_agent: str = ""
     platform: str = ""
+    platform_name: str = ""
     sec_ch_ua: str = ""
     sec_ch_ua_platform: str = ""
 
@@ -337,6 +338,8 @@ class ProfilNavigateur:
             self.user_agent = self._construire_ua()
         if not self.platform:
             self.platform = self._plateforme()
+        if not self.platform_name:
+            self.platform_name = {"macos": "macOS", "windows": "Windows", "linux": "Linux"}[self.os]
         if not self.sec_ch_ua:
             self.sec_ch_ua = self._client_hints()
         if not self.sec_ch_ua_platform:
@@ -403,6 +406,7 @@ class ProfilNavigateur:
             "audio_seed": self.audio_seed,
             "user_agent": self.user_agent,
             "platform": self.platform,
+            "platform_name": self.platform_name,
             "sec_ch_ua": self.sec_ch_ua,
             "sec_ch_ua_platform": self.sec_ch_ua_platform,
         }

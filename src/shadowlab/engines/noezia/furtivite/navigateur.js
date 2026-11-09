@@ -201,6 +201,13 @@
     });
   }
 
+  // ─── navigator.platform (doit correspondre à l'OS du profil et au User-Agent) ───
+  if (P.platform) {
+    Object.defineProperty(Navigator.prototype, 'platform', {
+      get: natif(() => P.platform, 'get platform'), configurable: true,
+    });
+  }
+
   // ─── navigator.vendor ───
   Object.defineProperty(Navigator.prototype, 'vendor', {
     get: natif(() => 'Google Inc.', 'get vendor'), configurable: true,
