@@ -233,3 +233,57 @@ def test_recaptcha_v3_verifier_sans_secret(client, monkeypatch):
     r = client.post(f"/lab/recaptcha-v3/verifier?sl={JETON}", content=json.dumps({"token": "x"}))
     body = r.json()
     assert r.status_code == 200 and body["success"] is False and body["score"] is None
+
+
+def _entetes_sceau(reglages, profil="06", session=JETON, ja4=""):
+    """Forge un sceau de frontal valide (comme le ferait Nginx) pour tester la porte de connexion."""
+    from shadowlab.arena import secret as secrets_arena
+
+    secret = secrets_arena.charger(reglages.dossier_arena)
+    observation = "obs-test"
+    signature = secrets_arena.signer(secret, observation, profil, session, ja4)
+    return {
+        "x-shadowlab-sceau": signature,
+        "x-shadowlab-obs": observation,
+        "x-shadowlab-profil": profil,
+        "x-shadowlab-session": session,
+        "x-shadowlab-ja4": ja4,
+    }
+
+
+def test_connexion_porte_laisse_passer_session_propre(client, reglages):
+    # Niveau 06, sceau valide, aucune observation de bot → la porte comportementale laisse passer.
+    entetes = _entetes_sceau(reglages, session=JETON)
+    r = client.post(
+        f"/lab/connexion?sl={JETON}",
+        data={"identifiant": "demo", "mot_de_passe": "arena-demo-2026"},
+        headers=entetes,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303 and r.headers["location"] == "/lab/espace"
+
+
+def test_connexion_porte_bloque_un_bot(client, reglages):
+    # Une empreinte de bot classée « automatise » → la porte refuse le login même avec les bons identifiants.
+    jb = "ffffffffffffffffffffffffffffffff"
+    client.post(
+        f"/lab/collecte?sl={jb}",
+        content=json.dumps(
+            {
+                "kind": "empreinte",
+                "page": "/",
+                "payload": {
+                    "navigateur": {"userAgent": "x", "webdriver": True, "languages": ["fr"]},
+                    "botd": {"bot": True, "botKind": "selenium"},
+                },
+            }
+        ),
+    )
+    entetes = _entetes_sceau(reglages, session=jb)
+    r = client.post(
+        f"/lab/connexion?sl={jb}",
+        data={"identifiant": "demo", "mot_de_passe": "arena-demo-2026"},
+        headers=entetes,
+        follow_redirects=False,
+    )
+    assert r.status_code == 403
