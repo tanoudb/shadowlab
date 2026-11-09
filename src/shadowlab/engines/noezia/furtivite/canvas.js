@@ -73,16 +73,20 @@
     } catch(e) { throw _nettoyer_stack(e); }
   }, 'toBlob');
 
-  // getImageData aussi, pour les détecteurs qui lisent les pixels directement
+  // getImageData : même algorithme de bruit que bruiter() pour cohérence avec toDataURL
   CanvasRenderingContext2D.prototype.getImageData = natif(function getImageData(sx, sy, sw, sh) {
     const data = origGetImageData.call(this, sx, sy, sw, sh);
-    // Bruit léger sur les données brutes
+    const limW = Math.min(sw, 128), limH = Math.min(sh, 128);
+    const limPixels = limW * limH * 4;
     state = P.canvas_seed >>> 0;
     const d = data.data;
-    for (let i = 0; i < Math.min(d.length, 4096); i += 4) {
-      if (xorshift() < 0.15) {
+    for (let i = 0; i < Math.min(d.length, limPixels); i += 4) {
+      const r = xorshift();
+      if (r < 0.3) {
         const canal = (xorshift() * 3) | 0;
-        d[i + canal] = Math.max(0, Math.min(255, d[i + canal] + (xorshift() < 0.5 ? 1 : -1)));
+        const delta = xorshift() < 0.8 ? 1 : 2;
+        const signe = xorshift() < 0.5 ? 1 : -1;
+        d[i + canal] = Math.max(0, Math.min(255, d[i + canal] + signe * delta));
       }
     }
     return data;
