@@ -502,6 +502,35 @@ class DetecteurEntropieInteraction:
                     Signal("pas_de_pause", f"max délai souris = {max(delais):.0f}ms (pas de pause humaine)", 0.5)
                 )
 
+            # Trajectoire trop linéaire : angles entre segments consécutifs
+            angles = r.get("angles_segments") or []
+            if len(angles) >= 10:
+                import statistics
+
+                angle_moyen = statistics.mean(angles)
+                # Un humain a des changements de direction fréquents (angle moyen > 0.15 rad)
+                # Un robot qui fait des lignes droites a un angle moyen très faible
+                if angle_moyen < 0.08:
+                    signaux.append(
+                        Signal(
+                            "trajectoire_lineaire",
+                            f"angle moyen entre segments = {angle_moyen:.3f} rad (< 0.08 = ligne droite)",
+                            0.6,
+                        )
+                    )
+                # Trop d'angles identiques → bruit synthétique régulier
+                angles_arr = [round(a, 2) for a in angles]
+                uniques_a = len(set(angles_arr))
+                ratio_a = uniques_a / len(angles_arr)
+                if ratio_a < 0.25:
+                    signaux.append(
+                        Signal(
+                            "courbure_quantifiee",
+                            f"{ratio_a:.0%} d'angles uniques ({uniques_a}/{len(angles_arr)})",
+                            0.4,
+                        )
+                    )
+
         return _verdict(self.name, self.version, signaux)
 
 

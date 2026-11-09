@@ -8,16 +8,37 @@ const evenements = { mousemove: 0, click: 0, keydown: 0, scroll: 0, touchstart: 
 let premiereInteraction = null;
 const delais_souris = [];
 let dernierMouvementMs = null;
+// Trajectoire spatiale : angles entre segments consécutifs (détection linéarité)
+const angles_segments = [];
+let dernierePos = null;
+let avantDernierePos = null;
 for (const type of Object.keys(evenements)) {
-  addEventListener(type, () => {
+  addEventListener(type, (e) => {
     const maintenant = performance.now() - debut;
     evenements[type] += 1;
     if (premiereInteraction === null) premiereInteraction = Math.round(maintenant);
-    if (type === 'mousemove' && delais_souris.length < 50) {
-      if (dernierMouvementMs !== null) {
+    if (type === 'mousemove') {
+      if (delais_souris.length < 50 && dernierMouvementMs !== null) {
         delais_souris.push(Math.round((maintenant - dernierMouvementMs) * 100) / 100);
       }
       dernierMouvementMs = maintenant;
+      // Collecter les changements d'angle entre 3 points consécutifs
+      const pos = { x: e.clientX, y: e.clientY };
+      if (avantDernierePos && dernierePos && angles_segments.length < 40) {
+        const dx1 = dernierePos.x - avantDernierePos.x;
+        const dy1 = dernierePos.y - avantDernierePos.y;
+        const dx2 = pos.x - dernierePos.x;
+        const dy2 = pos.y - dernierePos.y;
+        const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+        const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+        if (len1 > 3 && len2 > 3) {
+          const dot = dx1 * dx2 + dy1 * dy2;
+          const cos = Math.max(-1, Math.min(1, dot / (len1 * len2)));
+          angles_segments.push(Math.round(Math.acos(cos) * 1000) / 1000);
+        }
+      }
+      avantDernierePos = dernierePos;
+      dernierePos = pos;
     }
   }, { passive: true });
 }
@@ -661,6 +682,7 @@ addEventListener('pagehide', () => {
   envoyer('comportement', {
     evenements, premiere_interaction_ms: premiereInteraction, duree_page_ms: Math.round(performance.now() - debut),
     delais_souris_ms: delais_souris,
+    angles_segments: angles_segments,
   }, true);
 });
 

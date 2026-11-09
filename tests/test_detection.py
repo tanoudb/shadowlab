@@ -95,3 +95,42 @@ def test_scenario_sans_page_html_reste_indetermine_cote_js():
     obs = Observations(http=[requete(entetes_navigateur(), "/lab/api/articles")], js=[], attend_js=False)
     v = verdicts(obs)
     assert v["botd"] == v["regles-js"] == v["coherence"] == "indetermine"
+
+
+def _comportement(**kw):
+    base = {
+        "evenements": {"mousemove": 30, "click": 5, "keydown": 0, "scroll": 3, "touchstart": 0},
+        "premiere_interaction_ms": 120,
+        "duree_page_ms": 5000,
+        "delais_souris_ms": [],
+        "angles_segments": [],
+    }
+    base.update(kw)
+    return {"kind": "comportement", "page": "/lab/statique", "payload": base}
+
+
+def test_entropie_trajectoire_lineaire_detectee():
+    """Angles proches de 0 = trajectoire en ligne droite → détection."""
+    angles = [0.01] * 15
+    delais = [float(i * 20 + 5) for i in range(20)]
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[empreinte(), _comportement(delais_souris_ms=delais, angles_segments=angles)],
+    )
+    v = verdicts(obs)
+    assert v["entropie-interaction"] == "automatise"
+
+
+def test_entropie_trajectoire_humaine_passe():
+    """Angles variés = trajectoire courbe → humain."""
+    import random
+
+    rng = random.Random(42)
+    angles = [rng.uniform(0.1, 0.8) for _ in range(20)]
+    delais = [rng.uniform(10, 600) for _ in range(25)]
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[empreinte(), _comportement(delais_souris_ms=delais, angles_segments=angles)],
+    )
+    v = verdicts(obs)
+    assert v["entropie-interaction"] == "humain"
