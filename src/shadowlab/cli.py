@@ -65,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser("comparer", help="comparer deux expériences (Fisher exact + Holm-Bonferroni)")
     p.add_argument("reference", type=int, help="id de l'expérience de référence")
     p.add_argument("nouveau", type=int, help="id de la nouvelle expérience")
+    p = sous.add_parser("recolter", help="récupérer une page et extraire des données (HTTP furtif)")
+    p.add_argument("url", help="URL à récupérer")
+    p.add_argument("selecteur", nargs="?", help="sélecteur CSS pour extraire du texte")
+    p.add_argument("--similaires", action="store_true", help="auto-match : trouver tous les éléments similaires")
+    p.add_argument("--seuil", type=float, default=0.5, help="seuil de ressemblance pour --similaires (défaut 0.5)")
+    p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
     args = parseur.parse_args(argv)
 
     reglages = charger()
@@ -125,6 +131,40 @@ def main(argv: list[str] | None = None) -> int:
         chemin.parent.mkdir(parents=True, exist_ok=True)
         chemin.touch()
         print(f"Arrêt demandé ({chemin}).")
+        return 0
+
+    if args.commande == "recolter":
+        import json as json_mod
+
+        from .engines.noezia.rapide import recuperer
+
+        try:
+            analyseur = recuperer(args.url, verifier_tls=False)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Erreur : {exc}", file=sys.stderr)
+            return 1
+        if args.selecteur and args.similaires:
+            elements = analyseur.similaires(args.selecteur, seuil=args.seuil)
+            if args.format_json:
+                print(json_mod.dumps([{"texte": e.texte} for e in elements], ensure_ascii=False, indent=2))
+            else:
+                print(f"{len(elements)} éléments similaires à « {args.selecteur} » :\n")
+                for i, e in enumerate(elements, 1):
+                    print(f"  {i}. {_nettoyer(e.texte[:120])}")
+        elif args.selecteur:
+            textes = analyseur.css(args.selecteur)
+            if args.format_json:
+                print(json_mod.dumps(textes, ensure_ascii=False, indent=2))
+            else:
+                print(f"{len(textes)} résultat(s) pour « {args.selecteur} » :\n")
+                for t in textes:
+                    print(f"  {_nettoyer(t[:200])}")
+        else:
+            texte = analyseur.tout_le_texte()
+            if args.format_json:
+                print(json_mod.dumps({"texte": texte[:5000]}, ensure_ascii=False, indent=2))
+            else:
+                print(texte[:3000])
         return 0
 
     cx = db.ouvrir(reglages.base_donnees)

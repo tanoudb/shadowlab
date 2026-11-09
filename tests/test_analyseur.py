@@ -90,6 +90,35 @@ def test_element_texte_et_attribut():
     assert a.similaires("article.carte")[1].css_un("h3") == "T2 Lyon"
 
 
+def test_http_base_analyseur():
+    """Les moteurs HTTP (httpx, scrapling) exposent un `.analyseur()` qui rend un Analyseur."""
+    from shadowlab.engines.http_base import DriverHttp, ReponseBrute
+
+    class FauxHttp(DriverHttp):
+        name = "faux"
+
+        def _ouvrir_client(self):
+            pass
+
+        def _envoyer(self, methode, url, donnees=None):
+            return ReponseBrute(200, {"content-type": "text/html"}, HTML_LISTE)
+
+        def close_session(self):
+            pass
+
+        def versions(self):
+            return {}
+
+    pilote = FauxHttp(("*",))
+    pilote.start_session()
+    pilote.navigate("http://faux.test/page")
+    a = pilote.analyseur()
+    assert a.css_un("h3") == "Studio Paris"
+    items = a.similaires("article.carte")
+    assert len(items) == 3
+    assert items[2].css_un("span.prix") == "165000"
+
+
 def test_recuperer_respecte_le_perimetre():
     # Le périmètre est vérifié AVANT tout fetch (pas de réseau nécessaire pour ce test).
     import pytest

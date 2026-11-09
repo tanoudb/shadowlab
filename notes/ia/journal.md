@@ -6,6 +6,32 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.6) — CLI récolte + analyseur branché aux moteurs HTTP
+
+### Fait
+- **`shadowlab recolter <url> [selecteur]`** (`cli.py`) — commande CLI de récolte HTTP furtive.
+  Fetch browserless (curl-cffi TLS), parser adaptatif, trois modes :
+  - sans sélecteur → texte brut de la page
+  - avec sélecteur CSS → textes ciblés
+  - `--similaires` → auto-match de liste (tous les éléments qui ressemblent à l'exemple)
+  Options : `--json` (sortie parsable), `--seuil` (ressemblance). Aucune base de données requise.
+- **`DriverHttp.analyseur()`** (`engines/http_base.py`) — expose un `Analyseur` sur le contenu de la
+  dernière page. Toutes les familles de moteurs HTTP (httpx, scrapling, curl-cffi) héritent de la
+  méthode, sans rien modifier. Permet `similaires`, extraction adaptative, css/xpath ergonomique.
+- **Tests** — `test_http_base_analyseur` (mock, vérifie css/similaires), `test_cli_recolter.py`
+  (4 tests intégration : texte brut, sélecteur, similaires, JSON + 1 test périmètre rapide).
+
+### Fichiers
+`src/shadowlab/cli.py`, `src/shadowlab/engines/http_base.py`, `tests/test_analyseur.py`,
+`tests/test_cli_recolter.py` (nouveau).
+
+### Vérifié
+Lint propre, 307 tests rapides verts (+2).
+
+### Reste
+Doc d'usage (README ou help étendu), wirer l'analyseur dans des scénarios de campagne (ex. : un
+scénario « extraction adaptative » qui teste la relocalisation en live), concurrence intra-session.
+
 ## 2026-11-09 — Claude (Opus 4.8) — Analyseur : auto-match de liste (façon Scrapling)
 
 ### Fait

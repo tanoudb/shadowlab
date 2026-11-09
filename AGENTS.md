@@ -79,6 +79,7 @@ uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
 uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTCHA v3 réel (clés v3 dans .env)
 uv run shadowlab campagne configs/experiments/connexion-arena.yaml  # le moteur franchit le login (01/05/06)
+uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)

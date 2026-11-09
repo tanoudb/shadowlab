@@ -129,3 +129,9 @@ class DriverHttp(Driver):
 
     def content(self) -> str:
         return self._texte
+
+    def analyseur(self):
+        """Renvoie un `Analyseur` sur le contenu de la dernière page (extraction adaptative sans navigateur)."""
+        from .noezia.analyseur import Analyseur
+
+        return Analyseur(self._texte, url=self._url)
