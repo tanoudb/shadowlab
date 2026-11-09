@@ -424,8 +424,8 @@ def generer_profil(nom: str | None = None, os: str | None = None, rng: random.Ra
     """
     r = rng or random.Random()
 
-    # Filtrer par OS si demandé
-    candidates = [m for m in MACHINES if m.os == os] if os else MACHINES
+    # Filtrer par OS si demandé (fallback sur toutes les machines si l'OS est inconnu)
+    candidates = ([m for m in MACHINES if m.os == os] or MACHINES) if os else MACHINES
     machine = r.choice(candidates)
 
     os_version = r.choice(machine.os_versions)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import logging
+import platform
 import random
 import time
 from pathlib import Path
@@ -40,6 +41,16 @@ from .profils.generateur import ProfilNavigateur, generer_profil
 from .profils.stockage import charger_ou_creer
 
 log = logging.getLogger(__name__)
+
+
+def _detecter_hote_os() -> str:
+    """OS de la machine qui exécute le moteur (pour la cohérence GPU réel ↔ profil)."""
+    return {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(
+        platform.system(), "linux"
+    )
+
+
+_HOTE_OS = _detecter_hote_os()
 
 # Hôtes des widgets CAPTCHA — sous-ressources uniquement, jamais cibles de navigation.
 HOTES_CHALLENGES = (
@@ -139,7 +150,9 @@ class DriverNoezia(Driver):
         if self._config.profil:
             self._profil = charger_ou_creer(self._config.profil)
         else:
-            self._profil = generer_profil()
+            # Profil cohérent avec l'OS de l'hôte : le GPU réel (Metal sur
+            # Apple Silicon) correspond alors au renderer WebGL annoncé.
+            self._profil = generer_profil(os=_HOTE_OS)
         log.info(
             "Profil NOEZIA : %s (OS=%s, GPU=%s)",
             self._profil.nom,
@@ -154,18 +167,30 @@ class DriverNoezia(Driver):
             "server": MANDATAIRE_BLOQUANT,
             "bypass": ",".join(liste_directe(tous_hotes)),
         }
+        args = [
+            "--disable-blink-features=AutomationControlled",
+            "--enable-features=NetworkService,NetworkServiceInProcess",
+        ]
+        # GPU réel au lieu de SwiftShader (rendu logiciel = signal headless évident).
+        # Réservé au couple profil macOS + hôte macOS : le backend Metal réel est
+        # alors cohérent avec le renderer Apple annoncé. Sous un profil Windows/Linux,
+        # un GPU Apple réel trahirait l'incohérence (OS usurpé ≠ matériel réel).
+        if self._profil.os == "macos" and _HOTE_OS == "macos":
+            args += ["--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist"]
+
         self._navigateur = self._pw.chromium.launch(
             headless=self._config.headless,
             proxy=verrou,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--enable-features=NetworkService,NetworkServiceInProcess",
-            ],
+            args=args,
             ignore_default_args=[
                 "--disable-extensions",
                 "--disable-default-apps",
                 "--disable-component-extensions-with-background-pages",
                 "--enable-automation",
+                # Retirés aussi par rebrowser-patches : ces flags sont absents d'un
+                # Chrome normal et constituent des signaux d'automatisation.
+                "--disable-popup-blocking",
+                "--disable-ipc-flooding-protection",
             ],
         )
 
