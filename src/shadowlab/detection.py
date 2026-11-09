@@ -1264,6 +1264,15 @@ class DetecteurCSSMedia:
         if cm.get("matchMedia_natif") is False:
             signaux.append(Signal("matchMedia_patche", "matchMedia surchargé", 0.3))
 
+        if cm.get("display_mode_browser") is False:
+            signaux.append(
+                Signal(
+                    "display_mode_not_browser",
+                    "display-mode:browser retourne false (headless Chrome)",
+                    0.5,
+                )
+            )
+
         return _verdict(self.name, self.version, signaux)
 
 

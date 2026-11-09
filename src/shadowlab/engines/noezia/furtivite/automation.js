@@ -66,42 +66,28 @@
   // Mais matchMedia peut trahir un écran absent via des queries obscures.
   const origMatchMedia = window.matchMedia;
   if (origMatchMedia) {
+    function _fauxResult(result, forcedMatches) {
+      return {
+        matches: forcedMatches,
+        media: result.media,
+        onchange: null,
+        addListener: natif(function addListener() {}, 'addListener'),
+        removeListener: natif(function removeListener() {}, 'removeListener'),
+        addEventListener: natif(function addEventListener() {}, 'addEventListener'),
+        removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
+        dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
+      };
+    }
     window.matchMedia = natif(function matchMedia(query) {
       const q = typeof query === 'string' ? query : '';
-      // display-mode: standalone/fullscreen = false en navigateur normal
-      // Headless peut répondre différemment à 'hover' et 'pointer'
-      // Un vrai navigateur desktop : hover=hover, pointer=fine
-      if (/\(hover:\s*none\)/.test(q)) {
-        const result = origMatchMedia.call(window, q);
-        if (result.matches) {
-          return {
-            matches: false,
-            media: result.media,
-            onchange: null,
-            addListener: natif(function addListener() {}, 'addListener'),
-            removeListener: natif(function removeListener() {}, 'removeListener'),
-            addEventListener: natif(function addEventListener() {}, 'addEventListener'),
-            removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
-            dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
-          };
-        }
-      }
-      if (/\(pointer:\s*none\)/.test(q)) {
-        const result = origMatchMedia.call(window, q);
-        if (result.matches) {
-          return {
-            matches: false,
-            media: result.media,
-            onchange: null,
-            addListener: natif(function addListener() {}, 'addListener'),
-            removeListener: natif(function removeListener() {}, 'removeListener'),
-            addEventListener: natif(function addEventListener() {}, 'addEventListener'),
-            removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
-            dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
-          };
-        }
-      }
-      return origMatchMedia.call(window, q);
+      const result = origMatchMedia.call(window, q);
+      // hover:none → false (un desktop a toujours hover:hover)
+      if (/\(hover:\s*none\)/.test(q) && result.matches) return _fauxResult(result, false);
+      // pointer:none → false (un desktop a toujours pointer:fine)
+      if (/\(pointer:\s*none\)/.test(q) && result.matches) return _fauxResult(result, false);
+      // display-mode:browser → true (headless Chrome retourne false)
+      if (/\(display-mode:\s*browser\)/.test(q) && !result.matches) return _fauxResult(result, true);
+      return result;
     }, 'matchMedia');
   }
 

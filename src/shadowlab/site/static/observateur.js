@@ -560,6 +560,10 @@ function cssMediaTest() {
     r.reduced_motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     // matchMedia natif ?
     r.matchMedia_natif = /\[native code\]/.test(window.matchMedia.toString());
+    // display-mode: browser (en headless, souvent false)
+    r.display_mode_browser = window.matchMedia('(display-mode: browser)').matches;
+    // inverted-colors: none (devrait être true sur desktop standard)
+    r.inverted_colors_none = window.matchMedia('(inverted-colors: none)').matches;
   } catch (_) { /* ignore */ }
   return r;
 }

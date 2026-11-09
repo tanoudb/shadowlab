@@ -1,0 +1,26 @@
+# NOEZIA v13 — Arena durcie à 29 détecteurs
+# Stack traces filtrées via getter (prepareStackTrace invisible),
+# navigator.platform spoofé, canvas stable, rAF timing
+experiment:
+  name: noezia_v13_arena29
+  description: "NOEZIA v13 : 29 détecteurs, stack getter natif, canvas consistency, rAF timing"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]
