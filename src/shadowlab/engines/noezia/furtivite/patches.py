@@ -36,6 +36,9 @@ def script_profil(profil: ProfilNavigateur) -> str:
         ),
         "fonts": profil.fonts,
         "timezone": profil.timezone,
+        "screen_width": profil.screen_width,
+        "screen_height": profil.screen_height,
+        "device_pixel_ratio": profil.device_pixel_ratio,
     }
     return f"window.__NOEZIA_PROFIL__ = {json.dumps(donnees)};"
 
@@ -46,6 +49,7 @@ def scripts_furtivite(
     webgl: bool = True,
     audio: bool = True,
     navigateur: bool = True,
+    environnement: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -56,6 +60,9 @@ def scripts_furtivite(
 
     if navigateur:
         scripts.append(_charger_script("navigateur.js"))
+
+    if environnement:
+        scripts.append(_charger_script("environnement.js"))
 
     if canvas:
         scripts.append(_charger_script("canvas.js"))

@@ -6,6 +6,56 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.6) — Durcissement Arena + NOEZIA : 12 détecteurs, environnement, prototype chain
+
+**Fait** : durcissement simultané de l'Arena et de NOEZIA v4. L'Arena a 2 nouveaux détecteurs (12 total). NOEZIA corrige la chaîne prototype et ajoute le spoofing d'environnement.
+
+**Arena — 2 nouveaux détecteurs** (`detection.py`) :
+- `DetecteurIntegriteProprietes` : vérifie function.length/name des fonctions natives (toDataURL, getParameter, toString), stack traces d'appels invalides (frames JS révélatrices), propriétés propres sur navigator (signe de spoofing instance), getters outerWidth/devicePixelRatio non natifs.
+- `DetecteurCoherenceEnvironnement` : timezone vs locale (Europe/Paris attend "fr"), innerWidth > screen.width impossible, offset timezone vs nom de zone avec DST.
+
+**Arena — observateur enrichi** (`observateur.js`) : nouvelle fonction `integrite()` collecte function.length/name, navigator own keys, screen own keys, stack traces toDataURL, descripteurs outerWidth/devicePixelRatio.
+
+**NOEZIA — correctifs furtivité** :
+- `navigateur.js` : propriétés `hardwareConcurrency`, `deviceMemory`, `plugins`, `mimeTypes` déplacées de `navigator` (instance) vers `Navigator.prototype` (comme Chrome réel). Corrige la détection `hwc_instance` du détecteur prototypes.
+- `environnement.js` (nouveau) : spoofing Screen.prototype (width/height/availWidth/availHeight/colorDepth/pixelDepth), gap chrome fenêtre par OS (macOS 0/28px, Windows 16/39px, Linux 2/37px) pour `outerWidth > innerWidth`, protection WebRTC (filtrage ICE host), Battery API (desktop réaliste), Connection API (profil 4g).
+- `patches.py` : screen_width/height/dpr dans le profil injecté, `environnement.js` inséré dans le pipeline (6 scripts total).
+
+**WAF** : exclusion rule 942430 (SQL character anomaly) pour `/lab/` — faux positif sur payloads de scraping au niveau 06 paranoia élevée.
+
+**Tests** : 13 tests unitaires ajoutés pour les détecteurs v4 (prototypes, cohérence profonde, entropie, canvas empreinte, intégrité propriétés, cohérence environnement, registre 12). Total : 40 tests v4, 248 tests suite complète.
+
+**Campagne #25** (pré-durcissement, 10 détecteurs, 360 passages) :
+| Moteur | 01 | 02 | 03 | 04 | 05 | 06 | Total |
+|--------|----|----|----|----|----|----|-------|
+| noezia | 100% | 100% | 100% | 100% | 83% | 0% | 80% |
+| noezia-exp | 100% | 100% | 100% | 100% | 75% | 0% | 79% |
+| scrapling-furtif | 100% | 100% | 83% | 83% | 0% | 0% | 61% |
+| patchright | 100% | 0% | 0% | 0% | 0% | 0% | 16% |
+| playwright | 100% | 0% | 0% | 0% | 0% | 0% | 16% |
+
+Niveau 05 : Turnstile non résolu (attendu — pas de solveur CAPTCHA). Niveau 06 : WAF rule 942430 bloquait avant détection (corrigé).
+
+**Fichiers créés** : `src/shadowlab/engines/noezia/furtivite/environnement.js`, `configs/experiments/validation-durcissement.yaml`.
+**Fichiers modifiés** : `navigateur.js`, `patches.py`, `observateur.js`, `detection.py`, `test_noezia_v4.py`, `docker/arena/coraza/main.go`.
+
+**Corrections supplémentaires (même session)** :
+- `souris.py` : jitter timing passé de 15% à 40% de l'intervalle + micro-hésitations (~8% des points, 50-300ms). CV des délais passe de ~0.15 (seuil détection) à ~0.60 — bien au-dessus. Clampage temporel pour garantir que le dernier point reste final.
+- `navigateur.js` : remplacement `Function.prototype.toString` avec `.name === "toString"` et `.length === 0` (via méthode nommée `{toString() {...}}.toString`). Corrige le signal `toString_name_incorrect` du détecteur intégrité.
+- `coraza/main.go` : ajout exclusion WAF 942431 en plus de 942430 pour `/lab/` — `recaptcha/verifier` bloqué au nv06.
+- Mouvement oisif souris : pause pré-mouvement 100-600ms pour casser la régularité des délais.
+
+**Campagne #26** (post-durcissement, 12 détecteurs, en cours) — résultats intermédiaires :
+- **coherence-profonde** : `automatise` → `indéterminé` sur NOEZIA (fix environnement.js fonctionne).
+- **prototypes** : `indéterminé` → `humain` sur NOEZIA (fix prototype chain fonctionne).
+- **coherence-environnement** (nouveau) : `humain` partout pour NOEZIA — passe proprement.
+- **entropie-interaction** : encore 2-6 `automatise` par niveau (timing souris marginal — corrigé ci-dessus, à valider en campagne suivante).
+- Nv06 : WAF 942430/942431 bloquait avant le fix — rebuild Docker fait, passages restants utiliseront le WAF corrigé.
+
+**Reste** : finir campagne #26, mini-campagne nv06 post-fix WAF, commit tout, push, puis continuer le durcissement.
+
+---
+
 ## 2026-11-08 (nuit) — Claude (Opus 4.6) — NOEZIA v4 : moteur modulaire + durcissement Arena
 
 **Fait** : refonte complète du moteur NOEZIA (v3 monolithique → v4 modulaire) et durcissement de l'Arena avec 4 nouveaux détecteurs.

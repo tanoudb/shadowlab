@@ -77,3 +77,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   modulaires avec PRNG par profil), et défis (3 handlers indépendants). L'ancien moteur reste sous le nom
   `noezia-experimental` pour comparaison. Le v4 est conçu pour évoluer : chaque module est testable et
   remplaçable indépendamment, les profils sont persistants et reproductibles par graine.
+- **D-23 — 09/11/2026 — Durcissement simultané Arena + moteur.** Ajouter de nouveaux détecteurs à l'Arena
+  (intégrité des propriétés, cohérence d'environnement — 12 total) en même temps que les contre-mesures
+  dans NOEZIA (prototype chain, environnement.js). Le moteur et l'Arena progressent en parallèle : chaque
+  nouveau détecteur est une épreuve que le moteur doit passer, et chaque évasion réussie valide la qualité
+  du spoofing. Les propriétés navigator passent sur `Navigator.prototype` (pas l'instance) et les dimensions
+  écran sur `Screen.prototype` pour reproduire la vraie chaîne de prototype de Chrome.

@@ -172,6 +172,60 @@ function prototypes() {
   return resultats;
 }
 
+function integrite() {
+  const r = {};
+  // Vérifier que les fonctions natives ont la bonne longueur (.length)
+  try {
+    r.toDataURL_length = HTMLCanvasElement.prototype.toDataURL.length;
+    r.toDataURL_name = HTMLCanvasElement.prototype.toDataURL.name;
+  } catch (_) { /* ignore */ }
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (gl) {
+      r.getParameter_length = gl.getParameter.length;
+      r.getParameter_name = gl.getParameter.name;
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    r.toString_length = Function.prototype.toString.length;
+    r.toString_name = Function.prototype.toString.name;
+  } catch (_) { /* ignore */ }
+  // navigator : propriétés propres inattendues
+  try {
+    r.navigator_own_keys = Object.getOwnPropertyNames(navigator)
+      .filter((k) => !['vendorSub', 'productSub', 'vendor'].includes(k));
+  } catch (_) { /* ignore */ }
+  // Screen : propriétés propres (ne devrait pas en avoir si c'est sur le prototype)
+  try {
+    r.screen_own_keys = Object.getOwnPropertyNames(screen)
+      .filter((k) => ['width', 'height', 'availWidth', 'availHeight', 'colorDepth'].includes(k));
+  } catch (_) { /* ignore */ }
+  // Stack trace d'un appel à toDataURL sur un objet invalide
+  try {
+    HTMLCanvasElement.prototype.toDataURL.call({});
+  } catch (e) {
+    const stack = (e.stack || '').split('\n').slice(0, 5);
+    r.toDataURL_error_stack = stack.map((l) => l.trim().slice(0, 120));
+  }
+  // Vérifier si outerWidth et outerHeight sont sur window (pas définis par un script)
+  try {
+    const descOW = Object.getOwnPropertyDescriptor(window, 'outerWidth');
+    r.outerWidth_propre = !!descOW;
+    if (descOW && descOW.get) {
+      r.outerWidth_getter_natif = /\[native code\]/.test(descOW.get.toString());
+    }
+  } catch (_) { /* ignore */ }
+  // devicePixelRatio : sur window ou hérité ?
+  try {
+    r.dpr_propre = window.hasOwnProperty('devicePixelRatio');
+    const descDPR = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+    if (descDPR && descDPR.get) {
+      r.dpr_getter_natif = /\[native code\]/.test(descDPR.get.toString());
+    }
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
 function timing() {
   return {
     performance_now: typeof performance.now === 'function',
@@ -218,6 +272,7 @@ async function collecter() {
     webgl: webgl(),
     canvas: await empreinteCanvas(),
     prototypes: prototypes(),
+    integrite: integrite(),
     timing: timing(),
     automation: automation(),
     botd: await botd(),

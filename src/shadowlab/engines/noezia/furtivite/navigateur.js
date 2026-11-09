@@ -13,11 +13,14 @@
   const _ts = Function.prototype.toString;
   const _natifs = new WeakMap();
   function natif(fn, nom) { _natifs.set(fn, nom); return fn; }
-  Function.prototype.toString = function() {
+  const _remplacement = {toString() {
     const n = _natifs.get(this);
     if (n !== undefined) return 'function ' + n + '() { [native code] }';
     return _ts.call(this);
-  };
+  }}.toString;
+  Object.defineProperty(Function.prototype, 'toString', {
+    value: _remplacement, writable: true, configurable: true,
+  });
   natif(Function.prototype.toString, 'toString');
 
   // Exposer natif() pour les autres scripts
@@ -54,7 +57,9 @@
   pluginArr.item = natif(i => fauxPlugins[i] || null, 'item');
   pluginArr.namedItem = natif(n => fauxPlugins.find(p => p.name === n) || null, 'namedItem');
   pluginArr.refresh = natif(() => {}, 'refresh');
-  Object.defineProperty(navigator, 'plugins', {get: natif(() => pluginArr, 'get plugins')});
+  Object.defineProperty(Navigator.prototype, 'plugins', {
+    get: natif(() => pluginArr, 'get plugins'), configurable: true,
+  });
 
   const mimeObjs = fauxPlugins.map(p => p[0]);
   const mimeArr = Object.create(MimeTypeArray.prototype);
@@ -62,7 +67,9 @@
   Object.defineProperty(mimeArr, 'length', {value: mimeObjs.length});
   mimeArr.item = natif(i => mimeObjs[i] || null, 'item');
   mimeArr.namedItem = natif(t => mimeObjs.find(m => m.type === t) || null, 'namedItem');
-  Object.defineProperty(navigator, 'mimeTypes', {get: natif(() => mimeArr, 'get mimeTypes')});
+  Object.defineProperty(Navigator.prototype, 'mimeTypes', {
+    get: natif(() => mimeArr, 'get mimeTypes'), configurable: true,
+  });
 
   // ─── Notification.permission → "default" ───
   try {
@@ -112,15 +119,17 @@
     });
   }
 
-  // ─── hardwareConcurrency et deviceMemory ───
+  // ─── hardwareConcurrency et deviceMemory (sur le prototype, pas l'instance) ───
   if (P.hardware_concurrency) {
-    Object.defineProperty(navigator, 'hardwareConcurrency', {
+    Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
       get: natif(() => P.hardware_concurrency, 'get hardwareConcurrency'),
+      configurable: true,
     });
   }
   if (P.device_memory) {
-    Object.defineProperty(navigator, 'deviceMemory', {
+    Object.defineProperty(Navigator.prototype, 'deviceMemory', {
       get: natif(() => P.device_memory, 'get deviceMemory'),
+      configurable: true,
     });
   }
 

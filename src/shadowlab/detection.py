@@ -546,6 +546,152 @@ class DetecteurEmpreinteCanvas:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurIntegriteProprietes:
+    """Vérifie l'intégrité fine des propriétés : .length, .name, stack traces, own keys.
+
+    Les wrappers JS qui remplacent une fonction native oublient souvent de reproduire
+    les propriétés secondaires (length, name) ou exposent leur frame dans les stack traces.
+    """
+
+    name = "integrite-proprietes"
+    version = "1"
+
+    # Valeurs attendues pour les fonctions natives de Chromium
+    ATTENDUS = {
+        "toDataURL_length": 0,
+        "toDataURL_name": "toDataURL",
+        "getParameter_length": 1,
+        "getParameter_name": "getParameter",
+        "toString_length": 0,
+        "toString_name": "toString",
+    }
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        integ = p.get("integrite") or {}
+        signaux: list[Signal] = []
+
+        for cle, attendu in self.ATTENDUS.items():
+            val = integ.get(cle)
+            if val is not None and val != attendu:
+                signaux.append(Signal(f"{cle}_incorrect", f"{cle}={val} (attendu {attendu})", 0.5))
+
+        # Stack trace de toDataURL sur objet invalide : ne devrait PAS contenir de frames JS utilisateur
+        stack = integ.get("toDataURL_error_stack") or []
+        for frame in stack:
+            if frame and "at toDataURL" in frame and "native" not in frame.lower() and "<anonymous>" not in frame:
+                signaux.append(Signal("stack_toDataURL_js", f"frame JS dans stack toDataURL : {frame[:80]}", 0.75))
+                break
+
+        # outerWidth redéfini avec un getter non natif
+        if integ.get("outerWidth_propre") is True and integ.get("outerWidth_getter_natif") is False:
+            signaux.append(Signal("outerWidth_patche", "outerWidth a un getter non natif", 0.5))
+
+        # devicePixelRatio redéfini
+        if integ.get("dpr_propre") is True and integ.get("dpr_getter_natif") is False:
+            signaux.append(Signal("dpr_patche", "devicePixelRatio a un getter non natif", 0.5))
+
+        # Propriétés inattendues sur navigator (instance)
+        own_keys = integ.get("navigator_own_keys") or []
+        suspects = [k for k in own_keys if k in ("hardwareConcurrency", "deviceMemory", "plugins", "mimeTypes")]
+        if suspects:
+            signaux.append(
+                Signal(
+                    "navigator_own_props",
+                    f"propriétés propres sur navigator : {', '.join(suspects)}",
+                    0.5,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurCoherenceEnvironnement:
+    """Cohérence entre timezone, locale, screen et viewport.
+
+    Un profil fabriqué peut avoir des incohérences subtiles :
+    - Europe/Paris avec en-US comme langue principale
+    - screen 3840x2160 mais viewport 800x600
+    - outerWidth == innerWidth (headless sans chrome de fenêtre)
+    """
+
+    name = "coherence-environnement"
+    version = "1"
+
+    TIMEZONE_LOCALES = {
+        "Europe/Paris": ("fr",),
+        "Europe/Berlin": ("de",),
+        "Europe/Madrid": ("es",),
+        "Europe/London": ("en",),
+        "America/New_York": ("en",),
+        "America/Chicago": ("en",),
+        "America/Los_Angeles": ("en",),
+    }
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        signaux: list[Signal] = []
+
+        fuseau = p.get("fuseau") or {}
+        nav = p.get("navigateur") or {}
+        ecran = p.get("ecran") or {}
+        fenetre = p.get("fenetre") or {}
+
+        # Timezone vs locale
+        zone = fuseau.get("zone", "")
+        langue = (nav.get("language") or "")[:2].lower()
+        attendues = self.TIMEZONE_LOCALES.get(zone) or ()
+        if attendues and langue and langue not in attendues:
+            signaux.append(
+                Signal(
+                    "timezone_locale_divergent",
+                    f"timezone {zone} avec langue {langue} (attendu : {'/'.join(attendues)})",
+                    0.25,
+                )
+            )
+
+        # Screen vs viewport ratio suspect
+        sw = ecran.get("width", 0)
+        iw = fenetre.get("innerWidth", 0)
+        if sw and iw:
+            ratio = iw / sw
+            if ratio > 1.0:
+                signaux.append(Signal("viewport_gt_screen", f"innerWidth {iw} > screen.width {sw}", 0.75))
+
+        # Timezone offset vs zone name
+        decalage = fuseau.get("decalage")
+        if zone and decalage is not None:
+            # Vérification grossière : Paris/Berlin/Madrid = UTC+1 (offset -60) ou UTC+2 (DST, -120)
+            offsets_connus: dict[str, tuple[int, ...]] = {
+                "Europe/Paris": (-60, -120),
+                "Europe/Berlin": (-60, -120),
+                "Europe/Madrid": (-60, -120),
+                "Europe/London": (0, -60),
+                "America/New_York": (300, 240),
+                "America/Chicago": (360, 300),
+                "America/Los_Angeles": (480, 420),
+            }
+            attendus = offsets_connus.get(zone)
+            if attendus and decalage not in attendus:
+                signaux.append(
+                    Signal(
+                        "timezone_offset_incoherent",
+                        f"zone {zone} avec offset {decalage} (attendu : {attendus})",
+                        0.75,
+                    )
+                )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -568,6 +714,8 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurCoherenceProfonde(),
         DetecteurEntropieInteraction(),
         DetecteurEmpreinteCanvas(),
+        DetecteurIntegriteProprietes(),
+        DetecteurCoherenceEnvironnement(),
     )
 }
 

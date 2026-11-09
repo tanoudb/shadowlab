@@ -38,6 +38,7 @@ const exclusions = `
 SecRule REQUEST_URI "@beginsWith /lab/collecte" "id:1010,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
 SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier$" "id:1011,phase:1,pass,nolog,ctl:ruleRemoveById=942120"
 SecRule REQUEST_URI "@beginsWith /lab/" "id:1012,phase:1,pass,nolog,ctl:ruleRemoveById=920272"
+SecRule REQUEST_URI "@beginsWith /lab/" "id:1013,phase:2,pass,nolog,ctl:ruleRemoveById=942430,ctl:ruleRemoveById=942431"
 `
 
 type regle struct {

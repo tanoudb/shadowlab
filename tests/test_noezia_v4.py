@@ -207,7 +207,7 @@ class TestFurtivite:
 
         p = generer_profil("test-furtif")
         scripts = scripts_furtivite(p)
-        assert len(scripts) == 5  # profil + navigateur + canvas + webgl + audio
+        assert len(scripts) == 6  # profil + navigateur + environnement + canvas + webgl + audio
 
     def test_scripts_contiennent_profil(self):
         from shadowlab.engines.noezia.furtivite.patches import scripts_furtivite
@@ -224,7 +224,7 @@ class TestFurtivite:
 
         p = generer_profil("test-selective")
         scripts = scripts_furtivite(p, canvas=False, audio=False)
-        assert len(scripts) == 3  # profil + navigateur + webgl
+        assert len(scripts) == 4  # profil + navigateur + environnement + webgl
 
 
 # ── Moteur (sans navigateur) ──────────────────────────────────────────
@@ -273,3 +273,143 @@ class TestMoteurSansBrowser:
         assert conf["headless"] is True
         assert conf["simuler_souris"] is True
         assert conf["furtivite_canvas"] is True
+
+
+# ── Détecteurs v4 (sans navigateur) ──────────────────────────────────
+
+
+def _obs_vide(**kw):
+    from shadowlab.detection import Observations
+
+    defaults = {"http": [], "js": [], "attend_js": True}
+    defaults.update(kw)
+    return Observations(**defaults)
+
+
+def _obs_avec_empreinte(empreinte, **kw):
+    return _obs_vide(js=[{"kind": "empreinte", "payload": empreinte}], **kw)
+
+
+class TestDetecteursV4:
+    def test_prototypes_toString_patche(self):
+        from shadowlab.detection import DetecteurPrototypes
+
+        d = DetecteurPrototypes()
+        obs = _obs_avec_empreinte({"prototypes": {"toString_self": "function faux() {}"}})
+        r = d.classer(obs)
+        assert r.classification == "automatise"
+
+    def test_prototypes_canvas_patche(self):
+        from shadowlab.detection import DetecteurPrototypes
+
+        d = DetecteurPrototypes()
+        obs = _obs_avec_empreinte({"prototypes": {"canvas_natif": False}})
+        r = d.classer(obs)
+        assert any(s.code == "canvas_patche" for s in r.signals)
+
+    def test_prototypes_hwc_instance(self):
+        from shadowlab.detection import DetecteurPrototypes
+
+        d = DetecteurPrototypes()
+        obs = _obs_avec_empreinte({"prototypes": {"hwc_instance": True}})
+        r = d.classer(obs)
+        assert any(s.code == "hwc_instance" for s in r.signals)
+
+    def test_coherence_profonde_avail_gt_screen(self):
+        from shadowlab.detection import DetecteurCoherenceProfonde
+
+        d = DetecteurCoherenceProfonde()
+        obs = _obs_avec_empreinte({"ecran": {"width": 1920, "availWidth": 2000, "height": 1080, "availHeight": 1080}})
+        r = d.classer(obs)
+        assert any(s.code == "avail_gt_screen" for s in r.signals)
+
+    def test_coherence_profonde_outer_eq_inner(self):
+        from shadowlab.detection import DetecteurCoherenceProfonde
+
+        d = DetecteurCoherenceProfonde()
+        obs = _obs_avec_empreinte(
+            {
+                "fenetre": {"outerWidth": 1920, "innerWidth": 1920, "outerHeight": 1080, "innerHeight": 1080},
+            }
+        )
+        r = d.classer(obs)
+        assert any(s.code == "outer_eq_inner" for s in r.signals)
+
+    def test_entropie_timing_regulier(self):
+        from shadowlab.detection import DetecteurEntropieInteraction
+
+        d = DetecteurEntropieInteraction()
+        delais = [16.0] * 30  # parfaitement régulier = machine
+        obs = _obs_vide(js=[{"kind": "comportement", "payload": {"delais_souris_ms": delais}}])
+        r = d.classer(obs)
+        assert any(s.code == "timing_trop_regulier" for s in r.signals)
+
+    def test_canvas_empreinte_patches(self):
+        from shadowlab.detection import DetecteurEmpreinteCanvas
+
+        d = DetecteurEmpreinteCanvas()
+        obs = _obs_avec_empreinte({"prototypes": {"canvas_natif": False, "webgl_getParameter_natif": False}})
+        r = d.classer(obs)
+        assert any(s.code == "canvas_webgl_patches" for s in r.signals)
+
+    def test_integrite_function_length(self):
+        from shadowlab.detection import DetecteurIntegriteProprietes
+
+        d = DetecteurIntegriteProprietes()
+        obs = _obs_avec_empreinte({"integrite": {"toDataURL_length": 3, "toDataURL_name": "toDataURL"}})
+        r = d.classer(obs)
+        assert any(s.code == "toDataURL_length_incorrect" for s in r.signals)
+
+    def test_integrite_stack_trace(self):
+        from shadowlab.detection import DetecteurIntegriteProprietes
+
+        d = DetecteurIntegriteProprietes()
+        obs = _obs_avec_empreinte(
+            {
+                "integrite": {"toDataURL_error_stack": ["TypeError: ...", "    at toDataURL (eval:1:5)", "    at foo"]},
+            }
+        )
+        r = d.classer(obs)
+        assert any(s.code == "stack_toDataURL_js" for s in r.signals)
+
+    def test_integrite_outerWidth_patche(self):
+        from shadowlab.detection import DetecteurIntegriteProprietes
+
+        d = DetecteurIntegriteProprietes()
+        obs = _obs_avec_empreinte({"integrite": {"outerWidth_propre": True, "outerWidth_getter_natif": False}})
+        r = d.classer(obs)
+        assert any(s.code == "outerWidth_patche" for s in r.signals)
+
+    def test_coherence_env_timezone_offset(self):
+        from shadowlab.detection import DetecteurCoherenceEnvironnement
+
+        d = DetecteurCoherenceEnvironnement()
+        obs = _obs_avec_empreinte(
+            {
+                "fuseau": {"zone": "Europe/Paris", "decalage": 480},
+                "navigateur": {"language": "fr"},
+            }
+        )
+        r = d.classer(obs)
+        assert any(s.code == "timezone_offset_incoherent" for s in r.signals)
+
+    def test_coherence_env_propre(self):
+        from shadowlab.detection import DetecteurCoherenceEnvironnement
+
+        d = DetecteurCoherenceEnvironnement()
+        obs = _obs_avec_empreinte(
+            {
+                "fuseau": {"zone": "Europe/Paris", "decalage": -60},
+                "navigateur": {"language": "fr-FR"},
+                "ecran": {"width": 1920},
+                "fenetre": {"innerWidth": 1440},
+            }
+        )
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_registre_12_detecteurs(self):
+        from shadowlab.detection import registre
+
+        r = registre()
+        assert len(r) == 12

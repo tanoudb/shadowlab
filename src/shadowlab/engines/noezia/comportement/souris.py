@@ -96,10 +96,16 @@ def trajectoire(
             bx += _bruit_mouvement(vitesse)
             by += _bruit_mouvement(vitesse)
 
-        # Timing avec micro-variation
+        # Timing avec jitter humain (CV cible > 0.20)
         t_s = t_norm * duree_s
         if 0 < i < n_points:
-            t_s += random.gauss(0, duree_s / n_points * 0.15)
+            intervalle = duree_s / n_points
+            jitter = random.gauss(0, intervalle * 0.40)
+            # Micro-hésitation (~8% des points) : pause 50-300ms
+            if random.random() < 0.08:
+                jitter += random.uniform(0.05, 0.30)
+            # Clamper pour ne jamais dépasser le point final
+            t_s = max(0, min(t_s + jitter, duree_s - 0.001))
 
         points.append(PointSouris(max(0, bx), max(0, by), max(0, t_s)))
 
@@ -207,6 +213,8 @@ class SimulateurSouris:
 
     def mouvement_aleatoire(self) -> None:
         """Mouvement oisif — la souris bouge un peu pendant la lecture."""
+        # Pause pré-mouvement (humain ne bouge pas en continu)
+        time.sleep(random.uniform(0.1, 0.6))
         x = self._x + random.gauss(0, 80)
         y = self._y + random.gauss(0, 60)
         x = max(20, min(self._vw - 20, x))
