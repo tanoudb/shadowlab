@@ -89,6 +89,34 @@
     return result;
   }, 'getClientRects');
 
+  // Range.getClientRects/getBoundingClientRect — même bruit que Element
+  // Les détecteurs CreepJS utilisent Range au lieu de Element pour contourner les patches.
+  const origRangeBCR = Range.prototype.getBoundingClientRect;
+  Range.prototype.getBoundingClientRect = natif(function getBoundingClientRect() {
+    return _noiseRect(origRangeBCR.call(this));
+  }, 'getBoundingClientRect');
+
+  const origRangeGCR = Range.prototype.getClientRects;
+  Range.prototype.getClientRects = natif(function getClientRects() {
+    const rects = origRangeGCR.call(this);
+    const result = [];
+    for (let i = 0; i < rects.length; i++) result.push(_noiseRect(rects[i]));
+    Object.defineProperty(result, 'item', {
+      value: natif(function item(idx) { return result[idx] || null; }, 'item'),
+    });
+    return result;
+  }, 'getClientRects');
+
+  // SVGTextContentElement.getComputedTextLength — fingerprint via SVG
+  if (typeof SVGTextContentElement !== 'undefined') {
+    const origGCTL = SVGTextContentElement.prototype.getComputedTextLength;
+    if (origGCTL) {
+      SVGTextContentElement.prototype.getComputedTextLength = natif(function getComputedTextLength() {
+        return origGCTL.call(this) + (rand() - 0.5) * 0.2;
+      }, 'getComputedTextLength');
+    }
+  }
+
   // Défense check() de FontFaceSet : signaler uniquement les polices du profil OS
   if (document.fonts && document.fonts.check) {
     const origCheck = document.fonts.check.bind(document.fonts);
