@@ -1431,3 +1431,23 @@ Score élevé = Google nous prend pour un humain. Ligne tenue : pas de solveur d
 ### Reste
 - Ethan : enregistrer une clé reCAPTCHA v3 (localhost autorisé), la mettre dans `.env`.
 - Ensuite : lancer la campagne et lire le score réel.
+
+## 2026-11-09 (suite 3) — Validation campagne v3 + 2 correctifs trouvés à l'exécution
+
+Lancé la campagne `recaptcha-v3.yaml` (sans clés, pour valider le pipeline). Deux vrais bugs
+révélés et corrigés (commit bf28849) :
+- **Verrou réseau cassé en illimité (régression de D-30)** : `liste_directe` renvoyait un bypass
+  `*` que Chromium n'honore pas → tout (même localhost) partait vers le mandataire bloquant →
+  `net::ERR_PROXY_CONNECTION_FAILED`. **Tous les moteurs navigateur étaient cassés en illimité.**
+  Correctif : `proxy_verrou()` renvoie `None` en illimité (aucun mandataire) ; appliqué à noezia,
+  playwright, selenium, scrapling. Sans cette campagne, la régression passait inaperçue.
+- **Collision d'URL** : `_resoudre_defis` matchait `/lab/recaptcha` dans `/lab/recaptcha-v3` → le
+  moteur attendait 20s une iframe reCAPTCHA v2 inexistante. Exclusion explicite de `-v3`.
+
+Après correctifs : pipeline propre bout-en-bout (campagne 45) — `erreur_technique=false`, cause
+« clés absentes » (dégradation attendue sans clés), moteur non détecté (`classe_automatise=false`).
+Site de test relancé avec le code à jour (la route `/lab/recaptcha-v3` répond 200).
+
+### Reste (inchangé)
+- Ethan : clé reCAPTCHA v3 (localhost autorisé) → `cp .env.example .env` + remplir → relancer la
+  campagne pour le score réel.
