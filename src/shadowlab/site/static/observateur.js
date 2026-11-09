@@ -611,6 +611,25 @@ function timingPrecisionTest() {
   return r;
 }
 
+function paintTimingTest() {
+  const r = {};
+  try {
+    const entries = performance.getEntriesByType('paint');
+    r.count = entries.length;
+    r.entries = entries.map(e => ({name: e.name, startTime: e.startTime}));
+    const fp = entries.find(e => e.name === 'first-paint');
+    const fcp = entries.find(e => e.name === 'first-contentful-paint');
+    r.has_first_paint = !!fp;
+    r.has_first_contentful_paint = !!fcp;
+    if (fp) r.first_paint_time = fp.startTime;
+    if (fcp) r.first_contentful_paint_time = fcp.startTime;
+    if (fp && fcp) r.fp_fcp_gap = fcp.startTime - fp.startTime;
+    // Vérifier que getEntriesByType est natif
+    r.getEntriesByType_natif = /\[native code\]/.test(performance.getEntriesByType.toString());
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
 function performanceMemoryTest() {
   const r = {};
   try {
@@ -681,6 +700,7 @@ async function collecter() {
     headless_signals: await headlessSignals(),
     stack_trace_test: stackTraceTest(),
     performance_memory: performanceMemoryTest(),
+    paint_timing: paintTimingTest(),
     automation_globals: automationGlobals(),
     css_media: cssMediaTest(),
     prototype_chain: prototypeChainTest(),

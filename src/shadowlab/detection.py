@@ -1333,6 +1333,68 @@ class DetecteurTimingPrecision:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurPaintTiming:
+    """Détecte l'absence ou les anomalies de PerformancePaintTiming (headless Chrome)."""
+
+    name = "paint-timing"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        pt = p.get("paint_timing") or {}
+        signaux: list[Signal] = []
+
+        if pt.get("count") is not None and pt["count"] == 0:
+            signaux.append(
+                Signal(
+                    "no_paint_entries",
+                    "aucune entrée paint (first-paint/first-contentful-paint manquantes)",
+                    0.5,
+                )
+            )
+        elif not pt.get("has_first_paint"):
+            signaux.append(
+                Signal(
+                    "no_first_paint",
+                    "first-paint manquant",
+                    0.3,
+                )
+            )
+        elif not pt.get("has_first_contentful_paint"):
+            signaux.append(
+                Signal(
+                    "no_fcp",
+                    "first-contentful-paint manquant",
+                    0.3,
+                )
+            )
+
+        fp_time = pt.get("first_paint_time")
+        if fp_time is not None and fp_time == 0:
+            signaux.append(
+                Signal(
+                    "fp_zero",
+                    "first-paint startTime = 0 (anormal)",
+                    0.4,
+                )
+            )
+
+        if pt.get("getEntriesByType_natif") is False:
+            signaux.append(
+                Signal(
+                    "getEntriesByType_patche",
+                    "performance.getEntriesByType() surchargé",
+                    0.3,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1370,6 +1432,7 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurCSSMedia(),
         DetecteurPrototypeChain(),
         DetecteurTimingPrecision(),
+        DetecteurPaintTiming(),
     )
 }
 

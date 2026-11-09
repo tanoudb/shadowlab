@@ -117,9 +117,12 @@
   } catch(e) {}
 
   // ─── window.screenX / screenY (headless : souvent 0,0 — un vrai navigateur a un offset) ───
+  // Déterministe par profil (canvas_seed) pour rester stable entre les pages d'une même session.
   try {
-    const sx = 22 + Math.floor(Math.random() * 200);
-    const sy = 25 + Math.floor(Math.random() * 100);
+    let _ws = (P.canvas_seed || 77) >>> 0;
+    function _wxr() { _ws ^= _ws << 13; _ws ^= _ws >>> 17; _ws ^= _ws << 5; return (_ws >>> 0) / 0xFFFFFFFF; }
+    const sx = 22 + Math.floor(_wxr() * 200);
+    const sy = 25 + Math.floor(_wxr() * 100);
     Object.defineProperty(window, 'screenX', {
       get: natif(() => sx, 'get screenX'), configurable: true,
     });
@@ -132,5 +135,81 @@
     Object.defineProperty(window, 'screenTop', {
       get: natif(() => sy, 'get screenTop'), configurable: true,
     });
+  } catch(e) {}
+
+  // ─── PerformancePaintTiming (headless peut manquer FP/FCP ou les avoir à t=0) ───
+  // Un vrai navigateur a toujours FirstPaint et FirstContentfulPaint avec des durées > 0.
+  // On s'assure que ces entrées existent avec des valeurs crédibles.
+  try {
+    const origGetEntries = performance.getEntriesByType.bind(performance);
+    const origGetAll = performance.getEntries.bind(performance);
+    let _paintPatched = null;
+
+    function _ensurePaintEntries(entries) {
+      const hasFP = entries.some(e => e.entryType === 'paint' && e.name === 'first-paint');
+      const hasFCP = entries.some(e => e.entryType === 'paint' && e.name === 'first-contentful-paint');
+      if (hasFP && hasFCP) return entries;
+
+      if (!_paintPatched) {
+        const navStart = performance.timing ? performance.timing.navigationStart : (performance.timeOrigin || 0);
+        const baseDelay = 80 + Math.floor(_wxr() * 200);
+        _paintPatched = [];
+        if (!hasFP) {
+          _paintPatched.push({
+            name: 'first-paint',
+            entryType: 'paint',
+            startTime: baseDelay,
+            duration: 0,
+            toJSON() { return {name: this.name, entryType: this.entryType, startTime: this.startTime, duration: 0}; },
+          });
+        }
+        if (!hasFCP) {
+          _paintPatched.push({
+            name: 'first-contentful-paint',
+            entryType: 'paint',
+            startTime: baseDelay + 5 + Math.floor(_wxr() * 30),
+            duration: 0,
+            toJSON() { return {name: this.name, entryType: this.entryType, startTime: this.startTime, duration: 0}; },
+          });
+        }
+      }
+      return [...entries, ..._paintPatched];
+    }
+
+    performance.getEntriesByType = natif(function getEntriesByType(type) {
+      const entries = origGetEntries(type);
+      if (type === 'paint') return _ensurePaintEntries(entries);
+      return entries;
+    }, 'getEntriesByType');
+
+    performance.getEntries = natif(function getEntries() {
+      const entries = origGetAll();
+      return _ensurePaintEntries(entries);
+    }, 'getEntries');
+
+    // PerformanceObserver : si un observateur demande 'paint', lui donner nos entrées
+    if (typeof PerformanceObserver !== 'undefined') {
+      const OrigPO = PerformanceObserver;
+      const PatchedPO = natif(function PerformanceObserver(callback) {
+        const wrappedCb = (list, observer) => {
+          const origEntries = list.getEntries();
+          const patched = _ensurePaintEntries(origEntries);
+          if (patched !== origEntries && patched.length > origEntries.length) {
+            const fakeList = {
+              getEntries: () => patched,
+              getEntriesByType: (t) => patched.filter(e => e.entryType === t),
+              getEntriesByName: (n) => patched.filter(e => e.name === n),
+            };
+            callback(fakeList, observer);
+          } else {
+            callback(list, observer);
+          }
+        };
+        return new OrigPO(wrappedCb);
+      }, 'PerformanceObserver');
+      PatchedPO.prototype = OrigPO.prototype;
+      PatchedPO.supportedEntryTypes = OrigPO.supportedEntryTypes;
+      window.PerformanceObserver = PatchedPO;
+    }
   } catch(e) {}
 })();

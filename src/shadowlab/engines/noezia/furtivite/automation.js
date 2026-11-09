@@ -156,23 +156,21 @@
   // que la fonction reste native.
   // (natif() suffit pour passer le toString test)
 
-  // ─── Cleanup : supprimer notre propre marqueur après initialisation ───
-  // __NOEZIA_PROFIL__ et __NOEZIA_NATIF__ sont visibles sur window.
-  // On les rend non-énumérables et non-détectables.
+  // ─── Cleanup : supprimer nos marqueurs — plus aucun script ne les utilise ───
+  // Suppression totale : '__NOEZIA_PROFIL__' in window → false
+  try { delete window.__NOEZIA_PROFIL__; } catch(e) {}
+  try { delete window.__NOEZIA_NATIF__; } catch(e) {}
+  // Aussi via Proxy si delete a échoué (propriété non-configurable)
   try {
-    const profilVal = window.__NOEZIA_PROFIL__;
-    const natifVal = window.__NOEZIA_NATIF__;
-    Object.defineProperty(window, '__NOEZIA_PROFIL__', {
-      get: () => profilVal,
-      set: () => {},
-      enumerable: false,
-      configurable: true,
-    });
-    Object.defineProperty(window, '__NOEZIA_NATIF__', {
-      get: () => natifVal,
-      set: () => {},
-      enumerable: false,
-      configurable: true,
-    });
+    if ('__NOEZIA_PROFIL__' in window) {
+      Object.defineProperty(window, '__NOEZIA_PROFIL__', {
+        get: () => undefined, set: () => {}, enumerable: false, configurable: true,
+      });
+    }
+    if ('__NOEZIA_NATIF__' in window) {
+      Object.defineProperty(window, '__NOEZIA_NATIF__', {
+        get: () => undefined, set: () => {}, enumerable: false, configurable: true,
+      });
+    }
   } catch(e) {}
 })();
