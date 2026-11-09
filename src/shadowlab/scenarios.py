@@ -325,6 +325,23 @@ def scrape_rapide(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue
     )
 
 
+def connexion(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Le moteur se connecte au niveau authentifié et atteint l'espace privé.
+
+    Aux niveaux 05-06, une porte comportementale garde la soumission (empreinte + comportement +
+    honeypot + limite de tentatives) : y arriver = franchir un login protégé anti-bot. Le compte
+    est une fixture de test (voir site/comptes.py : demo / arena-demo-2026).
+    """
+    aller(d, url(base, "/lab/connexion", jeton))
+    d.fill("#champ-identifiant", "demo")  # jamais le champ piège sl_site (invisible)
+    d.fill("#champ-mot-de-passe", "arena-demo-2026")
+    d.click("#bouton-connexion")  # POST → 303 → /lab/espace si accepté
+    textes = d.texts("#espace-prive")
+    contenu = textes[0] if textes else ""
+    atteint = "demo" in contenu
+    return Issue(atteint, {"espace_atteint": atteint, "contenu": contenu[:120]})
+
+
 def recaptcha_v3(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     """Démo : charge le vrai reCAPTCHA v3 et relève le score que Google attribue au moteur.
 
@@ -369,5 +386,6 @@ SCENARIOS: dict[str, Scenario] = {
         Scenario("scrape_catalogue", "Scraping complet du catalogue (5 pages, 50 articles)", True, scrape_catalogue),
         Scenario("scrape_rapide", "Scraping rapide (scalping) : 5 pages, extraction sans pause", True, scrape_rapide),
         Scenario("recaptcha_v3", "Démo reCAPTCHA v3 réel : relever le score attribué au moteur", True, recaptcha_v3),
+        Scenario("connexion", "Se connecter au niveau authentifié et atteindre l'espace privé", True, connexion),
     )
 }

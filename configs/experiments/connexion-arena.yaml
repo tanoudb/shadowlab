@@ -1,0 +1,18 @@
+# Le monstre franchit le login protégé. Aux niveaux 05-06, la soumission est gardée par une porte
+# comportementale (empreinte + comportement + honeypot + limite de tentatives). Réussir = franchir
+# un login anti-bot. Nécessite l'Arena (uv run shadowlab arena demarrer).
+experiment:
+  name: connexion_arena
+  description: Le monstre se connecte au niveau authentifié à travers les protections (01/05/06)
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - connexion
+  protections:
+    - "01"
+    - "05"
+    - "06"
+  repetitions: 2
+  seed: 42
+  output: [json, html]
