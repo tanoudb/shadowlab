@@ -39,6 +39,7 @@ def script_profil(profil: ProfilNavigateur) -> str:
         "screen_width": profil.screen_width,
         "screen_height": profil.screen_height,
         "device_pixel_ratio": profil.device_pixel_ratio,
+        "locale": profil.locale,
     }
     return f"window.__NOEZIA_PROFIL__ = {json.dumps(donnees)};"
 

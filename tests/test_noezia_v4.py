@@ -534,8 +534,9 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_24_detecteurs(self):
+    def test_registre_25_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 24
+        assert len(r) == 25
+        assert "scroll" in r

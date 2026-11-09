@@ -553,6 +553,66 @@ class DetecteurEntropieInteraction:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurScroll:
+    """Analyse les patterns de défilement (wheel events).
+
+    Un humain scrolle avec des deltas variables (trackpad : bell-curve ; molette : ticks discrets
+    mais avec variation). Un robot utilise souvent des deltas identiques (ex: 120px à chaque tick)
+    ou des intervalles trop réguliers.
+    """
+
+    name = "scroll"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+
+        releves = [o["payload"] for o in obs.js if o["kind"] == "comportement"]
+        if not releves:
+            return _indetermine(self.name, self.version, "sans_releve", "aucun relevé")
+
+        signaux: list[Signal] = []
+        for r in releves:
+            deltas = r.get("wheel_deltas") or []
+            delais = r.get("delais_scroll_ms") or []
+
+            if len(deltas) >= 8:
+                import statistics
+
+                # Deltas tous identiques → robot avec pas fixe
+                uniques = len(set(round(d, 1) for d in deltas))
+                ratio = uniques / len(deltas)
+                if ratio < 0.15 and len(deltas) > 10:
+                    signaux.append(
+                        Signal("deltas_uniformes", f"wheel deltas : {ratio:.0%} uniques ({uniques}/{len(deltas)})", 0.7)
+                    )
+
+                # Écart-type des deltas trop faible
+                ecart = statistics.stdev(deltas) if len(deltas) > 1 else 0
+                moyenne = statistics.mean(abs(d) for d in deltas)
+                if moyenne > 0:
+                    cv_d = ecart / moyenne
+                    if cv_d < 0.1:
+                        signaux.append(
+                            Signal("scroll_regulier", f"CV des wheel deltas = {cv_d:.2f} (< 0.1 = pas fixe)", 0.6)
+                        )
+
+            if len(delais) >= 8:
+                import statistics
+
+                m_s = statistics.mean(delais)
+                s_s = statistics.stdev(delais) if len(delais) > 1 else 0
+                if m_s > 0:
+                    cv_s = s_s / m_s
+                    if cv_s < 0.1:
+                        signaux.append(
+                            Signal("scroll_timing_regulier", f"CV délais scroll = {cv_s:.2f} (< 0.1 = machine)", 0.65)
+                        )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 class DetecteurEmpreinteCanvas:
     """Vérifie l'empreinte canvas pour détecter le bruit artificiel.
 
@@ -1294,6 +1354,7 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurPrototypes(),
         DetecteurCoherenceProfonde(),
         DetecteurEntropieInteraction(),
+        DetecteurScroll(),
         DetecteurEmpreinteCanvas(),
         DetecteurIntegriteProprietes(),
         DetecteurCoherenceEnvironnement(),

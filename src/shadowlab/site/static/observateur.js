@@ -15,6 +15,10 @@ let avantDernierePos = null;
 // Délais inter-touches clavier (détection rythme de frappe)
 const delais_clavier = [];
 let dernierKeydownMs = null;
+// Scroll / wheel : deltas, timing, directions (détection uniformité)
+const delais_scroll = [];
+const wheel_deltas = [];
+let dernierScrollMs = null;
 for (const type of Object.keys(evenements)) {
   addEventListener(type, (e) => {
     const maintenant = performance.now() - debut;
@@ -49,8 +53,20 @@ for (const type of Object.keys(evenements)) {
       }
       dernierKeydownMs = maintenant;
     }
+    if (type === 'scroll' && delais_scroll.length < 50) {
+      if (dernierScrollMs !== null) {
+        delais_scroll.push(Math.round((maintenant - dernierScrollMs) * 100) / 100);
+      }
+      dernierScrollMs = maintenant;
+    }
   }, { passive: true });
 }
+// Wheel events : collecter les deltaY pour détecter les deltas uniformes (robot)
+addEventListener('wheel', (e) => {
+  if (wheel_deltas.length < 50) {
+    wheel_deltas.push(Math.round(e.deltaY * 10) / 10);
+  }
+}, { passive: true });
 
 function envoyer(kind, payload, enFin = false) {
   if (!jeton) return Promise.resolve();
@@ -693,6 +709,8 @@ addEventListener('pagehide', () => {
     delais_souris_ms: delais_souris,
     angles_segments: angles_segments,
     delais_clavier_ms: delais_clavier,
+    delais_scroll_ms: delais_scroll,
+    wheel_deltas: wheel_deltas,
   }, true);
 });
 

@@ -18,11 +18,31 @@ from . import humain
 
 # Touches adjacentes sur un clavier QWERTY pour les erreurs de frappe
 VOISINES: dict[str, str] = {
-    "a": "sqzw", "b": "vghn", "c": "xdfv", "d": "sfcxer", "e": "rdwsf",
-    "f": "dgcvrt", "g": "fhbvty", "h": "gjbnyu", "i": "ujko", "j": "hknmui",
-    "k": "jlmio", "l": "kop", "m": "njk", "n": "bhjm", "o": "iklp",
-    "p": "ol", "q": "wa", "r": "etdf", "s": "awedxz", "t": "rfgy",
-    "u": "yhji", "v": "cfgb", "w": "qase", "x": "zsdc", "y": "tghu",
+    "a": "sqzw",
+    "b": "vghn",
+    "c": "xdfv",
+    "d": "sfcxer",
+    "e": "rdwsf",
+    "f": "dgcvrt",
+    "g": "fhbvty",
+    "h": "gjbnyu",
+    "i": "ujko",
+    "j": "hknmui",
+    "k": "jlmio",
+    "l": "kop",
+    "m": "njk",
+    "n": "bhjm",
+    "o": "iklp",
+    "p": "ol",
+    "q": "wa",
+    "r": "etdf",
+    "s": "awedxz",
+    "t": "rfgy",
+    "u": "yhji",
+    "v": "cfgb",
+    "w": "qase",
+    "x": "zsdc",
+    "y": "tghu",
     "z": "asx",
 }
 
@@ -63,11 +83,7 @@ class SimulateurClavier:
         precedent: str | None = None
 
         for i, c in enumerate(texte):
-            if (
-                self._rng.random() < self._proba_erreur
-                and c.isalpha()
-                and i < len(texte) - 1
-            ):
+            if self._rng.random() < self._proba_erreur and c.isalpha() and i < len(texte) - 1:
                 erreur = self._erreur_voisine(c)
                 if erreur:
                     delai_ms = self._delai_caractere(erreur, precedent)

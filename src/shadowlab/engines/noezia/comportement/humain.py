@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 # ── Distributions de base ──────────────────────────────────────────────
 
+
 def log_normale(mu_ms: float, sigma: float, borne_min: float = 0, borne_max: float = float("inf")) -> float:
     """Échantillon log-normal. mu_ms est la MÉDIANE en ms, sigma le paramètre de forme."""
     val = random.lognormvariate(math.log(mu_ms), sigma)
@@ -45,9 +46,11 @@ def pareto_bornee(alpha: float, xm: float, borne_max: float) -> float:
 
 # ── Délais souris ──────────────────────────────────────────────────────
 
+
 @dataclass
 class ProfilSouris:
     """Paramètres du profil moteur souris."""
+
     pause_mediane_ms: float = 280.0
     pause_sigma: float = 0.9
     pause_min_ms: float = 30.0
@@ -60,8 +63,7 @@ class ProfilSouris:
 # Profils pré-calibrés
 PROFIL_RAPIDE = ProfilSouris(pause_mediane_ms=180, pause_sigma=0.7, micro_pause_proba=0.05)
 PROFIL_MOYEN = ProfilSouris()
-PROFIL_LENT = ProfilSouris(pause_mediane_ms=420, pause_sigma=1.0, micro_pause_proba=0.12,
-                            micro_pause_mediane_ms=1800)
+PROFIL_LENT = ProfilSouris(pause_mediane_ms=420, pause_sigma=1.0, micro_pause_proba=0.12, micro_pause_mediane_ms=1800)
 
 
 def delai_inter_mouvement(profil: ProfilSouris | None = None) -> float:
@@ -74,27 +76,31 @@ def delai_inter_mouvement(profil: ProfilSouris | None = None) -> float:
     p = profil or PROFIL_MOYEN
 
     if random.random() < p.micro_pause_proba:
-        return log_normale(p.micro_pause_mediane_ms, p.micro_pause_sigma,
-                           borne_min=500, borne_max=p.pause_max_ms)
+        return log_normale(p.micro_pause_mediane_ms, p.micro_pause_sigma, borne_min=500, borne_max=p.pause_max_ms)
 
-    return log_normale(p.pause_mediane_ms, p.pause_sigma,
-                       borne_min=p.pause_min_ms, borne_max=p.pause_max_ms)
+    return log_normale(p.pause_mediane_ms, p.pause_sigma, borne_min=p.pause_min_ms, borne_max=p.pause_max_ms)
 
 
 # ── Délais clavier (digraphes) ────────────────────────────────────────
 
 # Catégories de paires de touches par difficulté (Card, Moran & Newell 1983)
 # Les temps sont des médianes en ms pour un typiste ~60 WPM
-_DIGRAPHE_MEME_DOIGT = 200      # même doigt, touche différente (lent)
-_DIGRAPHE_ADJACENT = 120        # doigts adjacents (moyen)
-_DIGRAPHE_OPPOSE = 90           # mains opposées (rapide)
-_DIGRAPHE_REPETITION = 80       # même touche (très rapide)
+_DIGRAPHE_MEME_DOIGT = 200  # même doigt, touche différente (lent)
+_DIGRAPHE_ADJACENT = 120  # doigts adjacents (moyen)
+_DIGRAPHE_OPPOSE = 90  # mains opposées (rapide)
+_DIGRAPHE_REPETITION = 80  # même touche (très rapide)
 
 # Mapping simplifié : doigt par touche (clavier QWERTY)
 _DOIGT = {}
 for _touches, _doigt_id in [
-    ("qaz1", "L4"), ("wsx2", "L3"), ("edc3", "L2"), ("rfvtgb45", "L1"),
-    ("yhnujm67", "R1"), ("ik8", "R2"), ("ol9", "R3"), ("p0", "R4"),
+    ("qaz1", "L4"),
+    ("wsx2", "L3"),
+    ("edc3", "L2"),
+    ("rfvtgb45", "L1"),
+    ("yhnujm67", "R1"),
+    ("ik8", "R2"),
+    ("ol9", "R3"),
+    ("p0", "R4"),
 ]:
     for _t in _touches:
         _DOIGT[_t] = _doigt_id
@@ -129,8 +135,7 @@ def _categorie_digraphe(a: str, b: str) -> float:
     return (_DIGRAPHE_ADJACENT + _DIGRAPHE_OPPOSE) / 2
 
 
-def delai_inter_touche(caractere: str, precedent: str | None = None,
-                        wpm: float = 62.0, fatigue: float = 0.0) -> float:
+def delai_inter_touche(caractere: str, precedent: str | None = None, wpm: float = 62.0, fatigue: float = 0.0) -> float:
     """Délai avant une frappe (ms), distribution ex-gaussienne par digraphe.
 
     wpm : vitesse de frappe (mots par minute).
@@ -147,7 +152,7 @@ def delai_inter_touche(caractere: str, precedent: str | None = None,
     mediane *= facteur_vitesse
 
     # Fatigue (ralentissement progressif)
-    mediane *= (1.0 + fatigue)
+    mediane *= 1.0 + fatigue
 
     # Majuscule = appui Shift
     if caractere.isupper():
@@ -172,6 +177,7 @@ def delai_inter_touche(caractere: str, precedent: str | None = None,
 
 
 # ── Pauses page (lecture, navigation) ─────────────────────────────────
+
 
 def pause_lecture_ms(mots_page: int = 200) -> float:
     """Temps de scan d'une page (ms). Log-normale basée sur le contenu.
@@ -217,6 +223,7 @@ def pause_hesitation_ms(proba: float = 0.12) -> float:
 
 
 # ── Auto-corrélation temporelle ───────────────────────────────────────
+
 
 class RythmeHumain:
     """Maintient un état interne pour produire des séquences auto-corrélées.

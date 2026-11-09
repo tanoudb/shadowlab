@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from .moteur import MoteurNoezia
 
@@ -130,7 +131,7 @@ class PoolNoezia:
             taches_par_worker[i % len(self._moteurs)].append(url)
 
         futures = {}
-        for idx, (moteur, urls_worker) in enumerate(zip(self._moteurs, taches_par_worker)):
+        for idx, (moteur, urls_worker) in enumerate(zip(self._moteurs, taches_par_worker, strict=False)):
             if urls_worker:
                 future = self._executor.submit(self._worker_batch, moteur, urls_worker)
                 futures[future] = idx
@@ -179,7 +180,7 @@ class PoolNoezia:
             taches_par_worker[i % len(self._moteurs)].append(url)
 
         futures = {}
-        for idx, (moteur, urls_worker) in enumerate(zip(self._moteurs, taches_par_worker)):
+        for idx, (moteur, urls_worker) in enumerate(zip(self._moteurs, taches_par_worker, strict=False)):
             for url in urls_worker:
                 future = self._executor.submit(self._traiter_url, moteur, url)
                 futures[future] = idx

@@ -12,7 +12,23 @@
   // ─── toString() natif : tous nos overrides passent /native code/.test() ───
   const _ts = Function.prototype.toString;
   const _natifs = new WeakMap();
-  function natif(fn, nom) { _natifs.set(fn, nom); return fn; }
+  function natif(fn, nom) {
+    _natifs.set(fn, nom);
+    // Un getter natif C++ n'a pas de .prototype et a length=0.
+    // Sans ce nettoyage, Object.getOwnPropertyDescriptor(Navigator.prototype, prop).get
+    // révèle une fonction JS au lieu d'un getter natif.
+    delete fn.prototype;
+    try {
+      Object.defineProperty(fn, 'name', { value: nom, writable: false, configurable: true });
+    } catch(e) {}
+    // Getters/setters natifs ont length=0 ; les méthodes gardent leur longueur déclarée
+    if (nom.startsWith('get ') || nom.startsWith('set ') || nom === 'toString') {
+      try {
+        Object.defineProperty(fn, 'length', { value: 0, writable: false, configurable: true });
+      } catch(e) {}
+    }
+    return fn;
+  }
   const _remplacement = {toString() {
     const n = _natifs.get(this);
     if (n !== undefined) return 'function ' + n + '() { [native code] }';

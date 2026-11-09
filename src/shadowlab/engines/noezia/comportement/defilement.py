@@ -134,7 +134,7 @@ class SimulateurDefilement:
 
         # 2-5 gestes de scroll entrecoupés de lecture
         n_gestes = random.randint(2, 5)
-        for i in range(n_gestes):
+        for _i in range(n_gestes):
             # Distance variable (log-normale)
             distance = int(humain.log_normale(250, 0.5, borne_min=80, borne_max=800))
             self.defiler_bas(distance)

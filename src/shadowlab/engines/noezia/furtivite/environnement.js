@@ -127,18 +127,26 @@
     }, 'getBattery');
   }
 
-  // ─── Connection API : profil réseau crédible ───
+  // ─── Connection API : profil réseau crédible, variable par profil ───
   if (navigator.connection) {
     const conn = navigator.connection;
+    let _s = (P.canvas_seed || 42) >>> 0;
+    function _xr() { _s ^= _s << 13; _s ^= _s >>> 17; _s ^= _s << 5; return (_s >>> 0) / 0xFFFFFFFF; }
+    const rttVals = [50, 50, 50, 100, 100, 150];
+    const dlVals = [10, 10, 8.65, 5.6, 3.4, 1.5];
+    const idx = Math.floor(_xr() * rttVals.length);
+    const connRtt = rttVals[idx];
+    const connDl = dlVals[idx];
+    const connType = connRtt <= 100 ? '4g' : '3g';
     try {
       Object.defineProperty(conn, 'effectiveType', {
-        get: natif(() => '4g', 'get effectiveType'), configurable: true,
+        get: natif(() => connType, 'get effectiveType'), configurable: true,
       });
       Object.defineProperty(conn, 'rtt', {
-        get: natif(() => 50, 'get rtt'), configurable: true,
+        get: natif(() => connRtt, 'get rtt'), configurable: true,
       });
       Object.defineProperty(conn, 'downlink', {
-        get: natif(() => 10, 'get downlink'), configurable: true,
+        get: natif(() => connDl, 'get downlink'), configurable: true,
       });
       Object.defineProperty(conn, 'saveData', {
         get: natif(() => false, 'get saveData'), configurable: true,
