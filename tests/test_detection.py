@@ -134,3 +134,42 @@ def test_entropie_trajectoire_humaine_passe():
     )
     v = verdicts(obs)
     assert v["entropie-interaction"] == "humain"
+
+
+def test_entropie_frappe_reguliere_detectee():
+    """Délais clavier quasi-identiques = bot."""
+    delais_souris = [float(i * 30 + 10) for i in range(20)]
+    delais_clavier = [100.0] * 12  # CV = 0
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[
+            empreinte(),
+            _comportement(
+                delais_souris_ms=delais_souris,
+                delais_clavier_ms=delais_clavier,
+            ),
+        ],
+    )
+    v = verdicts(obs)
+    assert v["entropie-interaction"] == "automatise"
+
+
+def test_entropie_frappe_humaine_passe():
+    """Délais clavier variés = humain."""
+    import random
+
+    rng = random.Random(99)
+    delais_souris = [rng.uniform(10, 600) for _ in range(20)]
+    delais_clavier = [rng.uniform(60, 300) for _ in range(15)]
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[
+            empreinte(),
+            _comportement(
+                delais_souris_ms=delais_souris,
+                delais_clavier_ms=delais_clavier,
+            ),
+        ],
+    )
+    v = verdicts(obs)
+    assert v["entropie-interaction"] == "humain"

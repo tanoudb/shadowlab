@@ -531,6 +531,25 @@ class DetecteurEntropieInteraction:
                         )
                     )
 
+            # Rythme de frappe clavier : CV trop faible = timing synthétique
+            touches = r.get("delais_clavier_ms") or []
+            if len(touches) >= 8:
+                import statistics
+
+                m_t = statistics.mean(touches)
+                s_t = statistics.stdev(touches) if len(touches) > 1 else 0
+                if m_t > 0:
+                    cv_t = s_t / m_t
+                    if cv_t < 0.12:
+                        poids = 1.0 if cv_t < 0.05 else 0.65
+                        signaux.append(
+                            Signal(
+                                "frappe_trop_reguliere",
+                                f"CV délais clavier = {cv_t:.2f} (< 0.12 = machine)",
+                                poids,
+                            )
+                        )
+
         return _verdict(self.name, self.version, signaux)
 
 

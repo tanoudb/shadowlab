@@ -12,6 +12,9 @@ let dernierMouvementMs = null;
 const angles_segments = [];
 let dernierePos = null;
 let avantDernierePos = null;
+// Délais inter-touches clavier (détection rythme de frappe)
+const delais_clavier = [];
+let dernierKeydownMs = null;
 for (const type of Object.keys(evenements)) {
   addEventListener(type, (e) => {
     const maintenant = performance.now() - debut;
@@ -39,6 +42,12 @@ for (const type of Object.keys(evenements)) {
       }
       avantDernierePos = dernierePos;
       dernierePos = pos;
+    }
+    if (type === 'keydown' && delais_clavier.length < 40) {
+      if (dernierKeydownMs !== null) {
+        delais_clavier.push(Math.round((maintenant - dernierKeydownMs) * 100) / 100);
+      }
+      dernierKeydownMs = maintenant;
     }
   }, { passive: true });
 }
@@ -683,6 +692,7 @@ addEventListener('pagehide', () => {
     evenements, premiere_interaction_ms: premiereInteraction, duree_page_ms: Math.round(performance.now() - debut),
     delais_souris_ms: delais_souris,
     angles_segments: angles_segments,
+    delais_clavier_ms: delais_clavier,
   }, true);
 });
 
