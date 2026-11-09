@@ -108,22 +108,46 @@
     if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = PatchedRTC;
   }
 
-  // ─── Battery API : retourner un état réaliste ───
+  // ─── Battery API : état réaliste et variable ───
+  // Un vrai navigateur retourne un niveau de batterie qui change au fil du temps.
+  // Valeur statique = signal bot. On simule un desktop branché (le cas le plus courant).
   if (navigator.getBattery) {
+    let _bs = (P.audio_seed || 77) >>> 0;
+    function _bxr() { _bs ^= _bs << 13; _bs ^= _bs >>> 17; _bs ^= _bs << 5; return (_bs >>> 0) / 0xFFFFFFFF; }
+    const isDesktop = (P.platform_name === 'macOS' || P.platform_name === 'Windows');
+    const baseLevel = isDesktop ? 1.0 : (0.4 + _bxr() * 0.55);
+    const isCharging = isDesktop ? true : (_bxr() > 0.3);
+
+    let _battLevel = baseLevel, _battLastT = Date.now();
+    function _battUpdate() {
+      const now = Date.now();
+      if (now - _battLastT > 5000) {
+        _bs ^= _bs << 13; _bs ^= _bs >>> 17; _bs ^= _bs << 5;
+        const r = (_bs >>> 0) / 0xFFFFFFFF;
+        if (!isDesktop) {
+          _battLevel = Math.min(1, Math.max(0.05,
+            baseLevel + (r - 0.5) * 0.03));
+          _battLevel = Math.round(_battLevel * 100) / 100;
+        }
+        _battLastT = now;
+      }
+    }
+
+    const battObj = {
+      get charging() { return isCharging; },
+      get chargingTime() { return isCharging ? 0 : Infinity; },
+      get dischargingTime() { return isCharging ? Infinity : 3600 + Math.floor(_bxr() * 7200); },
+      get level() { _battUpdate(); return _battLevel; },
+      addEventListener: natif(function addEventListener() {}, 'addEventListener'),
+      removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
+      dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
+      onchargingchange: null,
+      onchargingtimechange: null,
+      ondischargingtimechange: null,
+      onlevelchange: null,
+    };
     Navigator.prototype.getBattery = natif(function getBattery() {
-      return Promise.resolve({
-        charging: true,
-        chargingTime: 0,
-        dischargingTime: Infinity,
-        level: 1.0,
-        addEventListener: natif(function addEventListener() {}, 'addEventListener'),
-        removeEventListener: natif(function removeEventListener() {}, 'removeEventListener'),
-        dispatchEvent: natif(function dispatchEvent() { return true; }, 'dispatchEvent'),
-        onchargingchange: null,
-        onchargingtimechange: null,
-        ondischargingtimechange: null,
-        onlevelchange: null,
-      });
+      return Promise.resolve(battObj);
     }, 'getBattery');
   }
 

@@ -705,6 +705,26 @@ function stackGetterTest() {
   return r;
 }
 
+function domRectStabilityTest() {
+  const r = {};
+  try {
+    const span = document.createElement('span');
+    span.textContent = 'DOMRect fingerprint test string 12345';
+    span.style.cssText = 'font-size:16px;font-family:monospace;position:absolute;top:-9999px';
+    document.body.appendChild(span);
+    const r1 = span.getBoundingClientRect();
+    const r2 = span.getBoundingClientRect();
+    r.width_1 = r1.width;
+    r.width_2 = r2.width;
+    r.height_1 = r1.height;
+    r.height_2 = r2.height;
+    r.stable = r1.width === r2.width && r1.height === r2.height;
+    r.has_subpixel = r1.width % 1 !== 0 || r1.height % 1 !== 0;
+    document.body.removeChild(span);
+  } catch(_) { r.error = true; }
+  return r;
+}
+
 function workerConsistencyTest() {
   return new Promise(resolve => {
     const r = { available: false };
@@ -837,6 +857,7 @@ async function collecter() {
     canvas_consistency: canvasConsistencyTest(),
     stack_getter: stackGetterTest(),
     raf_timing: await rafTimingTest(),
+    domrect_stability: domRectStabilityTest(),
     worker_consistency: await workerConsistencyTest(),
     connection_dynamic: connectionDynamicTest(),
     automation: automation(),

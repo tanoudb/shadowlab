@@ -49,6 +49,46 @@
     return result;
   }, 'measureText');
 
+  // Brouillage des DOMRect (getBoundingClientRect, getClientRects)
+  // CreepJS et d'autres utilisent les dimensions exactes de spans de texte
+  // pour fingerprinter les polices rendues. Un bruit déterministe par profil
+  // rend l'empreinte unique mais stable pour la session.
+  function _noiseRect(rect) {
+    const n = () => (rand() - 0.5) * 0.15;
+    const nx = n(), ny = n(), nw = n(), nh = n();
+    return Object.create(DOMRect.prototype, {
+      x:      {get: natif(() => rect.x + nx, 'get x'), configurable: true, enumerable: true},
+      y:      {get: natif(() => rect.y + ny, 'get y'), configurable: true, enumerable: true},
+      width:  {get: natif(() => rect.width + nw, 'get width'), configurable: true, enumerable: true},
+      height: {get: natif(() => rect.height + nh, 'get height'), configurable: true, enumerable: true},
+      top:    {get: natif(() => rect.top + ny, 'get top'), configurable: true, enumerable: true},
+      right:  {get: natif(() => rect.right + nx + nw, 'get right'), configurable: true, enumerable: true},
+      bottom: {get: natif(() => rect.bottom + ny + nh, 'get bottom'), configurable: true, enumerable: true},
+      left:   {get: natif(() => rect.left + nx, 'get left'), configurable: true, enumerable: true},
+      toJSON: {value: natif(function toJSON() {
+        return {x: this.x, y: this.y, width: this.width, height: this.height,
+                top: this.top, right: this.right, bottom: this.bottom, left: this.left};
+      }, 'toJSON')},
+    });
+  }
+
+  const origGetBCR = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = natif(function getBoundingClientRect() {
+    return _noiseRect(origGetBCR.call(this));
+  }, 'getBoundingClientRect');
+
+  const origGetCR = Element.prototype.getClientRects;
+  Element.prototype.getClientRects = natif(function getClientRects() {
+    const rects = origGetCR.call(this);
+    const result = [];
+    for (let i = 0; i < rects.length; i++) result.push(_noiseRect(rects[i]));
+    // DOMRectList-like
+    Object.defineProperty(result, 'item', {
+      value: natif(function item(idx) { return result[idx] || null; }, 'item'),
+    });
+    return result;
+  }, 'getClientRects');
+
   // Défense check() de FontFaceSet : signaler uniquement les polices du profil OS
   if (document.fonts && document.fonts.check) {
     const origCheck = document.fonts.check.bind(document.fonts);
