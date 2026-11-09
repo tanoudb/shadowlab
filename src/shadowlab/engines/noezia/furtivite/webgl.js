@@ -31,8 +31,27 @@
     }, 'getExtension');
   };
 
-  if (typeof WebGLRenderingContext !== 'undefined')
+  // shaderPrecisionFormat — cohérence avec le GPU déclaré
+  const surchargerPrecision = proto => {
+    const origSPF = proto.getShaderPrecisionFormat;
+    proto.getShaderPrecisionFormat = natif(function getShaderPrecisionFormat(shaderType, precisionType) {
+      const result = origSPF.call(this, shaderType, precisionType);
+      if (!result) return result;
+      // Les GPUs intégrés Intel ont une précision medium plus basse
+      if (P.gpu_renderer && P.gpu_renderer.includes('Intel') && precisionType === 0x8DF1) {
+        // MEDIUM_FLOAT — Intel renvoie typiquement 23 bits
+        return { rangeMin: 127, rangeMax: 127, precision: 23 };
+      }
+      return result;
+    }, 'getShaderPrecisionFormat');
+  };
+
+  if (typeof WebGLRenderingContext !== 'undefined') {
     surchargerGL(WebGLRenderingContext.prototype);
-  if (typeof WebGL2RenderingContext !== 'undefined')
+    surchargerPrecision(WebGLRenderingContext.prototype);
+  }
+  if (typeof WebGL2RenderingContext !== 'undefined') {
     surchargerGL(WebGL2RenderingContext.prototype);
+    surchargerPrecision(WebGL2RenderingContext.prototype);
+  }
 })();

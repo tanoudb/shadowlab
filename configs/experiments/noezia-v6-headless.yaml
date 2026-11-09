@@ -1,0 +1,27 @@
+# Validation NOEZIA v6 : contre-mesures headless + permissions étendues
+# - headless.js (webdriver, hasFocus, visibility, voices, mediaDevices)
+# - Permissions API étendu (geo/cam/mic → prompt)
+# - 2 nouveaux détecteurs Arena (headless, permissions-etendu)
+experiment:
+  name: noezia_v6_headless
+  description: "NOEZIA v6 : 10 scripts furtivité, 17 détecteurs Arena"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - pagination
+  repetitions: 3
+  seed: 20261109
+  output: [json]

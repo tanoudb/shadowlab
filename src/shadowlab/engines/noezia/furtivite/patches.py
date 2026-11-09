@@ -53,6 +53,7 @@ def scripts_furtivite(
     iframes: bool = True,
     codecs: bool = True,
     polices: bool = True,
+    headless: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -84,6 +85,9 @@ def scripts_furtivite(
 
     if polices:
         scripts.append(_charger_script("polices.js"))
+
+    if headless:
+        scripts.append(_charger_script("headless.js"))
 
     return scripts
 

@@ -207,7 +207,7 @@ class TestFurtivite:
 
         p = generer_profil("test-furtif")
         scripts = scripts_furtivite(p)
-        assert len(scripts) == 9  # profil + nav + iframes + env + canvas + webgl + audio + codecs + polices
+        assert len(scripts) == 10  # profil + nav + iframes + env + canvas + webgl + audio + codecs + polices + headless
 
     def test_scripts_contiennent_profil(self):
         from shadowlab.engines.noezia.furtivite.patches import scripts_furtivite
@@ -224,7 +224,7 @@ class TestFurtivite:
 
         p = generer_profil("test-selective")
         scripts = scripts_furtivite(p, canvas=False, audio=False)
-        assert len(scripts) == 7  # profil + navigateur + iframes + environnement + webgl + codecs + polices
+        assert len(scripts) == 8  # profil + nav + iframes + env + webgl + codecs + polices + headless
 
 
 # ── Moteur (sans navigateur) ──────────────────────────────────────────
@@ -408,8 +408,52 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_15_detecteurs(self):
+    def test_stack_trace_patchright(self):
+        from shadowlab.detection import DetecteurStackTrace
+
+        d = DetecteurStackTrace()
+        obs = _obs_avec_empreinte({"stack_trace_test": {"contient_patchright": True}})
+        r = d.classer(obs)
+        assert r.classification == "automatise"
+        assert any(s.code == "stack_patchright" for s in r.signals)
+
+    def test_stack_trace_propre(self):
+        from shadowlab.detection import DetecteurStackTrace
+
+        d = DetecteurStackTrace()
+        obs = _obs_avec_empreinte(
+            {
+                "stack_trace_test": {
+                    "contient_patchright": False,
+                    "contient_playwright": False,
+                    "contient_puppeteer": False,
+                    "contient_cdp": False,
+                    "contient_devtools": False,
+                    "prepareStackTrace_present": False,
+                }
+            }
+        )
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_position_fenetre_zero(self):
+        from shadowlab.detection import DetecteurPositionFenetre
+
+        d = DetecteurPositionFenetre()
+        obs = _obs_avec_empreinte({"performance_memory": {"screenX": 0, "screenY": 0}})
+        r = d.classer(obs)
+        assert any(s.code == "screen_position_zero" for s in r.signals)
+
+    def test_position_fenetre_normale(self):
+        from shadowlab.detection import DetecteurPositionFenetre
+
+        d = DetecteurPositionFenetre()
+        obs = _obs_avec_empreinte({"performance_memory": {"screenX": 120, "screenY": 45}})
+        r = d.classer(obs)
+        assert r.classification == "humain"
+
+    def test_registre_20_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 15
+        assert len(r) == 20

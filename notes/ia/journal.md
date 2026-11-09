@@ -6,6 +6,58 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v6+ : anti-headless + stack trace + 20 détecteurs Arena
+
+### Fait
+- **Nouveau script `headless.js`** (136 lignes) — contre-mesures headless :
+  - `navigator.webdriver` → false, `document.hasFocus()` → true
+  - `document.visibilityState` → 'visible', `document.hidden` → false
+  - `speechSynthesis.getVoices()` → liste réaliste par OS (macOS/Windows/Linux)
+  - `navigator.mediaDevices.enumerateDevices()` → 3 devices mock si vide
+  - `Notification.requestPermission` → 'default'
+  - `performance.memory.jsHeapSizeLimit` → 4 294 705 152 (valeur standard Chrome)
+  - `window.screenX/Y/Left/Top` → offsets réalistes (pas 0,0)
+  - Suppression `navigator.scheduling` (spécifique headless)
+- **navigateur.js** (290 lignes) — améliorations majeures :
+  - Permissions API étendu : 18 permissions → 'prompt', 3 capteurs → 'granted'
+  - `PluginArray`/`MimeTypeArray` itérables (Symbol.iterator + accès par nom)
+  - **Filtrage stack traces** : `Error.prepareStackTrace` patché, regex contre
+    patchright/playwright/puppeteer/__cdp/devtools/chrome-extension dans les fichiers
+- **environnement.js** (171 lignes) :
+  - WebRTC : `onicecandidate` propriété + SDP host filtering + `webkitRTCPeerConnection`
+  - Intl API : `DateTimeFormat`/`NumberFormat` locale alignée sur `navigator.language`
+  - Connection API : ajout `saveData: false`
+- **webgl.js** : `shaderPrecisionFormat` cohérent avec GPU Intel
+- **4 nouveaux détecteurs Arena** : `headless`, `permissions-etendu`, `webrtc`,
+  `stack-trace`, `position-fenetre`. **Total : 20 détecteurs.**
+- **observateur.js** (562 lignes) : collecteurs `headlessSignals`, `webrtcTest`,
+  `stackTraceTest`, `performanceMemoryTest`, `intl_locale` dans languagesTest
+- 252 tests verts, lint propre
+- NOEZIA : 2 756 lignes (10 scripts furtivité, 944 lignes JS)
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/furtivite/headless.js` (nouveau, 136 lignes)
+- `src/shadowlab/engines/noezia/furtivite/navigateur.js` (perms + plugins itérables + stack trace)
+- `src/shadowlab/engines/noezia/furtivite/environnement.js` (WebRTC + Intl + Connection)
+- `src/shadowlab/engines/noezia/furtivite/webgl.js` (shaderPrecisionFormat)
+- `src/shadowlab/engines/noezia/furtivite/patches.py` (10 scripts)
+- `src/shadowlab/detection.py` (5 nouveaux détecteurs → 20 total, 1 158 lignes)
+- `src/shadowlab/site/static/observateur.js` (4 nouveaux collecteurs, 562 lignes)
+- `tests/test_noezia_v4.py` (44 tests, compteurs 10/8/20)
+- `configs/experiments/noezia-v6-headless.yaml` (nouveau)
+
+### Décisions
+- D-25 : défenses headless groupées dans headless.js
+- D-26 : durcissement multi-vecteur (stack trace, Intl, performance.memory, screenPosition)
+- Patchright gère sourceURL via `patchrightInitScript` → pas de script dédié
+
+### Campagne 31
+- En cours : noezia × 6 niveaux × 6 scénarios × 3 reps = 108 passages
+- Note : le site a démarré avant les modifications de l'observateur → les nouveaux collecteurs
+  (stackTraceTest, performanceMemoryTest) ne seront pas exercés. Campagne 32 nécessaire.
+
+---
+
 ## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v5 : intégration techniques concurrents + Arena 15 détecteurs
 
 ### Fait

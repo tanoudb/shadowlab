@@ -709,12 +709,23 @@ class DetecteurChromeApis:
     name = "chrome-apis"
     version = "1"
 
-    LOADTIMES_CLES_ATTENDUES = sorted([
-        "commitLoadTime", "connectionInfo", "finishDocumentLoadTime", "finishLoadTime",
-        "firstPaintAfterLoadTime", "firstPaintTime", "navigationType",
-        "npnNegotiatedProtocol", "requestTime", "startLoadTime",
-        "wasAlternateProtocolAvailable", "wasFetchedViaSpdy", "wasNpnNegotiated",
-    ])
+    LOADTIMES_CLES_ATTENDUES = sorted(
+        [
+            "commitLoadTime",
+            "connectionInfo",
+            "finishDocumentLoadTime",
+            "finishLoadTime",
+            "firstPaintAfterLoadTime",
+            "firstPaintTime",
+            "navigationType",
+            "npnNegotiatedProtocol",
+            "requestTime",
+            "startLoadTime",
+            "wasAlternateProtocolAvailable",
+            "wasFetchedViaSpdy",
+            "wasNpnNegotiated",
+        ]
+    )
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -733,11 +744,13 @@ class DetecteurChromeApis:
             if not chrome.get("chrome_loadTimes"):
                 signaux.append(Signal("loadTimes_absent", "Chrome annoncé sans chrome.loadTimes()", 0.5))
             elif chrome.get("loadTimes_keys") != self.LOADTIMES_CLES_ATTENDUES:
-                signaux.append(Signal(
-                    "loadTimes_incomplet",
-                    f"chrome.loadTimes() a des clés inattendues : {chrome.get('loadTimes_keys')}",
-                    0.5,
-                ))
+                signaux.append(
+                    Signal(
+                        "loadTimes_incomplet",
+                        f"chrome.loadTimes() a des clés inattendues : {chrome.get('loadTimes_keys')}",
+                        0.5,
+                    )
+                )
             if not chrome.get("chrome_csi"):
                 signaux.append(Signal("csi_absent", "Chrome annoncé sans chrome.csi()", 0.25))
             if not chrome.get("runtime_PlatformOs"):
@@ -788,15 +801,21 @@ class DetecteurLangues:
         signaux: list[Signal] = []
 
         if not lang.get("language_dans_languages"):
-            signaux.append(Signal(
-                "language_hors_languages",
-                "navigator.language absent de navigator.languages",
-                0.75,
-            ))
+            signaux.append(
+                Signal(
+                    "language_hors_languages",
+                    "navigator.language absent de navigator.languages",
+                    0.75,
+                )
+            )
         if lang.get("languages") and not lang.get("languages_gelees"):
-            signaux.append(Signal(
-                "languages_pas_gelees", "navigator.languages non gelé (Object.freeze manquant)", 0.25,
-            ))
+            signaux.append(
+                Signal(
+                    "languages_pas_gelees",
+                    "navigator.languages non gelé (Object.freeze manquant)",
+                    0.25,
+                )
+            )
         if lang.get("languages_getter_natif") is False:
             signaux.append(Signal("languages_patche", "navigator.languages a un getter non natif", 0.5))
 
@@ -805,14 +824,264 @@ class DetecteurLangues:
             accept_lang = e.get("accept-language", "").split(",")[0].split(";")[0].strip().lower()
             js_lang = (lang.get("language") or "").lower()
             if accept_lang and js_lang and accept_lang != js_lang:
-                signaux.append(Signal(
-                    "langue_http_js_divergente",
-                    f"Accept-Language principal {accept_lang} ≠ navigator.language {js_lang}",
-                    0.5,
-                ))
+                signaux.append(
+                    Signal(
+                        "langue_http_js_divergente",
+                        f"Accept-Language principal {accept_lang} ≠ navigator.language {js_lang}",
+                        0.5,
+                    )
+                )
 
         if lang.get("vendor") != "Google Inc.":
             signaux.append(Signal("vendor_absent", f"navigator.vendor = '{lang.get('vendor')}'", 0.25))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurHeadless:
+    """Détecte les signaux spécifiques à un navigateur headless."""
+
+    name = "headless"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        hs = p.get("headless_signals") or {}
+        signaux: list[Signal] = []
+
+        if hs.get("hasFocus") is False:
+            signaux.append(
+                Signal(
+                    "hasFocus_false",
+                    "document.hasFocus() retourne false",
+                    0.5,
+                )
+            )
+        if hs.get("visibilityState") == "hidden":
+            signaux.append(
+                Signal(
+                    "visibility_hidden",
+                    "document.visibilityState = 'hidden'",
+                    0.3,
+                )
+            )
+        if hs.get("hidden") is True:
+            signaux.append(
+                Signal(
+                    "document_hidden",
+                    "document.hidden = true",
+                    0.3,
+                )
+            )
+        if hs.get("webdriver") is True:
+            signaux.append(
+                Signal(
+                    "webdriver_true",
+                    "navigator.webdriver = true",
+                    1.0,
+                )
+            )
+        if hs.get("webdriver_getter_natif") is False:
+            signaux.append(
+                Signal(
+                    "webdriver_patche",
+                    "navigator.webdriver getter non natif",
+                    0.4,
+                )
+            )
+        if hs.get("voices_count") is not None and hs["voices_count"] == 0:
+            signaux.append(
+                Signal(
+                    "voices_vide",
+                    "speechSynthesis.getVoices() retourne une liste vide",
+                    0.4,
+                )
+            )
+        if hs.get("devices_count") is not None and hs["devices_count"] == 0:
+            signaux.append(
+                Signal(
+                    "devices_vide",
+                    "mediaDevices.enumerateDevices() retourne une liste vide",
+                    0.3,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurPermissions:
+    """Vérifie la cohérence de l'API Permissions sur plusieurs requêtes."""
+
+    name = "permissions-etendu"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(
+                self.name,
+                self.version,
+                "sans_page",
+                "scénario sans page HTML",
+            )
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(
+                self.name,
+                self.version,
+                "non_execute",
+                "JavaScript non exécuté",
+            )
+        hs = p.get("headless_signals") or {}
+        perms = hs.get("permissions") or {}
+        signaux: list[Signal] = []
+
+        n_granted = sum(1 for v in perms.values() if v == "granted")
+        if len(perms) >= 3 and n_granted == len(perms):
+            signaux.append(
+                Signal(
+                    "permissions_all_granted",
+                    "Toutes les permissions (geo/cam/mic) granted sans interaction",
+                    0.8,
+                )
+            )
+        n_denied = sum(1 for v in perms.values() if v == "denied")
+        if len(perms) >= 3 and n_denied == len(perms):
+            signaux.append(
+                Signal(
+                    "permissions_all_denied",
+                    "Toutes les permissions denied (headless typique)",
+                    0.5,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurWebRTC:
+    """Détecte les fuites d'IP locale via WebRTC ou un RTCPeerConnection patché."""
+
+    name = "webrtc"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        rtc = p.get("webrtc_test") or {}
+        signaux: list[Signal] = []
+
+        if rtc.get("disponible") is False:
+            return _verdict(self.name, self.version, signaux)
+
+        if rtc.get("rtc_natif") is False:
+            signaux.append(
+                Signal(
+                    "rtc_patche",
+                    "RTCPeerConnection.toString() non natif",
+                    0.4,
+                )
+            )
+        if rtc.get("candidats_host", 0) > 0:
+            signaux.append(
+                Signal(
+                    "rtc_host_leak",
+                    f"{rtc['candidats_host']} candidats host exposant l'IP locale",
+                    0.0,
+                )
+            )
+        if rtc.get("sdp_host_lines", 0) > 0:
+            signaux.append(
+                Signal(
+                    "sdp_host_leak",
+                    f"{rtc['sdp_host_lines']} lignes host dans le SDP",
+                    0.0,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurStackTrace:
+    """Détecte les traces d'injection dans les stack traces d'erreur."""
+
+    name = "stack-trace"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        st = p.get("stack_trace_test") or {}
+        signaux: list[Signal] = []
+
+        for marqueur in (
+            "patchright",
+            "playwright",
+            "puppeteer",
+            "cdp",
+            "devtools",
+        ):
+            if st.get(f"contient_{marqueur}"):
+                signaux.append(
+                    Signal(
+                        f"stack_{marqueur}",
+                        f"Stack trace contient '{marqueur}'",
+                        1.0,
+                    )
+                )
+
+        if st.get("prepareStackTrace_present") and not st.get("prepareStackTrace_natif", True):
+            signaux.append(
+                Signal(
+                    "prepareStackTrace_patche",
+                    "Error.prepareStackTrace surchargé (filtrage de stack)",
+                    0.3,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurPositionFenetre:
+    """Détecte les fenêtres headless (screenX/Y à 0, memory incohérente)."""
+
+    name = "position-fenetre"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        pm = p.get("performance_memory") or {}
+        signaux: list[Signal] = []
+
+        if pm.get("screenX") == 0 and pm.get("screenY") == 0:
+            signaux.append(
+                Signal(
+                    "screen_position_zero",
+                    "screenX et screenY à 0 (typique headless)",
+                    0.4,
+                )
+            )
+
+        if pm.get("memory_propre") and not pm.get("memory_getter_natif", True):
+            signaux.append(
+                Signal(
+                    "memory_patche",
+                    "performance.memory getter surchargé",
+                    0.3,
+                )
+            )
 
         return _verdict(self.name, self.version, signaux)
 
@@ -844,6 +1113,11 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurChromeApis(),
         DetecteurMediaCodecs(),
         DetecteurLangues(),
+        DetecteurHeadless(),
+        DetecteurPermissions(),
+        DetecteurWebRTC(),
+        DetecteurStackTrace(),
+        DetecteurPositionFenetre(),
     )
 }
 

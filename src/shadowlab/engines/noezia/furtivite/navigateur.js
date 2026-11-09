@@ -26,6 +26,21 @@
   // Exposer natif() pour les autres scripts
   window.__NOEZIA_NATIF__ = natif;
 
+  // ─── Filtrage des stack traces (masquer le mécanisme d'injection) ───
+  const _origPrepare = Error.prepareStackTrace;
+  const _SUSPECTS = /patchright|playwright|puppeteer|__cdp|devtools|injected|chrome-extension:\/\//i;
+  Error.prepareStackTrace = function(err, stack) {
+    const filtre = stack.filter(frame => {
+      const fn = frame.getFileName() || '';
+      const src = frame.toString();
+      return !_SUSPECTS.test(fn) && !_SUSPECTS.test(src);
+    });
+    if (_origPrepare) return _origPrepare(err, filtre.length ? filtre : stack);
+    return err.name + ': ' + err.message + '\n' +
+      (filtre.length ? filtre : stack).map(f => '    at ' + f.toString()).join('\n');
+  };
+  natif(Error.prepareStackTrace, 'prepareStackTrace');
+
   // ─── Plugins (4 viewers PDF) ───
   const pluginDefs = [
     ['PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/pdf'],
@@ -52,21 +67,30 @@
     return p;
   });
   const pluginArr = Object.create(PluginArray.prototype);
-  fauxPlugins.forEach((p, i) => Object.defineProperty(pluginArr, i, {value: p}));
+  fauxPlugins.forEach((p, i) => Object.defineProperty(pluginArr, i, {value: p, enumerable: true}));
   Object.defineProperty(pluginArr, 'length', {value: fauxPlugins.length});
   pluginArr.item = natif(i => fauxPlugins[i] || null, 'item');
   pluginArr.namedItem = natif(n => fauxPlugins.find(p => p.name === n) || null, 'namedItem');
   pluginArr.refresh = natif(() => {}, 'refresh');
+  pluginArr[Symbol.iterator] = natif(function* values() {
+    for (let i = 0; i < fauxPlugins.length; i++) yield fauxPlugins[i];
+  }, 'values');
+  // Accès par nom (Chrome le supporte)
+  fauxPlugins.forEach(p => { pluginArr[p.name] = p; });
   Object.defineProperty(Navigator.prototype, 'plugins', {
     get: natif(() => pluginArr, 'get plugins'), configurable: true,
   });
 
   const mimeObjs = fauxPlugins.map(p => p[0]);
   const mimeArr = Object.create(MimeTypeArray.prototype);
-  mimeObjs.forEach((m, i) => Object.defineProperty(mimeArr, i, {value: m}));
+  mimeObjs.forEach((m, i) => Object.defineProperty(mimeArr, i, {value: m, enumerable: true}));
   Object.defineProperty(mimeArr, 'length', {value: mimeObjs.length});
   mimeArr.item = natif(i => mimeObjs[i] || null, 'item');
   mimeArr.namedItem = natif(t => mimeObjs.find(m => m.type === t) || null, 'namedItem');
+  mimeArr[Symbol.iterator] = natif(function* values() {
+    for (let i = 0; i < mimeObjs.length; i++) yield mimeObjs[i];
+  }, 'values');
+  mimeObjs.forEach(m => { mimeArr[m.type] = m; });
   Object.defineProperty(Navigator.prototype, 'mimeTypes', {
     get: natif(() => mimeArr, 'get mimeTypes'), configurable: true,
   });
@@ -78,12 +102,25 @@
     });
   } catch(e) {}
 
-  // ─── Permissions API : query('notifications') → 'prompt' ───
+  // ─── Permissions API : toutes les requêtes → état réaliste ───
   if (navigator.permissions) {
     const origQuery = navigator.permissions.query.bind(navigator.permissions);
+    const PERM_PROMPT = new Set([
+      'notifications', 'geolocation', 'camera', 'microphone',
+      'persistent-storage', 'midi', 'screen-wake-lock', 'nfc',
+      'display-capture', 'idle-detection', 'clipboard-read',
+      'clipboard-write', 'payment-handler', 'background-fetch',
+      'background-sync', 'periodic-background-sync',
+      'storage-access', 'window-management', 'local-fonts',
+    ]);
+    const PERM_GRANTED = new Set(['accelerometer', 'gyroscope', 'magnetometer']);
     navigator.permissions.query = natif(function query(desc) {
-      if (desc && desc.name === 'notifications')
+      if (!desc || !desc.name) return origQuery(desc);
+      const nom = desc.name;
+      if (PERM_PROMPT.has(nom))
         return Promise.resolve({state: 'prompt', onchange: null});
+      if (PERM_GRANTED.has(nom))
+        return Promise.resolve({state: 'granted', onchange: null});
       return origQuery(desc);
     }, 'query');
   }

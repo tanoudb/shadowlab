@@ -61,28 +61,56 @@
   // ─── WebRTC protection : empêcher la fuite d'IP via ICE candidates ───
   if (typeof RTCPeerConnection !== 'undefined') {
     const OrigRTC = RTCPeerConnection;
+    const filtrerCandidat = (e, cb) => {
+      if (e.candidate && e.candidate.candidate && e.candidate.candidate.includes('host')) return;
+      cb.call(this, e);
+    };
     const PatchedRTC = natif(function RTCPeerConnection(config, constraints) {
       const clean = config ? {...config, iceServers: []} : config;
       const pc = new OrigRTC(clean, constraints);
-      // Supprimer les événements qui révèleraient l'IP locale
+      // Filtrer via addEventListener
       const origAddEvent = pc.addEventListener.bind(pc);
       pc.addEventListener = function(type, cb, opts) {
         if (type === 'icecandidate') {
-          return origAddEvent(type, function(e) {
-            if (e.candidate && e.candidate.candidate) {
-              // Filtrer les candidats host qui contiennent l'IP locale
-              if (e.candidate.candidate.includes('host')) return;
-            }
-            cb.call(this, e);
-          }, opts);
+          return origAddEvent(type, (e) => filtrerCandidat(e, cb), opts);
         }
         return origAddEvent(type, cb, opts);
       };
+      // Filtrer via onicecandidate (propriété)
+      let _userHandler = null;
+      Object.defineProperty(pc, 'onicecandidate', {
+        get() { return _userHandler; },
+        set(cb) {
+          _userHandler = cb;
+          origAddEvent('icecandidate', (e) => {
+            if (typeof cb === 'function') filtrerCandidat(e, cb);
+          });
+        },
+        configurable: true,
+      });
+      // createDataChannel : vider la description locale des candidats host
+      const origLocalDesc = Object.getOwnPropertyDescriptor(
+        OrigRTC.prototype, 'localDescription'
+      );
+      if (origLocalDesc && origLocalDesc.get) {
+        Object.defineProperty(pc, 'localDescription', {
+          get() {
+            const desc = origLocalDesc.get.call(pc);
+            if (desc && desc.sdp) {
+              const sdp = desc.sdp.replace(/a=candidate:[^\r\n]*host[^\r\n]*/g, '');
+              return {type: desc.type, sdp, toJSON: () => ({type: desc.type, sdp})};
+            }
+            return desc;
+          },
+          configurable: true,
+        });
+      }
       return pc;
     }, 'RTCPeerConnection');
     PatchedRTC.prototype = OrigRTC.prototype;
     PatchedRTC.generateCertificate = OrigRTC.generateCertificate;
     window.RTCPeerConnection = PatchedRTC;
+    if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = PatchedRTC;
   }
 
   // ─── Battery API : retourner un état réaliste ───
@@ -117,6 +145,30 @@
       Object.defineProperty(conn, 'downlink', {
         get: natif(() => 10, 'get downlink'), configurable: true,
       });
+      Object.defineProperty(conn, 'saveData', {
+        get: natif(() => false, 'get saveData'), configurable: true,
+      });
     } catch(e) {}
+  }
+
+  // ─── Intl API : locale cohérente avec navigator.language ───
+  if (P.locale) {
+    const localeTag = P.locale.replace('_', '-');
+    const OrigDTF = Intl.DateTimeFormat;
+    const OrigNF = Intl.NumberFormat;
+
+    Intl.DateTimeFormat = natif(function DateTimeFormat(locales, options) {
+      const l = locales || localeTag;
+      return new OrigDTF(l, options);
+    }, 'DateTimeFormat');
+    Intl.DateTimeFormat.prototype = OrigDTF.prototype;
+    Intl.DateTimeFormat.supportedLocalesOf = OrigDTF.supportedLocalesOf;
+
+    Intl.NumberFormat = natif(function NumberFormat(locales, options) {
+      const l = locales || localeTag;
+      return new OrigNF(l, options);
+    }, 'NumberFormat');
+    Intl.NumberFormat.prototype = OrigNF.prototype;
+    Intl.NumberFormat.supportedLocalesOf = OrigNF.supportedLocalesOf;
   }
 })();

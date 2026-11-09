@@ -317,6 +317,98 @@ function iframeTest() {
   return r;
 }
 
+async function webrtcTest() {
+  const r = {};
+  try {
+    if (typeof RTCPeerConnection === 'undefined') { r.disponible = false; return r; }
+    r.disponible = true;
+    r.rtc_natif = /\[native code\]/.test(RTCPeerConnection.toString());
+    const pc = new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]});
+    pc.createDataChannel('test');
+    const candidats = [];
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 3000);
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          candidats.push({
+            type: e.candidate.type,
+            protocol: e.candidate.protocol,
+            has_ip: /\d+\.\d+\.\d+\.\d+/.test(e.candidate.candidate),
+          });
+        } else {
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+      pc.createOffer().then(o => pc.setLocalDescription(o));
+    });
+    r.candidats_count = candidats.length;
+    r.candidats_host = candidats.filter(c => c.type === 'host').length;
+    r.candidats_avec_ip = candidats.filter(c => c.has_ip).length;
+    // SDP check
+    const sdp = pc.localDescription?.sdp || '';
+    r.sdp_host_lines = (sdp.match(/a=candidate:[^\r\n]*host/g) || []).length;
+    pc.close();
+  } catch (e) { r.erreur = String(e).slice(0, 100); }
+  return r;
+}
+
+async function headlessSignals() {
+  const r = {};
+  // document.hasFocus
+  try { r.hasFocus = document.hasFocus(); } catch (_) { /* ignore */ }
+  // visibilityState
+  try { r.visibilityState = document.visibilityState; } catch (_) { /* ignore */ }
+  try { r.hidden = document.hidden; } catch (_) { /* ignore */ }
+  // webdriver
+  try {
+    r.webdriver = navigator.webdriver;
+    const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
+    r.webdriver_sur_prototype = !!desc;
+    if (desc && desc.get) {
+      r.webdriver_getter_natif = /\[native code\]/.test(desc.get.toString());
+    }
+  } catch (_) { /* ignore */ }
+  // speechSynthesis.getVoices
+  try {
+    if (typeof speechSynthesis !== 'undefined') {
+      const voix = speechSynthesis.getVoices();
+      r.voices_count = voix.length;
+      r.getVoices_natif = /\[native code\]/.test(speechSynthesis.getVoices.toString());
+    }
+  } catch (_) { /* ignore */ }
+  // mediaDevices.enumerateDevices
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      r.devices_count = devices.length;
+      r.devices_kinds = [...new Set(devices.map(d => d.kind))].sort();
+    }
+  } catch (_) { /* ignore */ }
+  // Permissions API étendu (tester plusieurs permissions)
+  try {
+    if (navigator.permissions) {
+      const tests = ['geolocation', 'camera', 'microphone'];
+      r.permissions = {};
+      for (const perm of tests) {
+        try {
+          const result = await navigator.permissions.query({name: perm});
+          r.permissions[perm] = result.state;
+        } catch (_) { r.permissions[perm] = 'erreur'; }
+      }
+    }
+  } catch (_) { /* ignore */ }
+  // Notification.requestPermission natif ?
+  try {
+    if (typeof Notification !== 'undefined') {
+      r.requestPermission_natif = /\[native code\]/.test(
+        Notification.requestPermission.toString()
+      );
+    }
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
 function languagesTest() {
   const r = {};
   try {
@@ -334,6 +426,64 @@ function languagesTest() {
   // vendor
   try {
     r.vendor = navigator.vendor;
+  } catch (_) { /* ignore */ }
+  // Intl locale vs navigator.language
+  try {
+    const intlLocale = new Intl.DateTimeFormat().resolvedOptions().locale;
+    r.intl_locale = intlLocale;
+    r.intl_timezone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const navLang = (navigator.language || '').toLowerCase();
+    const intlLang = intlLocale.toLowerCase();
+    r.intl_coherent = intlLang.startsWith(navLang.split('-')[0]);
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function stackTraceTest() {
+  const r = {};
+  try {
+    const err = new Error('probe');
+    r.stack_brut = err.stack ? err.stack.split('\n').slice(0, 6) : [];
+    r.contient_patchright = /patchright/i.test(err.stack || '');
+    r.contient_playwright = /playwright/i.test(err.stack || '');
+    r.contient_puppeteer = /puppeteer/i.test(err.stack || '');
+    r.contient_cdp = /__cdp/i.test(err.stack || '');
+    r.contient_devtools = /devtools/i.test(err.stack || '');
+    // Error.prepareStackTrace natif ?
+    r.prepareStackTrace_present = typeof Error.prepareStackTrace === 'function';
+    if (r.prepareStackTrace_present) {
+      r.prepareStackTrace_natif = /\[native code\]/.test(Error.prepareStackTrace.toString());
+    }
+    // Tester via eval (injection paths apparaissent souvent là)
+    try {
+      eval('throw new Error("eval-probe")');
+    } catch (e2) {
+      r.eval_stack = e2.stack ? e2.stack.split('\n').slice(0, 4) : [];
+    }
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function performanceMemoryTest() {
+  const r = {};
+  try {
+    if (performance.memory) {
+      r.jsHeapSizeLimit = performance.memory.jsHeapSizeLimit;
+      r.totalJSHeapSize = performance.memory.totalJSHeapSize;
+      r.usedJSHeapSize = performance.memory.usedJSHeapSize;
+      // Vérifier getter natif
+      const desc = Object.getOwnPropertyDescriptor(performance, 'memory');
+      r.memory_propre = !!desc;
+      if (desc && desc.get) {
+        r.memory_getter_natif = /\[native code\]/.test(desc.get.toString());
+      }
+    } else {
+      r.memory_absent = true;
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    r.screenX = window.screenX;
+    r.screenY = window.screenY;
   } catch (_) { /* ignore */ }
   return r;
 }
@@ -380,6 +530,10 @@ async function collecter() {
     media_codecs: mediaCodecs(),
     iframe_test: iframeTest(),
     languages_test: languagesTest(),
+    webrtc_test: await webrtcTest(),
+    headless_signals: await headlessSignals(),
+    stack_trace_test: stackTraceTest(),
+    performance_memory: performanceMemoryTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),
