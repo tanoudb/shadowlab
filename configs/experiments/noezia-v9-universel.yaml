@@ -1,0 +1,25 @@
+# NOEZIA v9 — modèle comportemental universel
+# Distributions log-normales + ex-gaussiennes + digraphes + auto-corrélation
+experiment:
+  name: noezia_v9_universel
+  description: "NOEZIA v9 : modèle comportemental humain universel"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]

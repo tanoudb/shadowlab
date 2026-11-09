@@ -236,7 +236,6 @@ class DriverNoezia(Driver):
         self._clavier = SimulateurClavier(
             self._page,
             wpm_moyen=cfg_c.wpm_moyen,
-            wpm_ecart=cfg_c.wpm_ecart,
             proba_erreur=cfg_c.proba_erreur,
             fatigue_par_caractere=cfg_c.fatigue_par_caractere,
         )
@@ -339,6 +338,29 @@ class DriverNoezia(Driver):
         except Exception:
             pass
 
+    def _interaction_post_clic_navigation(self) -> None:
+        """Comportement après un clic qui déclenche une navigation.
+
+        Plus léger que _interaction_post_chargement (aller()) : l'humain
+        connaît déjà le site, il scanne la nouvelle page rapidement
+        avant de continuer. Injecte assez de variabilité dans les délais
+        et mouvements souris pour tromper le détecteur d'entropie.
+        """
+        try:
+            tempo.pause_apres_navigation()
+            if self._config.souris.actif and self._souris:
+                self._souris.mouvement_aleatoire()
+                # 1-2 micro-interactions de scan
+                n_scan = random.randint(1, 2)
+                for _ in range(n_scan):
+                    tempo.pause_reflexion()
+                    self._souris.mouvement_aleatoire()
+                if self._config.defilement.actif and self._defilement and random.random() < 0.4:
+                    self._defilement.defiler_bas(random.randint(30, 150))
+                tempo.hesitation(proba=0.20)
+        except Exception:
+            pass
+
     # ── Résolution des défis Arena ─────────────────────────────────────
 
     def _resoudre_defis(self) -> None:
@@ -433,10 +455,12 @@ class DriverNoezia(Driver):
             log.debug("Honeypot évité : %s", selector)
             return
 
-        # Pause humaine inter-actions (~30% du temps entre deux clics rapprochés)
+        # Pause humaine inter-actions (probabilité croissante si clics rapprochés)
         if self._config.souris.actif and self._souris:
             ecart = time.monotonic() - self._souris._derniere_action
-            if ecart < 2.0 and random.random() < 0.30:
+            if ecart < 1.0 and random.random() < 0.60:
+                self._souris.pause_humaine()
+            elif ecart < 2.0 and random.random() < 0.30:
                 self._souris.pause_humaine()
 
         # Mouvement de souris réaliste vers la cible
@@ -451,6 +475,9 @@ class DriverNoezia(Driver):
         if navigue:
             with self._page.expect_navigation(wait_until="load"):
                 self._page.click(selector)
+            # Comportement post-navigation (lecture, mouvement oisif)
+            if self._config.interaction_post_page:
+                self._interaction_post_clic_navigation()
         else:
             self._page.click(selector)
 

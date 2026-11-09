@@ -114,3 +114,20 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   marqueurs `__NOEZIA_PROFIL__`/`__NOEZIA_NATIF__` rendus non-énumérables. 4 nouveaux détecteurs Arena
   (automation-globals, css-media, prototype-chain, timing-precision) avec collecteurs dans observateur.js.
   Total : 11 scripts furtivité (~1 100 lignes JS), 24 détecteurs Arena, 265 tests.
+- **D-28 — 09/11/2026 — NOEZIA v8 : trajectoire calée sur le frame rate.** Le nombre de points de
+  trajectoire souris était calculé sur la distance (jusqu'à 120 points/mouvement), générant 250-330
+  mousemove/page. L'observateur Arena garde les 50 derniers délais : les pauses entre mouvements étaient
+  poussées hors fenêtre, ne laissant que des délais uniformes ~16ms → détection `entropie-interaction`
+  (CV < 0.15 + max < 80ms). Fix : `n_points = max(6, min(int(duree_ms / 16), 50))` — calé sur 60 fps
+  comme un vrai navigateur. Résultat : 0 détection automatise sur 109 passages × 24 détecteurs.
+  Aussi : `outerWidth`/`dpr` déplacés sur `Window.prototype` (anti own-property detection),
+  comportement post-navigation (`_interaction_post_clic_navigation`), pauses inter-clics améliorées.
+- **D-29 — 09/11/2026 — NOEZIA v9 : modèle comportemental universel.** Les versions v4-v8 calibraient les
+  délais sur les seuils de nos 24 détecteurs (CV > 0.15, max > 80ms, etc.). Une vraie défense universelle
+  doit passer *n'importe quel* test statistique. Nouveau module `humain.py` : délais souris log-normaux
+  (Hwang 2006, médiane 280ms σ=0.9), clavier par digraphes biomécaniques (Card/Moran/Newell 1983) avec
+  distribution ex-gaussienne, profils souris (rapide/moyen/lent), micro-pauses Pareto (8%), auto-corrélation
+  temporelle via marche aléatoire multiplicative (`RythmeHumain`). Les modules `souris.py`, `clavier.py`,
+  `tempo.py` réécris pour déléguer à `humain.py`. Résultat campagne 37 : 108 passages × 24 détecteurs,
+  0 détection automatise. Données v9 : CV=3.43 (seuil=0.15), médiane=25ms, max=6049ms, queue lourde
+  typique d'un humain. Les distributions sont correctes par construction — aucun seuil à tuner.

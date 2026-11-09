@@ -28,7 +28,7 @@
     Object.defineProperty(Screen.prototype, 'pixelDepth', {
       get: natif(() => 24, 'get pixelDepth'), configurable: true,
     });
-    Object.defineProperty(window, 'devicePixelRatio', {
+    Object.defineProperty(Window.prototype, 'devicePixelRatio', {
       get: natif(() => dpr, 'get devicePixelRatio'), configurable: true,
     });
 
@@ -39,18 +39,13 @@
     const gapW = P.platform_name === 'macOS' ? 0 : P.platform_name === 'Windows' ? 16 : 2;
     const gapH = P.platform_name === 'macOS' ? 28 : P.platform_name === 'Windows' ? 39 : 37;
 
-    const origIW = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
-      || Object.getOwnPropertyDescriptor(window, 'innerWidth');
-    const origIH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
-      || Object.getOwnPropertyDescriptor(window, 'innerHeight');
-
-    Object.defineProperty(window, 'outerWidth', {
+    Object.defineProperty(Window.prototype, 'outerWidth', {
       get: natif(function outerWidth() {
         return (window.innerWidth || 0) + gapW;
       }, 'get outerWidth'),
       configurable: true,
     });
-    Object.defineProperty(window, 'outerHeight', {
+    Object.defineProperty(Window.prototype, 'outerHeight', {
       get: natif(function outerHeight() {
         return (window.innerHeight || 0) + gapH;
       }, 'get outerHeight'),

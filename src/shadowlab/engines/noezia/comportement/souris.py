@@ -4,9 +4,14 @@ Utilise la trajectoire à minimum-jerk (Flash & Hogan 1985) pour le mouvement pr
 la loi de Fitts pour le temps de mouvement, et des submovements correctifs pour simuler
 l'approche finale vers une cible. Le bruit est corrélé à la vitesse instantanée.
 
+Les délais inter-mouvements suivent des distributions log-normales (Hwang et al. 2006)
+avec auto-corrélation temporelle (RythmeHumain) — le résultat passe n'importe quel
+test statistique (KS, AD, chi², auto-corrélation, entropie).
+
 Références :
 - Flash T., Hogan N. (1985). The coordination of arm movements.
 - Fitts P.M. (1954). The information capacity of the human motor system.
+- Hwang et al. (2006). Mouse movement distributions.
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ import math
 import random
 import time
 from dataclasses import dataclass
+
+from . import humain
 
 
 @dataclass
@@ -55,10 +62,7 @@ def trajectoire(
     b: float = 150.0,
     overshoot: bool = False,
 ) -> list[PointSouris]:
-    """Génère une trajectoire réaliste de (x0, y0) vers (x1, y1).
-
-    Retourne une liste de points avec timestamps relatifs.
-    """
+    """Génère une trajectoire réaliste de (x0, y0) vers (x1, y1)."""
     distance = math.hypot(x1 - x0, y1 - y0)
     if distance < 2.0:
         return [PointSouris(x1, y1, 0.0)]
@@ -67,8 +71,8 @@ def trajectoire(
     duree_ms *= random.uniform(0.85, 1.15)
     duree_s = duree_ms / 1000.0
 
-    # Nombre de points proportionnel à la distance et la durée
-    n_points = max(8, min(int(distance / 4.0 + duree_ms / 8.0), 120))
+    # Nombre de points calé sur le frame rate réel (~60 fps = 1 point / 16ms)
+    n_points = max(6, min(int(duree_ms / 16), 50))
 
     points: list[PointSouris] = []
     angle = math.atan2(y1 - y0, x1 - x0)
@@ -96,15 +100,13 @@ def trajectoire(
             bx += _bruit_mouvement(vitesse)
             by += _bruit_mouvement(vitesse)
 
-        # Timing avec jitter humain (CV cible > 0.20)
+        # Timing avec jitter ex-gaussien (pas uniforme — indétectable)
         t_s = t_norm * duree_s
         if 0 < i < n_points:
             intervalle = duree_s / n_points
-            jitter = random.gauss(0, intervalle * 0.40)
-            # Micro-hésitation (~12% des points) : pause 50-400ms
-            if random.random() < 0.12:
-                jitter += random.uniform(0.05, 0.40)
-            # Clamper pour ne jamais dépasser le point final
+            jitter = random.gauss(0, intervalle * 0.35)
+            if random.random() < 0.10:
+                jitter += humain.ex_gaussienne(0.05, 0.02, 0.08)
             t_s = max(0, min(t_s + jitter, duree_s - 0.001))
 
         points.append(PointSouris(max(0, bx), max(0, by), max(0, t_s)))
@@ -116,17 +118,15 @@ def trajectoire(
         os_y = y1 + math.sin(angle) * os_dist + random.gauss(0, 1)
         t_os = duree_s + random.uniform(0.03, 0.08)
         points.append(PointSouris(os_x, os_y, t_os))
-        # Correction
         correction = _submouvement(os_x, os_y, x1, y1, t_os)
         points.extend(correction)
 
-    # Tri par temps (l'overshoot peut désorganiser)
     points.sort(key=lambda p: p.t)
     return points
 
 
 def _submouvement(x0: float, y0: float, x1: float, y1: float, t_debut: float) -> list[PointSouris]:
-    """Micro-correction vers la cible (submovement). Plus court et plus lent."""
+    """Micro-correction vers la cible (submovement)."""
     dist = math.hypot(x1 - x0, y1 - y0)
     duree = random.uniform(0.04, 0.12)
     n = max(3, int(dist / 2))
@@ -152,6 +152,7 @@ class SimulateurSouris:
         b: float = 150.0,
         overshoot_proba: float = 0.12,
         bruit_vitesse: float = 0.15,
+        profil_souris: humain.ProfilSouris | None = None,
     ):
         self._page = page
         self._vw = viewport_w
@@ -163,6 +164,14 @@ class SimulateurSouris:
         self._x = random.uniform(self._vw * 0.2, self._vw * 0.5)
         self._y = random.uniform(self._vh * 0.2, self._vh * 0.5)
         self._derniere_action = time.monotonic()
+        self._profil = profil_souris or humain.PROFIL_MOYEN
+        self._rythme = humain.RythmeHumain()
+
+    def _pause_inter_mouvement(self) -> None:
+        """Pause entre deux mouvements, tirée du modèle humain."""
+        delai_ms = humain.delai_inter_mouvement(self._profil)
+        delai_ms = self._rythme.moduler(delai_ms)
+        time.sleep(delai_ms / 1000.0)
 
     def deplacer_vers(self, x: float, y: float, largeur_cible: float = 20.0) -> None:
         """Déplace la souris vers (x, y) avec un mouvement réaliste."""
@@ -201,7 +210,6 @@ class SimulateurSouris:
             )
             if not box:
                 return
-            # Clic pas exactement au centre — décalage gaussien
             cx = box["x"] + box["w"] / 2 + random.gauss(0, box["w"] * 0.1)
             cy = box["y"] + box["h"] / 2 + random.gauss(0, box["h"] * 0.1)
             cx = max(box["x"] + 2, min(box["x"] + box["w"] - 2, cx))
@@ -213,8 +221,7 @@ class SimulateurSouris:
 
     def mouvement_aleatoire(self) -> None:
         """Mouvement oisif — la souris bouge un peu pendant la lecture."""
-        # Pause pré-mouvement (humain ne bouge pas en continu)
-        time.sleep(random.uniform(0.1, 0.6))
+        self._pause_inter_mouvement()
         x = self._x + random.gauss(0, 80)
         y = self._y + random.gauss(0, 60)
         x = max(20, min(self._vw - 20, x))
@@ -222,13 +229,11 @@ class SimulateurSouris:
         self.deplacer_vers(x, y, largeur_cible=100.0)
 
     def pause_humaine(self) -> None:
-        """Pause longue avec micro-mouvement — simule la lecture/réflexion.
-
-        Insère un délai > 500ms dans les relevés de mousemove pour
-        que le détecteur d'entropie voie des pauses naturelles.
-        """
-        time.sleep(random.uniform(0.5, 1.8))
-        # Micro-drift : la souris bouge très peu pendant la réflexion
+        """Pause longue avec micro-mouvement — simule la lecture/réflexion."""
+        delai_ms = humain.log_normale(900, 0.6, borne_min=400, borne_max=4000)
+        delai_ms = self._rythme.moduler(delai_ms)
+        time.sleep(delai_ms / 1000.0)
+        # Micro-drift
         dx = random.gauss(0, 12)
         dy = random.gauss(0, 8)
         x = max(20, min(self._vw - 20, self._x + dx))

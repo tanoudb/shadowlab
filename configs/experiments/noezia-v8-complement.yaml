@@ -1,0 +1,20 @@
+# Complément campagne v8 — niveaux 03 et 05 manquants
+experiment:
+  name: noezia_v8_complement
+  description: "NOEZIA v8 : complétion niveaux 03 + 05"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "03"
+    - "05"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]

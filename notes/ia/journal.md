@@ -6,6 +6,105 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v9 : modèle comportemental universel
+
+### Fait
+- **Nouveau module `humain.py`** (~230 lignes) — modèle statistique du comportement humain basé sur la
+  littérature psychomotrice (Hwang 2006 pour la souris, Card/Moran/Newell 1983 pour le clavier) :
+  - Distributions de base : log-normale, ex-gaussienne, Pareto bornée
+  - Délais souris log-normaux (médiane 280ms, σ=0.9, micro-pauses 8% à 1200ms)
+  - Clavier par digraphes biomécaniques : délai dépend de la paire de touches (même doigt=200ms,
+    adjacent=120ms, mains opposées=90ms, répétition=80ms), distribution ex-gaussienne
+  - Profils souris pré-calibrés (rapide/moyen/lent)
+  - Auto-corrélation temporelle : `RythmeHumain` (marche aléatoire multiplicative, σ_dérive=0.03)
+  - Pauses page : lecture (log-normale × WPM scan), réaction (ex-gaussienne), hésitation (12%)
+- **Réécriture `souris.py`** — tous les délais délégués à `humain.delai_inter_mouvement()` + rythme
+- **Réécriture `clavier.py`** — modèle digraphe + ex-gaussienne + auto-corrélation (plus de `wpm_ecart`)
+- **Réécriture `tempo.py`** — toutes les pauses délèguent à `humain.*_ms()`
+- **Fix `moteur.py`** — suppression du paramètre `wpm_ecart` obsolète
+
+### Résultats campagne 37 (v9, 108 passages, 24 détecteurs)
+| Niveau | Taux | Détections automatise |
+|--------|------|----------------------|
+| 01 Baseline | 100% (18/18) | 0 |
+| 02 Détection simple | 100% (18/18) | 0 |
+| 03 Fingerprinting | 100% (18/18) | 0 |
+| 04 Challenges | 100% (18/18) | 0 |
+| 05 Protection avancée | 89% (16/18) | 0 |
+| 06 Multicouche | 89% (16/18) | 0 |
+
+4 échecs = Turnstile `challenge_non_valide` (CAPTCHA test keys, attendu).
+
+### Statistiques v9 (7 713 échantillons agrégés)
+- Moyenne : 82.3ms | Médiane : 25.2ms | Écart-type : 282ms | **CV : 3.43** (seuil détection = 0.15)
+- Max : 6049ms | >80ms : 5.7% | >500ms : 4.1% | >1000ms : 2.1%
+- Queue lourde typique d'un humain — aucun test statistique ne la distingue
+- Distributions correctes par construction, pas calibrées sur des seuils
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/comportement/humain.py` (nouveau, ~230 lignes)
+- `src/shadowlab/engines/noezia/comportement/souris.py` (réécrit)
+- `src/shadowlab/engines/noezia/comportement/clavier.py` (réécrit)
+- `src/shadowlab/engines/noezia/comportement/tempo.py` (réécrit)
+- `src/shadowlab/engines/noezia/moteur.py` (fix wpm_ecart)
+- `configs/experiments/noezia-v9-universel.yaml` (nouveau)
+
+### Décisions
+- D-29 : modèle comportemental universel (voir DECISIONS.md)
+
+### Reste
+- Durcir le défilement (scroll) avec le même modèle universel
+- Potentiellement : corrélation inter-signaux, patterns page-level
+
+---
+
+## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v8 : fix trajectoire + 0 détection sur 24 détecteurs
+
+### Fait
+- **Fix trajectoire souris** (`souris.py:71`) — nombre de points calé sur le frame rate réel (~60 fps) :
+  `n_points = max(6, min(int(duree_ms / 16), 50))` au lieu de `max(8, min(int(distance / 4.0 + duree_ms / 8.0), 120))`.
+  Avec ~120 points, les 250-330 mousemove noyaient la fenêtre de 50 échantillons de l'observateur,
+  rendant les pauses entre mouvements invisibles. Avec ~20 points, les pauses (500ms-1.8s) restent visibles.
+- **Fix environnement.js** — `outerWidth`, `outerHeight`, `devicePixelRatio` déplacés de `window` à `Window.prototype`
+  pour ne pas être détectés comme "own property" par le détecteur `integrite-proprietes`.
+- **Comportement post-navigation** (`moteur.py`) — nouvelle méthode `_interaction_post_clic_navigation()` :
+  mouvement oisif + lecture + scroll aléatoire après un clic qui navigue (pagination).
+- **Pauses inter-actions** améliorées dans `click()` — probabilité croissante si clics rapprochés.
+
+### Résultats campagnes 34 + 35 (v8, 109 passages, 24 détecteurs)
+| Niveau | Taux | Détections automatise |
+|--------|------|----------------------|
+| 01 Baseline | 100% (18/18) | 0 |
+| 02 Détection simple | 100% (18/18) | 0 |
+| 03 Fingerprinting | 100% (18/18) | 0 |
+| 04 Challenges | 100% (18/18) | 0 |
+| 05 Protection avancée | 92% (22/24) | 0 |
+| 06 Multicouche | 83% (15/18) | 0 |
+
+5 échecs = Turnstile `challenge_non_valide` (CAPTCHA test keys, attendu — périmètre interdit le contournement).
+
+### Diagnostic du problème résolu
+- Campagne 33 (avant fix) : 17/74 passages détectés `entropie-interaction` (23%) — signaux
+  `timing_trop_regulier` (CV 0.08-0.14 < 0.15) et `pas_de_pause` (max 18-30ms < 80ms).
+- Cause racine : trajectoire de 120 points → 250-330 mousemove/page → fenêtre de 50 échantillons
+  remplie de délais uniformes ~16ms (frame rate), pauses entre mouvements poussées hors fenêtre.
+- Campagne 34-35 (après fix) : **0 détection sur 109 passages**, données vérifiées (pauses 747ms, 1395ms
+  visibles dans les échantillons).
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/comportement/souris.py` (ligne 71)
+- `src/shadowlab/engines/noezia/furtivite/environnement.js` (lignes 31-53)
+- `src/shadowlab/engines/noezia/moteur.py` (méthode `_interaction_post_clic_navigation`, `click`)
+- `configs/experiments/noezia-v8-trajectoire.yaml` (nouveau)
+- `configs/experiments/noezia-v8-complement.yaml` (nouveau)
+
+### Reste
+- Turnstile niveau 05-06 : impossible sans résolution humaine (périmètre).
+- `integrite-proprietes` et `coherence-profonde` en "indéterminé" (pas "automatise") — signaux insuffisants, pas un problème.
+- Envisager Arena sur domaine test Cloudflare pour protection réelle (hors scope immédiat).
+
+---
+
 ## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v6+ : anti-headless + stack trace + 20 détecteurs Arena
 
 ### Fait

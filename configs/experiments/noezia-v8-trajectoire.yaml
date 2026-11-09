@@ -1,0 +1,27 @@
+# Campagne NOEZIA v8 — correction trajectoire + post-navigation
+# Fix : n_points calé sur frame rate (50→20 pts/mouvement)
+# Fix : comportement post-clic-navigation 
+# Fix : outerWidth/dpr sur Window.prototype
+experiment:
+  name: noezia_v8_trajectoire
+  description: "NOEZIA v8 : trajectoire réaliste, post-navigation, 24 détecteurs"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]
