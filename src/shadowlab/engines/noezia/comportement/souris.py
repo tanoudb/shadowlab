@@ -101,9 +101,9 @@ def trajectoire(
         if 0 < i < n_points:
             intervalle = duree_s / n_points
             jitter = random.gauss(0, intervalle * 0.40)
-            # Micro-hésitation (~8% des points) : pause 50-300ms
-            if random.random() < 0.08:
-                jitter += random.uniform(0.05, 0.30)
+            # Micro-hésitation (~12% des points) : pause 50-400ms
+            if random.random() < 0.12:
+                jitter += random.uniform(0.05, 0.40)
             # Clamper pour ne jamais dépasser le point final
             t_s = max(0, min(t_s + jitter, duree_s - 0.001))
 
@@ -220,6 +220,20 @@ class SimulateurSouris:
         x = max(20, min(self._vw - 20, x))
         y = max(20, min(self._vh - 20, y))
         self.deplacer_vers(x, y, largeur_cible=100.0)
+
+    def pause_humaine(self) -> None:
+        """Pause longue avec micro-mouvement — simule la lecture/réflexion.
+
+        Insère un délai > 500ms dans les relevés de mousemove pour
+        que le détecteur d'entropie voie des pauses naturelles.
+        """
+        time.sleep(random.uniform(0.5, 1.8))
+        # Micro-drift : la souris bouge très peu pendant la réflexion
+        dx = random.gauss(0, 12)
+        dy = random.gauss(0, 8)
+        x = max(20, min(self._vw - 20, self._x + dx))
+        y = max(20, min(self._vh - 20, self._y + dy))
+        self.deplacer_vers(x, y, largeur_cible=200.0)
 
     @property
     def position(self) -> tuple[float, float]:

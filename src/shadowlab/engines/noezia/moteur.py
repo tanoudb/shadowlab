@@ -433,6 +433,12 @@ class DriverNoezia(Driver):
             log.debug("Honeypot évité : %s", selector)
             return
 
+        # Pause humaine inter-actions (~30% du temps entre deux clics rapprochés)
+        if self._config.souris.actif and self._souris:
+            ecart = time.monotonic() - self._souris._derniere_action
+            if ecart < 2.0 and random.random() < 0.30:
+                self._souris.pause_humaine()
+
         # Mouvement de souris réaliste vers la cible
         if self._config.souris.actif and self._souris:
             self._souris.deplacer_vers_element(selector)
@@ -454,6 +460,9 @@ class DriverNoezia(Driver):
             return
 
         if self._config.souris.actif and self._souris:
+            ecart = time.monotonic() - self._souris._derniere_action
+            if ecart < 2.0 and random.random() < 0.25:
+                self._souris.pause_humaine()
             self._souris.deplacer_vers_element(selector)
             tempo.pause_avant_clic()
 
