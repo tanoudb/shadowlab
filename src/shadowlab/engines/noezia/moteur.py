@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ...config import RACINE
 from ...perimetre import est_autorisee
 from ..base import (
     Driver,
@@ -28,6 +29,7 @@ from ..base import (
     ResultatNavigation,
     proxy_verrou,
 )
+from . import extraction
 from .comportement import humain, tempo
 from .comportement.clavier import SimulateurClavier
 from .comportement.defilement import SimulateurDefilement
@@ -90,6 +92,7 @@ class DriverNoezia(Driver):
         self._config = self._construire_config(self.options)
         self._bloquer_ressources = bool(self.options.get("bloquer_ressources", False))
         self._nb_essais = max(1, int(self.options.get("nb_essais", 1)))
+        self._signatures = extraction.Signatures(RACINE / "outputs" / "signatures_adaptatives.json")
         self._profil: ProfilNavigateur | None = None
         self._pw = None
         self._navigateur = None
@@ -606,6 +609,34 @@ class DriverNoezia(Driver):
 
     def texts(self, selector: str) -> list[str]:
         return self._page.locator(selector).all_text_contents()
+
+    def extraire_adaptatif(self, selecteur: str, cle: str) -> str | None:
+        """Extrait le texte d'un élément. Si le sélecteur a cassé (site changé), relocalise
+        l'élément par ressemblance à la signature mémorisée lors d'une extraction réussie.
+
+        `cle` est un nom logique stable (ex. "prix", "titre") sous lequel la signature est rangée.
+        """
+        domaine = extraction.domaine_de(self._page.url)
+        try:
+            feats = self._page.eval_on_selector(selecteur, extraction.CARAC_UN)
+        except Exception:  # noqa: BLE001 — sélecteur introuvable : on tentera la relocalisation
+            feats = None
+        if feats:
+            self._signatures.enregistrer(domaine, cle, feats)
+            return feats.get("texte")
+        # Sélecteur cassé : relocalisation par signature.
+        sig = self._signatures.charger(domaine, cle)
+        if not sig:
+            return None
+        try:
+            candidats = self._page.eval_on_selector_all(sig["tag"], extraction.CARAC_TOUS)
+        except Exception:  # noqa: BLE001
+            return None
+        meilleur, sc = extraction.meilleur_candidat(sig, candidats)
+        if meilleur and sc >= extraction.SEUIL_RELOCALISATION:
+            self.mesures.details["relocalisations"] = self.mesures.details.get("relocalisations", 0) + 1
+            return meilleur.get("texte")
+        return None
 
     def attendre_chargement(self) -> None:
         self._page.wait_for_load_state("load")
