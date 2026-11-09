@@ -703,6 +703,120 @@ class DetecteurCoherenceEnvironnement:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurChromeApis:
+    """Vérifie la présence et cohérence des API chrome.* que les vrais Chrome exposent."""
+
+    name = "chrome-apis"
+    version = "1"
+
+    LOADTIMES_CLES_ATTENDUES = sorted([
+        "commitLoadTime", "connectionInfo", "finishDocumentLoadTime", "finishLoadTime",
+        "firstPaintAfterLoadTime", "firstPaintTime", "navigationType",
+        "npnNegotiatedProtocol", "requestTime", "startLoadTime",
+        "wasAlternateProtocolAvailable", "wasFetchedViaSpdy", "wasNpnNegotiated",
+    ])
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        chrome = p.get("chrome_apis") or {}
+        nav = p.get("navigateur") or {}
+        signaux: list[Signal] = []
+        is_chrome = "Chrome/" in nav.get("userAgent", "")
+
+        if is_chrome:
+            if not chrome.get("chrome_app"):
+                signaux.append(Signal("chrome_app_absent", "Chrome annoncé sans chrome.app", 0.5))
+            if not chrome.get("chrome_loadTimes"):
+                signaux.append(Signal("loadTimes_absent", "Chrome annoncé sans chrome.loadTimes()", 0.5))
+            elif chrome.get("loadTimes_keys") != self.LOADTIMES_CLES_ATTENDUES:
+                signaux.append(Signal(
+                    "loadTimes_incomplet",
+                    f"chrome.loadTimes() a des clés inattendues : {chrome.get('loadTimes_keys')}",
+                    0.5,
+                ))
+            if not chrome.get("chrome_csi"):
+                signaux.append(Signal("csi_absent", "Chrome annoncé sans chrome.csi()", 0.25))
+            if not chrome.get("runtime_PlatformOs"):
+                signaux.append(Signal("runtime_incomplet", "chrome.runtime sans PlatformOs (mock partiel)", 0.5))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurMediaCodecs:
+    """Vérifie que canPlayType retourne les bonnes valeurs pour les codecs propriétaires."""
+
+    name = "media-codecs"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        codecs = p.get("media_codecs") or {}
+        signaux: list[Signal] = []
+
+        if codecs.get("mp4_avc1") == "":
+            signaux.append(Signal("avc1_absent", "canPlayType H.264 = '' (headless sans codecs)", 0.5))
+        if codecs.get("audio_aac") == "":
+            signaux.append(Signal("aac_absent", "canPlayType AAC = ''", 0.25))
+        if codecs.get("canPlayType_natif") is False:
+            signaux.append(Signal("canPlayType_patche", "HTMLMediaElement.canPlayType patché", 0.5))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurLangues:
+    """Vérifie la cohérence des langues déclarées et la qualité du patch."""
+
+    name = "langues"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        lang = p.get("languages_test") or {}
+        documents = obs.documents
+        signaux: list[Signal] = []
+
+        if not lang.get("language_dans_languages"):
+            signaux.append(Signal(
+                "language_hors_languages",
+                "navigator.language absent de navigator.languages",
+                0.75,
+            ))
+        if lang.get("languages") and not lang.get("languages_gelees"):
+            signaux.append(Signal(
+                "languages_pas_gelees", "navigator.languages non gelé (Object.freeze manquant)", 0.25,
+            ))
+        if lang.get("languages_getter_natif") is False:
+            signaux.append(Signal("languages_patche", "navigator.languages a un getter non natif", 0.5))
+
+        if documents:
+            e = _entetes(documents[0])
+            accept_lang = e.get("accept-language", "").split(",")[0].split(";")[0].strip().lower()
+            js_lang = (lang.get("language") or "").lower()
+            if accept_lang and js_lang and accept_lang != js_lang:
+                signaux.append(Signal(
+                    "langue_http_js_divergente",
+                    f"Accept-Language principal {accept_lang} ≠ navigator.language {js_lang}",
+                    0.5,
+                ))
+
+        if lang.get("vendor") != "Google Inc.":
+            signaux.append(Signal("vendor_absent", f"navigator.vendor = '{lang.get('vendor')}'", 0.25))
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -727,6 +841,9 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurEmpreinteCanvas(),
         DetecteurIntegriteProprietes(),
         DetecteurCoherenceEnvironnement(),
+        DetecteurChromeApis(),
+        DetecteurMediaCodecs(),
+        DetecteurLangues(),
     )
 }
 

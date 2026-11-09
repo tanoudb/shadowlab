@@ -241,6 +241,103 @@ function timing() {
   };
 }
 
+function chromeApis() {
+  const r = {};
+  // chrome.app
+  try {
+    r.chrome_app = typeof window.chrome?.app !== 'undefined';
+    if (window.chrome?.app) {
+      r.chrome_app_isInstalled = window.chrome.app.isInstalled;
+      r.chrome_app_getDetails = typeof window.chrome.app.getDetails === 'function';
+      r.chrome_app_runningState = typeof window.chrome.app.runningState === 'function';
+    }
+  } catch (_) { /* ignore */ }
+  // chrome.loadTimes
+  try {
+    r.chrome_loadTimes = typeof window.chrome?.loadTimes === 'function';
+    if (window.chrome?.loadTimes) {
+      const lt = window.chrome.loadTimes();
+      r.loadTimes_keys = Object.keys(lt).sort();
+      r.loadTimes_requestTime_positif = lt.requestTime > 0;
+      r.loadTimes_connectionInfo = lt.connectionInfo;
+    }
+  } catch (_) { /* ignore */ }
+  // chrome.csi
+  try {
+    r.chrome_csi = typeof window.chrome?.csi === 'function';
+    if (window.chrome?.csi) {
+      const csi = window.chrome.csi();
+      r.csi_keys = Object.keys(csi).sort();
+      r.csi_pageT_positif = csi.pageT > 0;
+    }
+  } catch (_) { /* ignore */ }
+  // chrome.runtime
+  try {
+    r.chrome_runtime = typeof window.chrome?.runtime !== 'undefined';
+    if (window.chrome?.runtime) {
+      r.runtime_connect = typeof window.chrome.runtime.connect === 'function';
+      r.runtime_sendMessage = typeof window.chrome.runtime.sendMessage === 'function';
+      r.runtime_PlatformOs = typeof window.chrome.runtime.PlatformOs !== 'undefined';
+    }
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function mediaCodecs() {
+  const r = {};
+  try {
+    const v = document.createElement('video');
+    r.mp4_avc1 = v.canPlayType('video/mp4; codecs="avc1.42E01E"');
+    r.audio_aac = v.canPlayType('audio/aac');
+    r.audio_mpeg = v.canPlayType('audio/mpeg');
+    r.audio_xm4a = v.canPlayType('audio/x-m4a');
+    r.canPlayType_natif = /\[native code\]/.test(HTMLMediaElement.prototype.canPlayType.toString());
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function iframeTest() {
+  const r = {};
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.srcdoc = '<html></html>';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    setTimeout(() => {
+      try {
+        r.contentWindow_existe = !!iframe.contentWindow;
+        if (iframe.contentWindow) {
+          r.iframe_chrome = typeof iframe.contentWindow.chrome !== 'undefined';
+          r.iframe_self_pas_top = iframe.contentWindow.self !== window.top;
+        }
+      } catch (_) { /* ignore */ }
+      iframe.remove();
+    }, 100);
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function languagesTest() {
+  const r = {};
+  try {
+    r.languages = Array.from(navigator.languages || []);
+    r.language = navigator.language;
+    r.languages_gelees = Object.isFrozen(navigator.languages);
+    const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'languages');
+    r.languages_sur_prototype = !!desc;
+    if (desc && desc.get) {
+      r.languages_getter_natif = /\[native code\]/.test(desc.get.toString());
+    }
+    // Cohérence language ∈ languages
+    r.language_dans_languages = navigator.languages?.includes(navigator.language);
+  } catch (_) { /* ignore */ }
+  // vendor
+  try {
+    r.vendor = navigator.vendor;
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
 async function collecter() {
   const nav = navigator;
   return {
@@ -279,6 +376,10 @@ async function collecter() {
     prototypes: prototypes(),
     integrite: integrite(),
     timing: timing(),
+    chrome_apis: chromeApis(),
+    media_codecs: mediaCodecs(),
+    iframe_test: iframeTest(),
+    languages_test: languagesTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),

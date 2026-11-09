@@ -207,7 +207,7 @@ class TestFurtivite:
 
         p = generer_profil("test-furtif")
         scripts = scripts_furtivite(p)
-        assert len(scripts) == 6  # profil + navigateur + environnement + canvas + webgl + audio
+        assert len(scripts) == 9  # profil + nav + iframes + env + canvas + webgl + audio + codecs + polices
 
     def test_scripts_contiennent_profil(self):
         from shadowlab.engines.noezia.furtivite.patches import scripts_furtivite
@@ -224,7 +224,7 @@ class TestFurtivite:
 
         p = generer_profil("test-selective")
         scripts = scripts_furtivite(p, canvas=False, audio=False)
-        assert len(scripts) == 4  # profil + navigateur + environnement + webgl
+        assert len(scripts) == 7  # profil + navigateur + iframes + environnement + webgl + codecs + polices
 
 
 # ── Moteur (sans navigateur) ──────────────────────────────────────────
@@ -408,8 +408,8 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_12_detecteurs(self):
+    def test_registre_15_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 12
+        assert len(r) == 15

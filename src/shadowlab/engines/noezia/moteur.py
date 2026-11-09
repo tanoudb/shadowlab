@@ -157,6 +157,16 @@ class DriverNoezia(Driver):
         self._navigateur = self._pw.chromium.launch(
             headless=self._config.headless,
             proxy=verrou,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--enable-features=NetworkService,NetworkServiceInProcess",
+            ],
+            ignore_default_args=[
+                "--disable-extensions",
+                "--disable-default-apps",
+                "--disable-component-extensions-with-background-pages",
+                "--enable-automation",
+            ],
         )
 
     def close(self) -> None:

@@ -50,6 +50,9 @@ def scripts_furtivite(
     audio: bool = True,
     navigateur: bool = True,
     environnement: bool = True,
+    iframes: bool = True,
+    codecs: bool = True,
+    polices: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -60,6 +63,9 @@ def scripts_furtivite(
 
     if navigateur:
         scripts.append(_charger_script("navigateur.js"))
+
+    if iframes:
+        scripts.append(_charger_script("iframes.js"))
 
     if environnement:
         scripts.append(_charger_script("environnement.js"))
@@ -72,6 +78,12 @@ def scripts_furtivite(
 
     if audio:
         scripts.append(_charger_script("audio.js"))
+
+    if codecs:
+        scripts.append(_charger_script("codecs.js"))
+
+    if polices:
+        scripts.append(_charger_script("polices.js"))
 
     return scripts
 

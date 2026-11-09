@@ -83,3 +83,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   nouveau détecteur est une épreuve que le moteur doit passer, et chaque évasion réussie valide la qualité
   du spoofing. Les propriétés navigator passent sur `Navigator.prototype` (pas l'instance) et les dimensions
   écran sur `Screen.prototype` pour reproduire la vraie chaîne de prototype de Chrome.
+- **D-24 — 09/11/2026 — NOEZIA v5 : intégration des techniques de puppeteer-extra-plugin-stealth.** Plutôt
+  que de forker littéralement les projets concurrents, on prend les techniques de puppeteer-stealth (15 modules
+  d'évasion étudiés) et on les réécrit pour l'architecture natif()/NOEZIA_PROFIL de NOEZIA. 3 nouveaux scripts
+  (iframes.js, codecs.js, polices.js), navigateur.js enrichi (+chrome.app, +chrome.loadTimes, +chrome.runtime
+  complet, +navigator.languages gelé). Args de lancement Chromium durcis (disable-blink-features, suppression
+  flags d'automation). 3 nouveaux détecteurs Arena pour valider (chrome-apis, media-codecs, langues). NOEZIA
+  passe de ~1 900 à 2 674 lignes, 8 scripts de furtivité au lieu de 5, 15 détecteurs Arena au lieu de 12.

@@ -6,6 +6,46 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-09 — Claude (Opus 4.6) — NOEZIA v5 : intégration techniques concurrents + Arena 15 détecteurs
+
+### Fait
+- **3 nouveaux scripts furtivité** intégrés depuis puppeteer-extra-plugin-stealth :
+  - `iframes.js` — proxy iframe.contentWindow pour que window.chrome existe dans les iframes srcdoc
+  - `codecs.js` — canPlayType retourne "probably" pour H.264/AAC (headless ne supporte pas les codecs propriétaires)
+  - `polices.js` — défense font fingerprinting (brouillage measureText, filtrage FontFaceSet.check par OS)
+- **navigateur.js enrichi** (149→253 lignes) : +chrome.app (mock complet), +chrome.loadTimes (PerformanceTiming),
+  +chrome.runtime (full Proxy avec messages d'erreur réalistes, PlatformOs/OnInstalledReason/etc.),
+  +navigator.languages (gelé, sur prototype), +navigator.vendor
+- **moteur.py** : args de lancement `--disable-blink-features=AutomationControlled`, `--enable-features=NetworkService`,
+  `ignore_default_args` retire `--disable-extensions`, `--disable-default-apps`, `--enable-automation`
+- **patches.py** étendu : 9 scripts dans le pipeline (profil + nav + iframes + env + canvas + webgl + audio + codecs + polices)
+- **3 nouveaux détecteurs Arena** : `chrome-apis` (chrome.app/loadTimes/csi/runtime), `media-codecs` (canPlayType),
+  `langues` (cohérence language/languages/Accept-Language, vendor, freeze). Total : 15 détecteurs.
+- **observateur.js** enrichi : collecte chrome_apis, media_codecs, iframe_test, languages_test
+- NOEZIA passe de ~1 900 à **2 674 lignes** (+41%)
+- 248 tests verts, lint propre
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/furtivite/iframes.js` (nouveau)
+- `src/shadowlab/engines/noezia/furtivite/codecs.js` (nouveau)
+- `src/shadowlab/engines/noezia/furtivite/polices.js` (nouveau)
+- `src/shadowlab/engines/noezia/furtivite/navigateur.js` (enrichi)
+- `src/shadowlab/engines/noezia/furtivite/patches.py` (3 scripts ajoutés)
+- `src/shadowlab/engines/noezia/moteur.py` (args lancement)
+- `src/shadowlab/detection.py` (3 détecteurs)
+- `src/shadowlab/site/static/observateur.js` (4 collectes)
+- `tests/test_noezia_v4.py` (compteurs mis à jour)
+- `configs/experiments/noezia-v5-validation.yaml` (nouveau)
+
+### Décisions
+- Techniques intégrées depuis puppeteer-extra-plugin-stealth : adaptées à l'architecture natif() de NOEZIA
+- Pas de fork littéral : on prend les techniques et on les réécrit pour notre pipeline d'injection
+
+### Reste
+- Campagne v5 en cours (108 passages)
+- Font enumeration poussée (CSS media queries, Intl API) : prochaine itération
+- sourceURL stripping : à vérifier si Patchright le gère déjà
+
 ## 2026-11-09 — Claude (Opus 4.6) — Durcissement Arena + NOEZIA : 12 détecteurs, environnement, prototype chain
 
 **Fait** : durcissement simultané de l'Arena et de NOEZIA v4. L'Arena a 2 nouveaux détecteurs (12 total). NOEZIA corrige la chaîne prototype et ajoute le spoofing d'environnement.

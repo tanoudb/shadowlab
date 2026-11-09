@@ -133,17 +133,121 @@
     });
   }
 
+  // ─── navigator.languages (sur le prototype, gelée) ───
+  if (P.locale) {
+    const langPrimaire = P.locale.replace('_', '-');
+    const langBase = langPrimaire.split('-')[0];
+    const langues = langPrimaire === langBase
+      ? Object.freeze([langPrimaire])
+      : Object.freeze([langPrimaire, langBase]);
+    Object.defineProperty(Navigator.prototype, 'languages', {
+      get: natif(() => langues, 'get languages'), configurable: true,
+    });
+    Object.defineProperty(Navigator.prototype, 'language', {
+      get: natif(() => langPrimaire, 'get language'), configurable: true,
+    });
+  }
+
+  // ─── navigator.vendor ───
+  Object.defineProperty(Navigator.prototype, 'vendor', {
+    get: natif(() => 'Google Inc.', 'get vendor'), configurable: true,
+  });
+
   // ─── window.chrome ───
   if (!window.chrome) window.chrome = {};
-  if (!window.chrome.runtime) {
-    window.chrome.runtime = {
-      connect: natif(function connect() { return {}; }, 'connect'),
-      sendMessage: natif(function sendMessage() {}, 'sendMessage'),
+
+  // chrome.app — mock complet (absent en headless)
+  if (!window.chrome.app) {
+    const InstallState = {DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed'};
+    const RunningState = {CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running'};
+    window.chrome.app = {
+      isInstalled: false,
+      InstallState,
+      RunningState,
+      getDetails: natif(function getDetails() { return null; }, 'getDetails'),
+      getIsInstalled: natif(function getIsInstalled() { return false; }, 'getIsInstalled'),
+      runningState: natif(function runningState() { return 'cannot_run'; }, 'runningState'),
     };
   }
+
+  // chrome.runtime — connect/sendMessage avec Proxy et messages d'erreur réalistes
+  if (!window.chrome.runtime || !window.chrome.runtime.id) {
+    const MSG_NO_EXT = 'Could not establish connection. Receiving end does not exist.';
+    const makePort = () => {
+      const port = {
+        name: '', sender: undefined,
+        disconnect: natif(function disconnect() {}, 'disconnect'),
+        onDisconnect: {addListener: natif(function addListener() {}, 'addListener'),
+                       dispatch: natif(function dispatch() {}, 'dispatch'),
+                       hasListener: natif(function hasListener() { return false; }, 'hasListener'),
+                       hasListeners: natif(function hasListeners() { return false; }, 'hasListeners'),
+                       removeListener: natif(function removeListener() {}, 'removeListener')},
+        onMessage: {addListener: natif(function addListener() {}, 'addListener'),
+                    dispatch: natif(function dispatch() {}, 'dispatch'),
+                    hasListener: natif(function hasListener() { return false; }, 'hasListener'),
+                    hasListeners: natif(function hasListeners() { return false; }, 'hasListeners'),
+                    removeListener: natif(function removeListener() {}, 'removeListener')},
+        postMessage: natif(function postMessage() { throw new Error(MSG_NO_EXT); }, 'postMessage'),
+      };
+      return port;
+    };
+    window.chrome.runtime = {
+      OnInstalledReason: {CHROME_UPDATE: 'chrome_update', INSTALL: 'install',
+                          SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update'},
+      OnRestartRequiredReason: {APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic'},
+      PlatformArch: {ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64'},
+      PlatformNaclArch: {ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64'},
+      PlatformOs: {ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win'},
+      RequestUpdateCheckStatus: {NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available'},
+      connect: natif(function connect(_extId) { return makePort(); }, 'connect'),
+      sendMessage: natif(function sendMessage(_id, _msg, _opts, cb) {
+        if (typeof cb === 'function') cb(undefined);
+      }, 'sendMessage'),
+      id: undefined,
+    };
+  }
+
+  // chrome.csi — version complète basée sur PerformanceTiming
   if (!window.chrome.csi) {
     window.chrome.csi = natif(function csi() {
-      return {onloadT: Date.now(), startE: Date.now() - 300, pageT: 300, tran: 15};
+      const t = window.performance && window.performance.timing;
+      if (!t) return {onloadT: Date.now(), startE: Date.now() - 300, pageT: 300, tran: 15};
+      return {
+        onloadT: t.domContentLoadedEventEnd || Date.now(),
+        startE: t.navigationStart || (Date.now() - 300),
+        pageT: Date.now() - (t.navigationStart || (Date.now() - 300)),
+        tran: 15,
+      };
     }, 'csi');
+  }
+
+  // chrome.loadTimes — mock complet basé sur PerformanceTiming
+  if (!window.chrome.loadTimes) {
+    window.chrome.loadTimes = natif(function loadTimes() {
+      const t = window.performance && window.performance.timing;
+      if (!t) return {
+        commitLoadTime: Date.now() / 1000, connectionInfo: 'http/1.1',
+        finishDocumentLoadTime: 0, finishLoadTime: 0, firstPaintAfterLoadTime: 0,
+        firstPaintTime: 0, navigationType: 'Other', npnNegotiatedProtocol: 'unknown',
+        requestTime: 0, startLoadTime: 0, wasAlternateProtocolAvailable: false,
+        wasFetchedViaSpdy: false, wasNpnNegotiated: false,
+      };
+      const nav = t.navigationStart / 1000;
+      return {
+        commitLoadTime: (t.responseStart || Date.now()) / 1000,
+        connectionInfo: 'http/1.1',
+        finishDocumentLoadTime: (t.domContentLoadedEventEnd || Date.now()) / 1000,
+        finishLoadTime: (t.loadEventEnd || Date.now()) / 1000,
+        firstPaintAfterLoadTime: 0,
+        firstPaintTime: (t.domContentLoadedEventEnd || Date.now()) / 1000,
+        navigationType: t.redirectCount > 0 ? 'BackForward' : 'Other',
+        npnNegotiatedProtocol: 'h2',
+        requestTime: nav,
+        startLoadTime: nav,
+        wasAlternateProtocolAvailable: false,
+        wasFetchedViaSpdy: true,
+        wasNpnNegotiated: true,
+      };
+    }, 'loadTimes');
   }
 })();
