@@ -1,0 +1,28 @@
+# Campagne comparative : NOEZIA v4 vs v3 vs top moteurs (6 niveaux Arena durcie)
+experiment:
+  name: v4_comparative
+  description: "NOEZIA v4 modulaire vs v3 wrapper vs meilleurs moteurs — Arena durcie (10 détecteurs)"
+  environment: local
+  engines:
+    - noezia
+    - noezia-experimental
+    - scrapling-furtif
+    - patchright
+    - playwright
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - pagination
+  repetitions: 2
+  seed: 20261109
+  output: [json]
