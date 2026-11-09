@@ -705,6 +705,59 @@ function stackGetterTest() {
   return r;
 }
 
+function workerConsistencyTest() {
+  return new Promise(resolve => {
+    const r = { available: false };
+    try {
+      const code = `
+        self.onmessage = function() {
+          self.postMessage({
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemory: navigator.deviceMemory,
+            platform: navigator.platform,
+            userAgent: navigator.userAgent,
+          });
+        };
+      `;
+      const blob = new Blob([code], {type: 'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      const w = new Worker(url);
+      const timeout = setTimeout(() => { w.terminate(); resolve(r); }, 3000);
+      w.onmessage = function(e) {
+        clearTimeout(timeout);
+        r.available = true;
+        r.worker_hardwareConcurrency = e.data.hardwareConcurrency;
+        r.worker_deviceMemory = e.data.deviceMemory;
+        r.worker_platform = e.data.platform;
+        r.main_hardwareConcurrency = navigator.hardwareConcurrency;
+        r.main_deviceMemory = navigator.deviceMemory;
+        r.main_platform = navigator.platform;
+        r.hc_match = e.data.hardwareConcurrency === navigator.hardwareConcurrency;
+        r.dm_match = e.data.deviceMemory === navigator.deviceMemory;
+        r.platform_match = e.data.platform === navigator.platform;
+        w.terminate();
+        URL.revokeObjectURL(url);
+        resolve(r);
+      };
+      w.onerror = function() { clearTimeout(timeout); w.terminate(); resolve(r); };
+      w.postMessage('go');
+    } catch(_) { resolve(r); }
+  });
+}
+
+function connectionDynamicTest() {
+  const r = { available: false };
+  if (!navigator.connection) return r;
+  r.available = true;
+  const c = navigator.connection;
+  r.rtt_1 = c.rtt;
+  r.downlink_1 = c.downlink;
+  r.effectiveType = c.effectiveType;
+  r.rtt_type = typeof c.rtt;
+  r.downlink_type = typeof c.downlink;
+  return r;
+}
+
 function rafTimingTest() {
   return new Promise(resolve => {
     const r = {};
@@ -784,6 +837,8 @@ async function collecter() {
     canvas_consistency: canvasConsistencyTest(),
     stack_getter: stackGetterTest(),
     raf_timing: await rafTimingTest(),
+    worker_consistency: await workerConsistencyTest(),
+    connection_dynamic: connectionDynamicTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),

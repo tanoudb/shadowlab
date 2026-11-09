@@ -127,28 +127,49 @@
     }, 'getBattery');
   }
 
-  // ─── Connection API : profil réseau crédible, variable par profil ───
+  // ─── Connection API : profil réseau crédible, DYNAMIQUE ───
+  // Un vrai navigateur fait varier rtt/downlink au fil du temps (fenêtre glissante).
+  // Valeurs statiques = signal de bot. On simule la dérive naturelle.
   if (navigator.connection) {
-    const conn = navigator.connection;
-    let _s = (P.canvas_seed || 42) >>> 0;
-    function _xr() { _s ^= _s << 13; _s ^= _s >>> 17; _s ^= _s << 5; return (_s >>> 0) / 0xFFFFFFFF; }
-    const rttVals = [50, 50, 50, 100, 100, 150];
-    const dlVals = [10, 10, 8.65, 5.6, 3.4, 1.5];
-    const idx = Math.floor(_xr() * rttVals.length);
-    const connRtt = rttVals[idx];
-    const connDl = dlVals[idx];
-    const connType = connRtt <= 100 ? '4g' : '3g';
+    let _cs = (P.canvas_seed || 42) >>> 0;
+    function _cxr() { _cs ^= _cs << 13; _cs ^= _cs >>> 17; _cs ^= _cs << 5; return (_cs >>> 0) / 0xFFFFFFFF; }
+    const baseRttChoices = [50, 50, 50, 100, 100, 150];
+    const baseDlChoices  = [10, 10, 8.65, 5.6, 3.4, 1.5];
+    const cidx = Math.floor(_cxr() * baseRttChoices.length);
+    const baseRtt = baseRttChoices[cidx];
+    const baseDl  = baseDlChoices[cidx];
+    const connType = baseRtt <= 100 ? '4g' : '3g';
+
+    let _lastRtt = baseRtt, _lastDl = baseDl, _lastT = Date.now();
+    function _connJitter() {
+      const now = Date.now();
+      if (now - _lastT > 800) {
+        _cs ^= _cs << 13; _cs ^= _cs >>> 17; _cs ^= _cs << 5;
+        const r = (_cs >>> 0) / 0xFFFFFFFF;
+        _lastRtt = Math.round(baseRtt + (r - 0.5) * 50);
+        if (_lastRtt < 0) _lastRtt = 0;
+        _lastRtt = Math.round(_lastRtt / 25) * 25;
+        _cs ^= _cs << 13; _cs ^= _cs >>> 17; _cs ^= _cs << 5;
+        const r2 = (_cs >>> 0) / 0xFFFFFFFF;
+        _lastDl = Math.round((baseDl + (r2 - 0.5) * 2) * 100) / 100;
+        if (_lastDl < 0.3) _lastDl = 0.3;
+        _lastDl = Math.round(_lastDl * 20) / 20;
+        _lastT = now;
+      }
+    }
+
+    const NI = Object.getPrototypeOf(navigator.connection);
     try {
-      Object.defineProperty(conn, 'effectiveType', {
+      Object.defineProperty(NI, 'effectiveType', {
         get: natif(() => connType, 'get effectiveType'), configurable: true,
       });
-      Object.defineProperty(conn, 'rtt', {
-        get: natif(() => connRtt, 'get rtt'), configurable: true,
+      Object.defineProperty(NI, 'rtt', {
+        get: natif(() => { _connJitter(); return _lastRtt; }, 'get rtt'), configurable: true,
       });
-      Object.defineProperty(conn, 'downlink', {
-        get: natif(() => connDl, 'get downlink'), configurable: true,
+      Object.defineProperty(NI, 'downlink', {
+        get: natif(() => { _connJitter(); return _lastDl; }, 'get downlink'), configurable: true,
       });
-      Object.defineProperty(conn, 'saveData', {
+      Object.defineProperty(NI, 'saveData', {
         get: natif(() => false, 'get saveData'), configurable: true,
       });
     } catch(e) {}

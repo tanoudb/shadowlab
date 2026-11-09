@@ -31,9 +31,7 @@ def script_profil(profil: ProfilNavigateur) -> str:
         "hardware_concurrency": profil.hardware_concurrency,
         "device_memory": profil.device_memory,
         "platform": profil.platform,
-        "platform_name": {"MacIntel": "macOS", "Win32": "Windows", "Linux x86_64": "Linux"}.get(
-            profil.platform, profil.platform
-        ),
+        "platform_name": profil.platform_name,
         "fonts": profil.fonts,
         "timezone": profil.timezone,
         "screen_width": profil.screen_width,
@@ -56,6 +54,7 @@ def scripts_furtivite(
     polices: bool = True,
     headless: bool = True,
     automation: bool = True,
+    workers: bool = True,
 ) -> list[str]:
     """Retourne la liste ordonnée des scripts à injecter.
 
@@ -90,6 +89,9 @@ def scripts_furtivite(
 
     if headless:
         scripts.append(_charger_script("headless.js"))
+
+    if workers:
+        scripts.append(_charger_script("workers.js"))
 
     if automation:
         scripts.append(_charger_script("automation.js"))

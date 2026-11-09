@@ -1498,6 +1498,100 @@ class DetecteurRAFTiming:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurWorkerConsistency:
+    """Compare navigator dans un Worker vs main thread : toute divergence = bot."""
+
+    name = "worker-consistency"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        wc = p.get("worker_consistency") or {}
+        signaux: list[Signal] = []
+
+        if not wc.get("available"):
+            return _indetermine(
+                self.name, self.version, "worker_indisponible", "Worker non supporté ou timeout"
+            )
+
+        if wc.get("hc_match") is False:
+            signaux.append(
+                Signal(
+                    "worker_hc_mismatch",
+                    f"hardwareConcurrency main={wc.get('main_hardwareConcurrency')} "
+                    f"vs worker={wc.get('worker_hardwareConcurrency')}",
+                    1.0,
+                )
+            )
+
+        if wc.get("dm_match") is False:
+            signaux.append(
+                Signal(
+                    "worker_dm_mismatch",
+                    f"deviceMemory main={wc.get('main_deviceMemory')} "
+                    f"vs worker={wc.get('worker_deviceMemory')}",
+                    0.8,
+                )
+            )
+
+        if wc.get("platform_match") is False:
+            signaux.append(
+                Signal(
+                    "worker_platform_mismatch",
+                    f"platform main={wc.get('main_platform')} "
+                    f"vs worker={wc.get('worker_platform')}",
+                    0.9,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurConnectionDynamic:
+    """Vérifie la cohérence de l'API NetworkInformation."""
+
+    name = "connection-dynamic"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        cd = p.get("connection_dynamic") or {}
+        signaux: list[Signal] = []
+
+        if not cd.get("available"):
+            return _indetermine(
+                self.name, self.version, "api_absente", "NetworkInformation non disponible"
+            )
+
+        if cd.get("rtt_type") != "number":
+            signaux.append(Signal("rtt_non_number", f"rtt type={cd.get('rtt_type')}", 0.5))
+        if cd.get("downlink_type") != "number":
+            signaux.append(
+                Signal("downlink_non_number", f"downlink type={cd.get('downlink_type')}", 0.5)
+            )
+
+        rtt = cd.get("rtt_1")
+        if isinstance(rtt, (int, float)):
+            if rtt == 0:
+                signaux.append(
+                    Signal("rtt_zero", "rtt=0 (valeur par défaut headless)", 0.4)
+                )
+            if rtt > 500:
+                signaux.append(
+                    Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3)
+                )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1539,6 +1633,8 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurCanvasConsistency(),
         DetecteurStackGetter(),
         DetecteurRAFTiming(),
+        DetecteurWorkerConsistency(),
+        DetecteurConnectionDynamic(),
     )
 }
 
