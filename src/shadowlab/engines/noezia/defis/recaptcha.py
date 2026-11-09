@@ -13,7 +13,7 @@ import time
 
 log = logging.getLogger(__name__)
 
-TIMEOUT_RECAPTCHA_S = 15.0
+TIMEOUT_RECAPTCHA_S = 20.0
 SELECTEUR_IFRAME = 'iframe[src*="recaptcha"]'
 SELECTEUR_FORM = 'form[action*="recaptcha/verifier"]'
 
@@ -91,6 +91,17 @@ def resoudre(page, souris=None, timeout: float = TIMEOUT_RECAPTCHA_S) -> bool:
         page.click(f'{SELECTEUR_FORM} button[type="submit"]')
     except Exception:
         page.eval_on_selector(SELECTEUR_FORM, "f => f.submit()")
+
+    try:
+        page.wait_for_url(lambda u: "/lab/recaptcha" not in u, timeout=8000)
+    except Exception:
+        log.debug("reCAPTCHA : retry après premier submit ignoré")
+        try:
+            page.click(f'{SELECTEUR_FORM} button[type="submit"]')
+            page.wait_for_url(lambda u: "/lab/recaptcha" not in u, timeout=5000)
+        except Exception:
+            log.warning("reCAPTCHA : toujours sur la page après retry")
+            return False
 
     log.debug("Formulaire reCAPTCHA soumis")
     return True

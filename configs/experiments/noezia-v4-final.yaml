@@ -1,0 +1,29 @@
+# Validation finale NOEZIA v4 : toutes corrections appliquées
+# - prepareStackTrace retiré (indétectable)
+# - Comportement oisif (pause_reflexion entre mouvements)
+# - Retry challenges Turnstile/reCAPTCHA
+# - Arena reconstruite (exclusion WAF 942430/431)
+# - Profils corrigés (hwc puissance 2, deviceMemory ≤ 8)
+experiment:
+  name: noezia_v4_final
+  description: "NOEZIA v4 finale : 6 niveaux, toutes corrections"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - pagination
+  repetitions: 3
+  seed: 20261109
+  output: [json]

@@ -14,7 +14,7 @@ import time
 
 log = logging.getLogger(__name__)
 
-TIMEOUT_TURNSTILE_S = 15.0
+TIMEOUT_TURNSTILE_S = 20.0
 SELECTEUR_IFRAME = 'iframe[src*="challenges.cloudflare.com"]'
 SELECTEUR_FORM = 'form[action*="turnstile/verifier"]'
 
@@ -59,8 +59,19 @@ def resoudre(page, souris=None, timeout: float = TIMEOUT_TURNSTILE_S) -> bool:
             time.sleep(0.05 + __import__("random").uniform(0.02, 0.08))
         page.click(f'{SELECTEUR_FORM} button[type="submit"]')
     except Exception:
-        # Fallback : soumettre via JS
         page.eval_on_selector(SELECTEUR_FORM, "f => f.submit()")
+
+    # Vérifier que la soumission a bien redirigé (pas restée sur la page Turnstile)
+    try:
+        page.wait_for_url(lambda u: "/lab/turnstile" not in u, timeout=8000)
+    except Exception:
+        log.debug("Turnstile : retry après premier submit ignoré")
+        try:
+            page.click(f'{SELECTEUR_FORM} button[type="submit"]')
+            page.wait_for_url(lambda u: "/lab/turnstile" not in u, timeout=5000)
+        except Exception:
+            log.warning("Turnstile : toujours sur la page après retry")
+            return False
 
     log.debug("Formulaire Turnstile soumis")
     return True

@@ -318,8 +318,14 @@ class DriverNoezia(Driver):
             if self._config.defilement.actif and self._defilement:
                 self._defilement.defiler_bas(random.randint(60, 350))
                 time.sleep(random.uniform(0.1, 0.4))
-                if random.random() < 0.35:
+            # Comportement oisif : 2-4 micro-interactions (lecture + exploration)
+            if self._config.souris.actif and self._souris:
+                n_idle = random.randint(2, 4)
+                for _ in range(n_idle):
+                    tempo.pause_reflexion()
                     self._souris.mouvement_aleatoire()
+                    if random.random() < 0.3 and self._defilement:
+                        self._defilement.defiler_bas(random.randint(40, 200))
         except Exception:
             pass
 

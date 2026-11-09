@@ -1,11 +1,17 @@
-# Mini-campagne NOEZIA × nv06 post-fix WAF (942430+942431 exclus)
+# Validation complète NOEZIA v4 post-durcissement
+# Stack trace masqué, profils corrigés (hwc puissance de 2, device_memory ≤ 8)
 experiment:
-  name: noezia_nv06_postfix
-  description: "NOEZIA v4 au niveau 06 après correction WAF 942430/942431"
+  name: noezia_v4_validation
+  description: "NOEZIA v4 complète : 6 niveaux, profils corrigés, stack trace masqué"
   environment: local
   engines:
     - noezia
   protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
     - "06"
   scenarios:
     - static_html
@@ -14,6 +20,6 @@ experiment:
     - session_cookies
     - fingerprint_observation
     - pagination
-  repetitions: 3
+  repetitions: 2
   seed: 20261109
   output: [json]

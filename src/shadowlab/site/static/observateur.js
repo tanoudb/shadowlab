@@ -207,6 +207,11 @@ function integrite() {
     const stack = (e.stack || '').split('\n').slice(0, 5);
     r.toDataURL_error_stack = stack.map((l) => l.trim().slice(0, 120));
   }
+  // Error.prepareStackTrace surchargé ? (V8 : utilisé pour filtrer les stack traces)
+  try {
+    r.prepareStackTrace_modifie = Error.prepareStackTrace !== undefined
+      && typeof Error.prepareStackTrace === 'function';
+  } catch (_) { /* ignore */ }
   // Vérifier si outerWidth et outerHeight sont sur window (pas définis par un script)
   try {
     const descOW = Object.getOwnPropertyDescriptor(window, 'outerWidth');

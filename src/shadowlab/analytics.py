@@ -29,7 +29,7 @@ def wilson(succes: int, total: int) -> dict[str, float] | None:
     p = succes / total
     denominateur = 1 + Z95**2 / total
     centre = (p + Z95**2 / (2 * total)) / denominateur
-    marge = Z95 * math.sqrt(p * (1 - p) / total + Z95**2 / (4 * total**2)) / denominateur
+    marge = Z95 * math.sqrt(max(0.0, p * (1 - p) / total + Z95**2 / (4 * total**2))) / denominateur
     return {"taux": round(p, 4), "bas": round(max(0.0, centre - marge), 4), "haut": round(min(1.0, centre + marge), 4)}
 
 

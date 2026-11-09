@@ -1,0 +1,20 @@
+# Revalidation NOEZIA v4 : niveaux 05-06 après rebuild Arena (exclusion WAF 942430)
+experiment:
+  name: noezia_v4_revalidation
+  description: "NOEZIA v4 nv05+06 : Arena reconstruite avec exclusion WAF 942430/431"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - form_interaction
+    - session_cookies
+    - fingerprint_observation
+    - pagination
+  repetitions: 3
+  seed: 20261109
+  output: [json]

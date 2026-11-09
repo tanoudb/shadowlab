@@ -583,9 +583,20 @@ class DetecteurIntegriteProprietes:
         # Stack trace de toDataURL sur objet invalide : ne devrait PAS contenir de frames JS utilisateur
         stack = integ.get("toDataURL_error_stack") or []
         for frame in stack:
-            if frame and "at toDataURL" in frame and "native" not in frame.lower() and "<anonymous>" not in frame:
-                signaux.append(Signal("stack_toDataURL_js", f"frame JS dans stack toDataURL : {frame[:80]}", 0.75))
+            if frame and "at toDataURL" in frame and "native" not in frame.lower():
+                if "<anonymous>" in frame:
+                    msg = f"frame init script dans stack toDataURL : {frame[:80]}"
+                    signaux.append(Signal("stack_toDataURL_initscript", msg, 0.65))
+                else:
+                    signaux.append(Signal("stack_toDataURL_js", f"frame JS dans stack toDataURL : {frame[:80]}", 0.75))
                 break
+        # Stack vide ou anormalement courte : Error.prepareStackTrace filtré ?
+        if stack and len(stack) < 2 and not any("native" in f.lower() for f in stack if f):
+            signaux.append(Signal("stack_filtre", "stack trace anormalement courte (possible filtrage)", 0.45))
+
+        # Error.prepareStackTrace surchargé
+        if integ.get("prepareStackTrace_modifie") is True:
+            signaux.append(Signal("prepareStackTrace_patche", "Error.prepareStackTrace surchargé", 0.40))
 
         # outerWidth redéfini avec un getter non natif
         if integ.get("outerWidth_propre") is True and integ.get("outerWidth_getter_natif") is False:

@@ -52,14 +52,25 @@
     } catch(e) { return null; }
   }
 
+  function _nettoyer_stack(e) {
+    if (e && e.stack) {
+      e.stack = e.stack.split('\n').filter(l => !l.includes('<anonymous>')).join('\n');
+    }
+    return e;
+  }
+
   HTMLCanvasElement.prototype.toDataURL = natif(function toDataURL() {
-    const b = bruiter(this);
-    return origToDataURL.apply(b || this, arguments);
+    try {
+      const b = bruiter(this);
+      return origToDataURL.apply(b || this, arguments);
+    } catch(e) { throw _nettoyer_stack(e); }
   }, 'toDataURL');
 
   HTMLCanvasElement.prototype.toBlob = natif(function toBlob() {
-    const b = bruiter(this);
-    return origToBlob.apply(b || this, arguments);
+    try {
+      const b = bruiter(this);
+      return origToBlob.apply(b || this, arguments);
+    } catch(e) { throw _nettoyer_stack(e); }
   }, 'toBlob');
 
   // getImageData aussi, pour les détecteurs qui lisent les pixels directement

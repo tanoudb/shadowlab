@@ -54,6 +54,48 @@ Niveau 05 : Turnstile non résolu (attendu — pas de solveur CAPTCHA). Niveau 0
 
 **Reste** : finir campagne #26, mini-campagne nv06 post-fix WAF, commit tout, push, puis continuer le durcissement.
 
+### Suite — Corrections post-campagne #27 + validation
+
+**Fait** : correction de 6 problèmes identifiés par les campagnes 26-27, rebuild Arena, validation campagnes 28-29.
+
+**Corrections appliquées** :
+1. **WAF rule 942430/431** : la règle d'exclusion 1013 dans `main.go` n'était pas dans le binaire Docker compilé. Fix : `shadowlab arena --reconstruire demarrer`. Vérifié avec `strings /waf | grep "id:101"`.
+2. **Error.prepareStackTrace** : l'override global dans `navigateur.js` était détectable (V8 ne le définit pas par défaut → `undefined !== undefined` = faux). **Retiré**. Le nettoyage de stack reste dans `canvas.js` via try/catch ciblé (`_nettoyer_stack()`).
+3. **Profils hwc/deviceMemory** (`generateur.py`) : hwc limité aux puissances de 2 `{4, 8, 16}`, deviceMemory aux valeurs Chrome valides `{4, 8}`.
+4. **Wilson interval** (`analytics.py`) : `max(0.0, ...)` pour éviter sqrt de nombre négatif en float.
+5. **Turnstile/reCAPTCHA retry** (`turnstile.py`, `recaptcha.py`) : timeout 15→20s, vérification post-submit avec retry si la page n'a pas redirigé.
+6. **Comportement oisif** (`moteur.py`) : 2-4 micro-interactions avec `pause_reflexion()` (médiane ~150ms, log-normale) entre les mouvements souris au chargement. Corrige le signal `pas_de_pause` du détecteur entropie-interaction (seuil 80ms).
+
+**Campagne #27** (72 passages, 6 niveaux, avant corrections WAF/challenges) :
+- nv01-04 : 100%
+- nv05 : 75% (3 Turnstile timeouts)
+- nv06 : 0% (WAF 942430 bloquait tout — binaire Docker sans exclusion)
+- **Total : 79%**
+
+**Campagne #28** (36 passages, nv05+06, post-rebuild Arena) :
+- nv05 : 7/18 (38%) — 7 `erreur_technique` = Arena rebuild mi-campagne (ERR_CONNECTION_REFUSED)
+- nv06 : **15/18 (83%)** — de 0% à 83% grâce au fix WAF. 3 échecs = pagination + Turnstile timeout
+- Le retry Turnstile/reCAPTCHA n'était pas actif (code rechargé après lancement des runs nv06)
+
+**Campagne #29** (108 passages, 6 niveaux × 6 scénarios × 3 reps, toutes corrections actives) :
+| Niveau | Réussite | Échecs |
+|--------|----------|--------|
+| 01     | 18/18 100% | — |
+| 02     | 18/18 100% | — |
+| 03     | 18/18 100% | — |
+| 04     | 18/18 100% | — |
+| 05     | 13/18  72% | 5× turnstile test key timeout (pagination, session_cookies) |
+| 06     | 15/18  83% | 3× turnstile test key timeout (pagination) |
+
+**Global : 100/108 (92%).** Zéro détection. Les 8 échecs sont exclusivement des timeouts
+d'auto-validation Turnstile (test keys, D-16) sur les scénarios multi-pages. Le moteur passe
+les 12 détecteurs Arena sans aucun signal de bot sur les 6 niveaux.
+
+**Comparaison C27 → C29** : nv06 passe de 0% (WAF 942430 bloquait tout) à 83%. Global 79% → 92%.
+
+**Fichiers modifiés** : `analytics.py`, `detection.py`, `canvas.js`, `moteur.py`, `generateur.py`, `observateur.js`, `turnstile.py`, `recaptcha.py`.
+**Configs créés** : `noezia-v4-revalidation.yaml`, `noezia-v4-final.yaml`.
+
 ---
 
 ## 2026-11-08 (nuit) — Claude (Opus 4.6) — NOEZIA v4 : moteur modulaire + durcissement Arena

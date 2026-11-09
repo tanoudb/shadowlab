@@ -182,15 +182,16 @@ WEBGL_EXTENSIONS = [
 ]
 
 HARDWARE_CONCURRENCY: dict[str, list[int]] = {
-    "macos": [8, 10, 12, 14, 16],
-    "windows": [4, 6, 8, 12, 16, 24],
-    "linux": [4, 8, 12, 16],
+    "macos": [8, 8, 8, 16, 16],
+    "windows": [4, 8, 8, 16, 16],
+    "linux": [4, 8, 8, 16],
 }
 
+# navigator.deviceMemory : valeurs Chrome valides (puissances de 2, max 8)
 DEVICE_MEMORY: dict[str, list[int]] = {
-    "macos": [8, 16, 32, 64],
-    "windows": [8, 16, 32, 64],
-    "linux": [8, 16, 32],
+    "macos": [4, 8, 8, 8],
+    "windows": [4, 8, 8, 8],
+    "linux": [4, 8, 8],
 }
 
 
