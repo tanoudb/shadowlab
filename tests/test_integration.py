@@ -93,3 +93,12 @@ def test_reproductibilite_bout_en_bout(reglages, tmp_path):
     assert len(seq_a) == 9  # 3 scénarios × 3 répétitions
     # Même plan (ordre scénario×répétition) ET mêmes résultats : reproductibilité réelle.
     assert seq_a == seq_b, f"résultats non reproductibles :\n{seq_a}\n{seq_b}"
+
+
+def test_recuperer_refuse_une_redirection_hors_perimetre(reglages):
+    """Browserless : une URL autorisée qui redirige hors périmètre est refusée (contrôle par saut)."""
+    from shadowlab.engines.noezia.rapide import recuperer
+
+    with campaigns.serveur_local(reglages):
+        with pytest.raises(DestinationRefusee):
+            recuperer(f"{reglages.url_site}/lab/sortie", hotes=("127.0.0.1", "localhost"), verifier_tls=False)
