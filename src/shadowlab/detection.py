@@ -1395,6 +1395,100 @@ class DetecteurPaintTiming:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurCanvasConsistency:
+    """Cohérence entre toDataURL et getImageData — un patch naïf produit des résultats différents."""
+
+    name = "canvas-consistency"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        cc = p.get("canvas_consistency") or {}
+        signaux: list[Signal] = []
+
+        if cc.get("toDataURL_stable") is False:
+            signaux.append(Signal("toDataURL_instable", "toDataURL() non déterministe entre appels", 0.8))
+
+        if cc.get("getImageData_stable") is False:
+            signaux.append(Signal("getImageData_instable", "getImageData() non déterministe entre appels", 0.8))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurStackGetter:
+    """Détecte la modification du getter Error.prototype.stack (filtrage de stack traces)."""
+
+    name = "stack-getter"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        sg = p.get("stack_getter") or {}
+        signaux: list[Signal] = []
+
+        if sg.get("stack_has_getter") and sg.get("stack_getter_natif") is False:
+            signaux.append(
+                Signal("stack_getter_patche", "Error.prototype.stack getter non natif", 0.5)
+            )
+
+        if sg.get("stack_has_patchright"):
+            signaux.append(Signal("stack_patchright", "patchright visible dans stack trace", 0.9))
+        if sg.get("stack_has_playwright"):
+            signaux.append(Signal("stack_playwright", "playwright visible dans stack trace", 0.9))
+
+        line_count = sg.get("stack_line_count")
+        if isinstance(line_count, int) and line_count < 2:
+            signaux.append(Signal("stack_trop_court", f"stack trace de {line_count} ligne(s)", 0.4))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurRAFTiming:
+    """Détecte les anomalies de requestAnimationFrame (timestamps fixes ou à 0 en headless)."""
+
+    name = "raf-timing"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        rt = p.get("raf_timing") or {}
+        signaux: list[Signal] = []
+
+        if rt.get("all_zero"):
+            signaux.append(
+                Signal("raf_all_zero", "tous les deltas rAF à 0 (headless sans vsync)", 0.6)
+            )
+
+        if rt.get("all_same") and not rt.get("all_zero"):
+            signaux.append(
+                Signal(
+                    "raf_all_same",
+                    f"tous les deltas rAF identiques ({rt.get('mean_delta')}ms)",
+                    0.4,
+                )
+            )
+
+        mean = rt.get("mean_delta")
+        if isinstance(mean, (int, float)) and mean > 0 and mean < 4:
+            signaux.append(
+                Signal("raf_trop_rapide", f"rAF moyen {mean}ms (< 4ms, pas de vsync)", 0.5)
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1433,6 +1527,9 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurPrototypeChain(),
         DetecteurTimingPrecision(),
         DetecteurPaintTiming(),
+        DetecteurCanvasConsistency(),
+        DetecteurStackGetter(),
+        DetecteurRAFTiming(),
     )
 }
 

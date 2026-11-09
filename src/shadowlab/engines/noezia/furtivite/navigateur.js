@@ -42,20 +42,25 @@
   // Exposer natif() pour les autres scripts
   window.__NOEZIA_NATIF__ = natif;
 
-  // ─── Filtrage des stack traces (masquer le mécanisme d'injection) ───
-  const _origPrepare = Error.prepareStackTrace;
+  // ─── Filtrage des stack traces via Error.prototype.stack getter ───
+  // On ne touche PAS à Error.prepareStackTrace (sa présence est détectable).
+  // À la place, on intercepte la lecture de .stack sur chaque Error.
   const _SUSPECTS = /patchright|playwright|puppeteer|__cdp|devtools|injected|chrome-extension:\/\//i;
-  Error.prepareStackTrace = function(err, stack) {
-    const filtre = stack.filter(frame => {
-      const fn = frame.getFileName() || '';
-      const src = frame.toString();
-      return !_SUSPECTS.test(fn) && !_SUSPECTS.test(src);
+  const _origStackDesc = Object.getOwnPropertyDescriptor(Error.prototype, 'stack')
+    || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Error.prototype), 'stack');
+  if (_origStackDesc && _origStackDesc.get) {
+    const _origGet = _origStackDesc.get;
+    const _filteredGet = natif(function get stack() {
+      const s = _origGet.call(this);
+      if (typeof s !== 'string') return s;
+      return s.split('\n').filter(l => !_SUSPECTS.test(l)).join('\n');
+    }, 'get stack');
+    Object.defineProperty(Error.prototype, 'stack', {
+      get: _filteredGet,
+      set: _origStackDesc.set,
+      configurable: true,
     });
-    if (_origPrepare) return _origPrepare(err, filtre.length ? filtre : stack);
-    return err.name + ': ' + err.message + '\n' +
-      (filtre.length ? filtre : stack).map(f => '    at ' + f.toString()).join('\n');
-  };
-  natif(Error.prepareStackTrace, 'prepareStackTrace');
+  }
 
   // ─── Plugins (4 viewers PDF) ───
   const pluginDefs = [

@@ -654,6 +654,78 @@ function performanceMemoryTest() {
   return r;
 }
 
+function canvasConsistencyTest() {
+  const r = {};
+  try {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#069';
+    ctx.fillRect(32, 0, 32, 32);
+    ctx.font = '14px Arial';
+    ctx.fillText('test', 2, 50);
+    const dataUrl1 = c.toDataURL();
+    const dataUrl2 = c.toDataURL();
+    r.toDataURL_stable = dataUrl1 === dataUrl2;
+    const img1 = ctx.getImageData(0, 0, 64, 64);
+    const img2 = ctx.getImageData(0, 0, 64, 64);
+    let same = true;
+    for (let i = 0; i < img1.data.length; i++) {
+      if (img1.data[i] !== img2.data[i]) { same = false; break; }
+    }
+    r.getImageData_stable = same;
+    // Vérifier que les mêmes pixels reviennent par les deux APIs
+    // (toDataURL encode en PNG, getImageData retourne les pixels bruts — pas directement comparable,
+    //  mais la stabilité de chaque API est le signal le plus fiable)
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function stackGetterTest() {
+  const r = {};
+  try {
+    const desc = Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
+    r.stack_has_getter = !!(desc && desc.get);
+    if (desc && desc.get) {
+      r.stack_getter_natif = /\[native code\]/.test(desc.get.toString());
+    }
+    const err = new Error('probe');
+    const stack = err.stack || '';
+    r.stack_has_patchright = /patchright/i.test(stack);
+    r.stack_has_playwright = /playwright/i.test(stack);
+    r.stack_has_anonymous = /<anonymous>/.test(stack);
+    r.stack_line_count = stack.split('\n').length;
+  } catch (_) { /* ignore */ }
+  return r;
+}
+
+function rafTimingTest() {
+  return new Promise(resolve => {
+    const r = {};
+    const deltas = [];
+    let prev = null;
+    let count = 0;
+    const max = 6;
+    function frame(ts) {
+      if (prev !== null) deltas.push(ts - prev);
+      prev = ts;
+      count++;
+      if (count < max) {
+        requestAnimationFrame(frame);
+      } else {
+        r.deltas = deltas.map(d => Math.round(d * 100) / 100);
+        r.mean_delta = deltas.length ? Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length * 100) / 100 : 0;
+        r.all_zero = deltas.every(d => d === 0);
+        r.all_same = deltas.length > 1 && deltas.every(d => d === deltas[0]);
+        resolve(r);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
 async function collecter() {
   const nav = navigator;
   return {
@@ -705,6 +777,9 @@ async function collecter() {
     css_media: cssMediaTest(),
     prototype_chain: prototypeChainTest(),
     timing_precision: timingPrecisionTest(),
+    canvas_consistency: canvasConsistencyTest(),
+    stack_getter: stackGetterTest(),
+    raf_timing: await rafTimingTest(),
     automation: automation(),
     botd: await botd(),
     fpjs: await fingerprintjs(),
