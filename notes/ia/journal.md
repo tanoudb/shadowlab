@@ -1497,3 +1497,19 @@ Options déclarées dans `options_permises` + `configuration()`. 10 nouveaux tes
 
 ### État branche
 `niveau-authentifie-perimetre`, 13 commits, non poussée.
+
+## 2026-11-09 (suite 6, autonome) — Extraction adaptative + concurrence (« les 2 »)
+
+Les deux piliers demandés, chacun testé et validé sur le lab :
+- **Extraction adaptative** (`engines/noezia/extraction.py` + `moteur.extraire_adaptatif`) : mémorise
+  une signature de l'élément extrait (balise, classes, id, texte, profondeur) ; si le sélecteur casse
+  (site changé), relocalise par ressemblance (score pondéré, seuil 0.55). Similarité en Python pur
+  (7 tests). Validé : sélecteur cassé → élément retrouvé (SL-001). Mémoire persistante par domaine+clé.
+- **Concurrence / débit** (`engines/noezia/recolte.py`) : `recolter(urls, selecteur, concurrence)`
+  répartit en lots et traite via un pool de PROCESSUS (chaque worker = un moteur isolé, réutilisé sur
+  son lot). Validé : 4 pages via 2 moteurs parallèles. `repartir()` testé (3 tests). Contrainte spawn :
+  s'utilise depuis un vrai point d'entrée.
+
+### Bilan capacités « meilleur scraper » (toutes testées)
+Vitesse (mode rapide), robustesse (retry/backoff), échelle (proxy), extraction adaptative, concurrence.
+295 tests rapides verts, lint propre. Branche `niveau-authentifie-perimetre`, 16 commits, non poussée.
