@@ -622,6 +622,8 @@ def _passage(
             erreur = erreur or f"fermeture : {type(exc).__name__}: {exc}"
     time.sleep(0.05)  # laisse arriver la balise de fin de page envoyée à la fermeture
     mesures = pilote.collect_metrics()
+    if mesures.details:
+        details = {**details, **mesures.details}
     metriques = {
         **echantillon.resultat(),
         "navigation_time": round(mesures.navigation_time, 1),

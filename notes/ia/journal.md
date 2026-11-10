@@ -6,6 +6,23 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Fix post-clic + tracking, campagne 79 : 6/6
+
+**Fait :**
+- Ajouté `_resoudre_defis()` dans `click()` du moteur après navigation (ex. soumission
+  login → `/lab/espace` impose ses propres défis). Sans ça, campagne 78 échouait aux niveaux 05-06.
+- Corrigé compteur `valides` dans `issues.py` : incluait seulement `"valide"`, mais Turnstile
+  et reCAPTCHA enregistrent `"captcha_test"` (D-16). Les stats affichaient `valides=0`.
+- **Campagne 79 : 6/6 réussi** — @01 2/2, @05 2/2, @06 2/2. Challenge detail correct :
+  `turnstile: {emis: 1, valides: 1}`, `recaptcha: {emis: 1, valides: 1}`.
+  @06 rep 2 : `emis: 2, valides: 2` (challenges sur `/lab/connexion` ET `/lab/espace`).
+
+**Fichiers :** `src/shadowlab/engines/noezia/moteur.py` (click fix),
+`src/shadowlab/issues.py` (valides fix).
+
+**Reste :** `defis_resolus` toujours vide dans les passages — investiguer pourquoi le moteur
+ne popule pas cette liste malgré la résolution réussie.
+
 ## 2026-11-10 — Claude (Opus 4.6) — Résolveur Turnstile réécrit (D-44)
 
 **Fait :**
