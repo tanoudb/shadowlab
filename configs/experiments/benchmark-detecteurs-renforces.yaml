@@ -1,0 +1,33 @@
+# Benchmark après renforcement des détecteurs (D-37 branchés aux niveaux 04-06)
+# NOEZIA seul × 6 niveaux × scénarios clés × 3 répétitions
+experiment:
+  name: detecteurs_renforces_v1
+  description: >-
+    Mesure l'impact du branchement des 6 nouveaux détecteurs (audio-context,
+    polices, math-constants, domrect, iframe-consistency, deep-proxy) aux
+    niveaux 04, 05, 06. Compare avec la baseline campagne 79 (sans ces détecteurs).
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - static_html
+    - javascript_content
+    - detection_page
+    - connexion
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  repetitions: 3
+  seed: 20261110
+  warmup: 0
+  metrics:
+    - detection_rate
+    - execution_time
+    - memory_usage
+    - cpu_usage
+    - scenario_success
+  output: [json, html]
