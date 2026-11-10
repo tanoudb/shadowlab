@@ -48,9 +48,7 @@ log = logging.getLogger(__name__)
 
 def _detecter_hote_os() -> str:
     """OS de la machine qui exécute le moteur (pour la cohérence GPU réel ↔ profil)."""
-    return {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(
-        platform.system(), "linux"
-    )
+    return {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(platform.system(), "linux")
 
 
 _HOTE_OS = _detecter_hote_os()

@@ -172,3 +172,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Si la somme ≥ `seuil_composite` (dans `fingerprinting` du profil Arena), un motif synthétique
   « composite » bloque la session. Seuils progressifs : 03=1.5, 04=1.0, 05=0.7, 06=0.5. Le score
   composite ne se déclenche que quand aucun détecteur individuel n'a déjà bloqué (pas de double peine).
+- **D-36 — 10/11/2026 — Composite différé : évaluation à la collecte, blocage à la 2e page.** Le gardien
+  vérifie au moment de servir la page, mais l'empreinte JS n'arrive qu'après le chargement (2-3 s).
+  Le composite ne peut donc pas bloquer la 1re page. Solution : `/lab/collecte` évalue le composite
+  dès réception de l'empreinte et enregistre une décision `composite-differe` / `detecte`. Toute requête
+  protégée ultérieure (2e page) consulte cette décision et bloque immédiatement. Comportement réaliste :
+  les vrais WAF (Cloudflare, Akamai) font aussi « collecter puis vérifier ».

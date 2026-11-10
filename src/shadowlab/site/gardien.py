@@ -146,11 +146,13 @@ def suspicion(
     if seuil_composite is not None and not motifs and signaux_faibles:
         score = sum(s.poids for s in signaux_faibles)
         if score >= seuil_composite:
-            motifs.append({
-                "detecteur": "composite",
-                "score": round(score, 3),
-                "signaux": [_signal(s) for s in signaux_faibles],
-            })
+            motifs.append(
+                {
+                    "detecteur": "composite",
+                    "score": round(score, 3),
+                    "signaux": [_signal(s) for s in signaux_faibles],
+                }
+            )
     hp = cx.execute(
         "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
         (jeton,),
@@ -162,6 +164,15 @@ def suspicion(
 
 def _signal(s: Signal) -> dict:
     return {"code": s.code, "description": s.description}
+
+
+def _composite_differe(cx: sqlite3.Connection, jeton: str) -> bool:
+    """Une collecte JS a-t-elle déjà détecté un score composite au-dessus du seuil ?"""
+    row = cx.execute(
+        "SELECT 1 FROM decisions WHERE session_token = ? AND couche = 'composite-differe' LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    return row is not None
 
 
 def honeypots_actifs(sceau: Sceau | None) -> bool:
@@ -189,6 +200,15 @@ def controler(
         cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
+        if profil.fingerprinting.seuil_composite is not None and _composite_differe(cx, jeton):
+            if profil.fingerprinting.bloquer != "non":
+                db.enregistrer_decision(
+                    cx, jeton, "fingerprinting", "bloque", chemin, [{"detecteur": "composite-differe"}]
+                )
+                return _refus(request, pages.page_blocage(), "composite-differe")
+            db.enregistrer_decision(
+                cx, jeton, "fingerprinting", "suspect", chemin, [{"detecteur": "composite-differe"}]
+            )
         inclure_js = profil.fingerprinting.bloquer != "http"
         motifs = suspicion(
             cx,
@@ -224,7 +244,8 @@ def controler(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie
     ):
         motifs = suspicion(
-            cx, jeton,
+            cx,
+            jeton,
             detecteurs=profil.fingerprinting.detecteurs or None,
             seuil_composite=profil.fingerprinting.seuil_composite,
         )

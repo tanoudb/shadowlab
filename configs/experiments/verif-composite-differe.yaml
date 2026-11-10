@@ -1,0 +1,14 @@
+# Vérification du composite différé : le composite bloque dès la 2e page.
+# Scénario pagination (5 pages) : page 1 collecte l'empreinte,
+# la collecte enregistre le composite, page 2+ est bloquée.
+# Prérequis : Arena lancée (docker compose).
+experiment:
+  name: verif_composite_differe
+  description: "Le composite-differe bloque NOEZIA sur un scénario multi-pages"
+  environment: local
+  engines: [noezia]
+  protections: ["04", "06"]
+  scenarios: [pagination]
+  repetitions: 2
+  seed: 20261110
+  output: [json]

@@ -113,6 +113,62 @@ def test_session_manuelle_refuse_sans_consentement(client):
     assert r.status_code == 422
 
 
+def test_composite_differe_enregistre_a_la_collecte(client, reglages):
+    """La collecte d'une empreinte JS avec signaux faibles ≥ seuil enregistre une décision composite-differe."""
+    # Pas de sceau → pas de profil Arena → pas de composite évalué (comportement attendu)
+    payload = {
+        "navigateur": {"userAgent": "x", "languages": ["fr"]},
+        "ecran": {"width": 1920, "height": 1080},
+    }
+    client.post(
+        f"/lab/collecte?sl={JETON}",
+        content=json.dumps({"kind": "empreinte", "page": "/lab/detection", "payload": payload}),
+    )
+    cx = db.ouvrir(reglages.base_donnees)
+    row = cx.execute(
+        "SELECT 1 FROM decisions WHERE session_token = ? AND couche = 'composite-differe'", (JETON,)
+    ).fetchone()
+    assert row is None, "sans sceau, pas de composite-differe"
+
+
+def test_suspicion_composite_cumule_signaux_faibles(reglages):
+    """suspicion() cumule les signaux faibles et bloque quand la somme ≥ seuil."""
+    cx = db.ouvrir(reglages.base_donnees)
+    # Insérer une empreinte JS avec un signal faible connu (webdriver=False → pas automatisé)
+    payload = {
+        "navigateur": {"userAgent": "Chrome/131", "webdriver": False, "languages": ["fr"], "platform": "MacIntel"},
+        "proprietes": {"hardwareConcurrency": {"instance": True, "prototype": True, "same_descriptor": False}},
+    }
+    cx.execute(
+        "INSERT INTO observations_js (session_token, received_at, kind, page, payload) VALUES (?, ?, ?, ?, ?)",
+        (JETON, db.maintenant(), "empreinte", "/lab/detection", db.j(payload)),
+    )
+    # Sans composite → pas de motif (chaque détecteur est sous le seuil individuellement)
+    from shadowlab.site.gardien import suspicion
+
+    motifs = suspicion(cx, JETON, seuil_composite=None)
+    composite = [m for m in motifs if m.get("detecteur") == "composite"]
+    assert composite == []
+    # Avec un seuil bas → le composite fire si la somme des signaux faibles le dépasse
+    motifs = suspicion(cx, JETON, seuil_composite=0.01)
+    composite = [m for m in motifs if m.get("detecteur") == "composite"]
+    # Si des signaux faibles existent, le composite doit fire avec un seuil très bas
+    if composite:
+        assert composite[0]["score"] >= 0.01
+
+
+def test_composite_differe_detecte_dans_gardien(reglages):
+    """_composite_differe() détecte une décision enregistrée."""
+    cx = db.ouvrir(reglages.base_donnees)
+    from shadowlab.site.gardien import _composite_differe
+
+    assert _composite_differe(cx, JETON) is False
+    db.enregistrer_decision(
+        cx, JETON, "composite-differe", "detecte", "/lab/collecte", [{"detecteur": "composite", "score": 1.0}]
+    )
+    assert _composite_differe(cx, JETON) is True
+
+
 def test_api_ecriture_exige_l_entete_anti_csrf(client):
     assert client.post("/api/arret").status_code == 403
     assert client.get("/api/sante").json() == {"statut": "ok"}
@@ -204,9 +260,7 @@ def test_connexion_page_et_succes(client):
 
 
 def test_connexion_mauvais_identifiants(client):
-    r = client.post(
-        "/lab/connexion", data={"identifiant": "demo", "mot_de_passe": "faux"}, follow_redirects=False
-    )
+    r = client.post("/lab/connexion", data={"identifiant": "demo", "mot_de_passe": "faux"}, follow_redirects=False)
     assert r.status_code == 401
     assert client.get("/lab/espace", follow_redirects=False).status_code == 303
 

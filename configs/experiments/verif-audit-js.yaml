@@ -1,0 +1,12 @@
+# Vérification audit JS : les 3 corrections (automation + workers + headless)
+# NOEZIA seul, niveaux 03+06, 2 scénarios, 2 rép.
+experiment:
+  name: verif_audit_js
+  description: "Vérification audit furtivité JS — prototype+instance partout"
+  environment: local
+  engines: [noezia]
+  protections: ["03", "06"]
+  scenarios: [fingerprint_observation, detection_page]
+  repetitions: 2
+  seed: 20261110
+  output: [json]

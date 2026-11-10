@@ -266,7 +266,8 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if porte and jeton:
             with base() as cx:
                 motifs = gardien.suspicion(
-                    cx, jeton,
+                    cx,
+                    jeton,
                     detecteurs=profil.fingerprinting.detecteurs or None,
                     seuil_composite=profil.fingerprinting.seuil_composite,
                 )
@@ -383,6 +384,22 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 "INSERT INTO observations_js (session_token, received_at, kind, page, payload) VALUES (?, ?, ?, ?, ?)",
                 (jeton, db.maintenant(), kind, page, db.j(payload)),
             )
+            if kind == "empreinte":
+                sceau = request.state.sceau
+                if sceau:
+                    profil = charger_profils().de(sceau.profil)
+                    if profil and profil.fingerprinting.actif and profil.fingerprinting.seuil_composite is not None:
+                        motifs = gardien.suspicion(
+                            cx,
+                            jeton,
+                            detecteurs=profil.fingerprinting.detecteurs or None,
+                            seuil_composite=profil.fingerprinting.seuil_composite,
+                        )
+                        composite = [m for m in motifs if m.get("detecteur") == "composite"]
+                        if composite:
+                            db.enregistrer_decision(
+                                cx, jeton, "composite-differe", "detecte", page or "/lab/collecte", composite
+                            )
         return Response(status_code=204)
 
     @app.get("/lab/verdict", tags=["détection"])

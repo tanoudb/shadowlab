@@ -6,6 +6,34 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Composite différé : évaluation à la collecte JS (D-36)
+
+### Fait
+- **Diagnostic du gap timing** : le gardien vérifie `suspicion()` au moment de servir la page,
+  mais l'empreinte JS n'arrive que 2-3 s après (via `/lab/collecte`). Le composite ne peut donc
+  pas bloquer la 1re page d'une session — il manque les signaux JS.
+- **Fix architectural (D-36)** : l'endpoint `/lab/collecte` évalue maintenant le composite dès
+  réception de l'empreinte (`kind == "empreinte"`). Si le score ≥ seuil, une décision
+  `composite-differe` / `detecte` est enregistrée. Le gardien consulte cette décision AVANT le
+  flow de challenges : toute requête protégée suivante est bloquée immédiatement.
+- **3 tests unitaires** ajoutés : `test_composite_differe_*` dans `test_site.py`.
+- **316 tests passent**, lint propre.
+
+### Fichiers modifiés
+- `src/shadowlab/site/gardien.py` (`_composite_differe()` + check dans `controler()`)
+- `src/shadowlab/site/app.py` (évaluation composite dans `/lab/collecte`)
+- `tests/test_site.py` (3 tests)
+- `docs/DECISIONS.md` (D-36)
+- `configs/experiments/verif-composite-differe.yaml` (campagne de vérif multi-pages)
+
+### Reste
+- Lancer la campagne `verif-composite-differe.yaml` (Arena requise) pour confirmer que NOEZIA
+  est bloqué dès la 2e page aux niveaux 04 et 06.
+- Corriger les 2 signaux réels (`hwc_instance` + `navigator_own_props`) si on veut que NOEZIA
+  passe sous le seuil composite.
+
+---
+
 ## 2026-11-10 — Claude (Opus 4.6) — Brainstorming NOEZIA v2 : audit Arena + 3 agents parallèles
 
 ### Fait
@@ -131,8 +159,45 @@ type: note
 - `configs/experiments/verif-d34.yaml` (nouvelle campagne de vérification)
 
 ### Reste
-- **Score composite** : prochaine priorité critique
-- Vérifier les autres scripts JS pour le même bug prototype-vs-instance
+- ~~Vérifier les autres scripts JS pour le même bug prototype-vs-instance~~ → fait (3 bugs corrigés)
+- **Score composite** : implémenté (D-35), mais gap architectural timing (voir entrée audit JS)
+
+---
+
+## 2026-11-10 — Claude (Opus 4.6) — Audit furtivité JS : 3 bugs corrigés + signaux réels
+
+### Fait
+- **Audit des 12 scripts JS** de furtivité pour le bug prototype-vs-instance.
+  - `canvas.js`, `webgl.js`, `audio.js`, `codecs.js`, `polices.js` → OK (méthodes de prototype, pas d'accesseurs d'instance)
+  - `cdp.js` → OK (logique smarteexistante pour prototype/instance)
+  - `iframes.js` → OK (pas de defineProperty sur prototypes globaux)
+- **Bug 1 (CRITIQUE) `automation.js`** : `PROPS_PROTOTYPE_ONLY` supprimait les propriétés propres
+  de `navigator` pour `hardwareConcurrency` et `deviceMemory` → **annulait le fix D-34**. Dans Chrome
+  réel ces propriétés SONT propres sur l'instance. Corrigé : retirées de la liste.
+- **Bug 2 `workers.js`** : le PROLOGUE injecté dans les Workers ne patchait que le prototype, pas
+  l'instance `navigator`. Corrigé : patch sur prototype ET instance avec `enumerable: true`.
+- **Bug 3 `headless.js`** : `screenX/Y/screenLeft/screenTop` patchés uniquement sur `window`, pas
+  sur `Window.prototype`. Le getter originel sur le prototype renvoyait les valeurs headless.
+  Corrigé : patch sur prototype ET instance.
+- **Campagne `verif_audit_js`** (expérience 50) — 8/8 réussis.
+  - **2 signaux réels détectés** : `hwc_instance` (0.50, prototypes) et `navigator_own_props`
+    (0.50, integrite-proprietes). Total = 1.0 → le composite bloquerait au niveau 04+.
+  - **Gap timing** : le gardien vérifie au moment de servir la page, mais le JS fingerprint
+    n'est collecté qu'après le chargement. Le composite ne peut pas bloquer la 1re page.
+    Un scraper multi-pages serait bloqué dès la 2e page.
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/furtivite/automation.js` (hwc/deviceMemory retirés de PROPS_PROTOTYPE_ONLY)
+- `src/shadowlab/engines/noezia/furtivite/workers.js` (PROLOGUE : patch prototype + instance)
+- `src/shadowlab/engines/noezia/furtivite/headless.js` (screenX/Y : patch prototype + instance)
+- `configs/experiments/verif-audit-js.yaml`
+
+### Reste
+- **Gap timing** du gardien : le fingerprint JS arrive après la page servie → le composite ne
+  bloque que sur la 2e page. Solution possible : flow « collecter puis vérifier » avec une page
+  intermédiaire qui collecte le fingerprint, puis redirige en vérifiant le composite.
+- Corriger les 2 signaux réels (`hwc_instance` + `navigator_own_props`) pour remonter NOEZIA
+  au score 0.0 — ou les accepter comme l'empreinte résiduelle d'un moteur patché.
 
 ---
 
