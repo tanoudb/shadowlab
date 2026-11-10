@@ -577,6 +577,9 @@ class DriverNoezia(Driver):
             # Comportement post-navigation (lecture, mouvement oisif)
             if self._config.interaction_post_page:
                 self._interaction_post_clic_navigation()
+            # La page cible peut imposer ses propres défis (ex. /lab/espace après login)
+            if self.options.get("resoudre_defis", True):
+                self._resoudre_defis()
         else:
             self._page.click(selector)
 

@@ -54,7 +54,8 @@ def evaluer(
     blocages = [d for d in decisions if d["decision"] == "bloque"]
     emis = {c: sum(1 for d in decisions if d["couche"] == c and d["decision"] == "emis") for c in COUCHES_CHALLENGE}
     valides = {
-        c: sum(1 for d in decisions if d["couche"] == c and d["decision"] == "valide") for c in COUCHES_CHALLENGE
+        c: sum(1 for d in decisions if d["couche"] == c and d["decision"] in ("valide", "captcha_test"))
+        for c in COUCHES_CHALLENGE
     }
     panne_arena = any(d["couche"] == "arena" for d in decisions)
     detecte_par = [c.detector_name for c in classements if c.classification == "automatise"]
