@@ -40,7 +40,7 @@ CARAC_TOUS = """els => els.map(e => {
   };
 }).filter(c => c.texte || c.id || c.classes.length)"""
 
-SEUIL_RELOCALISATION = 0.55  # score minimal pour accepter une relocalisation
+SEUIL_RELOCALISATION = 0.50  # score minimal — permet la relocalisation même avec classes 100% mutées
 
 
 def domaine_de(url: str) -> str:

@@ -142,3 +142,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   démo Arena et les test keys restent permis ; le but est de *ne pas déclencher* le CAPTCHA), aucune
   mesure inventée, étiquetage des résultats en test keys. Implémentation : `perimetre.ILLIMITE`,
   `base.liste_directe`, défaut `config.charger`, filtrage du `*` côté serveur de test (`site/app.py`).
+- **D-31 — 10/11/2026 — Signatures mémoire seule (`chemin=None`).** Pour les scénarios en mémoire
+  (campagnes, tests unitaires), `Signatures()` sans argument fonctionne en RAM sans fichier. Plus
+  simple qu'un `tempfile` : pas d'effets de bord disque, pas de nettoyage. Le fichier JSON reste
+  disponible pour la persistance inter-exécutions (`Signatures(Path("..."))`). Implémentation :
+  `chemin: Path | None = None` dans `extraction.Signatures.__init__`, `enregistrer` saute l'écriture
+  si `_chemin is None`.

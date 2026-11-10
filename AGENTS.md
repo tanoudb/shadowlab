@@ -35,7 +35,7 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (09/11/2026)
+## État (10/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **6 niveaux progressifs** (01 baseline → 06 multicouche, D-18). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 24 détecteurs, honeypots (lien piège + champ piège), fingerprinting actif,
@@ -54,7 +54,10 @@ recommander des optimisations.
   classification en 6 issues, intervalles de Wilson, mesures CPU/mémoire.
 - **Catalogue recherche** : 52 projets open source analysés (`docs/recherche/catalogue.yaml`).
 - **Périmètre** : illimité par défaut en phase interne (D-30, débrayable — `docs/securite-a-finaliser.md`).
-- **275 tests rapides verts** (hors intégration), lint propre.
+- **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
+  `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
+  signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
+- **311 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA.
 
@@ -79,6 +82,7 @@ uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
 uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTCHA v3 réel (clés v3 dans .env)
 uv run shadowlab campagne configs/experiments/connexion-arena.yaml  # le moteur franchit le login (01/05/06)
+uv run shadowlab campagne configs/experiments/extraction-adaptative.yaml  # relocalisation malgré mutation CSS
 uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
@@ -100,7 +104,7 @@ src/shadowlab/
 │   └── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc)
 ├── site/            # Site de test FastAPI (app, pages, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
-├── scenarios.py     # 10 scénarios de test
+├── scenarios.py     # 15 scénarios de test
 ├── detection.py     # 24 détecteurs
 ├── issues.py        # Classification en 6 issues
 ├── passages.py      # Cycle de vie d'un passage

@@ -20,7 +20,8 @@ Extraire des données structurées d'une page web même quand les sélecteurs CS
 | Texte           | 0.25  | SequenceMatcher ratio                     |
 | Profondeur DOM  | 0.15  | 1 − (écart / 5), plancher à 0            |
 
-La balise doit coïncider (sinon score = 0). Seuil par défaut : **0.55**.
+La balise doit coïncider (sinon score = 0). Seuil par défaut : **0.50** (permet la relocalisation
+même avec classes 100% mutées, tant que le texte et la profondeur correspondent).
 
 ## Usage en Python
 

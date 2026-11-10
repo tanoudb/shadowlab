@@ -166,6 +166,35 @@ def test_http_base_analyseur():
     assert items[2].css_un("span.prix") == "165000"
 
 
+def test_extraction_adaptative_relocalise_malgre_mutation():
+    """Simule deux pages /lab/adaptatif avec des classes mutées — l'extracteur relocalise."""
+    from shadowlab.site.pages import ANNONCES_ADAPTATIVES
+
+    def _page(sfx: str) -> str:
+        cartes = "".join(
+            f"<div class='annonce-{sfx}'>"
+            f"<h3 class='titre-{sfx}'>{a['titre']}</h3>"
+            f"<span class='prix-{sfx}'>{a['prix']}</span>"
+            f"</div>"
+            for a in ANNONCES_ADAPTATIVES
+        )
+        return f"<html><body><div id='annonces'>{cartes}</div></body></html>"
+
+    sigs = extraction.Signatures()
+    url = "http://test.local/lab/adaptatif"
+
+    # Passage 1 : sélecteur exact fonctionne
+    a1 = Analyseur(_page("abc"), url=url, signatures=sigs)
+    t1 = a1.extraire_adaptatif("h3.titre-abc", "titre")
+    assert t1 == "Studio Paris 18e"
+
+    # Passage 2 : les classes ont changé → sélecteur cassé, relocalisation
+    a2 = Analyseur(_page("xyz"), url=url, signatures=sigs)
+    assert a2.css_un("h3.titre-abc") is None  # sélecteur cassé
+    t2 = a2.extraire_adaptatif("h3.titre-abc", "titre")
+    assert t2 == "Studio Paris 18e"  # retrouvé par ressemblance
+
+
 def test_recuperer_respecte_le_perimetre():
     # Le périmètre est vérifié AVANT tout fetch (pas de réseau nécessaire pour ce test).
     import pytest
