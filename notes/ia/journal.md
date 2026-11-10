@@ -6,6 +6,41 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Détection furtivité : 37/39 humain (D-39, D-40)
+
+### Fait
+- **Fix faux positif proxy_dans_stack (D-39)** : la fonction `deepProxyDetectionTest` dans `observateur.js`
+  contenait « Proxy » dans son nom. La regex `/Proxy|proxy/` du test deep-proxy matchait le nom de la
+  fonction dans les stack traces, pas un vrai objet Proxy V8. Renommée en `testDetectionProfonde()`.
+  Campagne 62 : deep-proxy passe « humain » avec 0 signal.
+- **Fix DOMRect instable (D-40)** : le bruit dans `polices.js` utilisait le PRNG global, produisant des
+  valeurs différentes à chaque appel `getBoundingClientRect()`. Remplacé par un seed déterministe dérivé
+  des valeurs du rect + seed profil → stable entre appels successifs.
+- **Fix navigator own props (D-40)** : `hardwareConcurrency` et `deviceMemory` étaient définis sur
+  `Navigator.prototype` ET `navigator` (instance). Le vrai Chrome ne les met qu'en prototype. Suppression
+  de la définition sur l'instance + ajout au nettoyage `PROPS_PROTOTYPE_ONLY` dans `automation.js`.
+- **Campagne 64** : NOEZIA **37 humain, 0 automatisé, 2 indéterminés** (tls=pas applicable hors Arena,
+  worker-consistency=timeout poids 0.0). Playwright : 27 humain, 7 automatisé, 5 indéterminés.
+
+### Fichiers modifiés
+- `src/shadowlab/site/static/observateur.js` (renommage fonction)
+- `src/shadowlab/engines/noezia/furtivite/polices.js` (bruit DOMRect déterministe)
+- `src/shadowlab/engines/noezia/furtivite/navigateur.js` (hwc/dm prototype uniquement)
+- `src/shadowlab/engines/noezia/furtivite/automation.js` (nettoyage own props hwc/dm)
+- `docs/DECISIONS.md` (D-39, D-40)
+
+### Décisions
+- D-39 : renommer pour éliminer le faux positif regex
+- D-40 : DOMRect stable + navigator conforme au vrai Chrome
+
+### Reste
+- Worker-consistency en timeout → investiguer si le worker NOEZIA ne reçoit pas les patches
+- Tester sur Arena Docker (niveaux 05-06) avec le login comportemental
+- Validation externe bot.incolumitas.com avec les correctifs
+- 338 tests verts, lint propre
+
+---
+
 ## 2026-11-10 — Claude (Opus 4.6) — Composite différé : évaluation à la collecte JS (D-36)
 
 ### Fait

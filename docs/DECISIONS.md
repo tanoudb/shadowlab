@@ -194,3 +194,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   paramètre `cible` à `natif()` : quand présent, vérifie `this instanceof Constructor` avant de retourner.
   Appliqué aux 3 fichiers de furtivité (navigateur, environnement, headless). Campagne 58 confirme la
   disparition du signal `illegal_invoc_absent` sur NOEZIA.
+- **D-39 — 10/11/2026 — Faux positif proxy_dans_stack : renommer la fonction de test.** La regex
+  `/Proxy|proxy/` du détecteur deep-proxy matchait le nom de la fonction `deepProxyDetectionTest` dans
+  les stack traces d'erreur, pas un vrai Proxy V8. Renommée en `testDetectionProfonde()`. Campagne 62
+  confirme deep-proxy « humain » avec 0 signal.
+- **D-40 — 10/11/2026 — DOMRect déterministe, navigator sans own props : 37/39 humain.** Trois corrections :
+  (1) bruit DOMRect dérivé des valeurs du rect et du seed profil (pas du PRNG global) → stable entre deux
+  appels ; (2) `hardwareConcurrency`/`deviceMemory` seulement sur `Navigator.prototype` (le vrai Chrome ne
+  les met pas en propre sur l'instance) ; (3) nettoyage des own props résiduelles de Patchright. Campagne 64 :
+  37 humain, 0 automatisé, 2 indéterminés structurels (tls=hors Arena, worker-consistency=timeout).
