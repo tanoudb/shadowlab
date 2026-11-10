@@ -882,7 +882,7 @@ function mathConstantsTest() {
   return r;
 }
 
-function deepProxyDetectionTest() {
+function testDetectionProfonde() {
   const r = {};
   try {
     const cibles = [
@@ -1104,7 +1104,7 @@ async function collecter() {
     audio_context: await audioContextTest(),
     font_fingerprint: fontFingerprintTest(),
     math_constants: mathConstantsTest(),
-    deep_proxy: deepProxyDetectionTest(),
+    deep_proxy: testDetectionProfonde(),
     worker_consistency: await workerConsistencyTest(),
     connection_dynamic: connectionDynamicTest(),
     uadata_integrity: uadataIntegrityTest(),
