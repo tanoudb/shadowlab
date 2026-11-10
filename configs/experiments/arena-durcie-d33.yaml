@@ -1,0 +1,24 @@
+# D-33 : première campagne avec les 33 détecteurs branchés au gardien.
+# Objectif : trouver le niveau où NOEZIA commence à échouer.
+experiment:
+  name: arena_durcie_d33
+  description: "Arena durcie (D-33) — 33 détecteurs branchés, NOEZIA vs tous niveaux"
+  environment: local
+  engines:
+    - noezia
+    - playwright
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261110
+  output: [json, csv, html]

@@ -265,7 +265,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         # 3) Porte comportementale : signaux de bot connus à cet instant (empreinte, comportement, honeypot…)
         if porte and jeton:
             with base() as cx:
-                motifs = gardien.suspicion(cx, jeton)
+                motifs = gardien.suspicion(
+                    cx, jeton, detecteurs=profil.fingerprinting.detecteurs or None
+                )
             if motifs:
                 return refus("Accès refusé.", motifs)
 

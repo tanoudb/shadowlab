@@ -49,6 +49,7 @@ class Fingerprinting(_Strict):
     actif: bool
     bloquer: ModeBlocage = "non"
     exclure: list[str] = Field(default_factory=list)
+    detecteurs: list[str] = Field(default_factory=list)
 
 
 class Honeypots(_Strict):

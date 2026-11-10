@@ -6,6 +6,7 @@
 # defi_js      : preuve de travail SHA-256. `lier_tls` lie le cookie au JA4 du client
 # captcha      : demo CAPTCHA servi quand une règle classe la session comme automatisée
 # fingerprinting : examen actif des signaux navigateur (FingerprintJS, BotD, comportement)
+#   detecteurs : liste explicite des détecteurs consultés pour ce niveau (vide = legacy 6)
 # honeypots    : champs invisibles et liens piège détectant les crawlers aveugles
 # turnstile    : Cloudflare Turnstile en mode test (test keys, ne prouve rien contre le vrai)
 # recaptcha    : Google reCAPTCHA v2 en mode test (test keys, ne prouve rien contre le vrai)
@@ -31,7 +32,10 @@
   waf: {mode: detection, paranoia: 1, seuil: 10}
   defi_js: {actif: false, difficulte: 0, lier_tls: false}
   captcha: {actif: false}
-  fingerprinting: {actif: true, bloquer: http}
+  fingerprinting:
+    actif: true
+    bloquer: http
+    detecteurs: [regles-http, tls]
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -39,12 +43,27 @@
 
 "03":
   nom: Fingerprinting
-  description: "Blocage sur signaux navigateur, JavaScript et comportements"
+  description: "Fingerprinting étendu — signaux navigateur, prototypes, headless, APIs Chrome"
   limitation: {debit: 10, rafale: 25}
   waf: {mode: detection, paranoia: 1, seuil: 5}
   defi_js: {actif: false, difficulte: 0, lier_tls: false}
   captcha: {actif: false}
-  fingerprinting: {actif: true, bloquer: tout}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+      - regles-http
+      - tls
+      - botd
+      - regles-js
+      - coherence
+      - comportement
+      - prototypes
+      - coherence-profonde
+      - headless
+      - chrome-apis
+      - langues
+      - media-codecs
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -52,12 +71,35 @@
 
 "04":
   nom: Challenges
-  description: CAPTCHA et challenges JavaScript en mode test
+  description: "Intégrité JS, stack traces, patches détectés, WAF en blocage"
   limitation: {debit: 5, rafale: 15}
   waf: {mode: blocage, paranoia: 1, seuil: 5}
   defi_js: {actif: true, difficulte: 12, lier_tls: false}
   captcha: {actif: true}
-  fingerprinting: {actif: true, bloquer: tout}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+      - regles-http
+      - tls
+      - botd
+      - regles-js
+      - coherence
+      - comportement
+      - prototypes
+      - coherence-profonde
+      - headless
+      - chrome-apis
+      - langues
+      - media-codecs
+      - integrite-proprietes
+      - stack-trace
+      - stack-getter
+      - automation-globals
+      - css-media
+      - prototype-chain
+      - enumerable-props
+      - proxy-uadata
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -65,12 +107,43 @@
 
 "05":
   nom: "Protection avanc\xE9e"
-  description: "WAF haute paranoïa, TLS binding, Turnstile test"
+  description: "Comportement, canvas, timing, workers — WAF haute paranoïa, TLS binding"
   limitation: {debit: 3, rafale: 8}
   waf: {mode: blocage, paranoia: 2, seuil: 5}
   defi_js: {actif: true, difficulte: 15, lier_tls: true}
   captcha: {actif: true}
-  fingerprinting: {actif: true, bloquer: tout}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+      - regles-http
+      - tls
+      - botd
+      - regles-js
+      - coherence
+      - comportement
+      - prototypes
+      - coherence-profonde
+      - headless
+      - chrome-apis
+      - langues
+      - media-codecs
+      - integrite-proprietes
+      - stack-trace
+      - stack-getter
+      - automation-globals
+      - css-media
+      - prototype-chain
+      - enumerable-props
+      - proxy-uadata
+      - entropie-interaction
+      - scroll
+      - canvas-empreinte
+      - canvas-consistency
+      - raf-timing
+      - worker-consistency
+      - paint-timing
+      - timing-precision
   honeypots: {actif: false}
   turnstile: {actif: true}
   recaptcha: {actif: true}
@@ -78,12 +151,48 @@
 
 "06":
   nom: "D\xE9fense multicouche"
-  description: "Toutes protections combinées, corrélation et adaptation"
+  description: "Tous les 33 détecteurs, honeypots, corrélation, adaptation"
   limitation: {debit: 2, rafale: 4}
   waf: {mode: blocage, paranoia: 3, seuil: 3}
   defi_js: {actif: true, difficulte: 18, lier_tls: true}
   captcha: {actif: true}
-  fingerprinting: {actif: true, bloquer: tout}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+      - regles-http
+      - tls
+      - botd
+      - regles-js
+      - coherence
+      - comportement
+      - prototypes
+      - coherence-profonde
+      - headless
+      - chrome-apis
+      - langues
+      - media-codecs
+      - integrite-proprietes
+      - stack-trace
+      - stack-getter
+      - automation-globals
+      - css-media
+      - prototype-chain
+      - enumerable-props
+      - proxy-uadata
+      - entropie-interaction
+      - scroll
+      - canvas-empreinte
+      - canvas-consistency
+      - raf-timing
+      - worker-consistency
+      - paint-timing
+      - timing-precision
+      - coherence-environnement
+      - connection-dynamic
+      - permissions-etendu
+      - position-fenetre
+      - webrtc
   honeypots: {actif: true}
   turnstile: {actif: true}
   recaptcha: {actif: true}

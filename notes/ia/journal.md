@@ -6,6 +6,112 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Brainstorming NOEZIA v2 : audit Arena + 3 agents parallèles
+
+### Fait
+- **Audit Arena** (`notes/ia/audit-arena-2026.md`) : analyse des 32 détecteurs — 6 branchés au
+  gardien, 26 débranchés. Constat : l'Arena est un adversaire fantoche. Proposition de 7 niveaux
+  révisés et 5 actions prioritaires.
+- **Brainstorm moteur** (`docs/superpowers/specs/2026-11-10-brainstorm-moteur.md`, 36 Ko) :
+  architecture cible (rester sur Patchright + curl-cffi HTTP/2), 8 techniques manquantes,
+  feuille de route en 8 étapes (~4 800 lignes). Avantage compétitif identifié : comportement
+  humain calibré sur les neurosciences motrices.
+- **Brainstorm Arena** (`docs/superpowers/specs/2026-11-10-brainstorm-arena.md`, 42 Ko) :
+  plan pour brancher les 26 détecteurs, score composite pondéré, corrélation cross-session,
+  détecteur HTTP/2, 7 niveaux avec mapping commercial (03 ≈ Cloudflare Free, 07 ≈ Enterprise).
+  Plan en 10 étapes (~2 010 lignes).
+- **État de l'art** (`docs/superpowers/specs/2026-11-10-brainstorm-etat-art.md`, 46 Ko) :
+  recherche web 2024-2026 — systèmes commerciaux (Cloudflare Precursor GA juil 2026, DataDome
+  85K modèles ML), techniques de fingerprinting avancées, top 10 outils open source, techniques
+  émergentes (IA détection, attestation matérielle), 10 gaps critiques de NOEZIA.
+- **Synthèse** (`docs/superpowers/specs/2026-11-10-synthese-brainstorming.md`) : convergence
+  des 3 agents, feuille de route consolidée en 8 étapes, questions ouvertes pour Ethan.
+- **Fix sécurité crawlee** (commit 261a330) : `ImpitHttpClient(follow_redirects=False)`.
+
+### Décisions
+- Priorité 1 = durcir l'Arena AVANT d'améliorer le moteur (consensus 3/3 agents).
+- Le gap n°1 est l'empreinte TLS/HTTP2 (aucun contrôle).
+- JA3 est déprécié (mai 2025), JA4 est le standard.
+- nodriver score le mieux sur Cloudflare (28/31) — à étudier.
+- Avantage compétitif NOEZIA = comportement humain neuro-calibré (personne d'autre ne le fait).
+
+### Reste
+- ~~Choisir la première étape à implémenter (Arena durcie recommandé)~~ → étape 1 lancée
+- ~~Répondre aux 5 questions ouvertes~~ → BrowserForge MIT (on utilise), Cloudflare test (sites manga), couche IA (après étape 5), Arena d'abord (confirmé), propriétaire pour l'instant
+- ~~Implémenter étape 0 : modifier gardien.py + profils.yaml pour brancher les détecteurs~~ → fait (D-33)
+- Lancer une campagne de calibration pour vérifier que le moteur NOEZIA échoue niveau 03+
+- Corriger ce que l'Arena durcie révèle (étape 2 du plan)
+
+---
+
+## 2026-11-10 — Claude (Opus 4.6) — Arena durcie : 33 détecteurs branchés (D-33)
+
+### Fait
+- **`profils.py`** : ajout du champ `detecteurs: list[str]` dans `Fingerprinting`.
+- **`gardien.py`** : `suspicion()` accepte une liste explicite de détecteurs (paramètre
+  `detecteurs`). Si absent, comportement legacy (6 hardcodés). `DETECTEURS_HTTP` distingue les
+  règles HTTP (pas besoin de JS) des autres.
+- **`app.py`** : la porte de connexion passe aussi les détecteurs du profil.
+- **`profils.yaml`** : chaque niveau a sa liste progressive : 01=0, 02=2, 03=12, 04=20, 05=28, 06=33.
+- **`DECISIONS.md`** : D-33 ajoutée.
+- 313 tests verts, lint propre.
+
+### Fichiers modifiés
+- `src/shadowlab/arena/profils.py` (champ `detecteurs`)
+- `src/shadowlab/site/gardien.py` (`suspicion()` + `controler()`)
+- `src/shadowlab/site/app.py` (porte connexion)
+- `configs/arena/profils.yaml` (listes progressives)
+- `docs/DECISIONS.md` (D-33)
+
+### Décisions
+- D-33 : détecteurs par niveau (voir DECISIONS.md)
+- BrowserForge MIT : on l'utilise (pas de raison de reconstruire)
+- Open source : propriétaire pour l'instant
+- Cibles réelles : sites manga (pour étape 6+)
+
+### Reste
+- ~~Lancer une campagne pour vérifier que le moteur casse au niveau 03-04~~ → campagne terminée, résultats ci-dessous
+- ~~Si besoin, calibrer les seuils (faux positifs avec Chrome réel)~~ → oui, hwc faux positif Apple Silicon corrigé
+- Étape 2 : ~~corriger ce que l'Arena révèle~~ → 2 fuites corrigées (voir entrée suivante)
+- **Prochaine étape** : score composite (les détecteurs individuels sont trop faibles seuls)
+
+---
+
+## 2026-11-10 — Claude (Opus 4.6) — Campagne D-33 + correction de 2 fuites moteur
+
+### Fait
+- **Campagne `arena_durcie_d33`** (expérience 48) — NOEZIA vs Playwright, 6 niveaux, 4 scénarios, 3 rép.
+  - **NOEZIA** : 72/72 réussis (100% tous niveaux). Aucun détecteur ne le classe « automatisé ».
+  - **Playwright** : 12/12 réussis en 01, **60/60 échecs** dès le 02. 7 détecteurs le bloquent
+    (`regles-http`, `regles-js`, `chrome-apis`, `coherence-profonde`, `headless`, `botd`, `comportement`).
+  - Seul signal faible contre NOEZIA : `coherence-profonde` (indéterminé 0.75).
+- **Diagnostic des 2 fuites NOEZIA** :
+  1. `outer_eq_inner` (0.5) : le patch `outerWidth/outerHeight` dans `environnement.js` ciblait
+     `Window.prototype` mais Chrome met une propriété propre sur `window` qui le masquait.
+     **Corrigé** : patch appliqué sur prototype ET instance.
+  2. `hwc_non_puissance2` (0.25) : `hardwareConcurrency=12` flaggé non-puissance-de-2, mais les
+     Mac Apple Silicon ont 10/12/14 cœurs. **Corrigé** : le détecteur exclut les valeurs Apple Silicon connues.
+     Le patch `hardwareConcurrency` dans `navigateur.js` avait le même bug prototype-vs-instance → aussi corrigé.
+- 313 tests verts, lint propre.
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/furtivite/environnement.js` (patch outer sur prototype + instance)
+- `src/shadowlab/engines/noezia/furtivite/navigateur.js` (patch hwc/deviceMemory sur prototype + instance)
+- `src/shadowlab/detection.py` (hwc : exclusion Apple Silicon)
+
+### Décisions
+- Le problème n'est PAS que les détecteurs sont débranchés (c'est fait), mais que chaque détecteur
+  individuellement est trop faible contre un moteur bien patché. Un score composite qui accumule les
+  signaux faibles de multiples détecteurs est la prochaine priorité critique.
+
+### Reste
+- Relancer la campagne pour vérifier que les 2 fuites sont colmatées
+- Implémenter le **score composite** (étape 3 du plan) : les signaux faibles de N détecteurs doivent
+  s'additionner pour dépasser le seuil (ex. 5 signaux à 0.2 = détection)
+- Vérifier les autres scripts JS pour le même bug prototype-vs-instance (canvas.js, audio.js, etc.)
+
+---
+
 ## 2026-11-10 — Claude (Opus 4.6) — Moteurs crawlee + zendriver (D-32)
 
 ### Fait

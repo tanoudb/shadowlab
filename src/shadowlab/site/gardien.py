@@ -39,6 +39,8 @@ HORS_PROTECTION = (
 # Règles consultées en direct : celles qui peuvent trancher dès la requête, puis celles qui lisent le JavaScript.
 REGLES_REQUETE = ("regles-http", "tls")
 REGLES_JAVASCRIPT = ("botd", "regles-js", "coherence", "comportement")
+# Les détecteurs HTTP fonctionnent sans empreinte JS ; les autres attendent l'empreinte.
+DETECTEURS_HTTP = frozenset(REGLES_REQUETE)
 
 
 @dataclass(frozen=True)
@@ -103,20 +105,33 @@ def _refus(request: Request, html: str, code: str) -> Response:
 
 
 def suspicion(
-    cx: sqlite3.Connection, jeton: str, inclure_js: bool = True, exclure: list[str] | None = None
+    cx: sqlite3.Connection,
+    jeton: str,
+    inclure_js: bool = True,
+    exclure: list[str] | None = None,
+    detecteurs: list[str] | None = None,
 ) -> list[dict]:
-    """Motifs de suspicion connus à cet instant. Le JavaScript ne compte qu'une fois l'empreinte reçue."""
+    """Motifs de suspicion connus à cet instant.
+
+    *detecteurs* : liste explicite de noms de détecteurs à consulter (depuis le profil Arena).
+    Si absent ou vide, les constantes REGLES_REQUETE / REGLES_JAVASCRIPT s'appliquent.
+    """
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
-    noms = list(REGLES_REQUETE)
-    if inclure_js and observations.empreinte_js is not None:
-        noms += REGLES_JAVASCRIPT
+    if detecteurs:
+        noms = [d for d in detecteurs if d in DETECTEURS_HTTP]
+        if inclure_js and observations.empreinte_js is not None:
+            noms += [d for d in detecteurs if d not in DETECTEURS_HTTP]
+    else:
+        noms = list(REGLES_REQUETE)
+        if inclure_js and observations.empreinte_js is not None:
+            noms += REGLES_JAVASCRIPT
     if exclure:
         noms = [n for n in noms if n not in exclure]
-    detecteurs = registre()
+    tous = registre()
     motifs: list[dict] = []
     for nom in noms:
-        classement = detecteurs[nom].classer(observations)
+        classement = tous[nom].classer(observations)
         if classement.classification == "automatise":
             motifs.append({"detecteur": nom, "signaux": [_signal(s) for s in classement.signals]})
     hp = cx.execute(
@@ -158,7 +173,13 @@ def controler(
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
         inclure_js = profil.fingerprinting.bloquer != "http"
-        motifs = suspicion(cx, jeton, inclure_js=inclure_js, exclure=profil.fingerprinting.exclure or None)
+        motifs = suspicion(
+            cx,
+            jeton,
+            inclure_js=inclure_js,
+            exclure=profil.fingerprinting.exclure or None,
+            detecteurs=profil.fingerprinting.detecteurs or None,
+        )
         if motifs:
             if profil.fingerprinting.bloquer != "non":
                 db.enregistrer_decision(cx, jeton, "fingerprinting", "bloque", chemin, motifs)
@@ -184,7 +205,7 @@ def controler(
     if profil.captcha.actif and not defis.cookie_valide(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie
     ):
-        motifs = suspicion(cx, jeton)
+        motifs = suspicion(cx, jeton, detecteurs=profil.fingerprinting.detecteurs or None)
         if motifs:
             db.enregistrer_decision(cx, jeton, "captcha", "emis", chemin, motifs)
             cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))

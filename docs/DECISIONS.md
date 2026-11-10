@@ -154,3 +154,15 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   WebDriver (anti-détection native, AGPL-3.0 — à surveiller avant livraison). Le pont est corrigé pour
   charger `base.py` sans déclencher `engines/__init__` (pré-enregistrement de modules fantômes), ce qui
   répare aussi les moteurs isolés existants.
+- **D-33 — 10/11/2026 — Détecteurs par niveau : `fingerprinting.detecteurs` dans le profil Arena.** Les 6
+  détecteurs hardcodés (`REGLES_REQUETE` + `REGLES_JAVASCRIPT`) laissaient 26 détecteurs collectés mais
+  ignorés par le gardien. Le champ `detecteurs` dans la config `fingerprinting` de chaque niveau liste
+  explicitement les détecteurs consultés : 0 (baseline) → 2 → 12 → 20 → 28 → 33. Si absent ou vide,
+  le comportement legacy (6 détecteurs) est préservé. La campagne D-33 a montré que NOEZIA passe tous
+  les niveaux : les détecteurs individuels sont trop faibles, un score composite est nécessaire.
+- **D-34 — 10/11/2026 — Patch furtivité : propriété propre + prototype.** Chrome (y compris Patchright)
+  place certaines propriétés (`outerWidth`, `outerHeight`, `hardwareConcurrency`, `deviceMemory`) comme
+  propriétés propres sur `window`/`navigator`, pas seulement sur le prototype. Un `defineProperty` sur
+  le prototype seul est masqué. Règle : tout patch de propriété navigateur doit cibler le prototype
+  ET l'instance. Corrigé dans `environnement.js` et `navigateur.js`. Le détecteur `coherence-profonde`
+  excluait aussi à tort les `hardwareConcurrency` Apple Silicon (10, 12, 14…) comme non-puissance-de-2.

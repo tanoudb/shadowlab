@@ -417,14 +417,18 @@ class DetecteurCoherenceProfonde:
                 )
             )
 
-        # hardwareConcurrency : doit être puissance de 2 entre 1 et 128
+        # hardwareConcurrency : les CPU Intel sont des puissances de 2, mais Apple Silicon
+        # a des valeurs non-puissance-de-2 (M1 Pro=10, M2 Pro=12, M4 Pro=14…).
+        # On ne flag que les valeurs qui ne sont ni puissance de 2 ni connues Apple Silicon.
         hwc = nav.get("hardwareConcurrency")
+        _HWC_APPLE_SILICON = {10, 11, 12, 14, 20, 24}
         if isinstance(hwc, int) and hwc > 0:
-            if hwc & (hwc - 1) != 0:
+            est_puissance_2 = hwc & (hwc - 1) == 0
+            if not est_puissance_2 and hwc not in _HWC_APPLE_SILICON:
                 signaux.append(
                     Signal(
                         "hwc_non_puissance2",
-                        f"hardwareConcurrency={hwc} n'est pas une puissance de 2",
+                        f"hardwareConcurrency={hwc} n'est ni puissance de 2 ni Apple Silicon connu",
                         0.25,
                     )
                 )

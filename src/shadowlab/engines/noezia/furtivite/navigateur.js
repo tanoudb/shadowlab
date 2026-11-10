@@ -214,18 +214,23 @@
     });
   }
 
-  // ─── hardwareConcurrency et deviceMemory (sur le prototype, pas l'instance) ───
+  // ─── hardwareConcurrency et deviceMemory (prototype + instance, car Chrome
+  //     peut mettre une propriété propre sur navigator qui masque le prototype) ───
   if (P.hardware_concurrency) {
-    Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
-      get: natif(() => P.hardware_concurrency, 'get hardwareConcurrency'),
-      configurable: true,
-    });
+    const getHWC = natif(() => P.hardware_concurrency, 'get hardwareConcurrency');
+    for (const target of [Navigator.prototype, navigator]) {
+      Object.defineProperty(target, 'hardwareConcurrency', {
+        get: getHWC, configurable: true, enumerable: true,
+      });
+    }
   }
   if (P.device_memory) {
-    Object.defineProperty(Navigator.prototype, 'deviceMemory', {
-      get: natif(() => P.device_memory, 'get deviceMemory'),
-      configurable: true,
-    });
+    const getDM = natif(() => P.device_memory, 'get deviceMemory');
+    for (const target of [Navigator.prototype, navigator]) {
+      Object.defineProperty(target, 'deviceMemory', {
+        get: getDM, configurable: true, enumerable: true,
+      });
+    }
   }
 
   // ─── navigator.languages (sur le prototype, gelée) ───

@@ -39,18 +39,21 @@
     const gapW = P.platform_name === 'macOS' ? 0 : P.platform_name === 'Windows' ? 16 : 2;
     const gapH = P.platform_name === 'macOS' ? 28 : P.platform_name === 'Windows' ? 39 : 37;
 
-    Object.defineProperty(Window.prototype, 'outerWidth', {
-      get: natif(function outerWidth() {
-        return (window.innerWidth || 0) + gapW;
-      }, 'get outerWidth'),
-      configurable: true,
-    });
-    Object.defineProperty(Window.prototype, 'outerHeight', {
-      get: natif(function outerHeight() {
-        return (window.innerHeight || 0) + gapH;
-      }, 'get outerHeight'),
-      configurable: true,
-    });
+    const getOW = natif(function outerWidth() {
+      return (window.innerWidth || 0) + gapW;
+    }, 'get outerWidth');
+    const getOH = natif(function outerHeight() {
+      return (window.innerHeight || 0) + gapH;
+    }, 'get outerHeight');
+
+    for (const target of [Window.prototype, window]) {
+      Object.defineProperty(target, 'outerWidth', {
+        get: getOW, configurable: true, enumerable: true,
+      });
+      Object.defineProperty(target, 'outerHeight', {
+        get: getOH, configurable: true, enumerable: true,
+      });
+    }
   }
 
   // ─── WebRTC protection : empêcher la fuite d'IP via ICE candidates ───
