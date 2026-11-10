@@ -6,6 +6,38 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Element enrichi + scénario extraction adaptative
+
+### Fait
+- **Element** (`analyseur.py`) : navigation DOM complète — `tag`, `attributs`, `elements()`,
+  `parent`, `enfants`, `freres`. Parité Scrapling pour la traversée.
+- **Analyseur.elements()** : sélection CSS renvoyant des `Element` navigables.
+- **Signatures mémoire seule** (`extraction.py`) : `chemin` optionnel (`None` = pas de persistance
+  fichier). Corrige le bug `Signatures(None)` (`AttributeError` sur `read_text`).
+- **Page `/lab/adaptatif`** (`pages.py`, `app.py`) : page Arena avec classes CSS mutées à chaque
+  requête (`_suffixe_aleatoire()`). Simule l'obfuscation CSS côté site.
+- **Scénario `extraction_adaptative`** (`scenarios.py`) : 2 passages sur `/lab/adaptatif`, le
+  premier apprend les signatures, le deuxième relocalise malgré les classes changées.
+- 7 tests ajoutés (`test_analyseur.py`), 311 tests verts, lint propre.
+
+### Fichiers
+- `src/shadowlab/engines/noezia/analyseur.py` — Element enrichi
+- `src/shadowlab/engines/noezia/extraction.py` — Signatures(chemin=None)
+- `src/shadowlab/scenarios.py` — extraction_adaptative
+- `src/shadowlab/site/pages.py` — page adaptatif()
+- `src/shadowlab/site/app.py` — route /lab/adaptatif
+- `tests/test_analyseur.py` — 7 tests DOM/navigation
+
+### Décisions
+- Signatures sans fichier : `None` plutôt qu'un `tempfile` — plus simple pour les scénarios en
+  mémoire, pas d'effets de bord disque.
+- Le scénario n'utilise pas JS (`attend_js=False`) car l'extracteur travaille sur le HTML brut.
+
+### Reste
+- Tester le scénario de bout en bout (site lancé + moteur HTTP).
+- Doc d'usage pour l'extraction adaptative.
+- Moteur expérimental propre (au-delà du wrapper).
+
 ## 2026-11-09 — Claude (Opus 4.6) — CLI récolte + analyseur branché aux moteurs HTTP
 
 ### Fait
