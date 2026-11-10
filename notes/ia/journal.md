@@ -1926,5 +1926,23 @@ Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'An
 **Fichiers** : `src/shadowlab/site/static/observateur.js`, `src/shadowlab/detection.py`,
 `tests/test_detection.py`, `tests/test_noezia_v4.py`, `docs/DECISIONS.md`, `AGENTS.md`
 
-**Reste** : valider avec une campagne Arena (les sondes JS seront collectées au prochain passage moteur),
-test de validation externe (bot.incolumitas.com).
+**Validation** :
+- Campagne 53 (verif-sondes-d37) : 6 sondes collectent des données réelles. domrect détecte la randomisation NOEZIA (indéterminé 0.80), deep-proxy détecte des signaux faibles sur les deux moteurs.
+- Campagne 54 (validation-externe) : les deux moteurs (noezia + playwright) passent bot.incolumitas.com (détecteur indépendant NikolaiT/CreepJS). Validation non circulaire confirmée.
+- Campagne 55 (benchmark-39-detecteurs, niveau 01) : NOEZIA 0/390 détections automatisé, 10/10 réussi. Playwright 65/390 automatisé, grillé par 7 détecteurs.
+- Campagne 56 (benchmark-niveaux-proteges, niveaux 03-04) : NOEZIA 6/6 réussi, 0 détecté. Playwright 0/6 réussi, bloqué par regles-http.
+- **Bilan** : NOEZIA 16/16 réussi (100%), 0% détecté. Playwright 10/16 réussi (62%), 100% détecté.
+
+**Reste** : tester niveaux 05-06 (avec Arena Docker), consolider le scénario de validation externe.
+
+## 10/11/2026 — Export signaux détaillés + benchmark 39 détecteurs
+
+**Fait** :
+- Fix `reports.py` : `passages_json()` exporte maintenant la colonne `signals` de la table `detections`. Chaque détection inclut ses signaux avec code, description et poids — résultats pleinement auditables.
+- Campagne 55 (benchmark-39-detecteurs, niveau 01) : NOEZIA 0% détecté, Playwright grillé par 7 détecteurs.
+- Campagne 56 (niveaux 03-04) : NOEZIA 6/6, Playwright 0/6 bloqué.
+- Campagne 57 (vérification export) : signaux visibles dans le JSON, deep-proxy NOEZIA révèle `illegal_invoc_absent` sur 5 getters (fuite Patchright).
+
+**Fichiers** : `src/shadowlab/reports.py`, `configs/experiments/benchmark-39-detecteurs.yaml`, `configs/experiments/benchmark-niveaux-proteges.yaml`
+
+**Reste** : corriger la fuite deep-proxy (illegal invocation absente sur getters patched par Patchright), tester niveaux 05-06, consolider validation externe.
