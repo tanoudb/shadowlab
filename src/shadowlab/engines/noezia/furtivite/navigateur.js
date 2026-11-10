@@ -12,22 +12,31 @@
   // ─── toString() natif : tous nos overrides passent /native code/.test() ───
   const _ts = Function.prototype.toString;
   const _natifs = new WeakMap();
-  function natif(fn, nom) {
-    _natifs.set(fn, nom);
+  function natif(fn, nom, cible) {
+    // cible : le constructeur attendu pour les getters (Navigator, Screen…).
+    // Si présent, appeler le getter avec un this non conforme lance TypeError
+    // comme un vrai getter natif C++.
+    const wrapped = cible
+      ? function() {
+          if (!(this instanceof cible)) throw new TypeError('Illegal invocation');
+          return fn.call(this);
+        }
+      : fn;
+    _natifs.set(wrapped, nom);
     // Un getter natif C++ n'a pas de .prototype et a length=0.
     // Sans ce nettoyage, Object.getOwnPropertyDescriptor(Navigator.prototype, prop).get
     // révèle une fonction JS au lieu d'un getter natif.
-    delete fn.prototype;
+    delete wrapped.prototype;
     try {
-      Object.defineProperty(fn, 'name', { value: nom, writable: false, configurable: true });
+      Object.defineProperty(wrapped, 'name', { value: nom, writable: false, configurable: true });
     } catch(e) {}
     // Getters/setters natifs ont length=0 ; les méthodes gardent leur longueur déclarée
     if (nom.startsWith('get ') || nom.startsWith('set ') || nom === 'toString') {
       try {
-        Object.defineProperty(fn, 'length', { value: 0, writable: false, configurable: true });
+        Object.defineProperty(wrapped, 'length', { value: 0, writable: false, configurable: true });
       } catch(e) {}
     }
-    return fn;
+    return wrapped;
   }
   const _remplacement = {toString() {
     const n = _natifs.get(this);
@@ -99,7 +108,7 @@
   // Accès par nom (Chrome le supporte)
   fauxPlugins.forEach(p => { pluginArr[p.name] = p; });
   Object.defineProperty(Navigator.prototype, 'plugins', {
-    get: natif(() => pluginArr, 'get plugins'), configurable: true,
+    get: natif(() => pluginArr, 'get plugins', Navigator), configurable: true,
   });
 
   const mimeObjs = fauxPlugins.map(p => p[0]);
@@ -113,7 +122,7 @@
   }, 'values');
   mimeObjs.forEach(m => { mimeArr[m.type] = m; });
   Object.defineProperty(Navigator.prototype, 'mimeTypes', {
-    get: natif(() => mimeArr, 'get mimeTypes'), configurable: true,
+    get: natif(() => mimeArr, 'get mimeTypes', Navigator), configurable: true,
   });
 
   // ─── Notification.permission → "default" ───
@@ -217,7 +226,7 @@
   // ─── hardwareConcurrency et deviceMemory (prototype + instance, car Chrome
   //     peut mettre une propriété propre sur navigator qui masque le prototype) ───
   if (P.hardware_concurrency) {
-    const getHWC = natif(() => P.hardware_concurrency, 'get hardwareConcurrency');
+    const getHWC = natif(() => P.hardware_concurrency, 'get hardwareConcurrency', Navigator);
     for (const target of [Navigator.prototype, navigator]) {
       Object.defineProperty(target, 'hardwareConcurrency', {
         get: getHWC, configurable: true, enumerable: true,
@@ -225,7 +234,7 @@
     }
   }
   if (P.device_memory) {
-    const getDM = natif(() => P.device_memory, 'get deviceMemory');
+    const getDM = natif(() => P.device_memory, 'get deviceMemory', Navigator);
     for (const target of [Navigator.prototype, navigator]) {
       Object.defineProperty(target, 'deviceMemory', {
         get: getDM, configurable: true, enumerable: true,
@@ -241,23 +250,23 @@
       ? Object.freeze([langPrimaire])
       : Object.freeze([langPrimaire, langBase]);
     Object.defineProperty(Navigator.prototype, 'languages', {
-      get: natif(() => langues, 'get languages'), configurable: true,
+      get: natif(() => langues, 'get languages', Navigator), configurable: true,
     });
     Object.defineProperty(Navigator.prototype, 'language', {
-      get: natif(() => langPrimaire, 'get language'), configurable: true,
+      get: natif(() => langPrimaire, 'get language', Navigator), configurable: true,
     });
   }
 
   // ─── navigator.platform (doit correspondre à l'OS du profil et au User-Agent) ───
   if (P.platform) {
     Object.defineProperty(Navigator.prototype, 'platform', {
-      get: natif(() => P.platform, 'get platform'), configurable: true,
+      get: natif(() => P.platform, 'get platform', Navigator), configurable: true,
     });
   }
 
   // ─── navigator.vendor ───
   Object.defineProperty(Navigator.prototype, 'vendor', {
-    get: natif(() => 'Google Inc.', 'get vendor'), configurable: true,
+    get: natif(() => 'Google Inc.', 'get vendor', Navigator), configurable: true,
   });
 
   // ─── window.chrome ───

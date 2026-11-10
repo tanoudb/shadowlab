@@ -19,17 +19,17 @@
 
     for (const [prop, val] of [['width', sw], ['height', sh], ['availWidth', aw], ['availHeight', ah]]) {
       Object.defineProperty(Screen.prototype, prop, {
-        get: natif(() => val, 'get ' + prop), configurable: true,
+        get: natif(() => val, 'get ' + prop, Screen), configurable: true,
       });
     }
     Object.defineProperty(Screen.prototype, 'colorDepth', {
-      get: natif(() => 24, 'get colorDepth'), configurable: true,
+      get: natif(() => 24, 'get colorDepth', Screen), configurable: true,
     });
     Object.defineProperty(Screen.prototype, 'pixelDepth', {
-      get: natif(() => 24, 'get pixelDepth'), configurable: true,
+      get: natif(() => 24, 'get pixelDepth', Screen), configurable: true,
     });
     Object.defineProperty(Window.prototype, 'devicePixelRatio', {
-      get: natif(() => dpr, 'get devicePixelRatio'), configurable: true,
+      get: natif(() => dpr, 'get devicePixelRatio', Window), configurable: true,
     });
 
     // outerWidth/Height > innerWidth/Height (chrome de fenêtre)
@@ -41,10 +41,10 @@
 
     const getOW = natif(function outerWidth() {
       return (window.innerWidth || 0) + gapW;
-    }, 'get outerWidth');
+    }, 'get outerWidth', Window);
     const getOH = natif(function outerHeight() {
       return (window.innerHeight || 0) + gapH;
-    }, 'get outerHeight');
+    }, 'get outerHeight', Window);
 
     for (const target of [Window.prototype, window]) {
       Object.defineProperty(target, 'outerWidth', {

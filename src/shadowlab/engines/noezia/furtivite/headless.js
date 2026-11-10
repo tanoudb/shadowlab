@@ -13,7 +13,7 @@
   // ─── navigator.webdriver → false (défense redondante après --disable-blink-features) ───
   try {
     Object.defineProperty(Navigator.prototype, 'webdriver', {
-      get: natif(() => false, 'get webdriver'), configurable: true,
+      get: natif(() => false, 'get webdriver', Navigator), configurable: true,
     });
   } catch(e) {}
 
@@ -27,10 +27,10 @@
   // ─── document.visibilityState / hidden (headless : 'hidden') ───
   try {
     Object.defineProperty(Document.prototype, 'visibilityState', {
-      get: natif(() => 'visible', 'get visibilityState'), configurable: true,
+      get: natif(() => 'visible', 'get visibilityState', Document), configurable: true,
     });
     Object.defineProperty(Document.prototype, 'hidden', {
-      get: natif(() => false, 'get hidden'), configurable: true,
+      get: natif(() => false, 'get hidden', Document), configurable: true,
     });
   } catch(e) {}
 
@@ -123,10 +123,10 @@
     function _wxr() { _ws ^= _ws << 13; _ws ^= _ws >>> 17; _ws ^= _ws << 5; return (_ws >>> 0) / 0xFFFFFFFF; }
     const sx = 22 + Math.floor(_wxr() * 200);
     const sy = 25 + Math.floor(_wxr() * 100);
-    const getSX = natif(() => sx, 'get screenX');
-    const getSY = natif(() => sy, 'get screenY');
-    const getSL = natif(() => sx, 'get screenLeft');
-    const getST = natif(() => sy, 'get screenTop');
+    const getSX = natif(() => sx, 'get screenX', Window);
+    const getSY = natif(() => sy, 'get screenY', Window);
+    const getSL = natif(() => sx, 'get screenLeft', Window);
+    const getST = natif(() => sy, 'get screenTop', Window);
     for (const target of [Window.prototype, window]) {
       Object.defineProperty(target, 'screenX', {
         get: getSX, configurable: true, enumerable: true,
