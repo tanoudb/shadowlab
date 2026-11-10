@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import random
+import subprocess
+import sys
 from dataclasses import dataclass
 
 # ── Machines réalistes (OS + GPU + cœurs + mémoire + écran) ───────────
@@ -98,7 +100,7 @@ MACHINES: list[ProfilMachine] = [
         ["15_1"],
         "Google Inc. (Apple)",
         "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
-        14,
+        18,
         8,
         [(1512, 982, 2.0), (1728, 1117, 2.0), (2560, 1440, 2.0)],
     ),
@@ -416,16 +418,46 @@ class ProfilNavigateur:
         return cls(**d)
 
 
+def _gpu_hote() -> str | None:
+    """Détecte le chipset GPU de la machine hôte (macOS uniquement)."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        out = subprocess.check_output(
+            ["system_profiler", "SPDisplaysDataType"],
+            text=True,
+            timeout=5,
+        )
+        for ligne in out.splitlines():
+            if "Chipset Model" in ligne:
+                return ligne.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return None
+
+
 def generer_profil(nom: str | None = None, os: str | None = None, rng: random.Random | None = None) -> ProfilNavigateur:
     """Génère un profil navigateur complet et cohérent.
 
     Tous les signaux sont corrélés via la table MACHINES : le GPU, les cœurs,
     la mémoire et la résolution d'écran correspondent à une vraie configuration.
+    Sur macOS avec Metal, le GPU réel est exposé par Chrome via ANGLE — le profil
+    doit correspondre au matériel réel pour éviter une incohérence GPU détectable.
     """
     r = rng or random.Random()
 
     # Filtrer par OS si demandé (fallback sur toutes les machines si l'OS est inconnu)
     candidates = ([m for m in MACHINES if m.os == os] or MACHINES) if os else MACHINES
+
+    # Sur macOS, filtrer aussi par GPU réel : Chrome expose le renderer ANGLE natif
+    # (Metal) et un profil M3 sur un M5 Pro réel serait incohérent.
+    if os == "macos":
+        gpu = _gpu_hote()
+        if gpu:
+            gpu_match = [m for m in candidates if gpu in m.gpu_renderer]
+            if gpu_match:
+                candidates = gpu_match
+
     machine = r.choice(candidates)
 
     os_version = r.choice(machine.os_versions)

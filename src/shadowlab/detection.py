@@ -421,7 +421,7 @@ class DetecteurCoherenceProfonde:
         # a des valeurs non-puissance-de-2 (M1 Pro=10, M2 Pro=12, M4 Pro=14…).
         # On ne flag que les valeurs qui ne sont ni puissance de 2 ni connues Apple Silicon.
         hwc = nav.get("hardwareConcurrency")
-        _HWC_APPLE_SILICON = {10, 11, 12, 14, 20, 24}
+        _HWC_APPLE_SILICON = {10, 11, 12, 14, 16, 18, 20, 24}
         if isinstance(hwc, int) and hwc > 0:
             est_puissance_2 = hwc & (hwc - 1) == 0
             if not est_puissance_2 and hwc not in _HWC_APPLE_SILICON:

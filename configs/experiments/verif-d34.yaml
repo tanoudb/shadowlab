@@ -1,0 +1,11 @@
+# Vérification D-34 : les 2 fuites (outer_eq_inner + hwc) sont-elles colmatées ?
+experiment:
+  name: verif_d34
+  description: "Vérification corrections D-34 — NOEZIA seul, niveaux 03+06"
+  environment: local
+  engines: [noezia]
+  protections: ["03", "06"]
+  scenarios: [fingerprint_observation, detection_page]
+  repetitions: 2
+  seed: 20261110
+  output: [json]
