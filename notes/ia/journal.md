@@ -49,10 +49,12 @@ type: note
 NOEZIA : **0 FAIL / 27 tests** sur un détecteur indépendant non contrôlé.
 Première validation externe non circulaire du moteur.
 
+### Stabilité confirmée (campagne 72)
+- 3 répétitions NOEZIA sur bot.incolumitas.com : **3/3 humain, 0/27 FAIL** à chaque run.
+- Score comportemental inaccessible (API `abs.incolumitas.com/classify` ne répond pas aux headless) — le fallback 0 FAIL suffit.
+
 ### Reste
-- Score comportemental de bot.incolumitas.com inaccessible (API `abs.incolumitas.com/classify` ne répond pas pour les headless) — le fallback sur 0 FAIL suffit
 - Tester sur Arena Docker (niveaux 05-06) avec le login comportemental
-- Lancer une campagne de répétitions (3-5 runs) pour confirmer la stabilité
 - 338 tests verts, lint propre
 
 ---

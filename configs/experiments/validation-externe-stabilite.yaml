@@ -1,0 +1,13 @@
+# Validation externe stabilité : 3 répétitions sur bot.incolumitas.com
+# Vérifie que le résultat 0/27 FAIL est stable et reproductible.
+experiment:
+  name: validation_externe_stabilite
+  description: Stabilité du verdict humain sur bot.incolumitas.com (3 répétitions)
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - bot_sanity_check
+  repetitions: 3
+  seed: 42
+  output: [json]
