@@ -169,6 +169,23 @@ def test_composite_differe_detecte_dans_gardien(reglages):
     assert _composite_differe(cx, JETON) is True
 
 
+def test_fingerprinting_differe_detecte_dans_gardien(reglages):
+    """_fingerprinting_differe() détecte une décision enregistrée par un détecteur individuel."""
+    cx = db.ouvrir(reglages.base_donnees)
+    from shadowlab.site.gardien import _fingerprinting_differe
+
+    assert _fingerprinting_differe(cx, JETON) is False
+    db.enregistrer_decision(
+        cx,
+        JETON,
+        "fingerprinting-differe",
+        "detecte",
+        "/lab/collecte",
+        [{"detecteur": "cdp", "signaux": [{"code": "debugger_instant", "description": "test"}]}],
+    )
+    assert _fingerprinting_differe(cx, JETON) is True
+
+
 def test_api_ecriture_exige_l_entete_anti_csrf(client):
     assert client.post("/api/arret").status_code == 403
     assert client.get("/api/sante").json() == {"statut": "ok"}

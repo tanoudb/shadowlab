@@ -1,0 +1,24 @@
+# Validation durcissement Arena : détecteur CDP + seuils composites abaissés
+# NOEZIA × niveaux 04-06 × scénarios clés × 2 reps
+experiment:
+  name: durcissement_v1
+  description: >-
+    Valide le nouveau détecteur CDP et les seuils composites abaissés.
+    Objectif : NOEZIA doit commencer à être détecté aux niveaux 04+.
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - detection_page
+    - javascript_content
+  protections:
+    - "04"
+    - "05"
+    - "06"
+  repetitions: 2
+  seed: 20261111
+  warmup: 0
+  metrics:
+    - detection_rate
+    - scenario_success
+  output: [json, html]

@@ -6,6 +6,48 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Blocage différé + interstitiel fingerprint (40 détecteurs)
+
+**Contexte :** campagnes 83-85 montrent que le détecteur CDP fonctionne (11/12 passages
+classés "automatise", score 1.0), mais NOEZIA passe quand même parce que le blocage est
+post-hoc : l'empreinte JS n'est collectée qu'après que la page est servie.
+
+**Diagnostic :**
+1. `__NOEZIA_PROFIL__` injecté par `add_init_script()` n'est PAS visible depuis le contexte
+   de la page (Patchright isole les scripts d'init) → check `injection_globals` inutile.
+2. Le `/lab/collecte` ne stockait des décisions différées que pour le composite — les
+   détecteurs individuels "automatise" (ex: CDP) étaient ignorés.
+3. Les pages interstitielles (défi JS, CAPTCHA, Turnstile, reCAPTCHA) n'incluaient pas
+   `observateur.js` → pas de collecte d'empreinte pendant le challenge.
+
+**Fait :**
+- **Blocage différé individuel** : `/lab/collecte` stocke maintenant une décision
+  `fingerprinting-differe` quand un détecteur individuel classifie "automatise".
+  `controler()` vérifie cette décision avant de servir la page.
+- **Interstitiel avec fingerprint** : les pages de challenge (`_page_arena`) incluent
+  `observateur.js` + meta sl-session quand un jeton est fourni. Le flux est :
+  page de défi → observateur collecte empreinte → /lab/collecte → CDP détecte → stocke
+  decision → redirection vers contenu → `controler()` bloque.
+- **`page_defi()`, `page_captcha()`, `page_turnstile()`, `page_recaptcha()`** : paramètre
+  `jeton` ajouté, passé par `gardien.controler()`.
+- **Test** : `test_fingerprinting_differe_detecte_dans_gardien` ajouté.
+- 339 tests, lint propre.
+
+**Fichiers modifiés :** `src/shadowlab/site/app.py` (collecte), `src/shadowlab/site/gardien.py`
+(`_fingerprinting_differe`, `controler`), `src/shadowlab/site/pages.py` (`_page_arena` +
+signatures), `tests/test_site.py`, `src/shadowlab/detection.py` (DetecteurCDP),
+`src/shadowlab/site/static/observateur.js` (cdpDetectionTest, injection_globals),
+`configs/arena/profils.yaml` (cdp + seuils), `tests/test_noezia_v4.py` (40 détecteurs).
+
+**Reste :**
+- Valider avec Arena Docker (campagne durcissement-v2 nécessite le frontal TLS).
+- Le timing entre collecte de l'empreinte et résolution du défi est critique : si le bot
+  résout le défi avant que l'empreinte soit envoyée, le blocage ne se déclenche pas.
+  À tester et éventuellement ajouter un délai minimum au défi.
+- Nettoyer `injection_globals` (check inutile contre Patchright — garder pour les autres moteurs).
+- Prochaine étape : vrai interstitiel de vérification (page blanche avec fingerprint collection
+  avant le moindre contenu, comme Cloudflare managed challenge).
+
 ## 2026-11-10 — Claude (Opus 4.6) — Détecteurs renforcés v2 : de 0% à 96% de détection
 
 **Contexte :** campagne 82 montrait que NOEZIA passait 72/72 passages sans déclencher

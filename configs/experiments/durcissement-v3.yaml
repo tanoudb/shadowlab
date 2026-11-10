@@ -1,0 +1,25 @@
+# Validation blocage différé via interstitiel — sans Arena (site direct).
+# Le défi JS est actif sur 04+ en direct aussi. On teste le flux :
+# page de défi → collecte empreinte → CDP détecte → stocke decision → page bloquée.
+experiment:
+  name: durcissement_v3
+  description: >-
+    Valide le blocage différé via fingerprint sur page interstitielle.
+    Sans Arena Docker, site direct.
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - detection_page
+    - javascript_content
+  protections:
+    - "04"
+    - "05"
+    - "06"
+  repetitions: 2
+  seed: 20261111
+  warmup: 0
+  metrics:
+    - detection_rate
+    - scenario_success
+  output: [json, html]

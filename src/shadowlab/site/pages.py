@@ -316,13 +316,16 @@ def manuel_pret(lien: str) -> str:
     return gabarit("Session manuelle", corps, "")
 
 
-def _page_arena(type_page: str, titre: str, corps: str, scripts: str = "") -> str:
-    """Page servie par une protection à la place du contenu demandé. Elle ne porte pas l'observateur."""
+def _page_arena(type_page: str, titre: str, corps: str, scripts: str = "", jeton: str = "") -> str:
+    """Page servie par une protection. Porte l'observateur si un jeton est fourni (collecte l'empreinte
+    pendant le challenge pour alimenter le blocage différé)."""
+    meta_session = f'\n<meta name="sl-session" content="{escape(jeton)}">' if jeton else ""
+    observateur = '\n<script type="module" src="/lab/static/observateur.js"></script>' if jeton else ""
     return f"""<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">{meta_session}
 <title>{escape(titre)} — ShadowLab</title>
 <link rel="stylesheet" href="/lab/static/lab.css">
 </head>
@@ -331,19 +334,21 @@ def _page_arena(type_page: str, titre: str, corps: str, scripts: str = "") -> st
 <h1>{escape(titre)}</h1>
 {corps}
 </main>
-{scripts}
+{scripts}{observateur}
 </body>
 </html>"""
 
 
-def page_defi(defi: str, difficulte: int, retour: str) -> str:
+def page_defi(defi: str, difficulte: int, retour: str, jeton: str = "") -> str:
     corps = f"""<p id="etat-defi">Vérification du navigateur en cours…</p>
 <noscript><p>Cette vérification demande JavaScript.</p></noscript>
 <div id="defi" hidden data-defi="{escape(defi)}" data-difficulte="{difficulte}" data-retour="{escape(retour)}"></div>"""
-    return _page_arena("defi", "Vérification", corps, '<script type="module" src="/lab/static/defi.js"></script>')
+    return _page_arena(
+        "defi", "Vérification", corps, '<script type="module" src="/lab/static/defi.js"></script>', jeton=jeton
+    )
 
 
-def page_captcha(captcha: str, retour: str, erreur: bool = False) -> str:
+def page_captcha(captcha: str, retour: str, erreur: bool = False, jeton: str = "") -> str:
     message = '<p id="captcha-erreur" role="alert">Code incorrect, réessayez.</p>' if erreur else ""
     corps = f"""<p>Cette session demande une vérification humaine (CAPTCHA de démonstration du laboratoire).</p>
 {message}
@@ -354,10 +359,10 @@ def page_captcha(captcha: str, retour: str, erreur: bool = False) -> str:
 <label>Code <input id="captcha-code" name="code" required maxlength="8" autocomplete="off"></label>
 <button id="captcha-envoyer" type="submit">Valider</button>
 </form>"""
-    return _page_arena("captcha", "Vérification humaine", corps)
+    return _page_arena("captcha", "Vérification humaine", corps, jeton=jeton)
 
 
-def page_turnstile(site_key: str, retour: str) -> str:
+def page_turnstile(site_key: str, retour: str, jeton: str = "") -> str:
     corps = f"""<p>Cette session demande une vérification Turnstile (Cloudflare, mode test).</p>
 <p id="turnstile-etat">Chargement du widget…</p>
 <form id="turnstile-formulaire" method="post" action="/lab/turnstile/verifier">
@@ -377,10 +382,11 @@ function turnstileOk(token) {{
         "Vérification Turnstile",
         corps,
         '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>',
+        jeton=jeton,
     )
 
 
-def page_recaptcha(site_key: str, retour: str) -> str:
+def page_recaptcha(site_key: str, retour: str, jeton: str = "") -> str:
     corps = f"""<p>Cette session demande une vérification reCAPTCHA v2 (Google, mode test).</p>
 <p id="recaptcha-etat">Chargement du widget…</p>
 <form id="recaptcha-formulaire" method="post" action="/lab/recaptcha/verifier">
@@ -400,6 +406,7 @@ function recaptchaOk(token) {{
         "Vérification reCAPTCHA",
         corps,
         '<script src="https://www.google.com/recaptcha/api.js" async defer></script>',
+        jeton=jeton,
     )
 
 

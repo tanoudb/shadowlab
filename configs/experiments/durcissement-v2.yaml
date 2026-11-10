@@ -1,0 +1,24 @@
+# Validation du blocage différé : CDP détecte pendant collecte → bloque les requêtes suivantes.
+# Scénarios à navigations multiples pour vérifier que la 2e requête est bloquée.
+experiment:
+  name: durcissement_v2
+  description: >-
+    Valide le blocage différé des détecteurs individuels (CDP).
+    Scénarios multi-pages : detection_page + javascript_content + connexion.
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - detection_page
+    - javascript_content
+  protections:
+    - "04"
+    - "05"
+    - "06"
+  repetitions: 2
+  seed: 20261111
+  warmup: 0
+  metrics:
+    - detection_rate
+    - scenario_success
+  output: [json, html]

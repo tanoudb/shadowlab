@@ -207,7 +207,7 @@ def controler(
         motifs = [{"difficulte": profil.defi_js.difficulte}]
         db.enregistrer_decision(cx, jeton, "defi-js", "emis", chemin, motifs)
         cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
-        return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
+        return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible, jeton=jeton), "defi-js")
     if profil.fingerprinting.actif:
         if _fingerprinting_differe(cx, jeton):
             if profil.fingerprinting.bloquer != "non":
@@ -247,7 +247,7 @@ def controler(
         db.enregistrer_decision(cx, jeton, "turnstile", "emis", chemin, [])
         cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         site_key = defis.turnstile_site_key("pass")
-        reponse = _refus(request, pages.page_turnstile(site_key, cible), "turnstile")
+        reponse = _refus(request, pages.page_turnstile(site_key, cible, jeton=jeton), "turnstile")
         reponse.headers["X-ShadowLab-Turnstile"] = "1"
         return reponse
     if profil.recaptcha.actif and not defis.cookie_valide(
@@ -255,7 +255,7 @@ def controler(
     ):
         db.enregistrer_decision(cx, jeton, "recaptcha", "emis", chemin, [])
         cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
-        reponse = _refus(request, pages.page_recaptcha(defis.recaptcha_site_key(), cible), "recaptcha")
+        reponse = _refus(request, pages.page_recaptcha(defis.recaptcha_site_key(), cible, jeton=jeton), "recaptcha")
         reponse.headers["X-ShadowLab-Recaptcha"] = "1"
         return reponse
     if profil.captcha.actif and not defis.cookie_valide(
@@ -270,5 +270,6 @@ def controler(
         if motifs:
             db.enregistrer_decision(cx, jeton, "captcha", "emis", chemin, motifs)
             cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
-            return _refus(request, pages.page_captcha(defis.creer_captcha(secret, jeton), cible), "captcha")
+            page = pages.page_captcha(defis.creer_captcha(secret, jeton), cible, jeton=jeton)
+            return _refus(request, page, "captcha")
     return None
