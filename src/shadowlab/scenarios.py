@@ -383,33 +383,49 @@ def extraction_adaptative(d: Driver, base: str, jeton: str, rng: random.Random) 
     from .engines.noezia.extraction import Signatures
 
     sigs = Signatures()  # mémoire seule, pas de fichier
+    url_page = f"{base}/lab/adaptatif"
 
-    a1 = Analyseur(html1, url=f"{base}/lab/adaptatif", signatures=sigs)
-    titre1 = a1.extraire_adaptatif("h3", "titre")  # apprend la signature du <h3>
-    prix1 = a1.extraire_adaptatif("span", "prix")
+    a1 = Analyseur(html1, url=url_page, signatures=sigs)
+
+    # Lire les classes dynamiques du premier passage via l'élément #info-classes
+    info = a1.attribut("#info-classes", "data-titre")
+    if not info:
+        return Issue(False, {"etape": "premier_passage", "erreur": "classes introuvables"})
+    cls_titre = info  # ex: "titre-xkqmt"
+    cls_prix = a1.attribut("#info-classes", "data-prix") or ""
+
+    # Sélecteurs par classe — ils cassent au prochain passage (classes mutées)
+    sel_titre = f"h3.{cls_titre}"
+    sel_prix = f"span.{cls_prix}"
+
+    titre1 = a1.extraire_adaptatif(sel_titre, "titre")
+    prix1 = a1.extraire_adaptatif(sel_prix, "prix")
 
     if not titre1:
-        return Issue(False, {"etape": "premier_passage", "erreur": "titre introuvable"})
+        return Issue(False, {"etape": "premier_passage", "erreur": "titre introuvable", "selecteur": sel_titre})
 
-    # Deuxième passage : les classes ont muté
+    # Deuxième passage : les classes ont muté, les sélecteurs du passage 1 cassent
     aller(d, url(base, "/lab/adaptatif", jeton))
     html2 = d.content()
-    a2 = Analyseur(html2, url=f"{base}/lab/adaptatif", signatures=sigs)
+    a2 = Analyseur(html2, url=url_page, signatures=sigs)
 
-    # Le sélecteur par classe du premier passage ne marche plus (classes aléatoires)
-    # Mais extraire_adaptatif doit retrouver les éléments par ressemblance
-    titre2 = a2.extraire_adaptatif("h3", "titre")
-    prix2 = a2.extraire_adaptatif("span", "prix")
+    # Vérifier que le sélecteur est bien cassé
+    selecteur_casse = a2.css_un(sel_titre) is None
+
+    # extraire_adaptatif doit retrouver les éléments par ressemblance à la signature
+    titre2 = a2.extraire_adaptatif(sel_titre, "titre")
+    prix2 = a2.extraire_adaptatif(sel_prix, "prix")
 
     titres_ok = titre1 and titre2 and pages.ANNONCES_ADAPTATIVES[0]["titre"] in titre1
     prix_ok = prix1 and prix2
     return Issue(
-        bool(titres_ok and prix_ok),
+        bool(titres_ok and prix_ok and selecteur_casse),
         {
             "titre_passage_1": titre1,
             "titre_passage_2": titre2,
             "prix_passage_1": prix1,
             "prix_passage_2": prix2,
+            "selecteur_casse": selecteur_casse,
             "signatures_memorisees": len(sigs._data),  # noqa: SLF001
         },
     )

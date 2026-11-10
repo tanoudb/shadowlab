@@ -166,33 +166,51 @@ def test_http_base_analyseur():
     assert items[2].css_un("span.prix") == "165000"
 
 
-def test_extraction_adaptative_relocalise_malgre_mutation():
-    """Simule deux pages /lab/adaptatif avec des classes mutées — l'extracteur relocalise."""
+def _page_adaptative(sfx: str) -> str:
+    """Génère une page adaptative avec le suffixe de classes donné."""
     from shadowlab.site.pages import ANNONCES_ADAPTATIVES
 
-    def _page(sfx: str) -> str:
-        cartes = "".join(
-            f"<div class='annonce-{sfx}'>"
-            f"<h3 class='titre-{sfx}'>{a['titre']}</h3>"
-            f"<span class='prix-{sfx}'>{a['prix']}</span>"
-            f"</div>"
-            for a in ANNONCES_ADAPTATIVES
-        )
-        return f"<html><body><div id='annonces'>{cartes}</div></body></html>"
+    cartes = "".join(
+        f"<div class='annonce-{sfx}'>"
+        f"<h3 class='titre-{sfx}'>{a['titre']}</h3>"
+        f"<span class='prix-{sfx}'>{a['prix']}</span>"
+        f"</div>"
+        for a in ANNONCES_ADAPTATIVES
+    )
+    return (
+        f"<html><body>"
+        f"<p id='info-classes' data-titre='titre-{sfx}' data-prix='prix-{sfx}'></p>"
+        f"<div id='annonces'>{cartes}</div>"
+        f"</body></html>"
+    )
 
+
+def test_extraction_adaptative_relocalise_malgre_mutation():
+    """Simule deux pages /lab/adaptatif avec des classes mutées — l'extracteur relocalise."""
     sigs = extraction.Signatures()
     url = "http://test.local/lab/adaptatif"
 
-    # Passage 1 : sélecteur exact fonctionne
-    a1 = Analyseur(_page("abc"), url=url, signatures=sigs)
+    # Passage 1 : sélecteur par classe fonctionne
+    a1 = Analyseur(_page_adaptative("abc"), url=url, signatures=sigs)
     t1 = a1.extraire_adaptatif("h3.titre-abc", "titre")
     assert t1 == "Studio Paris 18e"
 
     # Passage 2 : les classes ont changé → sélecteur cassé, relocalisation
-    a2 = Analyseur(_page("xyz"), url=url, signatures=sigs)
+    a2 = Analyseur(_page_adaptative("xyz"), url=url, signatures=sigs)
     assert a2.css_un("h3.titre-abc") is None  # sélecteur cassé
     t2 = a2.extraire_adaptatif("h3.titre-abc", "titre")
     assert t2 == "Studio Paris 18e"  # retrouvé par ressemblance
+
+
+def test_similaires_sur_page_adaptative():
+    """similaires() retrouve les 4 annonces malgré des classes inconnues."""
+    a = Analyseur(_page_adaptative("qrs"))
+    # On pointe UNE carte, similaires() les retrouve toutes
+    cartes = a.similaires("div.annonce-qrs")
+    assert len(cartes) == 4
+    titres = [c.css_un("h3") for c in cartes]
+    assert titres[0] == "Studio Paris 18e"
+    assert titres[3] == "Maison Nantes"
 
 
 def test_recuperer_respecte_le_perimetre():
