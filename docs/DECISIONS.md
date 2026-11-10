@@ -188,3 +188,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   illegal invocation, descripteurs Object vs Reflect, chaîne prototype, stack d'erreur). Le collecteur JS
   (`observateur.js`) envoie les données ; 6 classes Python (`detection.py`) les classent. Total : 39
   détecteurs, 338 tests verts.
+- **D-38 — 10/11/2026 — Illegal invocation sur getters patchés.** Les getters natifs de Chrome lancent
+  `TypeError: Illegal invocation` quand appelés avec un `this` non conforme (ex: `getter.call({})`). Nos
+  patches retournaient silencieusement la valeur — signature détectable par la sonde deep-proxy. Ajout d'un
+  paramètre `cible` à `natif()` : quand présent, vérifie `this instanceof Constructor` avant de retourner.
+  Appliqué aux 3 fichiers de furtivité (navigateur, environnement, headless). Campagne 58 confirme la
+  disparition du signal `illegal_invoc_absent` sur NOEZIA.

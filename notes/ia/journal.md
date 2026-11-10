@@ -1945,4 +1945,17 @@ Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'An
 
 **Fichiers** : `src/shadowlab/reports.py`, `configs/experiments/benchmark-39-detecteurs.yaml`, `configs/experiments/benchmark-niveaux-proteges.yaml`
 
-**Reste** : corriger la fuite deep-proxy (illegal invocation absente sur getters patched par Patchright), tester niveaux 05-06, consolider validation externe.
+**Reste** : tester niveaux 05-06 (Arena Docker), consolider validation externe.
+
+## 10/11/2026 — Correction fuite illegal invocation (D-38)
+
+**Objectif** : corriger la signature détectable `illegal_invoc_absent` sur 5 getters (hwc, wd, platform, dm, screen_w).
+
+**Fait** :
+- Ajout paramètre `cible` à `natif()` dans `navigateur.js` : les getters vérifient `this instanceof Constructor`
+- Appliqué à `navigateur.js` (7 getters Navigator), `environnement.js` (7 getters Screen/Window), `headless.js` (5 getters Navigator/Document/Window)
+- Campagne 58 confirme : signal `illegal_invoc_absent` disparu. Seul reste `proxy_dans_stack` (0.8, identique à Playwright — vient de l'architecture CDP, pas de nos patches)
+
+**Fichiers** : `src/shadowlab/engines/noezia/furtivite/navigateur.js`, `environnement.js`, `headless.js`, `docs/DECISIONS.md`
+
+**Reste** : investiguer le signal `proxy_dans_stack` (partagé avec Playwright), tester niveaux 05-06, validation externe complète.
