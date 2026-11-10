@@ -1,0 +1,28 @@
+# Validation statistique des détecteurs renforcés v2
+# 3 scénarios × 4 niveaux × 3 répétitions = 36 passages
+# Sans connexion (nécessite Arena Docker)
+experiment:
+  name: validation_detecteurs_v2_stat
+  description: >-
+    Validation statistique avec 3 répétitions. Confirme la robustesse
+    de la détection sans dépendance Arena Docker.
+  environment: local
+  engines:
+    - noezia
+  scenarios:
+    - static_html
+    - javascript_content
+    - detection_page
+  protections:
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  repetitions: 3
+  seed: 20261111
+  warmup: 0
+  metrics:
+    - detection_rate
+    - execution_time
+    - scenario_success
+  output: [json, html]

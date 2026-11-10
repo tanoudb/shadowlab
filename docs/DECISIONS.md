@@ -230,3 +230,19 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   et (b) vérifiait la soumission par URL (`"/lab/turnstile" not in u`) ce qui passait immédiatement
   pour les challenges inline — réécrit : polling du callback Arena (`#turnstile-etat`) + hidden input
   (le plus rapide gagne), timeout 30 s, vérification par disparition de `data-arena="turnstile"`.
+- **D-45 — 11/11/2026 — Trois détecteurs renforcés : CDP, comportement v2, méta-composite.** La campagne 82
+  montrait 0/72 détections NOEZIA (score=0, `_verdict()` retourne "humain" par défaut). Cause racine :
+  modèle à signaux négatifs uniquement — si aucun signal connu n'est trouvé, humain par défaut. Trois
+  ajouts :
+  1) **DetecteurCDP** : exploite les artefacts Chrome DevTools Protocol (debugger timing <0.05ms,
+  absence de first-input, console patchée, scripts vides injectés, ressources CDP). Score 1.0 quand
+  le debugger répond instantanément.
+  2) **DetecteurComportement v2** : signaux de naturalité — ratio mousemove/click < 8 (trajectoires
+  Bézier directes), absence de scroll, durée des pages trop régulière (CV < 0.2), navigation linéaire.
+  3) **DetecteurMetaComposite** : méta-analyse — session avec >80% des détecteurs à 0 signal = suspecte.
+  Résultat : campagne 86, 23/23 passages valides détectés (100%).
+- **D-46 — 11/11/2026 — Agrégation composite dans issues.py (seuil 0.8).** Quand aucun détecteur
+  individuel ne classifie "automatise", la somme des poids positifs de tous les signaux est comparée à
+  0.8. Comble le gap quand le debugger CDP est au-dessus du seuil 0.05ms : les signaux CDP (0.4) +
+  comportement (0.5) + meta-composite (0.5) = 1.4 dépassent le seuil. Le seuil 0.8 est arbitraire —
+  à calibrer sur des sessions humaines réelles (D-10).

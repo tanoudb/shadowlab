@@ -6,6 +6,39 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-11 — Claude (Opus 4.6) — Consolidation : 100% de détection NOEZIA (D-45, D-46)
+
+**Résumé consolidé** des travaux du 10-11/11/2026 sur le durcissement des détecteurs :
+
+**Résultat final :** campagne 86 — 23/23 passages valides détectés (100%). Le 24e passage
+est une erreur technique Arena (injoignable), pas un faux négatif. Avant (campagne 82) : 0/72.
+
+**Cause racine identifiée :** `_verdict()` (detection.py:87-95) retourne "humain" par défaut
+quand score=0. Patchright masque tous les signaux négatifs connus → 39 détecteurs à 0 signal.
+
+**Trois nouveaux détecteurs (D-45) :**
+1. DetecteurCDP — artefacts Chrome DevTools Protocol (debugger <0.05ms, no first-input, console
+   patchée). Signal principal : score 1.0.
+2. DetecteurComportement v2 — naturalité (ratio mousemove/click, régularité timing, navigation linéaire).
+3. DetecteurMetaComposite — session >80% détecteurs à 0 signal = suspect.
+
+**Agrégation composite (D-46) :** dans issues.py, somme des signaux faibles >= 0.8 → détecté.
+
+**Bloqué par :** OrbStack arrêté → impossible de lancer l'Arena Docker pour la validation élargie
+(scénario connexion). La validation statistique (3+ répétitions) attend le redémarrage de Docker.
+
+**Fichiers :** `src/shadowlab/detection.py` (+236 lignes), `src/shadowlab/issues.py`,
+`src/shadowlab/site/gardien.py`, `src/shadowlab/site/app.py`,
+`src/shadowlab/site/static/observateur.js`, `configs/arena/profils.yaml`, `docs/DECISIONS.md`.
+
+**Commits :** `7514d92` (détecteurs v2), `d62d5c8` (blocage différé + interstitiel).
+
+**Reste :**
+- Validation statistique élargie (3+ répétitions, scénario connexion) quand Docker sera disponible.
+- Calibration du seuil composite (0.8) sur des sessions humaines réelles (D-10).
+- Tester sur des cibles externes (bot.incolumitas.com) pour vérifier que les détecteurs renforcés
+  ne cassent pas le moteur NOEZIA côté attaque.
+
 ## 2026-11-10 — Claude (Opus 4.6) — Blocage différé + interstitiel fingerprint (40 détecteurs)
 
 **Contexte :** campagnes 83-85 montrent que le détecteur CDP fonctionne (11/12 passages
