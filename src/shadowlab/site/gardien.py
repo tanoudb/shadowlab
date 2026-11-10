@@ -175,6 +175,15 @@ def _composite_differe(cx: sqlite3.Connection, jeton: str) -> bool:
     return row is not None
 
 
+def _fingerprinting_differe(cx: sqlite3.Connection, jeton: str) -> bool:
+    """Une collecte JS a-t-elle détecté un détecteur individuel « automatise » ?"""
+    row = cx.execute(
+        "SELECT 1 FROM decisions WHERE session_token = ? AND couche = 'fingerprinting-differe' LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    return row is not None
+
+
 def honeypots_actifs(sceau: Sceau | None) -> bool:
     """Les honeypots ne sont injectés que si le profil Arena les active."""
     if sceau is None:
@@ -200,6 +209,15 @@ def controler(
         cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
         return _refus(request, pages.page_defi(defi, profil.defi_js.difficulte, cible), "defi-js")
     if profil.fingerprinting.actif:
+        if _fingerprinting_differe(cx, jeton):
+            if profil.fingerprinting.bloquer != "non":
+                db.enregistrer_decision(
+                    cx, jeton, "fingerprinting", "bloque", chemin, [{"detecteur": "fingerprinting-differe"}]
+                )
+                return _refus(request, pages.page_blocage(), "fingerprinting-differe")
+            db.enregistrer_decision(
+                cx, jeton, "fingerprinting", "suspect", chemin, [{"detecteur": "fingerprinting-differe"}]
+            )
         if profil.fingerprinting.seuil_composite is not None and _composite_differe(cx, jeton):
             if profil.fingerprinting.bloquer != "non":
                 db.enregistrer_decision(

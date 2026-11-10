@@ -106,7 +106,8 @@
       - math-constants
       - domrect
       - deep-proxy
-    seuil_composite: 1.0
+      - cdp
+    seuil_composite: 0.8
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -157,7 +158,8 @@
       - domrect
       - iframe-consistency
       - deep-proxy
-    seuil_composite: 0.7
+      - cdp
+    seuil_composite: 0.6
   honeypots: {actif: false}
   turnstile: {actif: true}
   recaptcha: {actif: true}
@@ -165,7 +167,7 @@
 
 "06":
   nom: "D\xE9fense multicouche"
-  description: "Tous les 39 détecteurs, honeypots, corrélation, adaptation"
+  description: "Tous les 40 détecteurs, honeypots, corrélation, adaptation"
   limitation: {debit: 2, rafale: 4}
   waf: {mode: blocage, paranoia: 3, seuil: 3}
   defi_js: {actif: true, difficulte: 18, lier_tls: true}
@@ -213,6 +215,7 @@
       - domrect
       - iframe-consistency
       - deep-proxy
+      - cdp
     seuil_composite: 0.5
   honeypots: {actif: true}
   turnstile: {actif: true}

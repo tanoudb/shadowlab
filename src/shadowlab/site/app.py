@@ -390,7 +390,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 sceau = request.state.sceau
                 if sceau:
                     profil = charger_profils().de(sceau.profil)
-                    if profil and profil.fingerprinting.actif and profil.fingerprinting.seuil_composite is not None:
+                    if profil and profil.fingerprinting.actif:
                         motifs = gardien.suspicion(
                             cx,
                             jeton,
@@ -401,6 +401,11 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                         if composite:
                             db.enregistrer_decision(
                                 cx, jeton, "composite-differe", "detecte", page or "/lab/collecte", composite
+                            )
+                        individuels = [m for m in motifs if m.get("detecteur") != "composite"]
+                        if individuels:
+                            db.enregistrer_decision(
+                                cx, jeton, "fingerprinting-differe", "detecte", page or "/lab/collecte", individuels
                             )
         return Response(status_code=204)
 

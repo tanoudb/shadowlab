@@ -537,11 +537,11 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_39_detecteurs(self):
+    def test_registre_40_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 39
+        assert len(r) == 40
         assert "scroll" in r
         assert "paint-timing" in r
         assert "canvas-consistency" in r

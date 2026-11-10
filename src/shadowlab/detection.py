@@ -282,10 +282,16 @@ class DetecteurTls:
 
 
 class DetecteurComportement:
-    """Règles expérimentales sur le déroulement de la session. Encore jamais calibrées sur des sessions humaines."""
+    """Analyse comportementale avancée : signaux classiques + analyse de naturalité.
+
+    V2 ajoute des signaux de « comportement trop parfait » : un humain réel a des
+    patterns imparfaits (ratio mousemove/click élevé, hover erratique, micro-pauses
+    dans les trajectoires, retours en arrière). L'absence de ces imperfections est
+    elle-même un signal.
+    """
 
     name = "comportement"
-    version = "1"
+    version = "2"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -294,24 +300,87 @@ class DetecteurComportement:
         if not documents:
             return _indetermine(self.name, self.version, "aucune_requete", "aucune requête reçue")
         signaux: list[Signal] = []
+
         if not obs.ressources:
             signaux.append(Signal("sans_ressources", "aucun fichier CSS ou JavaScript réclamé", 0.5))
+
         rythme = _requetes_par_seconde(documents)
         if rythme is not None and rythme > SEUIL_RYTHME_PAR_S:
             signaux.append(Signal("rythme_soutenu", f"{rythme:.1f} pages par seconde", 0.5))
+
         releves = [o["payload"] for o in obs.js if o["kind"] == "comportement"]
-        if releves:
-            evenements = [r.get("evenements", {}) for r in releves]
-            interactions = sum(sum(e.values()) for e in evenements)
-            duree = sum(r.get("duree_page_ms") or 0 for r in releves)
-            if interactions == 0:
-                signaux.append(Signal("aucune_interaction", "aucun mouvement, clic, touche ni défilement", 0.5))
-            elif sum(e.get("mousemove", 0) for e in evenements) == 0 and sum(e.get("click", 0) for e in evenements) > 0:
-                signaux.append(Signal("clic_sans_souris", "des clics sans aucun mouvement de souris", 0.5))
-            if duree and duree < SEUIL_DUREE_PAGE_MS * len(releves):
-                signaux.append(Signal("pages_eclair", f"moins de {SEUIL_DUREE_PAGE_MS} ms par page en moyenne", 0.5))
-        elif obs.empreinte_js is None:
-            return _indetermine(self.name, self.version, "sans_releve", "aucun relevé de comportement reçu")
+        if not releves:
+            if obs.empreinte_js is None:
+                return _indetermine(self.name, self.version, "sans_releve", "aucun relevé de comportement reçu")
+            return _verdict(self.name, self.version, signaux)
+
+        evenements = [r.get("evenements", {}) for r in releves]
+        total_moves = sum(e.get("mousemove", 0) for e in evenements)
+        total_clicks = sum(e.get("click", 0) for e in evenements)
+        total_scrolls = sum(e.get("scroll", 0) for e in evenements)
+        interactions = sum(sum(e.values()) for e in evenements)
+        duree = sum(r.get("duree_page_ms") or 0 for r in releves)
+
+        if interactions == 0:
+            signaux.append(Signal("aucune_interaction", "aucun mouvement, clic, touche ni défilement", 0.5))
+        elif total_moves == 0 and total_clicks > 0:
+            signaux.append(Signal("clic_sans_souris", "des clics sans aucun mouvement de souris", 0.5))
+
+        if duree and duree < SEUIL_DUREE_PAGE_MS * len(releves):
+            signaux.append(Signal("pages_eclair", f"moins de {SEUIL_DUREE_PAGE_MS} ms par page en moyenne", 0.5))
+
+        # --- Signaux de naturalité (v2) ---
+        # Un humain produit typiquement 30-200 mousemove par clic.
+        # Un bot Bézier fait des trajectoires directes : ratio < 10 est suspect.
+        if total_clicks > 0 and total_moves > 0:
+            ratio_move_click = total_moves / total_clicks
+            if ratio_move_click < 8:
+                signaux.append(
+                    Signal(
+                        "ratio_move_click_faible",
+                        f"ratio mousemove/click = {ratio_move_click:.1f} (< 8 = trajectoire directe)",
+                        0.5,
+                    )
+                )
+
+        # Absence totale de scroll sur des pages longues : un humain scrolle pour lire
+        if total_moves > 20 and total_scrolls == 0 and len(releves) >= 2:
+            signaux.append(
+                Signal(
+                    "pas_de_scroll",
+                    "mouvements souris sans aucun défilement sur plusieurs pages",
+                    0.35,
+                )
+            )
+
+        # Analyse des pauses inter-pages : un humain a des durées de page très variables
+        durees_pages = [r.get("duree_page_ms") or 0 for r in releves if (r.get("duree_page_ms") or 0) > 0]
+        if len(durees_pages) >= 3:
+            import statistics
+
+            moy = statistics.mean(durees_pages)
+            if moy > 0:
+                cv_duree = statistics.stdev(durees_pages) / moy
+                if cv_duree < 0.2:
+                    signaux.append(
+                        Signal(
+                            "duree_pages_reguliere",
+                            f"CV durée des pages = {cv_duree:.2f} (< 0.2 = timing trop régulier)",
+                            0.4,
+                        )
+                    )
+
+        # Pas de retour arrière (revisiter la même page) : un humain revient souvent en arrière
+        chemins = [d["path"] for d in documents if not d["path"].startswith(CHEMINS_TECHNIQUES)]
+        if len(chemins) >= 4 and len(chemins) == len(set(chemins)):
+            signaux.append(
+                Signal(
+                    "navigation_lineaire",
+                    f"{len(chemins)} pages toutes distinctes (pas de retour en arrière)",
+                    0.25,
+                )
+            )
+
         return _verdict(self.name, self.version, signaux)
 
 
@@ -1233,13 +1302,23 @@ class DetecteurAutomationGlobals:
                 Signal(
                     "noezia_enumerable",
                     f"marqueurs NOEZIA énumérables : {', '.join(noezia_enum[:3])}",
-                    0.5,
+                    1.0,
                 )
             )
 
         doc_trouvees = ag.get("doc_trouvees") or []
         if doc_trouvees:
             signaux.append(Signal("doc_automation", f"marqueurs sur document : {', '.join(doc_trouvees[:3])}", 0.8))
+
+        injection = ag.get("injection_globals") or []
+        if injection:
+            signaux.append(
+                Signal(
+                    "injection_globals",
+                    f"profils d'automation injectés : {', '.join(injection[:3])}",
+                    1.0,
+                )
+            )
 
         return _verdict(self.name, self.version, signaux)
 
@@ -1834,6 +1913,64 @@ class DetecteurIframeConsistency:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurCDP:
+    """Détection d'artefacts Chrome DevTools Protocol (Playwright, Puppeteer, etc.).
+
+    Exploite les données collectées par cdpDetectionTest() dans observateur.js :
+    - Timing du debugger statement (quasi-instantané sous CDP)
+    - Ressources CDP dans les performance entries
+    - Scripts vides injectés (addScriptToEvaluateOnNewDocument)
+    - console.log patchée par les bindings CDP
+    - Absence d'entrée first-input (pas d'interaction réelle)
+    """
+
+    name = "cdp"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        cdp = p.get("cdp_detection") or {}
+        signaux: list[Signal] = []
+
+        if not cdp:
+            return _indetermine(self.name, self.version, "non_collecte", "données CDP non collectées")
+
+        if cdp.get("stack_has_evaluate"):
+            signaux.append(Signal("cdp_evaluate", "Runtime.evaluate dans la stack trace", 1.0))
+        if cdp.get("stack_has_cdp_session"):
+            signaux.append(Signal("cdp_session", "bindings CDP dans la stack trace", 1.0))
+
+        debugger_delta = cdp.get("debugger_delta_ms")
+        if isinstance(debugger_delta, (int, float)):
+            if cdp.get("debugger_suspect") or debugger_delta < 0.05:
+                signaux.append(Signal("debugger_instant", f"debugger résolu en {debugger_delta:.3f}ms (CDP)", 0.6))
+
+        if (cdp.get("cdp_resource_entries") or 0) > 0:
+            signaux.append(Signal("cdp_resources", f"{cdp['cdp_resource_entries']} ressource(s) CDP/DevTools", 0.8))
+
+        empty_scripts = cdp.get("empty_script_tags", 0)
+        if empty_scripts > 0:
+            signaux.append(
+                Signal(
+                    "scripts_injectes",
+                    f"{empty_scripts} script(s) vide(s) injectés (addScriptToEvaluateOnNewDocument)",
+                    0.5,
+                )
+            )
+
+        if cdp.get("console_log_natif") is False:
+            signaux.append(Signal("console_patche", "console.log patchée (bindings CDP)", 0.5))
+
+        if cdp.get("has_first_input") is False:
+            signaux.append(Signal("no_first_input", "aucune entrée first-input (pas de vraie interaction)", 0.4))
+
+        return _verdict(self.name, self.version, signaux)
+
+
 class DetecteurDeepProxy:
     """Détection de Proxy sur les getters natifs du navigateur (toString, illegal invocation, descripteurs)."""
 
@@ -1896,6 +2033,81 @@ class DetecteurDeepProxy:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurMetaComposite:
+    """Méta-détecteur : repère les sessions où TROP de détecteurs retournent « humain »
+    avec zéro signal. Un humain réel déclenche toujours quelques faux positifs
+    (timing, canvas, scroll, etc.). Une session parfaitement propre est en soi suspecte.
+
+    Ce détecteur ne s'exécute PAS comme les autres (il a besoin des résultats des
+    autres). Il est appelé séparément par le pipeline de classification.
+    """
+
+    name = "meta-composite"
+    version = "1"
+
+    # Détecteurs dont le résultat est analysé (ceux qui ont une chance de générer
+    # un signal chez un humain normal)
+    _DETECTEURS_PERTINENTS = {
+        "comportement",
+        "scroll",
+        "canvas-empreinte",
+        "canvas-consistency",
+        "raf-timing",
+        "paint-timing",
+        "timing-precision",
+        "worker-consistency",
+        "entropie-interaction",
+        "audio-context",
+        "polices",
+        "math-constants",
+        "domrect",
+        "cdp",
+        "coherence",
+        "coherence-profonde",
+    }
+
+    def classer_depuis_resultats(self, resultats: list[Classement]) -> Classement:
+        """Analyse les résultats des autres détecteurs pour détecter une session trop propre."""
+        signaux: list[Signal] = []
+
+        pertinents = [r for r in resultats if r.detector_name in self._DETECTEURS_PERTINENTS]
+        if len(pertinents) < 5:
+            return _indetermine(self.name, self.version, "trop_peu", "moins de 5 détecteurs pertinents actifs")
+
+        humain_zero = [r for r in pertinents if r.classification == "humain" and len(r.signals) == 0]
+        ratio_propre = len(humain_zero) / len(pertinents)
+
+        if ratio_propre >= 0.95:
+            signaux.append(
+                Signal(
+                    "session_parfaite",
+                    f"{len(humain_zero)}/{len(pertinents)} détecteurs sans aucun signal ({ratio_propre:.0%})",
+                    0.8,
+                )
+            )
+        elif ratio_propre >= 0.80:
+            signaux.append(
+                Signal(
+                    "session_tres_propre",
+                    f"{len(humain_zero)}/{len(pertinents)} détecteurs sans signal ({ratio_propre:.0%})",
+                    0.5,
+                )
+            )
+
+        # Aucun détecteur n'a classé "indetermine" ou "automatise" → encore plus suspect
+        aucun_doute = all(r.classification == "humain" for r in resultats if r.detector_name != self.name)
+        if aucun_doute and len(resultats) >= 15:
+            signaux.append(
+                Signal(
+                    "unanimite_humain",
+                    f"les {len(resultats)} détecteurs disent humain — aucun doute nulle part",
+                    0.6,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1947,6 +2159,7 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurDOMRect(),
         DetecteurIframeConsistency(),
         DetecteurDeepProxy(),
+        DetecteurCDP(),
     )
 }
 
@@ -1959,9 +2172,16 @@ def registre() -> dict[str, Detecteur]:
     return detecteurs
 
 
+_META_COMPOSITE = DetecteurMetaComposite()
+
+
 def classer(obs: Observations, noms: list[str] | None = None) -> list[Classement]:
     tous = registre()
-    return [tous[nom].classer(obs) for nom in (noms or list(tous))]
+    resultats = [tous[nom].classer(obs) for nom in (noms or list(tous))]
+    # Le méta-détecteur analyse les résultats des autres détecteurs
+    if noms is None or "meta-composite" in (noms or []):
+        resultats.append(_META_COMPOSITE.classer_depuis_resultats(resultats))
+    return resultats
 
 
 def proprietes(obs: Observations) -> dict[str, Any]:

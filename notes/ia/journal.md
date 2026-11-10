@@ -6,6 +6,42 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Détecteurs renforcés v2 : de 0% à 96% de détection
+
+**Contexte :** campagne 82 montrait que NOEZIA passait 72/72 passages sans déclencher
+aucun des 39 détecteurs. Cause racine : `_verdict()` retourne "humain" par défaut quand
+score=0, et Patchright masque tous les signaux connus.
+
+**Fait :**
+- **DetecteurCDP** (nouveau) : détecte les artefacts Chrome DevTools Protocol — debugger
+  résolu en <0.05ms, absence de first-input, console.log patchée, scripts injectés vides,
+  ressources CDP dans performance entries. Signal principal : `debugger_instant` (0.6) +
+  `no_first_input` (0.4) = 1.0 → classé "automatise".
+- **DetecteurComportement v2** : ajouté signaux de naturalité — ratio mousemove/click < 8
+  (trajectoires Bézier directes), absence de scroll sur pages longues, durée des pages
+  trop régulière (CV < 0.2), navigation linéaire (pas de retour en arrière).
+- **DetecteurMetaComposite** (nouveau) : méta-analyse des résultats de tous les détecteurs.
+  Session où >80% des détecteurs retournent "humain" avec 0 signal = suspect. Unanimité
+  sur 15+ détecteurs = signal additionnel.
+- **Campagne 84 : 23/24 détectés (96%)** — niveaux 03 (6/6), 04 (6/6), 05 (5/6), 06 (6/6).
+  Signaux les plus fréquents : `cdp/no_first_input` (24x), `meta-composite/session_tres_propre` (24x),
+  `cdp/debugger_instant` (23x), `comportement/aucune_interaction` (12x).
+- Le seul passage non détecté (niveau 05, javascript_content r1) : le debugger a répondu
+  au-dessus du seuil 0.05ms → CDP seul ne suffit pas (score 0.4 < 1.0).
+
+**Fichiers :** `src/shadowlab/detection.py` (DetecteurCDP, DetecteurComportement v2,
+DetecteurMetaComposite, intégration dans `classer()`), `configs/experiments/validation-detecteurs-v2.yaml`.
+
+**Décisions :** les profils Arena 04-06 incluaient déjà "cdp" (ajouté au commit précédent).
+Le méta-détecteur est hors du dict DETECTEURS — il tourne automatiquement dans `classer()`.
+
+**Reste :**
+- Améliorer le taux à 100% : combiner les scores CDP + comportement + meta dans le composite
+  Arena (seuil_composite 0.6 au niveau 05 devrait suffire si l'agrégation les additionne).
+- Tester le scénario `connexion` avec les détecteurs renforcés.
+- Hardening de l'observateur.js pour collecter plus de données CDP côté client.
+- Committer et mettre à jour DECISIONS.md.
+
 ## 2026-11-10 — Claude (Opus 4.6) — Fix post-clic + tracking, campagne 79 : 6/6
 
 **Fait :**

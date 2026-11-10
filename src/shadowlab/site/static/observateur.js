@@ -564,6 +564,16 @@ function automationGlobals() {
     const noezia = Object.keys(window).filter(k => k.includes('NOEZIA'));
     r.noezia_enumerable = noezia;
   } catch (_) { /* ignore */ }
+  // Vérification directe : profils d'automation injectés (non-énumérables inclus)
+  try {
+    const injected = [
+      '__NOEZIA_PROFIL__', '__PATCHRIGHT_PROFIL__', '__PUPPETEER_STEALTH__',
+      '__SELENIUM_STEALTH__', '__REBROWSER_PATCHES__',
+    ];
+    r.injection_globals = injected.filter(n => {
+      try { return n in window; } catch(_) { return false; }
+    });
+  } catch (_) { /* ignore */ }
   // Document markers
   try {
     const docSuspects = ['__selenium_unwrapped', '__webdriver_evaluate', '$chrome_asyncScriptInfo'];
@@ -882,6 +892,94 @@ function mathConstantsTest() {
   return r;
 }
 
+function cdpDetectionTest() {
+  const r = {};
+  try {
+    // 1. Runtime.evaluate laisse un artefact : Error.stack contient "Runtime.evaluate"
+    // quand le code est injecté via CDP (Playwright, Puppeteer, etc.)
+    try {
+      const err = new Error('cdp-probe');
+      const stack = err.stack || '';
+      r.stack_has_evaluate = /Runtime\.evaluate|__puppeteer_evaluation_script__|evaluateHandle/i.test(stack);
+      r.stack_has_cdp_session = /__cdp_binding__|DevToolsAPI|inspectorBackend/i.test(stack);
+    } catch (_) { /* ignore */ }
+
+    // 2. debugger statement timing : en mode CDP, un breakpoint "debugger" est résolu quasi-instantanément
+    // car le debugger n'est pas actif visuellement. Sur un vrai navigateur avec DevTools ouvert,
+    // le délai est > 0 ; sans DevTools, le statement est ignoré. Le side-effect est mesurable.
+    try {
+      const t0 = performance.now();
+      // eslint-disable-next-line no-debugger
+      debugger;
+      const dt = performance.now() - t0;
+      r.debugger_delta_ms = Math.round(dt * 100) / 100;
+      r.debugger_suspect = dt < 0.01;
+    } catch (_) { /* ignore */ }
+
+    // 3. Performance.getMetrics n'existe pas dans l'API Web standard —
+    // mais certains outils CDP exposent des side-effects dans performance.timing
+    try {
+      const perfEntries = performance.getEntriesByType('resource');
+      const cdpEntries = perfEntries.filter(e =>
+        /devtools|cdp|__playwright|__puppeteer/.test(e.name)
+      );
+      r.cdp_resource_entries = cdpEntries.length;
+      if (cdpEntries.length > 0) {
+        r.cdp_resource_names = cdpEntries.slice(0, 3).map(e => e.name.slice(0, 80));
+      }
+    } catch (_) { /* ignore */ }
+
+    // 4. Page.addScriptToEvaluateOnNewDocument laisse des globals ou modifie l'ordre d'exécution
+    // Tester si certains scripts ont été injectés avant DOMContentLoaded
+    try {
+      const scripts = document.querySelectorAll('script');
+      let injectedCount = 0;
+      for (const s of scripts) {
+        if (!s.src && !s.textContent.trim() && s.type !== 'module') {
+          injectedCount++;
+        }
+      }
+      r.empty_script_tags = injectedCount;
+    } catch (_) { /* ignore */ }
+
+    // 5. Utilisation mémoire suspecte : un processus Chromium piloté par CDP
+    // a typiquement un heap plus grand à cause des bindings
+    try {
+      if (performance.memory) {
+        const heapRatio = performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit;
+        r.heap_ratio = Math.round(heapRatio * 1000) / 1000;
+      }
+    } catch (_) { /* ignore */ }
+
+    // 6. Vérifier l'existence de Runtime.consoleAPICalled bindings
+    // Les outils CDP hookent console.log — vérifier si console.log.toString() est natif
+    try {
+      r.console_log_natif = /\[native code\]/.test(console.log.toString());
+      r.console_debug_natif = /\[native code\]/.test(console.debug.toString());
+    } catch (_) { /* ignore */ }
+
+    // 7. window.trustedTypes policy (Playwright 1.64+ injecte une policy)
+    try {
+      if (window.trustedTypes) {
+        r.trusted_types_available = true;
+        // Compter les policies créées
+        try {
+          r.tt_policy_count = window.trustedTypes.defaultPolicy ? 1 : 0;
+        } catch (_) { /* ignore */ }
+      }
+    } catch (_) { /* ignore */ }
+
+    // 8. Absence de certains événements d'utilisateur dans PerformanceObserver
+    // Un navigateur normal génère des "first-input" entries, pas un bot
+    try {
+      const fid = performance.getEntriesByType('first-input');
+      r.has_first_input = fid.length > 0;
+    } catch (_) { /* ignore */ }
+
+  } catch (e) { r.error = String(e).slice(0, 100); }
+  return r;
+}
+
 function testDetectionProfonde() {
   const r = {};
   try {
@@ -1105,6 +1203,7 @@ async function collecter() {
     font_fingerprint: fontFingerprintTest(),
     math_constants: mathConstantsTest(),
     deep_proxy: testDetectionProfonde(),
+    cdp_detection: cdpDetectionTest(),
     worker_consistency: await workerConsistencyTest(),
     connection_dynamic: connectionDynamicTest(),
     uadata_integrity: uadataIntegrityTest(),
