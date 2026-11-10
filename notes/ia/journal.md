@@ -6,6 +6,28 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Résolveur Turnstile réécrit (D-44)
+
+**Fait :**
+- Diagnostiqué pourquoi les niveaux 05-06 de l'Arena échouaient sur Turnstile :
+  le gardien sert le challenge *inline* (même URL, status 403, `data-arena` sur body),
+  mais `_resoudre_defis()` ne détectait les challenges que par URL → corrigé par
+  détection `data-arena` (moteur.py).
+- Réécrit `defis/turnstile.py` — trois corrections :
+  1. Supprimé l'attente de l'iframe (goulot d'étranglement : 20 s partagées avec le token).
+  2. Polling dual : callback Arena `#turnstile-etat` + hidden input (le plus rapide gagne).
+  3. Vérification post-soumission par `data-arena` au lieu de l'URL (l'URL passait
+     immédiatement pour les challenges inline).
+  4. Timeout porté de 20 s à 30 s.
+- `_resoudre_defis()` : log temporaire `info` passé à `debug`.
+- 338 tests verts, lint propre.
+
+**Fichiers :** `src/shadowlab/engines/noezia/defis/turnstile.py` (réécrit),
+`src/shadowlab/engines/noezia/moteur.py` (détection data-arena + log debug),
+`docs/DECISIONS.md` (D-44).
+
+**Reste :** lancer une campagne connexion-arena pour vérifier la fiabilité aux niveaux 05-06.
+
 ## 2026-11-10 — Claude (Opus 4.6) — Validation externe : 0/27 FAIL sur bot.incolumitas.com (D-42, D-43)
 
 ### Fait

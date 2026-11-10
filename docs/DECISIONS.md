@@ -223,3 +223,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   du prototype : `navigator.webdriver` → `undefined` (falsy, passe tous les tests intoli et fpscanner).
   Campagne 71 : NOEZIA **0 FAIL / 27 tests**, verdict **humain** sur le détecteur indépendant
   bot.incolumitas.com. Playwright vanilla : 11 FAIL / 27.
+- **D-44 — 10/11/2026 — Résolveur Turnstile réécrit : détection inline + timeout 30 s.** Deux bugs :
+  1) `_resoudre_defis()` ne détectait les challenges que par URL, mais le gardien sert le challenge
+  *inline* (même URL, status 403, `data-arena` sur le body) — corrigé par détection `data-arena`.
+  2) `resoudre()` (a) attendait l'iframe Cloudflare en partageant le timeout avec le token (20 s total),
+  et (b) vérifiait la soumission par URL (`"/lab/turnstile" not in u`) ce qui passait immédiatement
+  pour les challenges inline — réécrit : polling du callback Arena (`#turnstile-etat`) + hidden input
+  (le plus rapide gagne), timeout 30 s, vérification par disparition de `data-arena="turnstile"`.

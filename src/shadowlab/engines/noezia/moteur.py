@@ -453,21 +453,31 @@ class DriverNoezia(Driver):
     # ── Résolution des défis Arena ─────────────────────────────────────
 
     def _resoudre_defis(self) -> None:
-        """Détecte et résout les défis de protection de l'Arena."""
+        """Détecte et résout les défis de protection de l'Arena.
+
+        Détection par URL (redirection vers /lab/defi, /lab/turnstile…) ET par attribut
+        ``data-arena`` sur le body (le gardien sert parfois le défi inline, sans redirection).
+        """
         url = self._page.url
+        try:
+            arena = self._page.evaluate("document.body?.dataset?.arena || ''")
+        except Exception:
+            arena = ""
+        if arena:
+            log.debug("_resoudre_defis: url=%s, arena=%s", url[:80], arena)
 
         # PoW (proof-of-work)
-        if "/lab/defi" in url:
-            log.debug("Défi PoW détecté")
+        if "/lab/defi" in url or arena == "defi":
+            log.debug("Défi PoW détecté (url=%s, arena=%s)", "/lab/defi" in url, arena)
             if defi_pow.attendre_resolution(self._page):
                 self.mesures.details["defis_resolus"].append("pow")
                 self._page.wait_for_load_state("load")
-                self._resoudre_defis()  # Cascade : peut y avoir un autre défi
+                self._resoudre_defis()
             return
 
         # Turnstile
-        if "/lab/turnstile" in url:
-            log.debug("Défi Turnstile détecté")
+        if "/lab/turnstile" in url or arena == "turnstile":
+            log.debug("Défi Turnstile détecté (url=%s, arena=%s)", "/lab/turnstile" in url, arena)
             tempo.pause_reflexion()
             if defi_turnstile.resoudre(self._page, self._souris):
                 self.mesures.details["defis_resolus"].append("turnstile_test")
@@ -479,8 +489,8 @@ class DriverNoezia(Driver):
             return
 
         # reCAPTCHA (défi v2 de l'Arena — surtout pas la démo /lab/recaptcha-v3, qui n'est pas un défi)
-        if "/lab/recaptcha" in url and "/lab/recaptcha-v3" not in url:
-            log.debug("Défi reCAPTCHA détecté")
+        if ("/lab/recaptcha" in url and "/lab/recaptcha-v3" not in url) or arena == "recaptcha":
+            log.debug("Défi reCAPTCHA détecté (url=%s, arena=%s)", "/lab/recaptcha" in url, arena)
             tempo.pause_reflexion()
             if defi_recaptcha.resoudre(self._page, self._souris):
                 self.mesures.details["defis_resolus"].append("recaptcha_test")
@@ -492,8 +502,8 @@ class DriverNoezia(Driver):
             return
 
         # CAPTCHA demo
-        if "/lab/captcha" in url:
-            log.debug("CAPTCHA demo détecté")
+        if "/lab/captcha" in url or arena == "captcha":
+            log.debug("CAPTCHA demo détecté (url=%s, arena=%s)", "/lab/captcha" in url, arena)
             self._resoudre_captcha_demo()
             return
 
