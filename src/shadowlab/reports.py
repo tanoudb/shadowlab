@@ -226,11 +226,17 @@ def passages_json(cx: sqlite3.Connection, experiment_id: int) -> str:
         lot = run_ids[i : i + 500]
         marques = ",".join("?" * len(lot))
         for d in cx.execute(
-            f"SELECT run_id, detector_name, classification, confidence FROM detections WHERE run_id IN ({marques})",
+            f"SELECT run_id, detector_name, classification, confidence, signals FROM detections WHERE run_id IN ({marques})",
             lot,
         ):
+            signaux_bruts = db.lj(d["signals"]) if d["signals"] else []
             det_par_run.setdefault(d["run_id"], []).append(
-                {"detecteur": d["detector_name"], "classification": d["classification"], "confiance": d["confidence"]}
+                {
+                    "detecteur": d["detector_name"],
+                    "classification": d["classification"],
+                    "confiance": d["confidence"],
+                    "signaux": signaux_bruts,
+                }
             )
     # Protection config (migration 4). Les colonnes existent après `db.ouvrir` (migrations
     # appliquées) ; on ne tolère que leur absence sur une base non migrée, pas une erreur quelconque.
