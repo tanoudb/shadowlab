@@ -33,8 +33,21 @@ type: note
 - D-39 : renommer pour éliminer le faux positif regex
 - D-40 : DOMRect stable + navigator conforme au vrai Chrome
 
+### Suite immédiate — Worker blob fix + CSP (D-41)
+- **CSP bloquait les blob workers** : la directive `worker-src` manquait dans les 4 CSP du site.
+  Ajout de `worker-src 'self' blob:`. Campagne 65 : le worker tourne mais `deviceMemory main=8 vs worker=32`.
+- **XHR sync sur blob: échouait** : le fallback créait un worker non patché. Fix : interception de
+  `URL.createObjectURL` pour tracker les blobs JS, puis `new Blob([prologue, origBlob])` au lieu de XHR.
+  Prologue nettoyé (prototype only, cohérence D-40).
+- **Campagne 66** : NOEZIA **38 humain, 0 automatisé, 1 indéterminé** (tls=hors Arena).
+  Playwright : 28 humain, 7 automatisé, 4 indéterminés.
+
+### Fichiers modifiés (suite)
+- `src/shadowlab/engines/noezia/furtivite/workers.js` (blob tracking + prologue prototype-only)
+- `src/shadowlab/site/app.py` (worker-src dans les 4 CSP)
+- `docs/DECISIONS.md` (D-41)
+
 ### Reste
-- Worker-consistency en timeout → investiguer si le worker NOEZIA ne reçoit pas les patches
 - Tester sur Arena Docker (niveaux 05-06) avec le login comportemental
 - Validation externe bot.incolumitas.com avec les correctifs
 - 338 tests verts, lint propre

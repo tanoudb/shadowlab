@@ -203,3 +203,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   appels ; (2) `hardwareConcurrency`/`deviceMemory` seulement sur `Navigator.prototype` (le vrai Chrome ne
   les met pas en propre sur l'instance) ; (3) nettoyage des own props résiduelles de Patchright. Campagne 64 :
   37 humain, 0 automatisé, 2 indéterminés structurels (tls=hors Arena, worker-consistency=timeout).
+- **D-41 — 10/11/2026 — Propagation profil dans les blob workers : 38/39 humain.** Deux problèmes :
+  (1) la CSP bloquait les blob workers (manquait `worker-src 'self' blob:`) ; (2) le XHR synchrone sur les
+  blob URLs échouait silencieusement, le worker tournait sans patches profil. Fix : interception de
+  `URL.createObjectURL` pour tracker les blobs JS, puis Blob compositing (`new Blob([prologue, origBlob])`)
+  au lieu de XHR. Prologue nettoyé pour poser les propriétés sur le prototype uniquement (cohérence D-40).
+  Campagne 66 : 38 humain, 0 automatisé, 1 indéterminé (tls=hors Arena, pas applicable en local).
