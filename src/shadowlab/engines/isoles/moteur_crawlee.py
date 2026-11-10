@@ -42,7 +42,7 @@ class DriverCrawlee(DriverHttp):
     def _ouvrir_client(self) -> None:
         from crawlee.http_clients._impit import ImpitHttpClient
 
-        self._client = ImpitHttpClient()
+        self._client = ImpitHttpClient(follow_redirects=False)
 
     def _envoyer(self, methode: str, url: str, donnees: dict[str, str] | None = None) -> ReponseBrute:
         from urllib.parse import urlencode
