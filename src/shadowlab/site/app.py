@@ -266,7 +266,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if porte and jeton:
             with base() as cx:
                 motifs = gardien.suspicion(
-                    cx, jeton, detecteurs=profil.fingerprinting.detecteurs or None
+                    cx, jeton,
+                    detecteurs=profil.fingerprinting.detecteurs or None,
+                    seuil_composite=profil.fingerprinting.seuil_composite,
                 )
             if motifs:
                 return refus("Accès refusé.", motifs)

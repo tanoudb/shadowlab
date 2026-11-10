@@ -110,11 +110,17 @@ def suspicion(
     inclure_js: bool = True,
     exclure: list[str] | None = None,
     detecteurs: list[str] | None = None,
+    seuil_composite: float | None = None,
 ) -> list[dict]:
     """Motifs de suspicion connus à cet instant.
 
     *detecteurs* : liste explicite de noms de détecteurs à consulter (depuis le profil Arena).
     Si absent ou vide, les constantes REGLES_REQUETE / REGLES_JAVASCRIPT s'appliquent.
+
+    *seuil_composite* : si défini, les signaux faibles de détecteurs « indéterminés » sont
+    cumulés. Si leur somme ≥ seuil_composite et qu'aucun détecteur individuel n'a bloqué,
+    un motif synthétique « composite » est ajouté. Permet de détecter les moteurs bien patchés
+    qui passent sous le seuil de chaque détecteur pris isolément.
     """
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
@@ -130,10 +136,21 @@ def suspicion(
         noms = [n for n in noms if n not in exclure]
     tous = registre()
     motifs: list[dict] = []
+    signaux_faibles: list[Signal] = []
     for nom in noms:
         classement = tous[nom].classer(observations)
         if classement.classification == "automatise":
             motifs.append({"detecteur": nom, "signaux": [_signal(s) for s in classement.signals]})
+        elif classement.signals:
+            signaux_faibles.extend(s for s in classement.signals if s.poids > 0)
+    if seuil_composite is not None and not motifs and signaux_faibles:
+        score = sum(s.poids for s in signaux_faibles)
+        if score >= seuil_composite:
+            motifs.append({
+                "detecteur": "composite",
+                "score": round(score, 3),
+                "signaux": [_signal(s) for s in signaux_faibles],
+            })
     hp = cx.execute(
         "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
         (jeton,),
@@ -179,6 +196,7 @@ def controler(
             inclure_js=inclure_js,
             exclure=profil.fingerprinting.exclure or None,
             detecteurs=profil.fingerprinting.detecteurs or None,
+            seuil_composite=profil.fingerprinting.seuil_composite,
         )
         if motifs:
             if profil.fingerprinting.bloquer != "non":
@@ -205,7 +223,11 @@ def controler(
     if profil.captcha.actif and not defis.cookie_valide(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie
     ):
-        motifs = suspicion(cx, jeton, detecteurs=profil.fingerprinting.detecteurs or None)
+        motifs = suspicion(
+            cx, jeton,
+            detecteurs=profil.fingerprinting.detecteurs or None,
+            seuil_composite=profil.fingerprinting.seuil_composite,
+        )
         if motifs:
             db.enregistrer_decision(cx, jeton, "captcha", "emis", chemin, motifs)
             cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))

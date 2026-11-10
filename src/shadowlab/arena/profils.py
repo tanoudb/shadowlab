@@ -50,6 +50,7 @@ class Fingerprinting(_Strict):
     bloquer: ModeBlocage = "non"
     exclure: list[str] = Field(default_factory=list)
     detecteurs: list[str] = Field(default_factory=list)
+    seuil_composite: float | None = None
 
 
 class Honeypots(_Strict):

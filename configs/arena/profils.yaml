@@ -51,6 +51,7 @@
   fingerprinting:
     actif: true
     bloquer: tout
+    seuil_composite: 1.5
     detecteurs:
       - regles-http
       - tls
@@ -100,6 +101,7 @@
       - prototype-chain
       - enumerable-props
       - proxy-uadata
+    seuil_composite: 1.0
   honeypots: {actif: false}
   turnstile: {actif: false}
   recaptcha: {actif: false}
@@ -144,6 +146,7 @@
       - worker-consistency
       - paint-timing
       - timing-precision
+    seuil_composite: 0.7
   honeypots: {actif: false}
   turnstile: {actif: true}
   recaptcha: {actif: true}
@@ -193,6 +196,7 @@
       - permissions-etendu
       - position-fenetre
       - webrtc
+    seuil_composite: 0.5
   honeypots: {actif: true}
   turnstile: {actif: true}
   recaptcha: {actif: true}

@@ -166,3 +166,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   le prototype seul est masqué. Règle : tout patch de propriété navigateur doit cibler le prototype
   ET l'instance. Corrigé dans `environnement.js` et `navigateur.js`. Le détecteur `coherence-profonde`
   excluait aussi à tort les `hardwareConcurrency` Apple Silicon (10, 12, 14…) comme non-puissance-de-2.
+- **D-35 — 10/11/2026 — Score composite : agrégation des signaux faibles inter-détecteurs.** Un moteur
+  bien patché (type NOEZIA) échappe à chaque détecteur pris isolément — aucun n'atteint le seuil de 1.0.
+  Le score composite cumule les signaux faibles (poids > 0) de tous les détecteurs « indéterminés ».
+  Si la somme ≥ `seuil_composite` (dans `fingerprinting` du profil Arena), un motif synthétique
+  « composite » bloque la session. Seuils progressifs : 03=1.5, 04=1.0, 05=0.7, 06=0.5. Le score
+  composite ne se déclenche que quand aucun détecteur individuel n'a déjà bloqué (pas de double peine).

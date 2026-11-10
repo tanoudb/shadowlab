@@ -105,10 +105,67 @@ type: note
   signaux faibles de multiples détecteurs est la prochaine priorité critique.
 
 ### Reste
-- Relancer la campagne pour vérifier que les 2 fuites sont colmatées
+- ~~Relancer la campagne pour vérifier que les 2 fuites sont colmatées~~ → fait (exp 49, 8/8)
+- ~~Corriger cohérence GPU profil → matériel réel~~ → fait (commit 5c1b9d8)
 - Implémenter le **score composite** (étape 3 du plan) : les signaux faibles de N détecteurs doivent
   s'additionner pour dépasser le seuil (ex. 5 signaux à 0.2 = détection)
 - Vérifier les autres scripts JS pour le même bug prototype-vs-instance (canvas.js, audio.js, etc.)
+
+---
+
+## 2026-11-10 — Claude (Opus 4.6) — Vérification D-34 + cohérence GPU (D-34 suite)
+
+### Fait
+- **Campagne `verif_d34`** (expérience 49) — NOEZIA seul, niveaux 03+06, 2 scénarios, 2 rép.
+  - 8/8 réussis. `outer_eq_inner` **disparu** (outerHeight=1108 vs innerHeight=1080, gap 28px macOS ✓).
+  - `hwc_non_puissance2` **disparu** (hardwareConcurrency=18, reconnu Apple Silicon ✓).
+  - Seul signal restant : `worker_indisponible` (bénin, confidence=0.00).
+- **Correction M5 Pro** : `hw_concurrency` corrigé de 14 à 18 (vérifié `sysctl -n hw.ncpu`).
+- **Filtre GPU `_gpu_hote()`** : détecte le chipset réel via `system_profiler SPDisplaysDataType`,
+  filtre les machines candidates dans `generer_profil()` pour que le renderer ANGLE Metal corresponde.
+- **`_HWC_APPLE_SILICON`** : ajout de 16 (M4 Pro) et 18 (M5 Pro).
+
+### Fichiers modifiés
+- `src/shadowlab/engines/noezia/profils/generateur.py` (`_gpu_hote()`, filtre GPU, M5 Pro 18)
+- `src/shadowlab/detection.py` (`_HWC_APPLE_SILICON += {16, 18}`)
+- `configs/experiments/verif-d34.yaml` (nouvelle campagne de vérification)
+
+### Reste
+- **Score composite** : prochaine priorité critique
+- Vérifier les autres scripts JS pour le même bug prototype-vs-instance
+
+---
+
+## 2026-11-10 — Claude (Opus 4.6) — Score composite inter-détecteurs (D-35)
+
+### Fait
+- **Score composite** (`gardien.py`) : après exécution de tous les détecteurs, si aucun n'a
+  bloqué seul, les signaux faibles (poids > 0) des détecteurs « indéterminés » sont cumulés.
+  Si la somme ≥ `seuil_composite`, un motif synthétique « composite » est ajouté.
+- **Modèle Arena** (`profils.py`) : nouveau champ `seuil_composite: float | None` dans `Fingerprinting`.
+- **Profils** (`profils.yaml`) : seuils progressifs — 03=1.5, 04=1.0, 05=0.7, 06=0.5.
+- **app.py** : la porte de connexion passe aussi le `seuil_composite`.
+- D-35 ajoutée à DECISIONS.md.
+- 313 tests verts, lint propre.
+
+### Fichiers modifiés
+- `src/shadowlab/site/gardien.py` (score composite dans `suspicion()`)
+- `src/shadowlab/arena/profils.py` (champ `seuil_composite`)
+- `src/shadowlab/site/app.py` (passage du seuil à la porte de connexion)
+- `configs/arena/profils.yaml` (seuils par niveau)
+- `docs/DECISIONS.md` (D-35)
+
+### Décisions
+- D-35 : le composite vit dans le gardien (couche politique), pas dans detection.py (couche détection).
+  Chaque détecteur fait son travail ; le gardien combine. Pas de double peine : le composite ne se
+  déclenche que quand aucun détecteur individuel n'a bloqué.
+
+### Reste
+- Actuellement NOEZIA produit ~0 signal → le composite ne change pas encore le résultat.
+  Il faut soit (a) ajouter des détecteurs plus fins qui émettent des signaux faibles contre
+  un moteur headless bien patché, soit (b) vérifier les scripts JS restants pour le bug
+  prototype-vs-instance (canvas, audio, webgl…) qui pourrait réintroduire des signaux.
+- Campagne de validation à lancer pour confirmer le bon fonctionnement du composite.
 
 ---
 
