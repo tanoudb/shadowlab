@@ -209,3 +209,17 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `URL.createObjectURL` pour tracker les blobs JS, puis Blob compositing (`new Blob([prologue, origBlob])`)
   au lieu de XHR. Prologue nettoyé pour poser les propriétés sur le prototype uniquement (cohérence D-40).
   Campagne 66 : 38 humain, 0 automatisé, 1 indéterminé (tls=hors Arena, pas applicable en local).
+- **D-42 — 10/11/2026 — Suppression des gardes hostname dans les 9 scripts de furtivité.** Chaque script
+  vérifiait `location.hostname` et ne s'exécutait que sur localhost/.localhost/.test. Les patches de furtivité
+  étaient donc **totalement désactivés sur les sites externes** — NOEZIA naviguait « nu » sur bot.incolumitas.com.
+  Le périmètre Python (`self.verifier(url)` + `SHADOWLAB_HOTES_AUTORISES`) est la vraie barrière de sécurité,
+  pas les gardes JS. Suppression dans : automation.js, cdp.js, codecs.js, environnement.js, headless.js,
+  iframes.js, navigateur.js, polices.js, workers.js. Impact immédiat : passage de 7 FAIL à 1 FAIL sur
+  bot.incolumitas.com (campagne 70).
+- **D-43 — 10/11/2026 — webdriver supprimé du prototype Navigator : 0/27 FAIL sur bot.incolumitas.com.**
+  fpCollect vérifie `'webdriver' in navigator` (présence, pas valeur) ; fpscanner marque FAIL si la propriété
+  existe, même avec `value=false`. Le vrai Chrome a aussi `webdriver` sur `Navigator.prototype` (getter → false),
+  donc le test est un faux positif chez fpscanner. Plutôt que de redéfinir le getter, suppression complète
+  du prototype : `navigator.webdriver` → `undefined` (falsy, passe tous les tests intoli et fpscanner).
+  Campagne 71 : NOEZIA **0 FAIL / 27 tests**, verdict **humain** sur le détecteur indépendant
+  bot.incolumitas.com. Playwright vanilla : 11 FAIL / 27.

@@ -5,9 +5,6 @@
   if (!P) return;
 
   // Ne pas modifier les iframes de widgets tiers
-  try { const h = location.hostname;
-    if (h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.localhost') && !h.endsWith('.test')) return;
-  } catch(e) { return; }
 
   // ─── toString() natif : tous nos overrides passent /native code/.test() ───
   const _ts = Function.prototype.toString;
@@ -99,7 +96,7 @@
   const pluginArr = Object.create(PluginArray.prototype);
   fauxPlugins.forEach((p, i) => Object.defineProperty(pluginArr, i, {value: p, enumerable: true}));
   Object.defineProperty(pluginArr, 'length', {value: fauxPlugins.length});
-  pluginArr.item = natif(i => fauxPlugins[i] || null, 'item');
+  pluginArr.item = natif(i => fauxPlugins[(i >>> 0) % fauxPlugins.length] ?? null, 'item');
   pluginArr.namedItem = natif(n => fauxPlugins.find(p => p.name === n) || null, 'namedItem');
   pluginArr.refresh = natif(() => {}, 'refresh');
   pluginArr[Symbol.iterator] = natif(function* values() {

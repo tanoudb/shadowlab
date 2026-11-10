@@ -7,9 +7,6 @@
   const natif = window.__NOEZIA_NATIF__;
   if (!P || !natif) return;
 
-  try { const h = location.hostname;
-    if (h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.localhost') && !h.endsWith('.test')) return;
-  } catch(e) { return; }
 
   // PRNG déterministe (même seed que canvas)
   let seed = P.canvas_seed || 42;

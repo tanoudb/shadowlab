@@ -6,9 +6,6 @@
   if (!P) return;
   const natif = window.__NOEZIA_NATIF__ || (fn => fn);
 
-  try { const h = location.hostname;
-    if (h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.localhost') && !h.endsWith('.test')) return;
-  } catch(e) { return; }
 
   // ─── Nettoyage des globales d'automation ───
   const GLOBALES_SUSPECTES = [

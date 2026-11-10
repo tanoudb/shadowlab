@@ -434,19 +434,39 @@ def extraction_adaptative(d: Driver, base: str, jeton: str, rng: random.Random) 
 def bot_sanity_check(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     """Validation externe : visite bot.incolumitas.com et extrait le score de détection.
 
-    Le site est un détecteur de bot indépendant (NikolaiT/CreepJS). Le moteur doit passer
+    Le site est un détecteur de bot indépendant (NikolaiT). Le moteur doit passer
     les tests fingerprint et comportementaux du site tiers. Le paramètre `base` est ignoré
     (site externe fixe). `attend_js` = True car le site charge JavaScript.
+
+    Structure du site (v0.6.3) :
+    - #behavioralScore : score comportemental 0 (bot) → 1 (humain), mis à jour à 4/7/10/15s
+    - #detection-tests : JSON avec résultats intoli + fpscanner (OK/FAIL par test)
+    - pre : blocs JSON individuels (puppeteer, webdriver, codecs, etc.)
     """
     d.navigate("https://bot.incolumitas.com")
-    time.sleep(2)
+    time.sleep(18)
 
     resultats: dict[str, Any] = {}
-    for _ in range(20):
-        texte = d.wait_for_element("#fp-status, #detection-status, .result-status", timeout_ms=3000)
-        if texte and ("done" in texte.lower() or "completed" in texte.lower() or "finished" in texte.lower()):
-            break
-        time.sleep(1)
+
+    for sel in ("#behavioralScore", "#detection-tests", "#canvas_fingerprint", "#webgl_fingerprint"):
+        try:
+            texte = d.wait_for_element(sel, timeout_ms=3000)
+            if texte:
+                resultats[sel.lstrip("#")] = texte[:1000]
+        except Exception:  # noqa: BLE001
+            pass
+
+    score_raw = resultats.get("behavioralScore", "")
+    if score_raw in ("", "..."):
+        for _ in range(6):
+            time.sleep(2)
+            try:
+                texte = d.wait_for_element("#behavioralScore", timeout_ms=2000)
+                if texte and texte not in ("", "..."):
+                    resultats["behavioralScore"] = texte[:200]
+                    break
+            except Exception:  # noqa: BLE001
+                pass
 
     try:
         all_text = d.content()
@@ -454,34 +474,40 @@ def bot_sanity_check(d: Driver, base: str, jeton: str, rng: random.Random) -> Is
     except Exception:  # noqa: BLE001
         resultats["page_length"] = 0
 
-    for sel in ("#detection-result", "#fp-result", "#overall-result", ".bot-score", "#bot-detection-result"):
+    if "detection-tests" in resultats:
         try:
-            texte = d.wait_for_element(sel, timeout_ms=1000)
-            if texte:
-                resultats[sel.lstrip("#.")] = texte[:500]
-        except Exception:  # noqa: BLE001
+            parsed = json.loads(resultats["detection-tests"])
+            resultats["detection_tests_json"] = parsed
+            fails = []
+            for suite, tests in parsed.items():
+                if isinstance(tests, dict):
+                    for test_name, result in tests.items():
+                        if result == "FAIL":
+                            fails.append(f"{suite}.{test_name}")
+            resultats["fails"] = fails
+            resultats["fail_count"] = len(fails)
+            total = sum(len(t) for t in parsed.values() if isinstance(t, dict))
+            resultats["total_tests"] = total
+            resultats["pass_count"] = total - len(fails)
+        except (json.JSONDecodeError, TypeError):
             pass
 
+    score_text = resultats.get("behavioralScore", "")
     try:
-        json_el = d.wait_for_element("pre, #raw-result, #json-result", timeout_ms=2000)
-        if json_el:
-            try:
-                parsed = json.loads(json_el)
-                resultats["raw_json"] = parsed
-            except (json.JSONDecodeError, ValueError):
-                resultats["raw_text"] = json_el[:1000]
-    except Exception:  # noqa: BLE001
-        pass
+        score = float(score_text)
+        resultats["behavioral_score_num"] = score
+    except (ValueError, TypeError):
+        score = None
 
-    is_human = any(
-        "human" in str(v).lower() or "not a bot" in str(v).lower() for v in resultats.values()
-    )
-    is_bot = any(
-        "bot" in str(v).lower() and "not" not in str(v).lower() for v in resultats.values()
-    )
+    if score is not None:
+        is_human = score >= 0.5
+    else:
+        fail_count = resultats.get("fail_count", 0)
+        total = resultats.get("total_tests", 0)
+        is_human = total > 0 and fail_count == 0
 
-    resultats["verdict_externe"] = "humain" if is_human else ("bot" if is_bot else "inconnu")
-    return Issue(is_human or not is_bot, resultats)
+    resultats["verdict_externe"] = "humain" if is_human else "bot"
+    return Issue(is_human, resultats)
 
 
 SCENARIOS: dict[str, Scenario] = {

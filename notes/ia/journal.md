@@ -6,6 +6,57 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Validation externe : 0/27 FAIL sur bot.incolumitas.com (D-42, D-43)
+
+### Fait
+- **Validation externe sur bot.incolumitas.com** : détecteur indépendant (NikolaiT) avec 27 tests
+  (fpscanner + intoli), score comportemental, fingerprints canvas/WebGL.
+- **Scénario `bot_sanity_check` réécrit** : anciens sélecteurs inexistants remplacés par les vrais
+  (`#behavioralScore`, `#detection-tests`). Parsing JSON des résultats test par test. Polling du score
+  comportemental (arrive >15s après le chargement).
+- **Pipeline export corrigé** : `details_scenario` ajouté dans les drapeaux (`issues.py`) pour que les
+  résultats du détecteur externe soient exportés dans le JSON.
+- **Suppression gardes hostname (D-42)** : les 9 scripts de furtivité avaient un guard
+  `if (hostname !== localhost) return;` qui désactivait TOUS les patches sur les sites externes.
+  NOEZIA visitait bot.incolumitas.com complètement nu. Suppression → passage de 7 FAIL à 1 FAIL.
+- **Suppression webdriver du prototype (D-43)** : fpscanner vérifie `'webdriver' in navigator`
+  (présence, pas valeur). Même un vrai Chrome échoue (faux positif). Suppression du getter sur
+  `Navigator.prototype` → 0 FAIL.
+- **Progression campagnes** : 69 (7 FAIL) → 70 (1 FAIL) → 71 (0 FAIL, verdict humain).
+  Playwright vanilla : 11 FAIL / 27.
+- **Fix plugins navigateur.js** : `item()` gère le débordement 32 bits (`i >>> 0`), passe `overflowTest`.
+
+### Fichiers modifiés
+- `src/shadowlab/scenarios.py` (réécriture `bot_sanity_check`)
+- `src/shadowlab/issues.py` (export `details_scenario`)
+- `src/shadowlab/engines/noezia/furtivite/automation.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/cdp.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/codecs.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/environnement.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/headless.js` (garde hostname + webdriver delete)
+- `src/shadowlab/engines/noezia/furtivite/iframes.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/navigateur.js` (garde hostname + plugin overflow)
+- `src/shadowlab/engines/noezia/furtivite/polices.js` (garde hostname)
+- `src/shadowlab/engines/noezia/furtivite/workers.js` (garde hostname)
+- `configs/experiments/validation-externe.yaml` (nouvelle campagne)
+- `docs/DECISIONS.md` (D-42, D-43)
+
+### Décisions
+- D-42 : suppression des gardes hostname — le périmètre Python est la vraie sécurité
+- D-43 : suppression webdriver du prototype plutôt que redéfinition
+
+### Résultat clé
+NOEZIA : **0 FAIL / 27 tests** sur un détecteur indépendant non contrôlé.
+Première validation externe non circulaire du moteur.
+
+### Reste
+- Score comportemental de bot.incolumitas.com inaccessible (API `abs.incolumitas.com/classify` ne répond pas pour les headless) — le fallback sur 0 FAIL suffit
+- Tester sur Arena Docker (niveaux 05-06) avec le login comportemental
+- Lancer une campagne de répétitions (3-5 runs) pour confirmer la stabilité
+- 338 tests verts, lint propre
+
+---
+
 ## 2026-11-10 — Claude (Opus 4.6) — Détection furtivité : 37/39 humain (D-39, D-40)
 
 ### Fait

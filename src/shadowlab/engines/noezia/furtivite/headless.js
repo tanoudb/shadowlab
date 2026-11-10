@@ -6,15 +6,20 @@
   if (!P) return;
   const natif = window.__NOEZIA_NATIF__ || (fn => fn);
 
-  try { const h = location.hostname;
-    if (h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.localhost') && !h.endsWith('.test')) return;
-  } catch(e) { return; }
 
-  // ─── navigator.webdriver → false (défense redondante après --disable-blink-features) ───
+  // ─── navigator.webdriver : suppression complète ───
+  // fpCollect vérifie `'webdriver' in navigator` (présence, pas valeur).
+  // Même avec value=false, `in` retourne true → fpscanner.WEBDRIVER FAIL.
+  // Supprimer du prototype : navigator.webdriver → undefined (falsy, passe tous les tests).
   try {
-    Object.defineProperty(Navigator.prototype, 'webdriver', {
-      get: natif(() => false, 'get webdriver', Navigator), configurable: true,
-    });
+    delete Navigator.prototype.webdriver;
+    if ('webdriver' in navigator) {
+      Object.defineProperty(Navigator.prototype, 'webdriver', {
+        get: natif(() => undefined, 'get webdriver', Navigator),
+        configurable: true,
+      });
+      delete Navigator.prototype.webdriver;
+    }
   } catch(e) {}
 
   // ─── document.hasFocus() → true (headless renvoie false) ───

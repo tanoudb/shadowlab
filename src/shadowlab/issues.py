@@ -6,6 +6,7 @@ principale, elle, est unique : elle sert aux totaux et répond à « pourquoi l'
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -70,6 +71,11 @@ def evaluer(
         "blocages": len(blocages),
         "erreur_technique": bool(erreur) or panne_arena,
     }
+    if motif_echec:
+        try:
+            drapeaux["details_scenario"] = json.loads(motif_echec) if isinstance(motif_echec, str) else motif_echec
+        except (json.JSONDecodeError, TypeError):
+            drapeaux["details_scenario"] = motif_echec
 
     if success:
         return IssuePassage(REUSSIE, None, drapeaux)

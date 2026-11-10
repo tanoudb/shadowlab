@@ -1,6 +1,9 @@
+# Validation externe : bot.incolumitas.com (NikolaiT/CreepJS)
+# Mesure si le moteur NOEZIA est détecté comme bot par un détecteur tiers indépendant.
+# Pas de site local requis — le scénario navigue directement sur le site externe.
 experiment:
-  name: validation-externe-incolumitas
-  description: Validation non circulaire — bot.incolumitas.com juge le fingerprint de nos moteurs
+  name: validation_externe
+  description: Verdict du détecteur indépendant bot.incolumitas.com (NOEZIA vs Playwright vanilla)
   environment: local
   engines:
     - noezia
