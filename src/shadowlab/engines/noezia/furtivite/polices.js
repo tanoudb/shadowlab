@@ -54,7 +54,13 @@
   // pour fingerprinter les polices rendues. Un bruit déterministe par profil
   // rend l'empreinte unique mais stable pour la session.
   function _noiseRect(rect) {
-    const n = () => (rand() - 0.5) * 0.15;
+    // Bruit déterministe dérivé des valeurs du rect + seed profil.
+    // Garantit la stabilité : même rect → même bruit à chaque appel.
+    let ls = (Math.round(rect.x * 1e3) ^ Math.round(rect.y * 1e3) ^
+              Math.round(rect.width * 1e3) ^ Math.round(rect.height * 1e3) ^
+              (P.canvas_seed || 42)) >>> 0;
+    function lr() { ls = (ls * 1664525 + 1013904223) & 0xffffffff; return (ls >>> 0) / 0xffffffff; }
+    const n = () => (lr() - 0.5) * 0.15;
     const nx = n(), ny = n(), nw = n(), nh = n();
     return Object.create(DOMRect.prototype, {
       x:      {get: natif(() => rect.x + nx, 'get x'), configurable: true, enumerable: true},
