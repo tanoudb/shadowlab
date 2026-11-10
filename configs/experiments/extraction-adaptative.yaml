@@ -1,0 +1,16 @@
+# Extraction adaptative : le sélecteur CSS casse entre deux requêtes (classes mutées),
+# l'extracteur doit relocaliser les éléments par ressemblance de signature.
+# Pas besoin de l'Arena — tourne sur le site de test nu (uv run shadowlab site).
+experiment:
+  name: extraction_adaptative
+  description: Extraire des données malgré la mutation des classes CSS (relocalisation)
+  environment: local
+  engines:
+    - httpx
+    - curl-cffi
+    - scrapling
+  scenarios:
+    - extraction_adaptative
+  repetitions: 3
+  seed: 42
+  output: [json, html]
