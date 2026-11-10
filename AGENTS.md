@@ -47,9 +47,9 @@ recommander des optimisations.
   moteur (clés dans `.env`, secret jamais exposé). Passer = être perçu comme humain (v3 ne fait que noter).
 - **Moteur NOEZIA** : GPU Metal réel en headless (anti-SwiftShader), profils cohérents avec l'OS hôte.
 - **Dashboard avancé** : vue Arena (décisions par couche, matrice moteur × protection, durées).
-- **11 moteurs** : 7 intégrés (playwright, selenium, scrapling, httpx, curl-cffi, patchright, scrapling-furtif),
-  4 isolés opérationnels (camoufox, seleniumbase, seleniumbase-uc, undetected-chromedriver),
-  2 à venir (crawlee, zendriver — API async, drivers à écrire).
+- **15 moteurs** : 9 intégrés (playwright, selenium, scrapling, httpx, curl-cffi, patchright, scrapling-furtif,
+  noezia, noezia-experimental), 6 isolés opérationnels (camoufox, seleniumbase, seleniumbase-uc,
+  undetected-chromedriver, crawlee, zendriver).
 - **Campagnes matricielles** : moteur × protection × scénario × répétitions, exécution parallèle (spawn),
   classification en 6 issues, intervalles de Wilson, mesures CPU/mémoire.
 - **Catalogue recherche** : 52 projets open source analysés (`docs/recherche/catalogue.yaml`).
@@ -57,7 +57,7 @@ recommander des optimisations.
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
   `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
   signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
-- **311 tests rapides verts** (hors intégration), lint propre.
+- **313 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA.
 

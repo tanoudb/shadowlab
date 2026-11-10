@@ -35,6 +35,8 @@ ISOLES = {
         "undetected-chromedriver",
         "shadowlab.engines.isoles.moteur_uc:DriverUndetectedChromedriver",
     ),
+    "crawlee": ("crawlee", "shadowlab.engines.isoles.moteur_crawlee:DriverCrawlee"),
+    "zendriver": ("zendriver", "shadowlab.engines.isoles.moteur_zendriver:DriverZendriver"),
 }
 
 
@@ -57,8 +59,9 @@ class DriverIsole(Driver):
         if manque:
             raise RuntimeError(manque)
         environnement = {**os.environ, "PYTHONPATH": str(RACINE / "src"), "PYTHONUNBUFFERED": "1"}
+        script = str(Path(__file__).with_name("pont_serveur.py"))
         self._enfant = subprocess.Popen(
-            [str(self.python()), "-m", "shadowlab.engines.pont_serveur", self.cible],
+            [str(self.python()), script, self.cible],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

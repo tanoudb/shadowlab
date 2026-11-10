@@ -6,6 +6,42 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-10 — Claude (Opus 4.6) — Moteurs crawlee + zendriver (D-32)
+
+### Fait
+- **Driver crawlee** (`moteur_crawlee.py`) : moteur HTTP isolé basé sur le client impit de crawlee.
+  Empreinte TLS/headers réaliste de navigateur par défaut. Pont async→sync.
+- **Driver zendriver** (`moteur_zendriver.py`) : moteur navigateur isolé par CDP (Chrome DevTools
+  Protocol). Anti-détection native (pas de WebDriver), event loop dédié dans un thread daemon.
+  AGPL-3.0 (noté pour la livraison). Interface complète : navigate, click, fill, select, content,
+  screenshot, souris, défilement.
+- **Correction pont** (`pont_serveur.py`, `pont.py`) : `python -m shadowlab.engines.pont_serveur`
+  déclenchait `engines/__init__` → ImportError sur les deps absentes. Corrigé par lancement direct
+  du script + pré-enregistrement de modules fantômes pour bloquer l'import du package. Corrige
+  aussi un bug latent sur les 4 moteurs isolés existants.
+- **Registre à 15 moteurs** : 9 intégrés + 6 isolés, tous « prêt ».
+- Environnements isolés créés (`moteurs_isoles/crawlee/.venv`, `moteurs_isoles/zendriver/.venv`).
+- 313 tests rapides verts, lint propre.
+
+### Fichiers
+- `src/shadowlab/engines/isoles/moteur_crawlee.py` — driver crawlee (HTTP, impit)
+- `src/shadowlab/engines/isoles/moteur_zendriver.py` — driver zendriver (navigateur, CDP)
+- `src/shadowlab/engines/pont.py` — registre ISOLES + lancement script direct
+- `src/shadowlab/engines/pont_serveur.py` — modules fantômes pour éviter __init__
+- `moteurs_isoles/crawlee/pyproject.toml` — deps crawlee[parsel]
+- `moteurs_isoles/zendriver/pyproject.toml` — deps zendriver
+- `docs/DECISIONS.md` — D-32
+- `AGENTS.md` — 15 moteurs
+
+### Décisions
+- D-32 : crawlee et zendriver en moteurs isolés (dépendances incompatibles avec l'env principal).
+- Pont corrigé : script direct au lieu de `-m` + modules fantômes dans sys.modules.
+- Zendriver en event loop dédié (thread daemon) pour ponter async→sync proprement.
+
+### Reste
+- Tester crawlee et zendriver contre l'Arena (campagne comparative).
+- Zendriver : AGPL-3.0 à examiner avant livraison produit.
+
 ## 2026-11-10 — Claude (Opus 4.6) — Element enrichi + scénario extraction adaptative
 
 ### Fait

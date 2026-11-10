@@ -1,4 +1,8 @@
-"""Côté enfant du pont : reçoit les appels en JSON et les exécute sur le pilote réel. Voir `pont.py`."""
+"""Côté enfant du pont : reçoit les appels en JSON et les exécute sur le pilote réel. Voir `pont.py`.
+
+Lancé par `pont.py` dans le Python de l'environnement isolé. Le package `shadowlab.engines` y est
+tronqué (`__init__` vidé dans sys.modules) pour ne pas tirer toutes les dépendances des moteurs.
+"""
 
 from __future__ import annotations
 
@@ -6,11 +10,21 @@ import dataclasses
 import json
 import os
 import sys
+import types
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from .base import Driver, MesuresSession
+# Empêcher l'import de shadowlab.engines.__init__ (qui charge tous les moteurs et leurs dépendances).
+# On insère un module vide pour le package avant d'importer shadowlab.engines.base.
+for _pkg in ("shadowlab", "shadowlab.engines"):
+    if _pkg not in sys.modules:
+        _m = types.ModuleType(_pkg)
+        _m.__path__ = [str(Path(__file__).resolve().parents[{"shadowlab.engines": 0, "shadowlab": 1}[_pkg]])]
+        _m.__package__ = _pkg
+        sys.modules[_pkg] = _m
+
+from shadowlab.engines.base import Driver, MesuresSession  # noqa: E402
 
 
 def _simple(valeur: Any) -> Any:

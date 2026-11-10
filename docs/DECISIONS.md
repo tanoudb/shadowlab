@@ -148,3 +148,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   disponible pour la persistance inter-exécutions (`Signatures(Path("..."))`). Implémentation :
   `chemin: Path | None = None` dans `extraction.Signatures.__init__`, `enregistrer` saute l'écriture
   si `_chemin is None`.
+- **D-32 — 10/11/2026 — Crawlee et Zendriver comme moteurs isolés.** Les deux derniers moteurs async
+  Python du catalogue (crawlee-python 1.11, zendriver 0.17) sont intégrés via le pont subprocess. Crawlee
+  apporte un client HTTP avec empreinte TLS/headers réaliste (impit) ; zendriver pilote Chrome par CDP sans
+  WebDriver (anti-détection native, AGPL-3.0 — à surveiller avant livraison). Le pont est corrigé pour
+  charger `base.py` sans déclencher `engines/__init__` (pré-enregistrement de modules fantômes), ce qui
+  répare aussi les moteurs isolés existants.
