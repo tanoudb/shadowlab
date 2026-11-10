@@ -33,18 +33,20 @@ TAILLE_MAX_COLLECTE = 64 * 1024
 NOMS_LOCAUX = frozenset({"127.0.0.1", "localhost", "::1"})
 DESTINATION_EXTERIEURE = "http://example.com/"  # domaine réservé à la documentation (RFC 2606)
 CSP = (
-    "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; "
+    "default-src 'self'; script-src 'self'; worker-src 'self' blob:; "
+    "connect-src 'self'; img-src 'self' data:; "
     "style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 CSP_TURNSTILE = (
     "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; "
-    "connect-src 'self' https://challenges.cloudflare.com; "
+    "worker-src 'self' blob:; connect-src 'self' https://challenges.cloudflare.com; "
     "frame-src https://challenges.cloudflare.com; img-src 'self' data:; "
     "style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
 CSP_RECAPTCHA = (
     "default-src 'self'; script-src 'self' 'unsafe-inline'"
     " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
+    "worker-src 'self' blob:; "
     "connect-src 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
     "img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
@@ -52,7 +54,7 @@ CSP_RECAPTCHA = (
 CSP_RECAPTCHA_V3 = (
     "default-src 'self'; script-src 'self' 'unsafe-inline'"
     " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; "
-    "connect-src 'self' https://www.google.com/recaptcha/; "
+    "worker-src 'self' blob:; connect-src 'self' https://www.google.com/recaptcha/; "
     "frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/; "
     "img-src 'self' data: https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"

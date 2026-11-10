@@ -22,22 +22,16 @@
   var _pn = ${JSON.stringify(P.platform_name || '')};
   var NP = Object.getPrototypeOf(navigator);
   if (_hc !== undefined) {
-    var getHC = function() { return _hc; };
     Object.defineProperty(NP, 'hardwareConcurrency', {
-      get: getHC, configurable: true, enumerable: true,
+      get: function() { return _hc; }, configurable: true, enumerable: true,
     });
-    Object.defineProperty(navigator, 'hardwareConcurrency', {
-      get: getHC, configurable: true, enumerable: true,
-    });
+    try { delete navigator.hardwareConcurrency; } catch(e) {}
   }
   if (_dm !== undefined) {
-    var getDM = function() { return _dm; };
     Object.defineProperty(NP, 'deviceMemory', {
-      get: getDM, configurable: true, enumerable: true,
+      get: function() { return _dm; }, configurable: true, enumerable: true,
     });
-    Object.defineProperty(navigator, 'deviceMemory', {
-      get: getDM, configurable: true, enumerable: true,
-    });
+    try { delete navigator.deviceMemory; } catch(e) {}
   }
   if (_pf) {
     Object.defineProperty(NP, 'platform', {
@@ -68,12 +62,21 @@
   const OrigWorker = window.Worker;
   if (!OrigWorker) return;
 
-  function _wrapBlobURL(scriptURL) {
-    if (typeof scriptURL === 'string' && scriptURL.startsWith('blob:')) {
-      return scriptURL;
+  // Tracker les blobs JS pour injecter le prologue dans les workers blob:
+  const _blobRegistry = new Map();
+  const _origCreateObjectURL = URL.createObjectURL;
+  URL.createObjectURL = natif(function createObjectURL(obj) {
+    const url = _origCreateObjectURL.call(URL, obj);
+    if (obj instanceof Blob && /javascript/.test(obj.type)) {
+      _blobRegistry.set(url, obj);
     }
-    return null;
-  }
+    return url;
+  }, 'createObjectURL');
+  const _origRevokeObjectURL = URL.revokeObjectURL;
+  URL.revokeObjectURL = natif(function revokeObjectURL(url) {
+    _blobRegistry.delete(url);
+    return _origRevokeObjectURL.call(URL, url);
+  }, 'revokeObjectURL');
 
   function _patchedWorker(scriptURL, options) {
     if (scriptURL instanceof URL) scriptURL = scriptURL.href;
@@ -82,11 +85,17 @@
     if (options && options.type === 'module') {
       const wrapper = `${PROLOGUE}\nimport ${JSON.stringify(scriptURL)};`;
       const blob = new Blob([wrapper], {type: 'application/javascript'});
-      const blobURL = URL.createObjectURL(blob);
+      const blobURL = _origCreateObjectURL.call(URL, blob);
       return new OrigWorker(blobURL, options);
     }
 
     if (scriptURL.startsWith('blob:')) {
+      const origBlob = _blobRegistry.get(scriptURL);
+      if (origBlob) {
+        const patched = new Blob([PROLOGUE + '\n', origBlob], {type: 'application/javascript'});
+        const newURL = _origCreateObjectURL.call(URL, patched);
+        return new OrigWorker(newURL, options);
+      }
       try {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', scriptURL, false);
@@ -94,7 +103,7 @@
         if (xhr.status === 200) {
           const patched = PROLOGUE + '\n' + xhr.responseText;
           const blob = new Blob([patched], {type: 'application/javascript'});
-          const newURL = URL.createObjectURL(blob);
+          const newURL = _origCreateObjectURL.call(URL, blob);
           return new OrigWorker(newURL, options);
         }
       } catch(e) {}
@@ -103,7 +112,7 @@
 
     const importWrapper = PROLOGUE + '\nimportScripts(' + JSON.stringify(scriptURL) + ');';
     const blob = new Blob([importWrapper], {type: 'application/javascript'});
-    const blobURL = URL.createObjectURL(blob);
+    const blobURL = _origCreateObjectURL.call(URL, blob);
     return new OrigWorker(blobURL, options);
   }
 
