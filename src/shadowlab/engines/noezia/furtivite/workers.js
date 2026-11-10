@@ -22,13 +22,21 @@
   var _pn = ${JSON.stringify(P.platform_name || '')};
   var NP = Object.getPrototypeOf(navigator);
   if (_hc !== undefined) {
+    var getHC = function() { return _hc; };
     Object.defineProperty(NP, 'hardwareConcurrency', {
-      get: function() { return _hc; }, configurable: true,
+      get: getHC, configurable: true, enumerable: true,
+    });
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      get: getHC, configurable: true, enumerable: true,
     });
   }
   if (_dm !== undefined) {
+    var getDM = function() { return _dm; };
     Object.defineProperty(NP, 'deviceMemory', {
-      get: function() { return _dm; }, configurable: true,
+      get: getDM, configurable: true, enumerable: true,
+    });
+    Object.defineProperty(navigator, 'deviceMemory', {
+      get: getDM, configurable: true, enumerable: true,
     });
   }
   if (_pf) {

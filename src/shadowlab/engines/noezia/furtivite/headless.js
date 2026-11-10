@@ -123,18 +123,24 @@
     function _wxr() { _ws ^= _ws << 13; _ws ^= _ws >>> 17; _ws ^= _ws << 5; return (_ws >>> 0) / 0xFFFFFFFF; }
     const sx = 22 + Math.floor(_wxr() * 200);
     const sy = 25 + Math.floor(_wxr() * 100);
-    Object.defineProperty(window, 'screenX', {
-      get: natif(() => sx, 'get screenX'), configurable: true,
-    });
-    Object.defineProperty(window, 'screenY', {
-      get: natif(() => sy, 'get screenY'), configurable: true,
-    });
-    Object.defineProperty(window, 'screenLeft', {
-      get: natif(() => sx, 'get screenLeft'), configurable: true,
-    });
-    Object.defineProperty(window, 'screenTop', {
-      get: natif(() => sy, 'get screenTop'), configurable: true,
-    });
+    const getSX = natif(() => sx, 'get screenX');
+    const getSY = natif(() => sy, 'get screenY');
+    const getSL = natif(() => sx, 'get screenLeft');
+    const getST = natif(() => sy, 'get screenTop');
+    for (const target of [Window.prototype, window]) {
+      Object.defineProperty(target, 'screenX', {
+        get: getSX, configurable: true, enumerable: true,
+      });
+      Object.defineProperty(target, 'screenY', {
+        get: getSY, configurable: true, enumerable: true,
+      });
+      Object.defineProperty(target, 'screenLeft', {
+        get: getSL, configurable: true, enumerable: true,
+      });
+      Object.defineProperty(target, 'screenTop', {
+        get: getST, configurable: true, enumerable: true,
+      });
+    }
   } catch(e) {}
 
   // ─── PerformancePaintTiming (headless peut manquer FP/FCP ou les avoir à t=0) ───

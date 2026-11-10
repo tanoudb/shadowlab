@@ -92,12 +92,12 @@
   }
 
   // ─── Prototype chain : propriétés propres inattendues sur navigator ───
-  // Les détecteurs vérifient que navigator n'a PAS de propriétés propres
-  // pour hardwareConcurrency, deviceMemory etc. (elles doivent être sur le prototype).
-  // Nos patches dans navigateur.js les mettent déjà sur le prototype,
-  // mais d'autres injections (Patchright lui-même) peuvent en ajouter.
+  // Certaines propriétés sont sur Navigator.prototype dans un vrai Chrome,
+  // mais Playwright/Patchright peut en ajouter comme propriétés propres.
+  // On ne supprime QUE celles qui ne sont PAS propres dans un vrai Chrome.
+  // hardwareConcurrency et deviceMemory SONT propres dans Chrome (D-34) → ne pas toucher.
   const PROPS_PROTOTYPE_ONLY = [
-    'webdriver', 'hardwareConcurrency', 'deviceMemory',
+    'webdriver',
     'languages', 'language', 'platform', 'vendor', 'plugins', 'mimeTypes',
   ];
   for (const prop of PROPS_PROTOTYPE_ONLY) {
