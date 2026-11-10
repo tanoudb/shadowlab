@@ -104,6 +104,10 @@ def scripts_furtivite(
 
 
 def injecter(contexte, profil: ProfilNavigateur, **kwargs) -> None:
-    """Injecte tous les scripts de furtivité dans un contexte Playwright/Patchright."""
-    for script in scripts_furtivite(profil, **kwargs):
-        contexte.add_init_script(script)
+    """Injecte tous les scripts de furtivité dans un contexte Playwright/Patchright.
+
+    Concatène tous les scripts en un seul appel add_init_script pour éviter
+    la limite de taille cumulative de Patchright (~75 KB sur plusieurs appels).
+    """
+    scripts = scripts_furtivite(profil, **kwargs)
+    contexte.add_init_script("\n".join(scripts))

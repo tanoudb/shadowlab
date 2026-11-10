@@ -368,6 +368,53 @@ def recaptcha_v3(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
     return Issue(score is not None, {"score": score, "etat": etat})
 
 
+def extraction_adaptative(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Extraire des données d'une page qui mute ses classes CSS à chaque requête.
+
+    La page `/lab/adaptatif` génère des noms de classes aléatoires (obfuscation simulée). Au premier
+    passage, le sélecteur initial (`div.annonce-*`) fonctionne et l'extracteur mémorise la signature.
+    Au deuxième passage, les classes ont changé : le sélecteur casse, mais l'extracteur retrouve les
+    éléments par ressemblance. Ce scénario ne nécessite **pas** JavaScript.
+    """
+    # Premier passage : on apprend les signatures sur la page
+    aller(d, url(base, "/lab/adaptatif", jeton))
+    html1 = d.content()
+    from .engines.noezia.analyseur import Analyseur
+    from .engines.noezia.extraction import Signatures
+
+    sigs = Signatures()  # mémoire seule, pas de fichier
+
+    a1 = Analyseur(html1, url=f"{base}/lab/adaptatif", signatures=sigs)
+    titre1 = a1.extraire_adaptatif("h3", "titre")  # apprend la signature du <h3>
+    prix1 = a1.extraire_adaptatif("span", "prix")
+
+    if not titre1:
+        return Issue(False, {"etape": "premier_passage", "erreur": "titre introuvable"})
+
+    # Deuxième passage : les classes ont muté
+    aller(d, url(base, "/lab/adaptatif", jeton))
+    html2 = d.content()
+    a2 = Analyseur(html2, url=f"{base}/lab/adaptatif", signatures=sigs)
+
+    # Le sélecteur par classe du premier passage ne marche plus (classes aléatoires)
+    # Mais extraire_adaptatif doit retrouver les éléments par ressemblance
+    titre2 = a2.extraire_adaptatif("h3", "titre")
+    prix2 = a2.extraire_adaptatif("span", "prix")
+
+    titres_ok = titre1 and titre2 and pages.ANNONCES_ADAPTATIVES[0]["titre"] in titre1
+    prix_ok = prix1 and prix2
+    return Issue(
+        bool(titres_ok and prix_ok),
+        {
+            "titre_passage_1": titre1,
+            "titre_passage_2": titre2,
+            "prix_passage_1": prix1,
+            "prix_passage_2": prix2,
+            "signatures_memorisees": len(sigs._data),  # noqa: SLF001
+        },
+    )
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -387,5 +434,11 @@ SCENARIOS: dict[str, Scenario] = {
         Scenario("scrape_rapide", "Scraping rapide (scalping) : 5 pages, extraction sans pause", True, scrape_rapide),
         Scenario("recaptcha_v3", "Démo reCAPTCHA v3 réel : relever le score attribué au moteur", True, recaptcha_v3),
         Scenario("connexion", "Se connecter au niveau authentifié et atteindre l'espace privé", True, connexion),
+        Scenario(
+            "extraction_adaptative",
+            "Extraire des données malgré la mutation des classes CSS (obfuscation)",
+            False,
+            extraction_adaptative,
+        ),
     )
 }

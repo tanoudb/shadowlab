@@ -90,6 +90,53 @@ def test_element_texte_et_attribut():
     assert a.similaires("article.carte")[1].css_un("h3") == "T2 Lyon"
 
 
+def test_element_tag_et_attributs():
+    a = Analyseur(HTML)
+    els = a.elements("li.article")
+    assert len(els) == 2
+    assert els[0].tag == "li"
+    assert els[0].attributs == {"class": "article", "data-id": "A1"}
+    assert els[1].attribut("data-id") == "A2"
+
+
+def test_element_navigation_dom():
+    a = Analyseur(HTML_LISTE)
+    carte = a.elements("article.carte")[0]
+    # parent = div.grille
+    p = carte.parent
+    assert p is not None
+    assert p.tag == "div"
+    assert "grille" in (p.attribut("class") or "")
+    # enfants = h3 + span
+    enf = carte.enfants
+    assert len(enf) == 2
+    assert enf[0].tag == "h3"
+    assert enf[0].texte == "Studio Paris"
+    assert enf[1].tag == "span"
+    # frères = les 2 autres cartes (même parent, sans soi-même)
+    fr = carte.freres
+    assert len(fr) == 2
+    assert fr[0].css_un("h3") == "T2 Lyon"
+    assert fr[1].css_un("h3") == "T3 Lille"
+
+
+def test_element_elements_descendant():
+    a = Analyseur(HTML_LISTE)
+    carte = a.elements("article.carte")[1]
+    prix = carte.elements("span.prix")
+    assert len(prix) == 1
+    assert prix[0].texte == "190000"
+
+
+def test_analyseur_elements():
+    """Analyseur.elements() renvoie des Element navigables."""
+    a = Analyseur(HTML)
+    items = a.elements("li.article")
+    assert len(items) == 2
+    assert items[0].texte == "Alpha"
+    assert items[0].attribut("data-id") == "A1"
+
+
 def test_http_base_analyseur():
     """Les moteurs HTTP (httpx, scrapling) exposent un `.analyseur()` qui rend un Analyseur."""
     from shadowlab.engines.http_base import DriverHttp, ReponseBrute

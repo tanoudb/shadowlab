@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import json
+import random
+import string
 from html import escape
 
 NB_PAGES_CATALOGUE = 5
 ARTICLES_PAR_PAGE = 10
 REFERENCES_STATIQUES = [f"SL-{n:03d}" for n in range(1, 11)]
+# Page « adaptatif » : annonces dont les classes CSS mutent à chaque requête (obfuscation).
+ANNONCES_ADAPTATIVES = [
+    {"titre": "Studio Paris 18e", "prix": "245 000 €", "surface": "22 m²"},
+    {"titre": "T2 Lyon 3e", "prix": "189 000 €", "surface": "41 m²"},
+    {"titre": "T3 Lille Centre", "prix": "167 500 €", "surface": "63 m²"},
+    {"titre": "Maison Nantes", "prix": "312 000 €", "surface": "95 m²"},
+]
 MODELES = ["Rally2", "Rally3", "Rally4", "Rally5"]
 TEXTE_DYNAMIQUE = "contenu-dynamique-ok"
 
@@ -22,6 +31,7 @@ NAVIGATION = [
     ("/lab/empreinte", "Empreinte"),
     ("/lab/detection", "Détection"),
     ("/lab/api/articles", "API JSON"),
+    ("/lab/adaptatif", "Adaptatif"),
 ]
 
 
@@ -84,6 +94,39 @@ def statique(jeton: str, honeypot: bool = False) -> str:
     return gabarit("HTML simple", corps, jeton, honeypot=honeypot)
 
 
+def _suffixe_aleatoire(longueur: int = 5) -> str:
+    return "".join(random.choices(string.ascii_lowercase, k=longueur))
+
+
+def adaptatif(jeton: str, honeypot: bool = False) -> str:
+    """Page qui mute ses classes CSS à chaque requête (simulation d'obfuscation).
+
+    Les données sont fixes (ANNONCES_ADAPTATIVES) mais les noms de classes changent :
+    le sélecteur `div.annonce` deviendra `div.annonce-xkqmt` → un sélecteur classique casse,
+    mais l'extraction adaptative retrouve les éléments par ressemblance à la signature.
+    """
+    sfx = _suffixe_aleatoire()
+    cls_carte = f"annonce-{sfx}"
+    cls_titre = f"titre-{sfx}"
+    cls_prix = f"prix-{sfx}"
+    cls_surface = f"surface-{sfx}"
+    cartes = "".join(
+        f"<div class='{cls_carte}'>"
+        f"<h3 class='{cls_titre}'>{escape(a['titre'])}</h3>"
+        f"<span class='{cls_prix}'>{escape(a['prix'])}</span>"
+        f"<span class='{cls_surface}'>{escape(a['surface'])}</span>"
+        f"</div>"
+        for a in ANNONCES_ADAPTATIVES
+    )
+    corps = f"""<p>Les classes CSS de cette page changent à chaque requête (obfuscation simulée).</p>
+<p id="info-classes" data-carte="{cls_carte}" data-titre="{cls_titre}"
+   data-prix="{cls_prix}" data-surface="{cls_surface}">
+  Classes actuelles : carte={cls_carte}, titre={cls_titre}, prix={cls_prix}, surface={cls_surface}
+</p>
+<div id="annonces">{cartes}</div>"""
+    return gabarit("Extraction adaptative", corps, jeton, honeypot=honeypot)
+
+
 def dynamique(jeton: str, honeypot: bool = False) -> str:
     corps = """<p>Le bloc ci-dessous est rempli par JavaScript 400 ms après le chargement.</p>
 <div id="zone-dynamique" aria-live="polite">chargement…</div>"""
@@ -131,8 +174,7 @@ def confirmation(jeton: str, nom: str, modele: str) -> str:
 
 # Champ piège du formulaire de connexion : un humain ne le remplit jamais (invisible).
 HONEYPOT_CONNEXION = (
-    '<label class="sl-hp" aria-hidden="true">Site web '
-    '<input name="sl_site" tabindex="-1" autocomplete="off"></label>'
+    '<label class="sl-hp" aria-hidden="true">Site web <input name="sl_site" tabindex="-1" autocomplete="off"></label>'
 )
 
 
@@ -173,8 +215,8 @@ def recaptcha_v3(jeton: str, site_key: str) -> str:
             '<div id="v3-resultat" data-pret="0"><p>État : <span id="v3-etat">clés absentes</span></p>'
             '<p>Score : <span id="v3-score"></span></p></div>'
             '<p class="indice">Configure <code>SHADOWLAB_RECAPTCHA_V3_SITE</code> et '
-            '<code>SHADOWLAB_RECAPTCHA_V3_SECRET</code> dans <code>.env</code>, autorise '
-            '<code>localhost</code> sur la clé, puis recharge.</p>'
+            "<code>SHADOWLAB_RECAPTCHA_V3_SECRET</code> dans <code>.env</code>, autorise "
+            "<code>localhost</code> sur la clé, puis recharge.</p>"
         )
         script = ""
     else:

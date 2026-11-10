@@ -87,15 +87,16 @@ def meilleur_candidat(
 
 
 class Signatures:
-    """Mémoire persistante des signatures, par domaine et clé logique (fichier JSON)."""
+    """Mémoire des signatures, par domaine et clé logique. Fichier JSON si `chemin` donné, sinon mémoire seule."""
 
-    def __init__(self, chemin: Path) -> None:
+    def __init__(self, chemin: Path | None = None) -> None:
         self._chemin = chemin
         self._data: dict[str, dict[str, Any]] = {}
-        try:
-            self._data = json.loads(chemin.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            self._data = {}
+        if chemin is not None:
+            try:
+                self._data = json.loads(chemin.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                self._data = {}
 
     @staticmethod
     def _cle(domaine: str, cle: str) -> str:
@@ -106,6 +107,8 @@ class Signatures:
 
     def enregistrer(self, domaine: str, cle: str, signature: dict[str, Any]) -> None:
         self._data[self._cle(domaine, cle)] = signature
+        if self._chemin is None:
+            return
         try:
             self._chemin.parent.mkdir(parents=True, exist_ok=True)
             self._chemin.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -50,7 +50,7 @@
     || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Error.prototype), 'stack');
   if (_origStackDesc && _origStackDesc.get) {
     const _origGet = _origStackDesc.get;
-    const _filteredGet = natif(function get stack() {
+    const _filteredGet = natif(function() {
       const s = _origGet.call(this);
       if (typeof s !== 'string') return s;
       return s.split('\n').filter(l => !_SUSPECTS.test(l)).join('\n');

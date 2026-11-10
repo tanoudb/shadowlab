@@ -184,6 +184,11 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         hp = gardien.honeypots_actifs(request.state.sceau)
         return pages.statique(jeton_de(request), honeypot=hp)
 
+    @app.get("/lab/adaptatif", response_class=HTMLResponse, tags=["site"])
+    def adaptatif(request: Request) -> str:
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return pages.adaptatif(jeton_de(request), honeypot=hp)
+
     @app.get("/lab/dynamique", response_class=HTMLResponse, tags=["site"])
     def dynamique(request: Request) -> str:
         hp = gardien.honeypots_actifs(request.state.sceau)
