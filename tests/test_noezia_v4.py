@@ -537,11 +537,11 @@ class TestDetecteursV4:
         r = d.classer(obs)
         assert r.classification == "humain"
 
-    def test_registre_33_detecteurs(self):
+    def test_registre_39_detecteurs(self):
         from shadowlab.detection import registre
 
         r = registre()
-        assert len(r) == 33
+        assert len(r) == 39
         assert "scroll" in r
         assert "paint-timing" in r
         assert "canvas-consistency" in r
@@ -551,6 +551,12 @@ class TestDetecteursV4:
         assert "connection-dynamic" in r
         assert "proxy-uadata" in r
         assert "enumerable-props" in r
+        assert "audio-context" in r
+        assert "polices" in r
+        assert "math-constants" in r
+        assert "domrect" in r
+        assert "iframe-consistency" in r
+        assert "deep-proxy" in r
 
 
 class TestBlocageRessources:

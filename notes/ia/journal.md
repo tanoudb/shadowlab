@@ -1897,3 +1897,34 @@ adaptatif rapide, découplés. 301 tests verts, lint propre.
 
 ### Reste pour égaler Scrapling (largeur)
 Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'Analyseur aux moteurs HTTP.
+
+## 10/11/2026 — 6 détecteurs cross-contexte (D-37)
+
+**Objectif** : combler les 6 lacunes identifiées par audit comparatif avec CreepJS (référence open source).
+
+**Fait** :
+- Ajout de 6 sondes JS dans `observateur.js` :
+  - `audioContextTest()` — OfflineAudioContext oscillateur triangle → hash audio, double rendu pour stabilité
+  - `fontFingerprintTest()` — 25 polices testées par mesure offsetWidth, cohérence OS (macOS/Windows)
+  - `mathConstantsTest()` — 13 constantes Math + vérification native (cos, tan, random)
+  - `domRectFingerprintTest()` — 3 polices/tailles, nativeness getBoundingClientRect, stabilité
+  - `iframeConsistencyTest()` — remplacement de l'ancien iframeTest ; compare navigator, chrome, Math,
+    own keys, screen entre thread principal et iframe srcdoc (10 vérifications)
+  - `deepProxyDetectionTest()` — 6 getters natifs testés : toString, illegal invocation, descripteurs
+    Object vs Reflect, chaîne prototype navigator, intégrité Function.prototype.toString, stack Proxy
+- Ajout de 6 détecteurs Python dans `detection.py` :
+  - `DetecteurAudioContext` (audio-context) — headless sans son, API patchée, randomisation
+  - `DetecteurPolices` (polices) — peu de polices, incohérence OS
+  - `DetecteurMathConstants` (math-constants) — Math.cos/tan/random patchées
+  - `DetecteurDOMRect` (domrect) — getBCR patchée, instabilité
+  - `DetecteurIframeConsistency` (iframe-consistency) — patches non propagés à l'iframe
+  - `DetecteurDeepProxy` (deep-proxy) — 7 signaux : getter non natif, illegal invocation absente,
+    descripteur mismatch, chaîne proto cassée, constructor altéré, toString patchée, Proxy dans stack
+- 22 tests unitaires ajoutés (32 total detection, 338 total projet)
+- Registre mis à jour : 39 détecteurs (était 33)
+
+**Fichiers** : `src/shadowlab/site/static/observateur.js`, `src/shadowlab/detection.py`,
+`tests/test_detection.py`, `tests/test_noezia_v4.py`, `docs/DECISIONS.md`, `AGENTS.md`
+
+**Reste** : valider avec une campagne Arena (les sondes JS seront collectées au prochain passage moteur),
+test de validation externe (bot.incolumitas.com).

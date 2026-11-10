@@ -173,3 +173,284 @@ def test_entropie_frappe_humaine_passe():
     )
     v = verdicts(obs)
     assert v["entropie-interaction"] == "humain"
+
+
+# --- Détecteur AudioContext ---
+
+
+def _avec_sonde(cle, **kw):
+    """Construit une empreinte avec une sonde supplémentaire dans le payload (pas dans navigateur)."""
+    e = empreinte()
+    e["payload"][cle] = kw
+    return e
+
+
+def _empreinte_audio(**kw):
+    base = {
+        "available": True,
+        "constructor_natif": True,
+        "startRendering_natif": True,
+        "createOscillator_natif": True,
+        "nonzero": True,
+        "stable": True,
+        "sum": 124.5,
+        "hash": -1234567,
+    }
+    base.update(kw)
+    return _avec_sonde("audio_context", **base)
+
+
+def test_audio_context_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_audio()])
+    assert verdicts(obs)["audio-context"] == "humain"
+
+
+def test_audio_context_patche():
+    obs = Observations(
+        http=[requete(entetes_navigateur())], js=[_empreinte_audio(constructor_natif=False, startRendering_natif=False)]
+    )
+    assert verdicts(obs)["audio-context"] == "automatise"
+
+
+def test_audio_context_zeros():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_audio(nonzero=False)])
+    v = verdicts(obs)
+    assert v["audio-context"] in ("automatise", "indetermine")
+
+
+def test_audio_context_instable():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_audio(stable=False)])
+    c = next(c for c in classer(obs) if c.detector_name == "audio-context")
+    assert any(s.code == "audio_instable" for s in c.signals)
+    assert c.signals[0].poids == 0.8
+
+
+# --- Détecteur Polices ---
+
+
+def _empreinte_polices(**kw):
+    base = {
+        "presentes": ["Arial", "Helvetica", "Menlo", "Helvetica Neue", "Georgia"],
+        "absentes": ["Segoe UI", "Calibri"],
+        "count": 5,
+        "os_declare": "macOS",
+        "os_manquantes": [],
+        "os_inattendues": [],
+    }
+    base.update(kw)
+    return _avec_sonde("font_fingerprint", **base)
+
+
+def test_polices_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_polices()])
+    assert verdicts(obs)["polices"] == "humain"
+
+
+def test_polices_tres_peu():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_polices(count=1, presentes=["Arial"])])
+    c = next(c for c in classer(obs) if c.detector_name == "polices")
+    assert any(s.code == "tres_peu_polices" for s in c.signals)
+
+
+def test_polices_os_incoherent():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_polices(os_manquantes=["Menlo", "Helvetica Neue"], os_inattendues=["Segoe UI"])],
+    )
+    assert verdicts(obs)["polices"] == "automatise"
+
+
+# --- Détecteur MathConstants ---
+
+
+def _empreinte_math(**kw):
+    base = {"tan": -0.6112, "acos": 1.447, "cos_natif": True, "tan_natif": True, "random_natif": True}
+    base.update(kw)
+    return _avec_sonde("math_constants", **base)
+
+
+def test_math_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_math()])
+    assert verdicts(obs)["math-constants"] == "humain"
+
+
+def test_math_patche():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_math(cos_natif=False, tan_natif=False)])
+    assert verdicts(obs)["math-constants"] == "automatise"
+
+
+# --- Détecteur DOMRect ---
+
+
+def _empreinte_domrect(**kw):
+    base = {
+        "rects": [{"font": "16px monospace", "width": 120.5, "height": 18.0}],
+        "getBCR_natif": True,
+        "stable": True,
+        "has_subpixel": True,
+    }
+    base.update(kw)
+    return _avec_sonde("domrect_fingerprint", **base)
+
+
+def test_domrect_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_domrect()])
+    assert verdicts(obs)["domrect"] == "humain"
+
+
+def test_domrect_patche():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_domrect(getBCR_natif=False)])
+    c = next(c for c in classer(obs) if c.detector_name == "domrect")
+    assert any(s.code == "getBCR_patche" for s in c.signals)
+
+
+def test_domrect_instable():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_domrect(stable=False, getBCR_natif=False)])
+    assert verdicts(obs)["domrect"] == "automatise"
+
+
+# --- Détecteur IframeConsistency ---
+
+
+def _empreinte_iframe(**kw):
+    base = {
+        "access": True,
+        "ua_match": True,
+        "platform_match": True,
+        "hwc_match": True,
+        "webdriver_match": True,
+        "chrome_match": True,
+        "own_keys_match": True,
+        "screen_match": True,
+        "math_tan_match": True,
+        "languages_match": True,
+    }
+    base.update(kw)
+    return _avec_sonde("iframe_test", **base)
+
+
+def test_iframe_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_iframe()])
+    assert verdicts(obs)["iframe-consistency"] == "humain"
+
+
+def test_iframe_own_keys_differ():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_iframe(own_keys_match=False)])
+    c = next(c for c in classer(obs) if c.detector_name == "iframe-consistency")
+    assert any(s.code == "iframe_own_keys_diff" for s in c.signals)
+
+
+def test_iframe_math_patch_non_propage():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_iframe(math_tan_match=False)])
+    c = next(c for c in classer(obs) if c.detector_name == "iframe-consistency")
+    assert any(s.code == "iframe_math_diff" for s in c.signals)
+    assert c.signals[0].poids == 0.9
+
+
+def test_iframe_multiples_differences():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_iframe(ua_match=False, hwc_match=False, chrome_match=False)],
+    )
+    assert verdicts(obs)["iframe-consistency"] == "automatise"
+
+
+# --- Deep Proxy ---
+
+
+def _empreinte_deep_proxy(**kw):
+    base = {
+        "hwc_natif": True,
+        "ua_natif": True,
+        "wd_natif": True,
+        "platform_natif": True,
+        "dm_natif": True,
+        "screen_w_natif": True,
+        "hwc_illegal_invoc": True,
+        "ua_illegal_invoc": True,
+        "wd_illegal_invoc": True,
+        "platform_illegal_invoc": True,
+        "dm_illegal_invoc": True,
+        "screen_w_illegal_invoc": True,
+        "hwc_desc_match": True,
+        "ua_desc_match": True,
+        "wd_desc_match": True,
+        "platform_desc_match": True,
+        "dm_desc_match": True,
+        "screen_w_desc_match": True,
+        "navigator_proto": True,
+        "navigator_constructor": True,
+        "toString_natif": True,
+        "toString_length": 0,
+        "error_stack_lines": 3,
+        "error_has_proxy": False,
+    }
+    base.update(kw)
+    return _avec_sonde("deep_proxy", **base)
+
+
+def test_deep_proxy_humain():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_empreinte_deep_proxy()])
+    assert verdicts(obs)["deep-proxy"] == "humain"
+
+
+def test_deep_proxy_getter_non_natif():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_deep_proxy(hwc_natif=False, ua_natif=False)],
+    )
+    r = verdicts(obs)
+    assert r["deep-proxy"] == "indetermine" or any(
+        s.name == "getter_non_natif"
+        for c in __import__("shadowlab.detection", fromlist=["classer"]).classer(obs)
+        if c.detector_name == "deep-proxy"
+        for s in c.signaux
+    )
+
+
+def test_deep_proxy_illegal_invoc_absent():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_deep_proxy(hwc_illegal_invoc=False, ua_illegal_invoc=False)],
+    )
+    from shadowlab.detection import classer as _classer
+
+    resultats = {c.detector_name: c for c in _classer(obs)}
+    dp = resultats["deep-proxy"]
+    codes = [s.code for s in dp.signals]
+    assert "illegal_invoc_absent" in codes
+
+
+def test_deep_proxy_toString_patche():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_deep_proxy(toString_natif=False)],
+    )
+    from shadowlab.detection import classer as _classer
+
+    resultats = {c.detector_name: c for c in _classer(obs)}
+    dp = resultats["deep-proxy"]
+    codes = [s.code for s in dp.signals]
+    assert "toString_patche" in codes
+    assert dp.signals[0].poids == 0.9
+
+
+def test_deep_proxy_proxy_dans_stack():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_deep_proxy(error_has_proxy=True)],
+    )
+    from shadowlab.detection import classer as _classer
+
+    resultats = {c.detector_name: c for c in _classer(obs)}
+    dp = resultats["deep-proxy"]
+    codes = [s.code for s in dp.signals]
+    assert "proxy_dans_stack" in codes
+
+
+def test_deep_proxy_cumul_automatise():
+    obs = Observations(
+        http=[requete(entetes_navigateur())],
+        js=[_empreinte_deep_proxy(toString_natif=False, error_has_proxy=True, navigator_proto=False)],
+    )
+    assert verdicts(obs)["deep-proxy"] == "automatise"

@@ -1,0 +1,12 @@
+experiment:
+  name: validation-externe-incolumitas
+  description: Validation non circulaire — bot.incolumitas.com juge le fingerprint de nos moteurs
+  environment: local
+  engines:
+    - noezia
+    - playwright
+  scenarios:
+    - bot_sanity_check
+  repetitions: 1
+  seed: 42
+  output: [json]

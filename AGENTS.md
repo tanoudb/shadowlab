@@ -38,7 +38,7 @@ recommander des optimisations.
 ## État (10/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **6 niveaux progressifs** (01 baseline → 06 multicouche, D-18). JS proof-of-work, demo CAPTCHA,
-  FingerprintJS 5.3.0, BotD 2.0, 24 détecteurs, honeypots (lien piège + champ piège), fingerprinting actif,
+  FingerprintJS 5.3.0, BotD 2.0, 39 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe cross-contexte, deep Proxy — D-37), honeypots (lien piège + champ piège), fingerprinting actif,
   Turnstile Cloudflare (test keys, niveaux 05-06), reCAPTCHA v2 Google (test keys, niveaux 05-06).
 - **Niveau authentifié** (05-06) : login `/lab/connexion` gardé par une porte comportementale
   (empreinte + comportement + honeypot + limite de tentatives), espace privé `/lab/espace`, comptes de
@@ -57,7 +57,7 @@ recommander des optimisations.
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
   `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
   signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
-- **313 tests rapides verts** (hors intégration), lint propre.
+- **338 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA.
 
@@ -105,7 +105,7 @@ src/shadowlab/
 ├── site/            # Site de test FastAPI (app, pages, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
 ├── scenarios.py     # 15 scénarios de test
-├── detection.py     # 24 détecteurs
+├── detection.py     # 39 détecteurs
 ├── issues.py        # Classification en 6 issues
 ├── passages.py      # Cycle de vie d'un passage
 ├── database.py      # SQLite + migrations

@@ -178,3 +178,13 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   dès réception de l'empreinte et enregistre une décision `composite-differe` / `detecte`. Toute requête
   protégée ultérieure (2e page) consulte cette décision et bloque immédiatement. Comportement réaliste :
   les vrais WAF (Cloudflare, Akamai) font aussi « collecter puis vérifier ».
+- **D-37 — 10/11/2026 — 6 détecteurs cross-contexte inspirés CreepJS : AudioContext, polices, Math,
+  DOMRect, cohérence iframe, deep Proxy.** L'audit comparatif avec CreepJS a identifié 6 lacunes majeures
+  de nos 33 détecteurs. Les 6 techniques implémentées couvrent : fingerprint audio (oscillateur offline →
+  hash stable, détection headless sans carte son), empreinte des polices installées (cohérence OS),
+  intégrité des fonctions Math (native vs patchée), empreinte DOMRect multi-polices (stabilité + nativeness
+  de getBoundingClientRect), cohérence cross-iframe (propriétés navigator, Math, chrome, own keys entre
+  thread principal et iframe srcdoc), et détection profonde de Proxy sur les getters natifs (toString,
+  illegal invocation, descripteurs Object vs Reflect, chaîne prototype, stack d'erreur). Le collecteur JS
+  (`observateur.js`) envoie les données ; 6 classes Python (`detection.py`) les classent. Total : 39
+  détecteurs, 338 tests verts.

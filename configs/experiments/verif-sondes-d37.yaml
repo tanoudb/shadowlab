@@ -1,0 +1,12 @@
+experiment:
+  name: verif-sondes-d37
+  description: Vérification que les 6 sondes CreepJS (audio, fonts, math, domrect, iframe, deep_proxy) collectent des données
+  environment: local
+  engines:
+    - noezia
+    - playwright
+  scenarios:
+    - fingerprint_observation
+  repetitions: 1
+  seed: 42
+  output: [json]

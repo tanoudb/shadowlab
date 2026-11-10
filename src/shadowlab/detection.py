@@ -1661,6 +1661,241 @@ class DetecteurEnumerableProps:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurAudioContext:
+    """Empreinte AudioContext : détecte l'absence d'audio (headless), le patching et la randomisation."""
+
+    name = "audio-context"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        ac = p.get("audio_context") or {}
+        signaux: list[Signal] = []
+
+        if not ac:
+            return _indetermine(self.name, self.version, "non_collecte", "données AudioContext non collectées")
+
+        if ac.get("available") is False:
+            signaux.append(Signal("no_audio_api", "OfflineAudioContext indisponible", 0.3))
+        if ac.get("constructor_natif") is False:
+            signaux.append(Signal("constructor_patche", "OfflineAudioContext.constructor patchée", 0.75))
+        if ac.get("startRendering_natif") is False:
+            signaux.append(Signal("startRendering_patche", "startRendering patchée", 0.75))
+        if ac.get("createOscillator_natif") is False:
+            signaux.append(Signal("createOscillator_patche", "createOscillator patchée", 0.5))
+        if ac.get("nonzero") is False:
+            signaux.append(Signal("audio_zeros", "rendu audio nul (headless sans carte son)", 0.5))
+        if ac.get("stable") is False:
+            signaux.append(Signal("audio_instable", "hash audio instable entre deux rendus (randomisation)", 0.8))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurPolices:
+    """Empreinte des polices installées : cohérence avec l'OS déclaré et nombre minimal."""
+
+    name = "polices"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        fp = p.get("font_fingerprint") or {}
+        signaux: list[Signal] = []
+
+        if not fp:
+            return _indetermine(self.name, self.version, "non_collecte", "données polices non collectées")
+
+        count = fp.get("count", 0)
+        if count < 3:
+            signaux.append(Signal("tres_peu_polices", f"seulement {count} polices détectées (headless)", 0.5))
+
+        manquantes = fp.get("os_manquantes") or []
+        if manquantes:
+            signaux.append(
+                Signal(
+                    "polices_os_manquantes",
+                    f"polices attendues pour {fp.get('os_declare', '?')} absentes : {', '.join(manquantes)}",
+                    0.5,
+                )
+            )
+        inattendues = fp.get("os_inattendues") or []
+        if inattendues:
+            signaux.append(
+                Signal(
+                    "polices_os_inattendues",
+                    f"polices d'un autre OS présentes : {', '.join(inattendues)}",
+                    0.5,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurMathConstants:
+    """Vérifie que les fonctions Math sont natives (non patchées)."""
+
+    name = "math-constants"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        mc = p.get("math_constants") or {}
+        signaux: list[Signal] = []
+
+        if not mc:
+            return _indetermine(self.name, self.version, "non_collecte", "données Math non collectées")
+
+        if mc.get("cos_natif") is False:
+            signaux.append(Signal("cos_patche", "Math.cos patchée", 0.75))
+        if mc.get("tan_natif") is False:
+            signaux.append(Signal("tan_patche", "Math.tan patchée", 0.75))
+        if mc.get("random_natif") is False:
+            signaux.append(Signal("random_patche", "Math.random patchée", 0.5))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurDOMRect:
+    """Empreinte DOMRect : patching de getBoundingClientRect, stabilité, sous-pixel."""
+
+    name = "domrect"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        dr = p.get("domrect_fingerprint") or {}
+        signaux: list[Signal] = []
+
+        if not dr:
+            return _indetermine(self.name, self.version, "non_collecte", "données DOMRect non collectées")
+
+        if dr.get("getBCR_natif") is False:
+            signaux.append(Signal("getBCR_patche", "getBoundingClientRect patchée", 0.75))
+        if dr.get("stable") is False:
+            signaux.append(Signal("domrect_instable", "DOMRect instable entre deux appels (randomisation)", 0.8))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurIframeConsistency:
+    """Cohérence entre le thread principal et une iframe : patches non propagés."""
+
+    name = "iframe-consistency"
+    version = "1"
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        it = p.get("iframe_test") or {}
+        signaux: list[Signal] = []
+
+        if not it:
+            return _indetermine(self.name, self.version, "non_collecte", "données iframe non collectées")
+
+        if it.get("access") is False:
+            return _indetermine(self.name, self.version, "no_access", "impossible d'accéder à l'iframe")
+
+        if it.get("ua_match") is False:
+            signaux.append(Signal("iframe_ua_diff", "userAgent diffère dans l'iframe", 0.6))
+        if it.get("platform_match") is False:
+            signaux.append(Signal("iframe_platform_diff", "platform diffère dans l'iframe", 0.6))
+        if it.get("hwc_match") is False:
+            signaux.append(Signal("iframe_hwc_diff", "hardwareConcurrency diffère dans l'iframe", 0.7))
+        if it.get("webdriver_match") is False:
+            signaux.append(Signal("iframe_webdriver_diff", "webdriver diffère dans l'iframe", 0.7))
+        if it.get("chrome_match") is False:
+            signaux.append(Signal("iframe_chrome_diff", "window.chrome diffère dans l'iframe", 0.6))
+        if it.get("own_keys_match") is False:
+            signaux.append(Signal("iframe_own_keys_diff", "propriétés propres de navigator diffèrent", 0.8))
+        if it.get("screen_match") is False:
+            signaux.append(Signal("iframe_screen_diff", "screen dimensions diffèrent dans l'iframe", 0.5))
+        if it.get("math_tan_match") is False:
+            signaux.append(Signal("iframe_math_diff", "Math.tan diffère dans l'iframe (patch non propagé)", 0.9))
+
+        return _verdict(self.name, self.version, signaux)
+
+
+class DetecteurDeepProxy:
+    """Détection de Proxy sur les getters natifs du navigateur (toString, illegal invocation, descripteurs)."""
+
+    name = "deep-proxy"
+    version = "1"
+
+    _GETTERS = ("hwc", "ua", "wd", "platform", "dm", "screen_w")
+
+    def classer(self, obs: Observations) -> Classement:
+        if not obs.attend_js:
+            return _indetermine(self.name, self.version, "sans_page", "scénario sans page HTML")
+        p = obs.empreinte_js
+        if p is None:
+            return _indetermine(self.name, self.version, "non_execute", "JavaScript non exécuté")
+        dp = p.get("deep_proxy") or {}
+        signaux: list[Signal] = []
+
+        if not dp:
+            return _indetermine(self.name, self.version, "non_collecte", "données deep proxy non collectées")
+
+        non_natifs = [g for g in self._GETTERS if dp.get(f"{g}_natif") is False]
+        if non_natifs:
+            signaux.append(
+                Signal(
+                    "getter_non_natif",
+                    f"toString non natif sur : {', '.join(non_natifs)}",
+                    0.8,
+                )
+            )
+
+        pas_invoc = [g for g in self._GETTERS if dp.get(f"{g}_illegal_invoc") is False]
+        if pas_invoc:
+            signaux.append(
+                Signal(
+                    "illegal_invoc_absent",
+                    f"pas d'illegal invocation sur : {', '.join(pas_invoc)}",
+                    0.7,
+                )
+            )
+
+        desc_diff = [g for g in self._GETTERS if dp.get(f"{g}_desc_match") is False]
+        if desc_diff:
+            signaux.append(
+                Signal(
+                    "descripteur_mismatch",
+                    f"Object/Reflect descripteur diverge sur : {', '.join(desc_diff)}",
+                    0.6,
+                )
+            )
+
+        if dp.get("navigator_proto") is False:
+            signaux.append(Signal("proto_chain_casse", "chaîne prototype navigator altérée", 0.7))
+        if dp.get("navigator_constructor") is False:
+            signaux.append(Signal("constructor_casse", "navigator.constructor altéré", 0.5))
+        if dp.get("toString_natif") is False:
+            signaux.append(Signal("toString_patche", "Function.prototype.toString patchée", 0.9))
+        if dp.get("error_has_proxy") is True:
+            signaux.append(Signal("proxy_dans_stack", "mot 'Proxy' dans la pile d'erreur", 0.8))
+
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -1706,6 +1941,12 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurConnectionDynamic(),
         DetecteurProxyUAData(),
         DetecteurEnumerableProps(),
+        DetecteurAudioContext(),
+        DetecteurPolices(),
+        DetecteurMathConstants(),
+        DetecteurDOMRect(),
+        DetecteurIframeConsistency(),
+        DetecteurDeepProxy(),
     )
 }
 

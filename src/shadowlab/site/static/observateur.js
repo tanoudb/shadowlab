@@ -342,25 +342,52 @@ function mediaCodecs() {
   return r;
 }
 
-function iframeTest() {
-  const r = {};
-  try {
-    const iframe = document.createElement('iframe');
-    iframe.srcdoc = '<html></html>';
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      try {
-        r.contentWindow_existe = !!iframe.contentWindow;
-        if (iframe.contentWindow) {
-          r.iframe_chrome = typeof iframe.contentWindow.chrome !== 'undefined';
-          r.iframe_self_pas_top = iframe.contentWindow.self !== window.top;
-        }
-      } catch (_) { /* ignore */ }
-      iframe.remove();
-    }, 100);
-  } catch (_) { /* ignore */ }
-  return r;
+function iframeConsistencyTest() {
+  return new Promise(resolve => {
+    const r = {};
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.srcdoc = '<html><head></head><body></body></html>';
+      iframe.style.cssText = 'position:absolute;width:1px;height:1px;top:-9999px;visibility:hidden';
+      const timeout = setTimeout(() => { try { iframe.remove(); } catch(_){} resolve(r); }, 3000);
+      iframe.onload = () => {
+        clearTimeout(timeout);
+        try {
+          const w = iframe.contentWindow;
+          if (!w) { r.access = false; iframe.remove(); resolve(r); return; }
+          r.access = true;
+          r.ua_match = w.navigator.userAgent === navigator.userAgent;
+          r.platform_match = w.navigator.platform === navigator.platform;
+          r.hwc_match = w.navigator.hardwareConcurrency === navigator.hardwareConcurrency;
+          r.dm_match = w.navigator.deviceMemory === navigator.deviceMemory;
+          r.webdriver_match = w.navigator.webdriver === navigator.webdriver;
+          r.languages_match = JSON.stringify(Array.from(w.navigator.languages || [])) ===
+                              JSON.stringify(Array.from(navigator.languages || []));
+          r.chrome_match = (typeof w.chrome !== 'undefined') === (typeof window.chrome !== 'undefined');
+          const mainOwn = Object.getOwnPropertyNames(navigator).sort();
+          const iframeOwn = Object.getOwnPropertyNames(w.navigator).sort();
+          r.own_keys_match = JSON.stringify(mainOwn) === JSON.stringify(iframeOwn);
+          if (!r.own_keys_match) {
+            r.main_own_extra = mainOwn.filter(k => !iframeOwn.includes(k));
+            r.iframe_own_extra = iframeOwn.filter(k => !mainOwn.includes(k));
+          }
+          r.screen_match = w.screen.width === screen.width && w.screen.height === screen.height;
+          r.math_tan_match = w.Math.tan(-1e300) === Math.tan(-1e300);
+          try {
+            const mDesc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
+            const iDesc = Object.getOwnPropertyDescriptor(w.Navigator.prototype, 'webdriver');
+            if (mDesc?.get && iDesc?.get) {
+              r.webdriver_getter_match = mDesc.get.toString() === iDesc.get.toString();
+            }
+          } catch(_) {}
+        } catch (e) { r.error = String(e).slice(0, 100); }
+        iframe.remove();
+        resolve(r);
+      };
+      iframe.onerror = () => { clearTimeout(timeout); r.load_error = true; resolve(r); };
+      document.body.appendChild(iframe);
+    } catch (e) { r.error = String(e).slice(0, 100); resolve(r); }
+  });
 }
 
 async function webrtcTest() {
@@ -705,23 +732,202 @@ function stackGetterTest() {
   return r;
 }
 
-function domRectStabilityTest() {
+function domRectFingerprintTest() {
   const r = {};
   try {
+    const TESTS = [
+      { text: 'mmmmmmmmmmlli1', font: '16px monospace' },
+      { text: 'WwQqXxYy', font: '20px serif' },
+      { text: 'Quick brown fox', font: '14px sans-serif' },
+    ];
+    r.rects = [];
+    for (const t of TESTS) {
+      const s = document.createElement('span');
+      s.textContent = t.text;
+      s.style.cssText = `font:${t.font};position:absolute;top:-9999px`;
+      document.body.appendChild(s);
+      const rect = s.getBoundingClientRect();
+      r.rects.push({ font: t.font, width: rect.width, height: rect.height });
+      s.remove();
+    }
+    r.getBCR_natif = /\[native code\]/.test(Element.prototype.getBoundingClientRect.toString());
+    const s2 = document.createElement('span');
+    s2.textContent = 'DOMRect stability';
+    s2.style.cssText = 'font:16px monospace;position:absolute;top:-9999px';
+    document.body.appendChild(s2);
+    const a = s2.getBoundingClientRect();
+    const b = s2.getBoundingClientRect();
+    r.stable = a.width === b.width && a.height === b.height;
+    r.has_subpixel = a.width % 1 !== 0 || a.height % 1 !== 0;
+    s2.remove();
+  } catch (e) { r.error = String(e).slice(0, 100); }
+  return r;
+}
+
+async function audioContextTest() {
+  const r = {};
+  try {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) { r.available = false; return r; }
+    r.available = true;
+    r.constructor_natif = /\[native code\]/.test(OAC.toString());
+    r.startRendering_natif = /\[native code\]/.test(OAC.prototype.startRendering.toString());
+    r.createOscillator_natif = /\[native code\]/.test(OAC.prototype.createOscillator.toString());
+    const ctx = new OAC(1, 44100, 44100);
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(10000, ctx.currentTime);
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.setValueAtTime(-50, ctx.currentTime);
+    comp.knee.setValueAtTime(40, ctx.currentTime);
+    comp.ratio.setValueAtTime(12, ctx.currentTime);
+    comp.attack.setValueAtTime(0, ctx.currentTime);
+    comp.release.setValueAtTime(0.25, ctx.currentTime);
+    osc.connect(comp);
+    comp.connect(ctx.destination);
+    osc.start(0);
+    const buffer = await ctx.startRendering();
+    const data = buffer.getChannelData(0);
+    let sum = 0;
+    for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
+    r.sum = Math.round(sum * 1e6) / 1e6;
+    r.nonzero = sum > 0;
+    let h = 0;
+    for (let i = 4500; i < 5000; i++) h = ((h << 5) - h + (data[i] * 1e6 | 0)) | 0;
+    r.hash = h;
+    const ctx2 = new OAC(1, 44100, 44100);
+    const osc2 = ctx2.createOscillator();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(10000, ctx2.currentTime);
+    const comp2 = ctx2.createDynamicsCompressor();
+    comp2.threshold.setValueAtTime(-50, ctx2.currentTime);
+    comp2.knee.setValueAtTime(40, ctx2.currentTime);
+    comp2.ratio.setValueAtTime(12, ctx2.currentTime);
+    comp2.attack.setValueAtTime(0, ctx2.currentTime);
+    comp2.release.setValueAtTime(0.25, ctx2.currentTime);
+    osc2.connect(comp2);
+    comp2.connect(ctx2.destination);
+    osc2.start(0);
+    const buf2 = await ctx2.startRendering();
+    const data2 = buf2.getChannelData(0);
+    let sum2 = 0;
+    for (let i = 4500; i < 5000; i++) sum2 += Math.abs(data2[i]);
+    r.stable = Math.abs(sum - sum2) < 0.0001;
+  } catch (e) { r.error = String(e).slice(0, 100); }
+  return r;
+}
+
+function fontFingerprintTest() {
+  const r = {};
+  try {
+    const POLICES = [
+      'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana',
+      'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS',
+      'Palatino Linotype', 'Lucida Console', 'Tahoma',
+      'Menlo', 'SF Pro', 'Helvetica Neue', 'Apple Color Emoji',
+      'Segoe UI', 'Consolas', 'Calibri', 'Cambria',
+      'Ubuntu', 'DejaVu Sans', 'Liberation Mono',
+      'Wingdings', 'Symbol',
+    ];
+    const TEXTE = 'mmmmmmmmmmlli1WwQq';
     const span = document.createElement('span');
-    span.textContent = 'DOMRect fingerprint test string 12345';
-    span.style.cssText = 'font-size:16px;font-family:monospace;position:absolute;top:-9999px';
+    span.style.cssText = 'font-size:72px;position:absolute;top:-9999px;left:-9999px;visibility:hidden';
+    span.textContent = TEXTE;
     document.body.appendChild(span);
-    const r1 = span.getBoundingClientRect();
-    const r2 = span.getBoundingClientRect();
-    r.width_1 = r1.width;
-    r.width_2 = r2.width;
-    r.height_1 = r1.height;
-    r.height_2 = r2.height;
-    r.stable = r1.width === r2.width && r1.height === r2.height;
-    r.has_subpixel = r1.width % 1 !== 0 || r1.height % 1 !== 0;
-    document.body.removeChild(span);
-  } catch(_) { r.error = true; }
+    span.style.fontFamily = 'monospace';
+    const lRef = span.offsetWidth;
+    const hRef = span.offsetHeight;
+    const presentes = [];
+    const absentes = [];
+    for (const p of POLICES) {
+      span.style.fontFamily = `'${p}',monospace`;
+      if (span.offsetWidth !== lRef || span.offsetHeight !== hRef) presentes.push(p);
+      else absentes.push(p);
+    }
+    span.remove();
+    r.presentes = presentes;
+    r.absentes = absentes;
+    r.count = presentes.length;
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('mac')) {
+      r.os_declare = 'macOS';
+      r.os_manquantes = ['Menlo', 'Helvetica Neue'].filter(f => !presentes.includes(f));
+      r.os_inattendues = ['Segoe UI', 'Calibri'].filter(f => presentes.includes(f));
+    } else if (ua.includes('windows')) {
+      r.os_declare = 'Windows';
+      r.os_manquantes = ['Segoe UI', 'Consolas'].filter(f => !presentes.includes(f));
+      r.os_inattendues = ['Menlo', 'SF Pro'].filter(f => presentes.includes(f));
+    }
+  } catch (e) { r.error = String(e).slice(0, 100); }
+  return r;
+}
+
+function mathConstantsTest() {
+  const r = {};
+  try {
+    r.tan = Math.tan(-1e300);
+    r.acos = Math.acos(0.123124234234234242);
+    r.acosh = Math.acosh(Math.SQRT2);
+    r.asin = Math.asin(0.123124234234234242);
+    r.atanh = Math.atanh(0.5);
+    r.cbrt = Math.cbrt(Math.PI);
+    r.cosh = Math.cosh(Math.PI);
+    r.expm1 = Math.expm1(1);
+    r.log1p = Math.log1p(Math.PI);
+    r.sinh = Math.sinh(Math.PI);
+    r.cos_natif = /\[native code\]/.test(Math.cos.toString());
+    r.tan_natif = /\[native code\]/.test(Math.tan.toString());
+    r.random_natif = /\[native code\]/.test(Math.random.toString());
+  } catch (e) { r.error = String(e).slice(0, 100); }
+  return r;
+}
+
+function deepProxyDetectionTest() {
+  const r = {};
+  try {
+    const cibles = [
+      { obj: Navigator.prototype, prop: 'hardwareConcurrency', nom: 'hwc' },
+      { obj: Navigator.prototype, prop: 'userAgent', nom: 'ua' },
+      { obj: Navigator.prototype, prop: 'webdriver', nom: 'wd' },
+      { obj: Navigator.prototype, prop: 'platform', nom: 'platform' },
+      { obj: Navigator.prototype, prop: 'deviceMemory', nom: 'dm' },
+      { obj: Screen.prototype, prop: 'width', nom: 'screen_w' },
+    ];
+    for (const c of cibles) {
+      const desc = Object.getOwnPropertyDescriptor(c.obj, c.prop);
+      if (!desc || !desc.get) continue;
+      const getter = desc.get;
+      const str = Function.prototype.toString.call(getter);
+      r[`${c.nom}_natif`] = /^\s*function\s+get\s+\w+\(\)\s*\{\s*\[native code\]\s*\}$/.test(str.trim());
+      try {
+        getter.call({});
+        r[`${c.nom}_illegal_invoc`] = false;
+      } catch (e) {
+        r[`${c.nom}_illegal_invoc`] = /illegal invocation/i.test(e.message);
+      }
+      try {
+        const objDesc = Object.getOwnPropertyDescriptor(c.obj, c.prop);
+        const refDesc = Reflect.getOwnPropertyDescriptor(c.obj, c.prop);
+        r[`${c.nom}_desc_match`] = objDesc?.get === refDesc?.get;
+      } catch (_) {}
+    }
+    r.navigator_proto = Object.getPrototypeOf(navigator) === Navigator.prototype;
+    r.navigator_constructor = navigator.constructor === Navigator;
+    try {
+      const toStr = Function.prototype.toString;
+      r.toString_natif = /\[native code\]/.test(toStr.call(toStr));
+      r.toString_length = toStr.length;
+    } catch (_) {}
+    try {
+      const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency');
+      if (desc?.get) {
+        try { desc.get.call(null); } catch (e) {
+          r.error_stack_lines = (e.stack || '').split('\n').length;
+          r.error_has_proxy = /Proxy|proxy/.test(e.stack || '');
+        }
+      }
+    } catch (_) {}
+  } catch (e) { r.error = String(e).slice(0, 100); }
   return r;
 }
 
@@ -880,7 +1086,7 @@ async function collecter() {
     timing: timing(),
     chrome_apis: chromeApis(),
     media_codecs: mediaCodecs(),
-    iframe_test: iframeTest(),
+    iframe_test: await iframeConsistencyTest(),
     languages_test: languagesTest(),
     webrtc_test: await webrtcTest(),
     headless_signals: await headlessSignals(),
@@ -894,7 +1100,11 @@ async function collecter() {
     canvas_consistency: canvasConsistencyTest(),
     stack_getter: stackGetterTest(),
     raf_timing: await rafTimingTest(),
-    domrect_stability: domRectStabilityTest(),
+    domrect_fingerprint: domRectFingerprintTest(),
+    audio_context: await audioContextTest(),
+    font_fingerprint: fontFingerprintTest(),
+    math_constants: mathConstantsTest(),
+    deep_proxy: deepProxyDetectionTest(),
     worker_consistency: await workerConsistencyTest(),
     connection_dynamic: connectionDynamicTest(),
     uadata_integrity: uadataIntegrityTest(),

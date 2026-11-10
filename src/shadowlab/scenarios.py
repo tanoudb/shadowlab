@@ -431,6 +431,59 @@ def extraction_adaptative(d: Driver, base: str, jeton: str, rng: random.Random) 
     )
 
 
+def bot_sanity_check(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Validation externe : visite bot.incolumitas.com et extrait le score de détection.
+
+    Le site est un détecteur de bot indépendant (NikolaiT/CreepJS). Le moteur doit passer
+    les tests fingerprint et comportementaux du site tiers. Le paramètre `base` est ignoré
+    (site externe fixe). `attend_js` = True car le site charge JavaScript.
+    """
+    d.navigate("https://bot.incolumitas.com")
+    time.sleep(2)
+
+    resultats: dict[str, Any] = {}
+    for _ in range(20):
+        texte = d.wait_for_element("#fp-status, #detection-status, .result-status", timeout_ms=3000)
+        if texte and ("done" in texte.lower() or "completed" in texte.lower() or "finished" in texte.lower()):
+            break
+        time.sleep(1)
+
+    try:
+        all_text = d.content()
+        resultats["page_length"] = len(all_text) if all_text else 0
+    except Exception:  # noqa: BLE001
+        resultats["page_length"] = 0
+
+    for sel in ("#detection-result", "#fp-result", "#overall-result", ".bot-score", "#bot-detection-result"):
+        try:
+            texte = d.wait_for_element(sel, timeout_ms=1000)
+            if texte:
+                resultats[sel.lstrip("#.")] = texte[:500]
+        except Exception:  # noqa: BLE001
+            pass
+
+    try:
+        json_el = d.wait_for_element("pre, #raw-result, #json-result", timeout_ms=2000)
+        if json_el:
+            try:
+                parsed = json.loads(json_el)
+                resultats["raw_json"] = parsed
+            except (json.JSONDecodeError, ValueError):
+                resultats["raw_text"] = json_el[:1000]
+    except Exception:  # noqa: BLE001
+        pass
+
+    is_human = any(
+        "human" in str(v).lower() or "not a bot" in str(v).lower() for v in resultats.values()
+    )
+    is_bot = any(
+        "bot" in str(v).lower() and "not" not in str(v).lower() for v in resultats.values()
+    )
+
+    resultats["verdict_externe"] = "humain" if is_human else ("bot" if is_bot else "inconnu")
+    return Issue(is_human or not is_bot, resultats)
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -455,6 +508,12 @@ SCENARIOS: dict[str, Scenario] = {
             "Extraire des données malgré la mutation des classes CSS (obfuscation)",
             False,
             extraction_adaptative,
+        ),
+        Scenario(
+            "bot_sanity_check",
+            "Validation externe : score bot.incolumitas.com (détecteur indépendant)",
+            True,
+            bot_sanity_check,
         ),
     )
 }
