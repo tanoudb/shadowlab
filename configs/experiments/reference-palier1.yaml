@@ -1,0 +1,24 @@
+# Campagne de référence du palier 1 (docs/PLAN.md, étape 1.3).
+# 3 moteurs × 7 niveaux × 3 scénarios × 5 répétitions = 315 passages, un à la fois.
+# Première mesure du code du 11/11 (D-47 à D-53).
+#   noezia     : le moteur étudié
+#   patchright : sa base, sans nos ajouts
+#   playwright : témoin sans furtivité (l'Arena doit l'arrêter)
+experiment:
+  name: reference_palier1
+  description: >-
+    Référence du palier 1 : noezia, patchright et playwright sur les niveaux 01 à 07,
+    dont un scénario à plusieurs pages (pagination). Première mesure de D-47 à D-53.
+  environment: local
+  engines:
+    - noezia
+    - patchright
+    - playwright
+  protections: ["01", "02", "03", "04", "05", "06", "07"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261111
+  output: [json, html]
