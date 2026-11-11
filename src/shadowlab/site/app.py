@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .. import correlation, passages
 from .. import database as db
-from .. import passages
 from ..arena import defis
 from ..arena import secret as secrets_arena
 from ..arena.profils import BASELINE
@@ -387,6 +387,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 (jeton, db.maintenant(), kind, page, db.j(payload)),
             )
             if kind == "empreinte":
+                correlation.enregistrer_hash(cx, jeton, payload)
                 sceau = request.state.sceau
                 if sceau:
                     profil = charger_profils().de(sceau.profil)
@@ -446,7 +447,11 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 raise HTTPException(403, motif)
             if gardien._fingerprinting_differe(cx, jeton) or gardien._composite_differe(cx, jeton):
                 db.enregistrer_decision(
-                    cx, jeton, "defi-js", "rejete-empreinte", request.url.path,
+                    cx,
+                    jeton,
+                    "defi-js",
+                    "rejete-empreinte",
+                    request.url.path,
                     [{"code": "empreinte_suspecte"}],
                 )
                 raise HTTPException(403, "empreinte suspecte")

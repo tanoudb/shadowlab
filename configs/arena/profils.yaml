@@ -216,8 +216,67 @@
       - iframe-consistency
       - deep-proxy
       - cdp
+      - correlation-session
     seuil_composite: 0.5
   honeypots: {actif: true}
   turnstile: {actif: true}
   recaptcha: {actif: true}
   connexion: {actif: true, tentatives_max: 5}
+
+"07":
+  nom: "\xC9tat de l'art"
+  description: "Tous les détecteurs, seuil minimal, corrélation, équivalent Cloudflare Enterprise"
+  limitation: {debit: 1, rafale: 2}
+  waf: {mode: blocage, paranoia: 4, seuil: 2}
+  defi_js: {actif: true, difficulte: 20, lier_tls: true}
+  captcha: {actif: true}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+      - regles-http
+      - tls
+      - botd
+      - regles-js
+      - coherence
+      - comportement
+      - prototypes
+      - coherence-profonde
+      - headless
+      - chrome-apis
+      - langues
+      - media-codecs
+      - integrite-proprietes
+      - stack-trace
+      - stack-getter
+      - automation-globals
+      - css-media
+      - prototype-chain
+      - enumerable-props
+      - proxy-uadata
+      - entropie-interaction
+      - scroll
+      - canvas-empreinte
+      - canvas-consistency
+      - raf-timing
+      - worker-consistency
+      - paint-timing
+      - timing-precision
+      - coherence-environnement
+      - connection-dynamic
+      - permissions-etendu
+      - position-fenetre
+      - webrtc
+      - audio-context
+      - polices
+      - math-constants
+      - domrect
+      - iframe-consistency
+      - deep-proxy
+      - cdp
+      - correlation-session
+    seuil_composite: 0.3
+  honeypots: {actif: true}
+  turnstile: {actif: true}
+  recaptcha: {actif: true}
+  connexion: {actif: true, tentatives_max: 2}

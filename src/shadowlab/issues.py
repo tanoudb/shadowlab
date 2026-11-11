@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .detection import Classement
+from .scoring import score_composite
 
 REUSSIE = "extraction_reussie"
 BLOQUE = "bloque"
@@ -59,14 +60,9 @@ def evaluer(
     }
     panne_arena = any(d["couche"] == "arena" for d in decisions)
     detecte_par = [c.detector_name for c in classements if c.classification == "automatise"]
-    # Agrégation composite : si aucun détecteur ne classifie "automatise" individuellement,
-    # la somme des signaux faibles (poids > 0) des détecteurs "indéterminés" ou "humain"
-    # peut quand même dépasser le seuil. Seuil par défaut 0.8 (gardien utilise seuil_composite
-    # du profil Arena, ici on n'y a pas accès).
     if not detecte_par:
-        signaux_faibles = [s for c in classements if c.classification != "automatise" for s in c.signals if s.poids > 0]
-        score_composite = sum(s.poids for s in signaux_faibles)
-        if score_composite >= 0.8:
+        sc = score_composite(classements)
+        if sc >= 0.8:
             detecte_par = ["composite"]
     drapeaux = {
         "extraction": bool(success),

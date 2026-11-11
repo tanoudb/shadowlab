@@ -165,6 +165,21 @@ MIGRATIONS: list[str] = [
     ALTER TABLE runs ADD COLUMN engine_version TEXT NOT NULL DEFAULT '';
     ALTER TABLE experiments ADD COLUMN schema_version INTEGER;
     """,
+    # 8 — corrélation cross-session : hash d'empreinte pour détecter recyclage de fingerprint
+    """
+    CREATE TABLE empreintes_vues (
+        id INTEGER PRIMARY KEY,
+        type TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        premiere_vue TEXT NOT NULL,
+        derniere_vue TEXT NOT NULL,
+        nb_sessions INTEGER NOT NULL DEFAULT 1,
+        sessions TEXT NOT NULL DEFAULT '[]',
+        UNIQUE (type, hash)
+    );
+    CREATE INDEX empreintes_vues_hash ON empreintes_vues(type, hash);
+    CREATE INDEX empreintes_vues_nb ON empreintes_vues(nb_sessions DESC);
+    """,
 ]
 
 

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+from .. import correlation, scoring
 from .. import database as db
 from ..arena import defis, profils
 from ..arena import secret as secrets_arena
@@ -124,6 +125,8 @@ def suspicion(
     """
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
+    if observations.empreinte_js is not None:
+        observations.correlation = correlation.correlation_session(cx, observations.empreinte_js)
     if detecteurs:
         noms = [d for d in detecteurs if d in DETECTEURS_HTTP]
         if inclure_js and observations.empreinte_js is not None:
@@ -136,21 +139,24 @@ def suspicion(
         noms = [n for n in noms if n not in exclure]
     tous = registre()
     motifs: list[dict] = []
-    signaux_faibles: list[Signal] = []
+    signaux_par_detecteur: list[tuple[str, list[Signal]]] = []
     for nom in noms:
         classement = tous[nom].classer(observations)
         if classement.classification == "automatise":
             motifs.append({"detecteur": nom, "signaux": [_signal(s) for s in classement.signals]})
         elif classement.signals:
-            signaux_faibles.extend(s for s in classement.signals if s.poids > 0)
-    if seuil_composite is not None and not motifs and signaux_faibles:
-        score = sum(s.poids for s in signaux_faibles)
+            positifs = [s for s in classement.signals if s.poids > 0]
+            if positifs:
+                signaux_par_detecteur.append((nom, positifs))
+    if seuil_composite is not None and not motifs and signaux_par_detecteur:
+        score = scoring.score_signaux(signaux_par_detecteur)
         if score >= seuil_composite:
+            tous_signaux = [s for _, sigs in signaux_par_detecteur for s in sigs]
             motifs.append(
                 {
                     "detecteur": "composite",
-                    "score": round(score, 3),
-                    "signaux": [_signal(s) for s in signaux_faibles],
+                    "score": score,
+                    "signaux": [_signal(s) for s in tous_signaux],
                 }
             )
     hp = cx.execute(

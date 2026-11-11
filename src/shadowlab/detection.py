@@ -55,6 +55,7 @@ class Observations:
     attend_js: bool = True  # faux pour un scénario sans page HTML (API JSON)
     tls: dict[str, Any] | None = None  # empreinte relevée par le frontal de l'Arena ; absente hors Arena
     page_remplacee: bool = False  # une protection a servi sa page à la place du contenu : pas d'observateur
+    correlation: dict[str, dict] | None = None  # données cross-session (rempli par le gardien)
 
     @property
     def empreinte_js(self) -> dict[str, Any] | None:
@@ -2108,6 +2109,47 @@ class DetecteurMetaComposite:
         return _verdict(self.name, self.version, signaux)
 
 
+class DetecteurCorrelationSession:
+    name = "correlation-session"
+    version = "1"
+
+    SEUIL_SESSIONS = 5
+    SEUIL_RAPIDE = 10
+
+    def classer(self, obs: Observations) -> Classement:
+        if obs.correlation is None:
+            return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
+        signaux: list[Signal] = []
+        for type_hash, data in obs.correlation.items():
+            nb = data.get("nb_sessions", 1)
+            if nb >= self.SEUIL_RAPIDE:
+                signaux.append(
+                    Signal(
+                        f"recycling_{type_hash}",
+                        f"{type_hash} vu {nb} fois — rotation de fingerprint massive",
+                        1.0,
+                    )
+                )
+            elif nb >= self.SEUIL_SESSIONS:
+                signaux.append(
+                    Signal(
+                        f"recycling_{type_hash}",
+                        f"{type_hash} vu {nb} fois — fingerprint recyclé",
+                        0.7,
+                    )
+                )
+            sph = data.get("sessions_par_heure", 0)
+            if sph >= 30:
+                signaux.append(
+                    Signal(
+                        f"velocity_{type_hash}",
+                        f"{sph} sessions/h avec le même {type_hash}",
+                        0.8,
+                    )
+                )
+        return _verdict(self.name, self.version, signaux)
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -2160,6 +2202,7 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurIframeConsistency(),
         DetecteurDeepProxy(),
         DetecteurCDP(),
+        DetecteurCorrelationSession(),
     )
 }
 
