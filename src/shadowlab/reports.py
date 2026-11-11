@@ -83,6 +83,14 @@ def _pct(bloc: dict[str, float] | None, n: int | None = None) -> str:
     )
 
 
+def _taux(valeur: float | None) -> dict[str, float] | None:
+    return None if valeur is None else {"taux": valeur}
+
+
+def _note(valeur: float | None) -> str:
+    return "<span class='nm'>n. m.</span>" if valeur is None else f"<span class='val'>{valeur * 100:.1f} %</span>"
+
+
 def _barre(bloc: dict[str, float] | None, classe: str) -> str:
     if not bloc:
         return ""
@@ -145,6 +153,14 @@ def rapport_html(stats: dict[str, Any]) -> str:
             f"<td>{_pct(p['taux_erreur_technique'], p['passages'])}</td>"
             f"<td>{_ms(p['duree_ms']['mediane'])}</td></tr>"
         )
+    lignes_recolte = "".join(
+        f"<tr><th scope='row'>{escape(c['moteur'])}</th><td>{escape(str(c['protection']))}</td>"
+        f"<td>{c['recolte']['passages_notes']}</td>"
+        f"<td>{_barre(_taux(c['recolte']['completude_moyenne']), 'ok')}{_note(c['recolte']['completude_moyenne'])}</td>"
+        f"<td>{_barre(_taux(c['recolte']['exactitude_moyenne']), 'ok')}{_note(c['recolte']['exactitude_moyenne'])}</td></tr>"
+        for c in stats.get("matrice_croisee", [])
+        if "recolte" in c
+    )
     environnement = e["environment"] or {}
     limites = "".join(f"<li>{escape(limite)}</li>" for limite in stats["limites"])
     return f"""<!doctype html>
@@ -199,6 +215,7 @@ ul {{ color:var(--doux); }}
 <div class="tableau"><table><thead><tr><th>Moteur</th><th>Scénario</th><th>Passages</th><th>Réussite</th>
 <th>Médiane (ms)</th><th>p95</th></tr></thead><tbody>{lignes_scenarios}</tbody></table></div>
 {"<h2>Par niveau de protection</h2>" + chr(10) + "<div class='tableau'><table><thead><tr><th>Protection</th><th>Passages</th><th>Réussite [IC 95 %]</th><th>Erreurs</th><th>Médiane (ms)</th></tr></thead>" + chr(10) + "<tbody>" + lignes_protections + "</tbody></table></div>" if lignes_protections else ""}
+{"<h2>Récolte du site vitrine</h2>" + chr(10) + "<div class='tableau'><table><thead><tr><th>Moteur</th><th>Niveau</th><th>Passages notés</th><th>Complétude moyenne</th><th>Exactitude moyenne</th></tr></thead>" + chr(10) + "<tbody>" + lignes_recolte + "</tbody></table></div>" if lignes_recolte else ""}
 <h2>Limites</h2><ul>{limites}</ul>
 <p class="meta">n. m. : non mesurable. Généré par NOEZIA ShadowLab.</p>
 </main></body></html>"""

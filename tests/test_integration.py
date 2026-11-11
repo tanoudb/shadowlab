@@ -102,3 +102,29 @@ def test_recuperer_refuse_une_redirection_hors_perimetre(reglages):
     with campaigns.serveur_local(reglages):
         with pytest.raises(DestinationRefusee):
             recuperer(f"{reglages.url_site}/lab/sortie", hotes=("127.0.0.1", "localhost"), verifier_tls=False)
+
+
+def test_recolte_vitrine_playwright_niveau_01(reglages, tmp_path, monkeypatch):
+    """Critère de l'étape 1.5 : un vrai navigateur parcourt tout le site vitrine et retrouve tout, sans faute."""
+    import json
+
+    monkeypatch.setenv("SHADOWLAB_VITRINE_TAILLE", "45")
+    from shadowlab.config import charger
+
+    reglages = charger()  # relu après le réglage de la taille
+    chemin = tmp_path / "recolte.yaml"
+    chemin.write_text(
+        "experiment:\n  name: recolte\n  engines: [playwright]\n  protections: ['01']\n"
+        "  scenarios: [recolte_vitrine]\n  repetitions: 1\n  seed: 20261112\n",
+        encoding="utf-8",
+    )
+    experience = campaigns.lire(chemin, reglages)
+    cx = db.ouvrir(reglages.base_donnees)
+    experiment_id = campaigns.creer(cx, experience)
+    with campaigns.serveur_local(reglages):
+        assert campaigns.executer(reglages, experiment_id) == "termine"
+    ligne = cx.execute("SELECT status, drapeaux FROM runs WHERE experiment_id = ?", (experiment_id,)).fetchone()
+    note = json.loads(ligne["drapeaux"])["details_scenario"]["recolte"]
+    assert note["annonces_attendues"] == 45
+    assert note["completude"] == 1 and note["exactitude"] == 1
+    assert ligne["status"] == "reussi"

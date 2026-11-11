@@ -8,9 +8,13 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urljoin
+
+from parsel import Selector
 
 from .engines.base import Driver, RefusProtection, ResultatNavigation
-from .site import pages
+from .notation import noter_recolte
+from .site import pages, vitrine
 
 DELAI_DEFI_S = 20
 NB_REQUETES_RAFALE = 30
@@ -510,6 +514,93 @@ def bot_sanity_check(d: Driver, base: str, jeton: str, rng: random.Random) -> Is
     return Issue(is_human, resultats)
 
 
+CHAMPS_FICHE = [
+    "reference",
+    "titre",
+    "type_bien",
+    "ville",
+    "code_postal",
+    "surface",
+    "pieces",
+    "prix",
+    "dpe",
+    "description",
+    "date_publication",
+    "nb_photos",
+    "agence",
+    "telephone",
+]
+CHAMPS_ENTIERS = ("surface", "pieces", "prix", "nb_photos")
+
+
+def _lire_fiche(html: str) -> dict[str, Any]:
+    """Champs présents sur une fiche (`data-champ`) : valeur brute `data-valeur` si elle existe, sinon le texte."""
+    sel = Selector(html)
+    annonce: dict[str, Any] = {}
+    for champ in CHAMPS_FICHE:
+        noeud = sel.css(f'[data-champ="{champ}"]')
+        if not noeud:
+            continue
+        valeur = noeud[0].attrib.get("data-valeur")
+        if valeur is None:
+            valeur = "".join(noeud[0].css("::text").getall()).strip()
+        if champ in CHAMPS_ENTIERS:
+            try:
+                valeur = int(valeur)
+            except ValueError:
+                pass
+        annonce[champ] = valeur
+    return annonce
+
+
+def _avec_jeton(cible: str, jeton: str) -> str:
+    return f"{cible}{'&' if '?' in cible else '?'}sl={jeton}"
+
+
+def recolte_vitrine(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Récolte complète du site vitrine : toute la liste (lien « suivante »), puis chaque fiche, 14 champs.
+
+    Le résultat est noté contre la vérité du site (`notation.noter_recolte`) : réussi = complétude 1 et exactitude 1.
+    Seule l'interface `Driver` sert (`navigate` via `aller`, puis `dom()` analysé avec parsel) : tous les pilotes
+    conviennent, JavaScript ou non. Une protection qui interrompt le parcours laisse une récolte partielle, notée aussi.
+    """
+    from .config import charger
+
+    reglages = charger()
+    verite = vitrine.verite(reglages.vitrine_graine, reglages.vitrine_taille)
+    recolte: list[dict[str, Any]] = []
+    details: dict[str, Any] = {"pages_liste": 0, "fiches_ouvertes": 0}
+    try:
+        page_liste = urljoin(f"{base}/", "lab/vitrine/annonces")
+        vues: set[str] = set()
+        ouvertes: set[str] = set()
+        limite_pages = 2 * verite["nb_pages"] + 2  # garde-fou contre une pagination qui boucle
+        while page_liste and page_liste not in vues and len(vues) < limite_pages:
+            vues.add(page_liste)
+            aller(d, _avec_jeton(page_liste, jeton))
+            details["pages_liste"] += 1
+            sel = Selector(d.dom())
+            liens = [urljoin(page_liste, h) for h in sel.css("a.fiche::attr(href)").getall()]
+            suivante = sel.css('a[rel="next"]::attr(href)').get()
+            suite = urljoin(page_liste, suivante) if suivante else ""
+            # Les fiches de la page s'ouvrent avant de passer à la suivante : une récolte interrompue reste partielle.
+            for lien in dict.fromkeys(liens):
+                if lien in ouvertes:
+                    continue
+                ouvertes.add(lien)
+                aller(d, _avec_jeton(lien, jeton))
+                details["fiches_ouvertes"] += 1
+                annonce = _lire_fiche(d.dom())
+                if annonce:
+                    recolte.append(annonce)
+            page_liste = suite
+    except RefusProtection as exc:
+        details["refus"] = str(exc)
+    note = noter_recolte(recolte, verite)
+    details["recolte"] = note
+    return Issue(note["completude"] == 1 and note["exactitude"] == 1, details)
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -529,6 +620,12 @@ SCENARIOS: dict[str, Scenario] = {
         Scenario("scrape_rapide", "Scraping rapide (scalping) : 5 pages, extraction sans pause", True, scrape_rapide),
         Scenario("recaptcha_v3", "Démo reCAPTCHA v3 réel : relever le score attribué au moteur", True, recaptcha_v3),
         Scenario("connexion", "Se connecter au niveau authentifié et atteindre l'espace privé", True, connexion),
+        Scenario(
+            "recolte_vitrine",
+            "Récolter tout le site vitrine (liste et fiches) et noter complétude et exactitude",
+            True,
+            recolte_vitrine,
+        ),
         Scenario(
             "extraction_adaptative",
             "Extraire des données malgré la mutation des classes CSS (obfuscation)",

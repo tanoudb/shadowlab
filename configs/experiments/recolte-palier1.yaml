@@ -1,0 +1,25 @@
+# Campagne de récolte du palier 1 (docs/PLAN.md, étape 1.5).
+# À lancer avec SHADOWLAB_VITRINE_TAILLE=60 :
+#   SHADOWLAB_VITRINE_TAILLE=60 uv run shadowlab campagne configs/experiments/recolte-palier1.yaml
+# Par défaut le site vitrine publie 500 annonces : plus de 500 pages par passage, trop long pour 105 passages.
+# 3 moteurs × 7 niveaux × 1 scénario × 5 répétitions = 105 passages, un à la fois.
+# Chaque passage est noté contre la vérité du site : complétude (annonces retrouvées) et exactitude (champs exacts).
+#   noezia     : le moteur étudié
+#   patchright : sa base, sans nos ajouts
+#   playwright : témoin sans furtivité (l'Arena doit l'arrêter aux niveaux protégés)
+experiment:
+  name: recolte_palier1
+  description: >-
+    Récolte du site vitrine (liste paginée puis chaque fiche, 14 champs) par noezia, patchright et playwright
+    sur les niveaux 01 à 07, notée en complétude et en exactitude.
+  environment: local
+  engines:
+    - noezia
+    - patchright
+    - playwright
+  protections: ["01", "02", "03", "04", "05", "06", "07"]
+  scenarios:
+    - recolte_vitrine
+  repetitions: 5
+  seed: 20261112
+  output: [json, html]

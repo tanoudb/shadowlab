@@ -418,6 +418,15 @@ def dependance_repetitions(cx: sqlite3.Connection, experiment_id: int) -> dict[s
     }
 
 
+def _note_recolte(drapeaux: dict | None) -> dict | None:
+    """Note de récolte (`notation.noter_recolte`) enregistrée par le scénario `recolte_vitrine`, ou None."""
+    details = (drapeaux or {}).get("details_scenario")
+    note = details.get("recolte") if isinstance(details, dict) else None
+    if isinstance(note, dict) and isinstance(note.get("completude"), int | float):
+        return note
+    return None
+
+
 def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
     experience = cx.execute("SELECT * FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
     if experience is None:
@@ -455,6 +464,8 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
         challenges = 0
         challenges_non_valides = par_issue.get("challenge_non_valide", 0)
         par_detecteur: dict[str, list[str]] = defaultdict(list)
+        completudes: list[float] = []
+        exactitudes: list[float] = []
         for p in lignes:
             dets = detections.get(p["id"], {})
             for nom, classement in dets.items():
@@ -468,6 +479,11 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             drp = db.lj(p["drapeaux"]) if p["drapeaux"] else None
             if drp and drp.get("challenge_declenche"):
                 challenges += 1
+            note = _note_recolte(drp)
+            if note is not None:
+                completudes.append(note["completude"])
+                if note.get("exactitude") is not None:
+                    exactitudes.append(note["exactitude"])
         resultat = {
             "passages": n,
             "evaluables": evaluables,
@@ -489,6 +505,13 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             "requetes": _resume([p["request_count"] for p in lignes]),
             "detection": {nom: _bloc_detection(c) for nom, c in sorted(par_detecteur.items())},
         }
+        if completudes:
+            resultat["recolte"] = {
+                "passages_notes": len(completudes),
+                "completude_moyenne": sum(completudes) / len(completudes),
+                "passages_exactitude": len(exactitudes),
+                "exactitude_moyenne": sum(exactitudes) / len(exactitudes) if exactitudes else None,
+            }
         resultat["qualite"] = qualite_metriques(resultat)
         return resultat
 
