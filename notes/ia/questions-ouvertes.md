@@ -8,6 +8,12 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-12 — 5 sessions humaines locales, dès que possible (10 minutes)** : lancer
+  `uv run shadowlab site`, ouvrir http://127.0.0.1:8770/manuel dans ton navigateur habituel, fenêtre
+  visible, une minute par session, puis « Terminer ». La campagne 90 montre que seul le détecteur `cdp`
+  arrête NOEZIA aux niveaux 04 à 07, et il arrête tout le monde de la même façon. Ces sessions disent
+  s'il arrête aussi les humains. Recommandation : les faire avant tout autre chose ; arrêter le site
+  ensuite (une campagne réutiliserait un site resté ouvert avec un ancien code).
 - **2026-11-11 — Mise en ligne du site vitrine** : où l'héberger, sur quel domaine à toi, derrière
   Cloudflare gratuit (étapes 1.6 et 1.8). Recommandation : un sous-domaine dédié, sur une petite machine
   séparée du labo. La mise en ligne reste à toi ; les conditions sont dans `docs/PLAN.md` § 5.

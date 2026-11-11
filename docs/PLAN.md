@@ -78,6 +78,35 @@ Vérifié dans le code, git ou la base (`outputs/shadowlab.sqlite3`), pas repris
 | Protection commerciale réelle | Jamais testée | — |
 | Git | Branche `niveau-authentifie-perimetre` : 33 commits non poussés, 86 d'avance sur `master`, pas de PR | `git status -sb` |
 
+### Campagne de référence n° 90 (11/11, 315 passages, 0 panne)
+
+Passages réussis sur 15 par case (intervalle de Wilson : 15/15 → 80 à 100 % ; 0/15 → 0 à 20 %).
+
+| Moteur | 01 | 02 | 03 | 04 | 05 | 06 | 07 |
+|--------|----|----|----|----|----|----|----|
+| noezia | 15 | 15 | 15 | 0 | 0 | 0 | 0 |
+| patchright | 15 | 0 | 0 | 0 | 0 | 0 | 0 |
+| playwright | 15 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Ce que la base dit :
+- **Niveaux 02 et 03** : l'Arena bloque les deux témoins (15/15, cause « fingerprinting ») et laisse passer
+  NOEZIA. Les détecteurs d'origine font leur travail : `regles-http`, `botd`, `chrome-apis`,
+  `coherence-profonde`, `regles-js` et `headless` classent patchright et playwright, **jamais NOEZIA**.
+- **Niveaux 04 à 07** : les trois moteurs échouent de la même façon (180 passages sur 180). Le défi
+  JavaScript est émis, l'empreinte est relevée sur la page du défi, le détecteur `cdp` la classe
+  « automatisé », et la vérification du défi est refusée (« empreinte suspecte »).
+- **Pour NOEZIA, `cdp` est le seul détecteur qui le classe** (101 passages sur 105), toujours avec les deux
+  mêmes signaux : `debugger_instant` et `no_first_input`. La durée mesurée de l'instruction `debugger` est
+  0 ms dans 298 relevés sur 315.
+- Conséquence : tant qu'on ne sait pas si `cdp` classe aussi les humains, les niveaux 04 à 07 ne mesurent
+  rien d'utile. S'il les classe (très probable à la lecture du code), ces niveaux sont fermés à tout le
+  monde ; s'il est retiré, l'Arena n'a plus aucun signal valide contre NOEZIA. Dans les deux cas, la vérité
+  viendra des sessions humaines (1.7) et de Cloudflare (1.8).
+- Essai du 12/11, **non concluant** : un Chromium ordinaire, sans automatisation, a chargé la page deux
+  fois mais n'a jamais envoyé son empreinte en 40 secondes. Cause non établie (piste : écran en veille ou
+  fenêtre masquée, la sonde attend une animation). À surveiller pendant les sessions humaines : une page
+  ouverte en arrière-plan pourrait ne rien envoyer.
+
 Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
 le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
@@ -195,7 +224,8 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 |------|------|
 | Accord pour committer et pousser la branche | 1.1 |
 | Hébergement et mise en ligne du site vitrine public : une machine qui fait tourner une application Python, sur un domaine à lui derrière Cloudflare gratuit | 1.6, 1.8 |
-| Au moins 10 sessions humaines (lui et des amis) | 1.7 |
+| **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`. Elles disent si `cdp` classe les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
+| Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
 | Un serveur Linux x86_64 avec Docker, et un proxy résidentiel | 3.2, 3.3, 3.4 |
 | Une clé reCAPTCHA v3 ; un environnement de tor-i qu'on a le droit de viser (facultatif) | 3.4 |
@@ -216,7 +246,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 |-------|------|------|---------------------------------|
 | 1.1 Sol propre | **fait** | 11/11 | commits `9a2f0f1`, `f0c2f5e`, branche poussée, `git status` propre |
 | 1.2 Mesure fiable | **fait** | 11/11 | commit `74c301a` ; 416 tests rapides verts ; campagne 86 recalculée : 80 % (4/5) au lieu de 440 % ; hash canvas présent sur des données réelles de la base |
-| 1.3 Campagne de référence | **en cours** | 11/11 | campagne 90 lancée à 22h25 (`208e020`), base passée au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
+| 1.3 Campagne de référence | **fait** | 11/11 | campagne 90 : 315 passages, 0 panne (critère < 5 %), 1 h 52. Tableau et lecture au § 2. Base au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | à faire | | |
 | 1.5 Scénario de récolte et notation | à faire | | |
 | 1.6 Application publique réduite | à faire | | |

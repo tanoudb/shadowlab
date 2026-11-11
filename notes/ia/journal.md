@@ -2397,3 +2397,30 @@ copie figée du code. Reste à Ethan : valider le plan, l'hébergement du site v
 **Reste :** lire les résultats de la campagne 90 (tableau moteur × niveau), mettre à jour le suivi du
 plan, puis 1.4 (site vitrine). Les quatre commits de ce soir ne sont pas encore tous poussés (`74c301a`
 et `208e020` sont locaux).
+
+## 2026-11-12 (0h30) — Claude (Fable 5.2) — Étape 1.3 faite : campagne de référence n° 90
+
+**Fait :** campagne 90 terminée (`reference_palier1`, 315 passages, 0 panne, 1 h 52, statut `termine`).
+Réussis sur 15 par case : noezia 15/15 aux niveaux 01 à 03 puis 0/15 aux niveaux 04 à 07 ; patchright et
+playwright 15/15 au niveau 01 puis 0/15 partout.
+
+**Lecture, vérifiée en base :**
+- Niveaux 02-03 : les témoins sont bloqués (cause « fingerprinting »), NOEZIA passe. Les détecteurs
+  d'origine (`regles-http`, `botd`, `chrome-apis`, `coherence-profonde`, `regles-js`, `headless`) classent
+  patchright et playwright, jamais NOEZIA.
+- Niveaux 04-07 : 180 échecs sur 180, tous moteurs. Chaîne des décisions : `defi-js emis` →
+  `fingerprinting-differe detecte` (détecteur `cdp`) → `defi-js rejete-empreinte` (« empreinte suspecte »).
+  C'est le comportement voulu par le commit `3eeba59` (synchronisation défi/collecte), mesuré pour la
+  première fois.
+- Pour NOEZIA, `cdp` est le seul détecteur qui le classe (101/105), avec `debugger_instant` et
+  `no_first_input` à chaque fois. `debugger_delta_ms` vaut 0 dans 298 relevés sur 315.
+- Donc les niveaux 04-07 ne mesurent rien d'utile tant qu'on ne sait pas si `cdp` classe aussi les humains.
+
+**Essai non concluant :** un Chromium ordinaire (sans automatisation, profil neuf) contre un site isolé
+(base temporaire, port 8799) a chargé la page et ses scripts deux fois, sans jamais envoyer d'empreinte en
+40 s. Cause non établie (piste : écran en veille ou fenêtre masquée, la sonde attend une animation). Rien
+n'a été écrit dans la base réelle ; tout a été nettoyé.
+
+**Fichiers :** `docs/PLAN.md` (§ 2 tableau de la campagne 90, § 7, § 8).
+
+**Reste :** étape 1.4 (site vitrine). Demandé à Ethan : 5 sessions humaines locales pour trancher sur `cdp`.
