@@ -180,12 +180,16 @@ class DriverNoezia(Driver):
             "--disable-blink-features=AutomationControlled",
             "--enable-features=NetworkService,NetworkServiceInProcess",
         ]
-        # GPU réel au lieu de SwiftShader (rendu logiciel = signal headless évident).
-        # Réservé au couple profil macOS + hôte macOS : le backend Metal réel est
-        # alors cohérent avec le renderer Apple annoncé. Sous un profil Windows/Linux,
-        # un GPU Apple réel trahirait l'incohérence (OS usurpé ≠ matériel réel).
+        # ── GPU / backend graphique : cohérence avec le profil déclaré ──
         if self._profil.os == "macos" and _HOTE_OS == "macos":
+            # macOS + profil macOS : Metal réel, cohérent avec renderer Apple.
             args += ["--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist"]
+        elif _HOTE_OS == "linux":
+            # Linux serveur : /dev/shm souvent petit (Docker), Chrome crashe sans ceci.
+            args += ["--disable-dev-shm-usage"]
+            # Pas de --disable-gpu : on laisse Chromium utiliser le GPU si disponible
+            # (Mesa/NVIDIA natif), sinon il bascule sur SwiftShader automatiquement.
+            # Notre webgl.js détecte SwiftShader et masque ses paramètres distinctifs.
 
         self._navigateur = self._pw.chromium.launch(
             headless=self._config.headless,

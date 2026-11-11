@@ -170,7 +170,8 @@ MACHINES: list[ProfilMachine] = [
         4,
         [(1366, 768, 1.0), (1536, 864, 1.25), (1920, 1080, 1.0)],
     ),
-    # ── Linux ─────────────────────────────────────────────────────────
+    # ── Linux — serveur / desktop ────────────────────────────────────
+    # Intel intégré
     ProfilMachine(
         "linux",
         ["x86_64"],
@@ -186,11 +187,58 @@ MACHINES: list[ProfilMachine] = [
     ProfilMachine(
         "linux",
         ["x86_64"],
+        "Mesa",
+        "Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)",
+        8,
+        8,
+        [(1920, 1080, 1.0), (2560, 1440, 1.0)],
+    ),
+    # NVIDIA dédié
+    ProfilMachine(
+        "linux",
+        ["x86_64"],
         "Google Inc. (NVIDIA)",
         "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.6.0)",
         16,
         8,
         [(1920, 1080, 1.0), (2560, 1440, 1.0), (3840, 2160, 2.0)],
+    ),
+    ProfilMachine(
+        "linux",
+        ["x86_64"],
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.6.0)",
+        16,
+        16,
+        [(2560, 1440, 1.0), (3840, 2160, 1.5)],
+    ),
+    ProfilMachine(
+        "linux",
+        ["x86_64"],
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA Tesla T4/PCIe/SSE2, OpenGL 4.6.0)",
+        8,
+        8,
+        [(1920, 1080, 1.0)],
+    ),
+    # AMD dédié
+    ProfilMachine(
+        "linux",
+        ["x86_64"],
+        "Mesa",
+        "Mesa AMD Radeon RX 6700 XT (navi22, LLVM 17.0.6, DRM 3.57)",
+        16,
+        8,
+        [(1920, 1080, 1.0), (2560, 1440, 1.0)],
+    ),
+    ProfilMachine(
+        "linux",
+        ["x86_64"],
+        "Mesa",
+        "Mesa AMD Radeon Pro W6800 (navi21, LLVM 17.0.6, DRM 3.57)",
+        16,
+        16,
+        [(2560, 1440, 1.0), (3840, 2160, 1.5)],
     ),
 ]
 

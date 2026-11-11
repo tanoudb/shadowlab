@@ -2,7 +2,8 @@
 // Le GPU déclaré dans le profil doit être indistinguable du vrai GPU à travers
 // toutes les API WebGL : getParameter (20+ params), getShaderPrecisionFormat, readPixels.
 //
-// Problème résolu : notre navigateur tourne toujours sur le même GPU réel (Apple M5 Pro)
+// Problème résolu : notre navigateur tourne sur le GPU réel de la machine hôte
+// (Apple Metal sur Mac, SwiftShader sur un serveur Linux sans GPU)
 // mais on déclare des GPU différents (NVIDIA, Intel, AMD). Sans ce script, un détecteur
 // qui croise le renderer avec MAX_VERTEX_ATTRIBS ou la précision mediump voit la faille.
 (() => {
@@ -19,13 +20,37 @@
     return (_seed >>> 0) / 0xFFFFFFFF;
   }
 
-  // ── Classification GPU depuis le renderer string ─────────────────
+  // ── Détection du backend GPU réel ──────────────────────────────
+  // Sur un serveur Linux sans GPU, Chromium utilise Google SwiftShader (logiciel).
+  // Ses limites WebGL (MAX_TEXTURE_SIZE=8192, pas de multisampling, SUBPIXEL_BITS=4)
+  // trahissent un bot si elles fuient via des paramètres non couverts par GP.
+  let _isSwiftShader = false;
+  let _realExtensions = null;
+  try {
+    const _c = document.createElement('canvas');
+    const _g = _c.getContext('webgl');
+    if (_g) {
+      const _d = _g.getExtension('WEBGL_debug_renderer_info');
+      if (_d) {
+        const _r = _g.getParameter(_d.UNMASKED_RENDERER_WEBGL);
+        _isSwiftShader = typeof _r === 'string' && _r.includes('SwiftShader');
+      }
+      _realExtensions = new Set(_g.getSupportedExtensions() || []);
+      const _l = _g.getExtension('WEBGL_lose_context');
+      if (_l) _l.loseContext();
+    }
+  } catch(e) {}
+
+  // ── Classification GPU depuis le renderer string du PROFIL ─────
   const rend = P.gpu_renderer || '';
   const isApple = rend.includes('Apple');
   const isIntel = rend.includes('Intel');
   const isNVIDIA = rend.includes('NVIDIA');
   const isD3D11 = rend.includes('D3D11') || rend.includes('Direct3D');
   const isMesa = rend.includes('Mesa');
+  // ANGLE + OpenGL sans D3D11 ni Mesa (ex : NVIDIA Linux via ANGLE/OpenGL)
+  const isLinuxGL = !isD3D11 && !isApple && !isMesa
+    && (rend.includes('OpenGL') || (rend.includes('ANGLE') && !rend.includes('Metal')));
 
   // ── Paramètres WebGL corrélés au GPU déclaré ─────────────────────
   // Valeurs mesurées sur Chrome/ANGLE par famille de GPU réelle.
@@ -54,8 +79,8 @@
     GP[3386]  = new Int32Array([16384, 16384]);
     GP[33902] = new Float32Array([1, 1]);
     GP[33901] = new Float32Array([1, 1024]);
-  } else if (isMesa) {
-    // Mesa/Linux (OpenGL backend)
+  } else if (isMesa || isLinuxGL) {
+    // Mesa/Linux (OpenGL backend) — couvre aussi ANGLE+OpenGL (NVIDIA Linux)
     GP[3379]  = 16384;   GP[34076] = 16384;   GP[34024] = 16384;
     GP[34921] = 16;      GP[36347] = 4096;    GP[36348] = 32;
     GP[35661] = 32;      GP[35660] = 16;      GP[34930] = 16;
@@ -65,6 +90,33 @@
     GP[3386]  = new Int32Array([16384, 16384]);
     GP[33902] = new Float32Array([1, 1]);
     GP[33901] = new Float32Array([1, isNVIDIA ? 1024 : 511]);
+  }
+
+  // ── SwiftShader : paramètres supplémentaires pour colmater les fuites ──
+  // SwiftShader a des limites distinctes sur des paramètres non couverts ci-dessus.
+  // Sans cette section, origGP.call() retourne les vraies valeurs SwiftShader
+  // et un détecteur qui croise renderer="Mesa Intel" avec SUBPIXEL_BITS=4 détecte le bot.
+  if (_isSwiftShader && !isApple) {
+    GP[3408]  = 8;            // SUBPIXEL_BITS (SwiftShader=4, vrais GPUs desktop=8)
+    GP[32824] = 2147483647;   // MAX_ELEMENTS_VERTICES (SwiftShader=65536)
+    GP[32825] = 2147483647;   // MAX_ELEMENTS_INDICES  (SwiftShader=65536)
+    GP[35071] = 16;           // MAX_TEXTURE_LOD_BIAS  (SwiftShader=2)
+    GP[35373] = 2048;         // MAX_ARRAY_TEXTURE_LAYERS (WebGL2)
+    GP[35657] = isNVIDIA ? 16 : 12;  // MAX_VERTEX_UNIFORM_BLOCKS (WebGL2)
+    GP[35658] = isNVIDIA ? 16 : 12;  // MAX_FRAGMENT_UNIFORM_BLOCKS (WebGL2)
+    GP[35371] = 72;           // MAX_UNIFORM_BUFFER_BINDINGS (WebGL2)
+    GP[35376] = 65536;        // MAX_UNIFORM_BLOCK_SIZE (WebGL2)
+    GP[35968] = 4;            // MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS (WebGL2)
+    GP[36203] = 128;          // MAX_VERTEX_OUTPUT_COMPONENTS (WebGL2)
+    GP[36211] = 128;          // MAX_FRAGMENT_INPUT_COMPONENTS (WebGL2)
+  }
+
+  // ── Filtrer les extensions du profil contre le backend réel ──────
+  // Si le profil déclare des extensions que le backend ne supporte pas,
+  // getExtension() retournerait null en contradiction avec getSupportedExtensions().
+  // On ne déclare que ce que le backend peut réellement fournir.
+  if (P.webgl_extensions && _realExtensions) {
+    P.webgl_extensions = P.webgl_extensions.filter(ext => _realExtensions.has(ext));
   }
 
   // ── Precision shader corrélée au backend GPU ─────────────────────
@@ -81,7 +133,7 @@
     PREC[0x8DF4] = _p(10, 10, 0);     // MEDIUM_INT
     PREC[0x8DF5] = _p(16, 16, 0);     // HIGH_INT
   } else {
-    // D3D11 et Mesa desktop : pas de vrai mediump
+    // D3D11, Mesa et SwiftShader desktop : pas de vrai mediump
     PREC[0x8DF0] = _p(127, 127, 23);
     PREC[0x8DF1] = _p(127, 127, 23);
     PREC[0x8DF2] = _p(127, 127, 23);
@@ -115,7 +167,7 @@
       return origGP.call(this, p);
     }, 'getParameter');
 
-    // getSupportedExtensions — liste du profil
+    // getSupportedExtensions — liste du profil (déjà filtrée contre le backend)
     proto.getSupportedExtensions = natif(function getSupportedExtensions() {
       if (P.webgl_extensions) return [...P.webgl_extensions];
       return origGSE.call(this);
