@@ -6,6 +6,35 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-11 — Claude (Opus 4.6) — HTTP/2 fingerprinting dans le frontal Arena (D-53)
+
+**Fait :**
+- `frontal.py` : négociation ALPN `h2`/`http/1.1`, nouvelle classe `_ConnexionH2` qui capture
+  l'empreinte HTTP/2 (SETTINGS frame ordre + valeurs, WINDOW_UPDATE, PRIORITY) puis relaye
+  la requête en HTTP/1.1 vers Nginx. Refactoring de `_observer()` pour accepter `http_version`
+  et `extra_details` sans dépendre d'un objet h11.
+- `detection.py` : nouveau `DetecteurH2` (version 1), 11 règles comparant les profils SETTINGS
+  de Chrome, Firefox et des bibliothèques (h2, curl, Go). Seuils calibrés sur captures réelles :
+  Chrome envoie 5 SETTINGS + WU 15663105, Firefox 2 SETTINGS + WU 12517377 (la lib h2 n'émet
+  pas MAX_FRAME_SIZE=16384 car c'est le défaut).
+- `scoring.py` : `"h2": "transport"` (coefficient 1.0).
+- `test_detection.py` : 16 tests H2 (Chrome/Firefox authentiques → humain, pile minimale,
+  cumul signaux → automatisé, chaque règle individuelle).
+- `test_noezia_v4.py` : compteur mis à jour → 42 détecteurs.
+- `docs/DECISIONS.md` : D-53 ajoutée.
+- 405 tests rapides verts, lint propre.
+
+**Fichiers modifiés :** `src/shadowlab/arena/frontal.py`, `src/shadowlab/detection.py`,
+`src/shadowlab/scoring.py`, `tests/test_detection.py`, `tests/test_noezia_v4.py`,
+`docs/DECISIONS.md`, `pyproject.toml` (dep h2), `AGENTS.md`.
+
+**Décisions :** D-53 — Support HTTP/2 dans le frontal + DetecteurH2 11 règles.
+
+**Reste :** valider en campagne réelle (Docker/OrbStack nécessaire), tester que le moteur
+NOEZIA envoie un profil h2 crédible (Chrome-like).
+
+---
+
 ## 2026-11-11 — Claude (Opus 4.6) — Compatibilité Linux serveur : SwiftShader, profils GPU, NVIDIA OpenGL (D-50, D-51)
 
 **Fait :**

@@ -273,3 +273,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   extensions Firefox (record_size_limit), confusion cross-navigateur, groupes elliptiques (x25519,
   ffdhe2048, ordre), algorithmes de signature, supported_versions, version TLS max, et détection
   d'empreinte OpenSSL (AES-256-GCM en tête). 28 tests unitaires dédiés.
+- **D-53 — 11/11/2026 — Support HTTP/2 dans le frontal Arena + détecteur h2.** Le frontal négocie
+  maintenant h2 via ALPN (`["h2", "http/1.1"]`). La classe `_ConnexionH2` (hérite de `_Connexion`)
+  capture l'empreinte HTTP/2 style Akamai (SETTINGS frame : IDs + valeurs en ordre reçu,
+  WINDOW_UPDATE connexion, PRIORITY) et relaie chaque requête vers Nginx via HTTP/1.1. Le nouveau
+  détecteur `DetecteurH2` (11 règles) vérifie la cohérence du profil h2 avec le navigateur annoncé :
+  Chrome 5 SETTINGS + WU ~15M, Firefox 2 SETTINGS + WU ~12M, bibliothèques = profil minimal.
+  Famille `transport` dans le scoring. 16 tests unitaires. 42 détecteurs au total.

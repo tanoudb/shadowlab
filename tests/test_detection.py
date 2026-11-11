@@ -752,3 +752,142 @@ def test_tls_cumul_signaux_automatise():
     c = _tls_verdict(UA_CHROME, tls)
     assert c.classification == "automatise"
     assert len(c.signals) >= 3
+
+
+# ─────────────────────────────────────────────────────────────
+# Détecteur HTTP/2 (h2)
+# ─────────────────────────────────────────────────────────────
+
+
+def _h2_chrome_data():
+    return {
+        "settings": [[1, 65536], [2, 0], [3, 1000], [4, 6291456], [6, 262144]],
+        "window_update": 15663105,
+        "priorites": [],
+        "empreinte": "S[1:65536;2:0;3:1000;4:6291456;6:262144]|WU[15663105]",
+    }
+
+
+def _h2_firefox_data():
+    return {
+        "settings": [[1, 65536], [4, 131072]],
+        "window_update": 12517377,
+        "priorites": [],
+        "empreinte": "S[1:65536;4:131072]|WU[12517377]",
+    }
+
+
+def _h2_verdict(ua, h2_data, tls_base=None):
+    tls = (tls_base or _tls_chrome()).copy()
+    tls["h2"] = h2_data
+    obs = Observations(http=[requete(entetes_navigateur(ua=ua))], js=[empreinte()], tls=tls)
+    return next(c for c in classer(obs) if c.detector_name == "h2")
+
+
+def _h2_signaux(ua, h2_data, tls_base=None):
+    return {s.code for s in _h2_verdict(ua, h2_data, tls_base).signals}
+
+
+def test_h2_chrome_authentique_humain():
+    c = _h2_verdict(UA_CHROME, _h2_chrome_data())
+    assert c.classification == "humain"
+
+
+def test_h2_firefox_authentique_humain():
+    c = _h2_verdict(UA_FIREFOX, _h2_firefox_data(), _tls_firefox())
+    assert c.classification == "humain"
+
+
+def test_h2_sans_tls():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte()], tls=None)
+    c = next(c for c in classer(obs) if c.detector_name == "h2")
+    assert c.classification == "indetermine"
+
+
+def test_h2_sans_donnees_h2():
+    obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte()], tls=_tls_chrome())
+    c = next(c for c in classer(obs) if c.detector_name == "h2")
+    assert c.classification == "indetermine"
+
+
+def test_h2_pas_de_settings():
+    h2 = _h2_chrome_data()
+    h2["settings"] = []
+    assert "h2_pas_de_settings" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_peu_de_settings():
+    h2 = _h2_chrome_data()
+    h2["settings"] = [[4, 6291456]]
+    assert "h2_peu_de_settings" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_chrome_iws_incorrect():
+    h2 = _h2_chrome_data()
+    h2["settings"] = [[1, 65536], [2, 0], [3, 1000], [4, 65535], [6, 262144]]
+    assert "h2_chrome_iws" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_firefox_iws_incorrect():
+    h2 = _h2_firefox_data()
+    h2["settings"] = [[1, 65536], [4, 65535]]
+    assert "h2_firefox_iws" in _h2_signaux(UA_FIREFOX, h2, _tls_firefox())
+
+
+def test_h2_chrome_sans_enable_push():
+    h2 = _h2_chrome_data()
+    h2["settings"] = [[1, 65536], [3, 1000], [4, 6291456], [6, 262144]]
+    assert "h2_chrome_sans_push" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_chrome_mcs_incorrect():
+    h2 = _h2_chrome_data()
+    h2["settings"] = [[1, 65536], [2, 0], [3, 100], [4, 6291456], [6, 262144]]
+    assert "h2_chrome_mcs" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_chrome_wu_incorrect():
+    h2 = _h2_chrome_data()
+    h2["window_update"] = 65535
+    assert "h2_chrome_wu" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_firefox_wu_incorrect():
+    h2 = _h2_firefox_data()
+    h2["window_update"] = 65535
+    assert "h2_firefox_wu" in _h2_signaux(UA_FIREFOX, h2, _tls_firefox())
+
+
+def test_h2_navigateur_sans_wu():
+    h2 = _h2_chrome_data()
+    h2["window_update"] = None
+    assert "h2_sans_wu" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_pile_minimale():
+    h2 = {"settings": [], "window_update": None, "priorites": [], "empreinte": "S[]"}
+    ua = "python-httpx/0.24"
+    tls = _tls_chrome(grease=False, alpn=["h2", "http/1.1"])
+    tls["h2"] = h2
+    obs = Observations(http=[requete(entetes_navigateur(ua=ua))], js=[empreinte()], tls=tls)
+    c = next(c for c in classer(obs) if c.detector_name == "h2")
+    assert "h2_pile_minimale" in {s.code for s in c.signals}
+
+
+def test_h2_hts_inattendu():
+    h2 = _h2_chrome_data()
+    h2["settings"] = [[1, 4096], [2, 0], [3, 1000], [4, 6291456], [6, 262144]]
+    assert "h2_hts_inattendu" in _h2_signaux(UA_CHROME, h2)
+
+
+def test_h2_cumul_signaux_automatise():
+    """Profil h2 incohérent avec Chrome → cumul → automatisé."""
+    h2 = {
+        "settings": [[4, 65535]],
+        "window_update": None,
+        "priorites": [],
+        "empreinte": "S[4:65535]",
+    }
+    c = _h2_verdict(UA_CHROME, h2)
+    assert c.classification == "automatise"
+    assert len(c.signals) >= 3

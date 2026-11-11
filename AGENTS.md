@@ -38,9 +38,9 @@ recommander des optimisations.
 ## État (11/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
-  FingerprintJS 5.3.0, BotD 2.0, 41 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
+  FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
   cross-contexte, deep Proxy, corrélation cross-session — D-48, **TLS v2 : 17 règles d'analyse
-  ClientHello** — D-52), honeypots (lien piège + champ piège),
+  ClientHello** — D-52, **HTTP/2 fingerprinting : 11 règles SETTINGS/WU** — D-53), honeypots (lien piège + champ piège),
   fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
   niveaux 05-07). Score composite pondéré par famille (D-47).
 - **Niveau authentifié** (05-07) : login `/lab/connexion` gardé par une porte comportementale
@@ -61,7 +61,7 @@ recommander des optimisations.
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
   `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
   signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
-- **389 tests rapides verts** (hors intégration), lint propre.
+- **405 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 

@@ -22,6 +22,10 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import h2.config
+import h2.connection
+import h2.events
+import h2.exceptions
 import h11
 
 from .. import database as db
@@ -167,7 +171,11 @@ class _Connexion:
         entetes = [(n.decode("latin-1"), v.decode("latin-1")) for n, v in requete.headers.raw_items()]
         jeton = jeton_de(cible, entetes)
         profil = self.serveur.profil_de(self.cx, jeton)
-        obs_id = self._observer(jeton, methode, chemin, requete, entetes) if jeton and observable(chemin) else None
+        obs_id = (
+            self._observer(jeton, methode, chemin, entetes, requete.http_version.decode("ascii"))
+            if jeton and observable(chemin)
+            else None
+        )
         statut, reponse_entetes, reponse_corps = self._relayer(
             methode, cible, entetes, corps, jeton, profil, obs_id, chemin
         )
@@ -182,8 +190,11 @@ class _Connexion:
             self.prise.sendall(self.h11.send(h11.Data(data=reponse_corps)))
         self.prise.sendall(self.h11.send(h11.EndOfMessage()))
 
-    def _observer(self, jeton, methode, chemin, requete, entetes) -> int:
+    def _observer(self, jeton, methode, chemin, entetes, http_version="1.1", extra_details=None) -> int:
         if self.tls_id is None:
+            details = self.empreinte["details"]
+            if extra_details:
+                details = {**details, **extra_details}
             curseur = self.cx.execute(
                 "INSERT INTO observations_tls (received_at, ja3, ja3_hash, ja4, details) VALUES (?, ?, ?, ?, ?)",
                 (
@@ -191,7 +202,7 @@ class _Connexion:
                     self.empreinte["ja3"],
                     self.empreinte["ja3_hash"],
                     self.empreinte["ja4"],
-                    db.j(self.empreinte["details"]),
+                    db.j(details),
                 ),
             )
             self.tls_id = curseur.lastrowid
@@ -203,7 +214,7 @@ class _Connexion:
                 db.maintenant(),
                 methode,
                 chemin,
-                requete.http_version.decode("ascii"),
+                http_version,
                 db.j([[n, v] for n, v in entetes]),
                 db.j(noms_cookies(entetes)),
                 self.tls_id,
@@ -281,6 +292,114 @@ class _Connexion:
             db.enregistrer_decision(self.cx, jeton, "waf", d.get("decision", "inconnue"), chemin, motifs)
 
 
+class _ConnexionH2(_Connexion):
+    """Connexion HTTP/2 : capture l'empreinte h2 (SETTINGS, WINDOW_UPDATE, PRIORITY) puis relaie vers la chaîne."""
+
+    def __init__(self, serveur: Frontal, prise: ssl.SSLSocket, empreinte: dict, adresse: str) -> None:
+        super().__init__(serveur, prise, empreinte, adresse)
+        cfg = h2.config.H2Configuration(client_side=False, header_encoding="utf-8")
+        self._h2 = h2.connection.H2Connection(config=cfg)
+        self._h2_settings: list[tuple[int, int]] = []
+        self._h2_window: int | None = None
+        self._h2_priorites: list[tuple[int, int, int, bool]] = []
+        self._h2_flux: dict[int, dict] = {}
+        self._h2_fige = False
+
+    def boucle(self) -> None:
+        try:
+            self._h2.initiate_connection()
+            self.prise.sendall(self._h2.data_to_send())
+            while True:
+                try:
+                    donnees = self.prise.recv(65536)
+                except (TimeoutError, OSError, ssl.SSLError):
+                    break
+                if not donnees:
+                    break
+                for ev in self._h2.receive_data(donnees):
+                    self._h2_evenement(ev)
+                a_envoyer = self._h2.data_to_send()
+                if a_envoyer:
+                    self.prise.sendall(a_envoyer)
+        except (h2.exceptions.ProtocolError, OSError, ssl.SSLError) as erreur:
+            journal.debug("h2 fermé : %s", erreur)
+        finally:
+            self.cx.close()
+
+    def _h2_evenement(self, ev) -> None:
+        if isinstance(ev, h2.events.RemoteSettingsChanged):
+            if not self._h2_fige:
+                for cs in ev.changed_settings.values():
+                    self._h2_settings.append((cs.setting, cs.new_value))
+        elif isinstance(ev, h2.events.WindowUpdated):
+            if ev.stream_id == 0 and self._h2_window is None:
+                self._h2_window = ev.delta
+        elif isinstance(ev, h2.events.PriorityUpdated):
+            self._h2_priorites.append((ev.stream_id, ev.depends_on, ev.weight, ev.exclusive))
+        elif isinstance(ev, h2.events.RequestReceived):
+            self._h2_flux[ev.stream_id] = {"entetes": list(ev.headers), "corps": bytearray()}
+        elif isinstance(ev, h2.events.DataReceived):
+            flux = self._h2_flux.get(ev.stream_id)
+            if flux is not None:
+                flux["corps"] += ev.data
+                self._h2.acknowledge_received_data(ev.flow_controlled_length, ev.stream_id)
+        elif isinstance(ev, h2.events.StreamEnded):
+            flux = self._h2_flux.pop(ev.stream_id, None)
+            if flux is not None:
+                self._traiter_h2(ev.stream_id, flux["entetes"], bytes(flux["corps"]))
+        elif isinstance(ev, h2.events.StreamReset):
+            self._h2_flux.pop(ev.stream_id, None)
+
+    def _h2_empreinte(self) -> dict:
+        self._h2_fige = True
+        s = ";".join(f"{sid}:{val}" for sid, val in self._h2_settings)
+        parties = [f"S[{s}]"]
+        if self._h2_window is not None:
+            parties.append(f"WU[{self._h2_window}]")
+        if self._h2_priorites:
+            p = ";".join(f"{a}:{b}:{c}:{int(d)}" for a, b, c, d in self._h2_priorites)
+            parties.append(f"P[{p}]")
+        return {
+            "empreinte": "|".join(parties),
+            "settings": self._h2_settings,
+            "window_update": self._h2_window,
+            "priorites": self._h2_priorites,
+        }
+
+    def _traiter_h2(self, stream_id: int, entetes_h2: list, corps: bytes) -> None:
+        pseudo = {n: v for n, v in entetes_h2 if n.startswith(":")}
+        reguliers = [(n, v) for n, v in entetes_h2 if not n.startswith(":")]
+        methode = pseudo.get(":method", "GET")
+        cible = pseudo.get(":path", "/")
+        chemin = urlsplit(cible).path
+        autorite = pseudo.get(":authority", "")
+        entetes = [("host", autorite)] + reguliers
+        jeton = jeton_de(cible, entetes)
+        profil = self.serveur.profil_de(self.cx, jeton)
+        obs_id = (
+            self._observer(jeton, methode, chemin, entetes, "2", {"h2": self._h2_empreinte()})
+            if jeton and observable(chemin)
+            else None
+        )
+        statut, rep_entetes, rep_corps = self._relayer(methode, cible, entetes, corps, jeton, profil, obs_id, chemin)
+        if obs_id is not None:
+            self.cx.execute("UPDATE observations_http SET status = ? WHERE id = ?", (statut, obs_id))
+        h2_entetes = [(":status", str(statut))]
+        h2_entetes.extend(
+            (n.lower(), v) for n, v in rep_entetes if n.lower() not in ("transfer-encoding", "connection", "keep-alive")
+        )
+        try:
+            self._h2.send_headers(stream_id, h2_entetes)
+            if rep_corps and methode != "HEAD":
+                taille_max = self._h2.max_outbound_frame_size
+                for i in range(0, len(rep_corps), taille_max):
+                    self._h2.send_data(stream_id, rep_corps[i : i + taille_max])
+                    self.prise.sendall(self._h2.data_to_send())
+            self._h2.end_stream(stream_id)
+        except (h2.exceptions.ProtocolError, h2.exceptions.FlowControlError) as erreur:
+            journal.debug("h2 flux %d : %s", stream_id, erreur)
+
+
 class _Gestion(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         serveur: Frontal = self.server.frontal
@@ -296,7 +415,11 @@ class _Gestion(socketserver.BaseRequestHandler):
         except (ssl.SSLError, OSError) as erreur:
             journal.debug("poignée de main refusée : %s", erreur)
             return
-        _Connexion(serveur, flux, tls.empreinte(hello), self.client_address[0]).boucle()
+        empr = tls.empreinte(hello)
+        if flux.selected_alpn_protocol() == "h2":
+            _ConnexionH2(serveur, flux, empr, self.client_address[0]).boucle()
+        else:
+            _Connexion(serveur, flux, empr, self.client_address[0]).boucle()
 
 
 class _Serveur(socketserver.ThreadingTCPServer):
@@ -313,7 +436,7 @@ class Frontal:
         cle, certificat = creer_certificat(reglages.dossier_arena / "tls")
         self.contexte = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.contexte.load_cert_chain(certificat, cle)
-        self.contexte.set_alpn_protocols(["http/1.1"])  # h11 ne parle que HTTP/1.1 : voir les limites de l'Arena
+        self.contexte.set_alpn_protocols(["h2", "http/1.1"])
         self._profils: dict[str, str] = {}
         self._verrou = threading.Lock()
         self._serveur: _Serveur | None = None

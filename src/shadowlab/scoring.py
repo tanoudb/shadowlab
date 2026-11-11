@@ -12,6 +12,7 @@ from .detection import Classement, Signal
 FAMILLE: dict[str, str] = {
     "regles-http": "transport",
     "tls": "transport",
+    "h2": "transport",
     "botd": "empreinte",
     "regles-js": "empreinte",
     "headless": "empreinte",

@@ -2437,6 +2437,148 @@ def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     return (len(documents) - 1) / duree if duree > 0 else None
 
 
+class DetecteurH2:
+    """Analyse de l'empreinte HTTP/2 : SETTINGS, WINDOW_UPDATE, PRIORITY.
+
+    Les navigateurs envoient des valeurs SETTINGS caractéristiques (Akamai h2 fingerprint).
+    Chrome : 5 settings {1:65536, 2:0, 3:1000, 4:6291456, 6:262144} + WU ~15M.
+    Firefox : 3 settings {1:65536, 4:131072, 5:16384} + WU ~12M.
+    Les bibliothèques h2 (Python, Go, curl) ont des profils très différents.
+    """
+
+    name = "h2"
+    version = "1"
+
+    _CHROME_SETTINGS = {1: 65536, 2: 0, 3: 1000, 4: 6291456, 6: 262144}
+    _FIREFOX_SETTINGS = {1: 65536, 4: 131072}
+
+    def classer(self, obs: Observations) -> Classement:
+        t = obs.tls
+        if t is None:
+            return _indetermine(self.name, self.version, "sans_tls", "session hors Arena")
+        h2 = t.get("h2")
+        if h2 is None:
+            return _indetermine(self.name, self.version, "sans_h2", "pas de données HTTP/2 (client h1.1)")
+
+        documents = obs.documents
+        ua = _entetes(documents[0]).get("user-agent", "").lower() if documents else ""
+        chrome = "chrome/" in ua and "edg/" not in ua
+        edge = "edg/" in ua
+        firefox = "firefox/" in ua
+        navigateur = chrome or edge or firefox or ("safari/" in ua and "chrome/" not in ua)
+
+        settings = h2.get("settings", [])
+        window_update = h2.get("window_update")
+        settings_dict = {s[0]: s[1] for s in settings} if settings else {}
+        nb_settings = len(settings)
+
+        signaux: list[Signal] = []
+
+        # ── Nombre de SETTINGS ──
+        if nb_settings == 0:
+            signaux.append(Signal("h2_pas_de_settings", "aucun SETTINGS envoyé (navigateurs : 3-5)", 0.5))
+        elif navigateur and nb_settings < 2:
+            signaux.append(
+                Signal(
+                    "h2_peu_de_settings",
+                    f"seulement {nb_settings} SETTINGS (Chrome : 5, Firefox : 2+)",
+                    0.4,
+                )
+            )
+
+        # ── INITIAL_WINDOW_SIZE (setting 4) ──
+        iws = settings_dict.get(4)
+        if iws is not None:
+            if (chrome or edge) and iws != 6291456:
+                signaux.append(
+                    Signal(
+                        "h2_chrome_iws",
+                        f"Chrome annoncé avec INITIAL_WINDOW_SIZE={iws} (attendu : 6291456)",
+                        0.5,
+                    )
+                )
+            elif firefox and iws != 131072:
+                signaux.append(
+                    Signal(
+                        "h2_firefox_iws",
+                        f"Firefox annoncé avec INITIAL_WINDOW_SIZE={iws} (attendu : 131072)",
+                        0.4,
+                    )
+                )
+
+        # ── ENABLE_PUSH (setting 2) ──
+        enable_push = settings_dict.get(2)
+        if (chrome or edge) and enable_push is None:
+            signaux.append(
+                Signal(
+                    "h2_chrome_sans_push",
+                    "Chrome annoncé sans ENABLE_PUSH=0 dans SETTINGS",
+                    0.3,
+                )
+            )
+
+        # ── MAX_CONCURRENT_STREAMS (setting 3) ──
+        mcs = settings_dict.get(3)
+        if (chrome or edge) and mcs is not None and mcs != 1000:
+            signaux.append(
+                Signal(
+                    "h2_chrome_mcs",
+                    f"Chrome annoncé avec MAX_CONCURRENT_STREAMS={mcs} (attendu : 1000)",
+                    0.3,
+                )
+            )
+
+        # ── WINDOW_UPDATE (connexion) ──
+        if window_update is not None:
+            if (chrome or edge) and abs(window_update - 15663105) > 100000:
+                signaux.append(
+                    Signal(
+                        "h2_chrome_wu",
+                        f"Chrome annoncé avec WINDOW_UPDATE={window_update} (attendu : ~15663105)",
+                        0.4,
+                    )
+                )
+            elif firefox and abs(window_update - 12517377) > 100000:
+                signaux.append(
+                    Signal(
+                        "h2_firefox_wu",
+                        f"Firefox annoncé avec WINDOW_UPDATE={window_update} (attendu : ~12517377)",
+                        0.3,
+                    )
+                )
+        elif navigateur:
+            signaux.append(
+                Signal(
+                    "h2_sans_wu",
+                    "navigateur annoncé sans WINDOW_UPDATE au niveau connexion",
+                    0.4,
+                )
+            )
+
+        # ── Profil de bibliothèque pure ──
+        if nb_settings <= 1 and window_update is None and not navigateur:
+            signaux.append(
+                Signal(
+                    "h2_pile_minimale",
+                    f"profil HTTP/2 minimal ({nb_settings} SETTINGS, pas de WU) : bibliothèque",
+                    0.5,
+                )
+            )
+
+        # ── HEADER_TABLE_SIZE (setting 1) ──
+        hts = settings_dict.get(1)
+        if navigateur and hts is not None and hts != 65536:
+            signaux.append(
+                Signal(
+                    "h2_hts_inattendu",
+                    f"HEADER_TABLE_SIZE={hts} (navigateurs : 65536)",
+                    0.3,
+                )
+            )
+
+        return _verdict(self.name, self.version, signaux)
+
+
 DETECTEURS: dict[str, Detecteur] = {
     d.name: d
     for d in (
@@ -2445,6 +2587,7 @@ DETECTEURS: dict[str, Detecteur] = {
         DetecteurReglesJs(),
         DetecteurCoherence(),
         DetecteurTls(),
+        DetecteurH2(),
         DetecteurComportement(),
         DetecteurPrototypes(),
         DetecteurCoherenceProfonde(),

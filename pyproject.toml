@@ -24,6 +24,7 @@ dependencies = [
     "parsel>=1.12",
     "selectolax>=1",
     "scipy>=1.14",
+    "h2>=4.4.1",
 ]
 
 [project.scripts]
