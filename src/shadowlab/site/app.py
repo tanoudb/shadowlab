@@ -444,6 +444,12 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             if motif:
                 db.enregistrer_decision(cx, jeton, "defi-js", "echec", request.url.path, [{"code": motif}])
                 raise HTTPException(403, motif)
+            if gardien._fingerprinting_differe(cx, jeton) or gardien._composite_differe(cx, jeton):
+                db.enregistrer_decision(
+                    cx, jeton, "defi-js", "rejete-empreinte", request.url.path,
+                    [{"code": "empreinte_suspecte"}],
+                )
+                raise HTTPException(403, "empreinte suspecte")
             duree = message.get("ms") if isinstance(message.get("ms"), int | float) else None
             db.enregistrer_decision(cx, jeton, "defi-js", "valide", request.url.path, [{"duree_ms": duree}])
         reponse = Response(status_code=204)

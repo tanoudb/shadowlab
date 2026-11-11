@@ -27,6 +27,14 @@ async function resoudre() {
 }
 
 const preuve = await resoudre();
+if (document.querySelector('meta[name="sl-session"]')?.content) {
+  if (!document.getElementById('observation-envoyee')) {
+    await Promise.race([
+      new Promise(r => document.addEventListener('shadowlab:collecte-finie', r, { once: true })),
+      new Promise(r => setTimeout(r, 5000)),
+    ]);
+  }
+}
 const reponse = await fetch('/lab/defi/verifier', {
   method: 'POST',
   credentials: 'same-origin',

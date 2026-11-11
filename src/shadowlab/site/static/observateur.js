@@ -1224,6 +1224,7 @@ async function demarrer() {
   marque.id = 'observation-envoyee';
   marque.hidden = true;
   document.body.append(marque);
+  document.dispatchEvent(new Event('shadowlab:collecte-finie'));
 }
 
 addEventListener('pagehide', () => {

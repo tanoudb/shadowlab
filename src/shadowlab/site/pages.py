@@ -334,7 +334,7 @@ def _page_arena(type_page: str, titre: str, corps: str, scripts: str = "", jeton
 <h1>{escape(titre)}</h1>
 {corps}
 </main>
-{scripts}{observateur}
+{observateur}{scripts}
 </body>
 </html>"""
 
