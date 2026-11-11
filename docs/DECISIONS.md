@@ -246,3 +246,15 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   0.8. Comble le gap quand le debugger CDP est au-dessus du seuil 0.05ms : les signaux CDP (0.4) +
   comportement (0.5) + meta-composite (0.5) = 1.4 dépassent le seuil. Le seuil 0.8 est arbitraire —
   à calibrer sur des sessions humaines réelles (D-10).
+- **D-47 — 11/11/2026 — Score composite pondéré par famille de détecteurs (scoring.py).** Chaque détecteur
+  appartient à une famille (transport, empreinte, intégrité, cohérence, comportement, corrélation) dotée
+  d'un coefficient multiplicateur. Remplace la somme naïve de poids dans gardien.py et issues.py.
+  Coefficients initiaux : transport 1.0, empreinte 0.7, intégrité 1.2, cohérence 0.8, comportement 1.0,
+  corrélation 1.5. À calibrer sur données réelles (D-10).
+- **D-48 — 11/11/2026 — Corrélation cross-session (correlation.py, migration 8).** Hash SHA-256 tronqué
+  du profil navigateur et du canvas ; table empreintes_vues ; détecteur correlation-session qui signale le
+  recyclage de fingerprint (≥5 sessions identiques) et la vélocité anormale (≥30 sessions/h avec le même
+  hash). Coefficient famille corrélation : 1.5 (le signal le plus fort). 41 détecteurs au total.
+- **D-49 — 11/11/2026 — Niveau 07 « État de l'art ».** Tous les 41 détecteurs, seuil composite 0.3,
+  WAF paranoia 4, rate limit 1 req/s, honeypots, Turnstile + reCAPTCHA, connexion à 2 tentatives max.
+  Objectif : équivalent Cloudflare Enterprise Bot Management en local.

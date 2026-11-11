@@ -6,6 +6,29 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-11 — Claude (Opus 4.6) — Score composite pondéré, corrélation cross-session, niveau 07 (D-47, D-48, D-49)
+
+**Fait :**
+- Nouveau module `scoring.py` : score composite pondéré par famille de détecteurs (6 familles,
+  coefficients différenciés). Remplace la somme naïve dans gardien.py et issues.py.
+- Nouveau module `correlation.py` : hash de profil et canvas, table `empreintes_vues` (migration 8),
+  détecte le recyclage de fingerprint cross-session (≥5 occurrences) et la vélocité (≥30/h).
+- Nouveau détecteur `correlation-session` dans detection.py → 41 détecteurs au total.
+- Niveau 07 « État de l'art » dans profils.yaml : tous les 41 détecteurs, seuil 0.3, WAF paranoia 4.
+- 13 tests scoring + 9 tests corrélation + correction test registre (40→41).
+- 361 tests verts, lint propre.
+
+**Fichiers :** scoring.py (nouveau), correlation.py (nouveau), detection.py, gardien.py, app.py,
+issues.py, database.py, profils.yaml, test_scoring.py (nouveau), test_correlation.py (nouveau),
+test_noezia_v4.py.
+
+**Décisions :** D-47 (score composite pondéré), D-48 (corrélation cross-session), D-49 (niveau 07).
+
+**Reste :** calibrer les coefficients et seuils sur des sessions humaines réelles. HTTP/2 fingerprinting
+(impact élevé). Font detection, audio fingerprint. Moteur expérimental propre.
+
+---
+
 ## 2026-11-11 — Claude (Opus 4.6) — Consolidation : 100% de détection NOEZIA (D-45, D-46)
 
 **Résumé consolidé** des travaux du 10-11/11/2026 sur le durcissement des détecteurs :
