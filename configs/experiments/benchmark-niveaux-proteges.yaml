@@ -1,0 +1,17 @@
+experiment:
+  name: benchmark-niveaux-proteges
+  description: >-
+    NOEZIA vs Playwright sur niveaux 03 (fingerprinting) et 04 (challenges).
+    Mesure la résistance du moteur aux protections actives de l'Arena.
+  environment: local
+  engines:
+    - noezia
+    - playwright
+  scenarios:
+    - detection_page
+  protections:
+    - "03"
+    - "04"
+  repetitions: 3
+  seed: 20261110
+  output: [json]

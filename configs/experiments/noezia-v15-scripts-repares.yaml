@@ -1,0 +1,25 @@
+# NOEZIA v15 — Première campagne avec scripts furtifs FONCTIONNELS
+# Fix critique : navigateur.js syntax error corrigé, injection en un seul appel
+experiment:
+  name: noezia_v15_scripts_repares
+  description: "NOEZIA v15 : scripts furtifs réparés (syntax fix + concat), 33 détecteurs"
+  environment: local
+  engines:
+    - noezia
+  protections:
+    - "01"
+    - "02"
+    - "03"
+    - "04"
+    - "05"
+    - "06"
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+    - form_interaction
+    - fingerprint_observation
+    - detection_page
+  repetitions: 3
+  seed: 20261109
+  output: [json, csv, html]

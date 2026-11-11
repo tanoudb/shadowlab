@@ -1,0 +1,20 @@
+experiment:
+  name: benchmark-39-detecteurs
+  description: >-
+    Benchmark des 39 détecteurs (dont 6 CreepJS D-37) sur noezia et playwright.
+    Fingerprinting + détection : mesure la capacité du moteur à éviter chaque sonde.
+  environment: local
+  engines:
+    - noezia
+    - playwright
+  scenarios:
+    - fingerprint_observation
+    - detection_page
+  repetitions: 5
+  seed: 20261110
+  metrics:
+    - detection_rate
+    - execution_time
+    - memory_usage
+    - cpu_usage
+  output: [json]
