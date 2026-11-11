@@ -21,6 +21,8 @@ class Reglages:
     concurrence_max: int
     port_arena: int  # frontal TLS, point d'entrée de l'Arena
     port_aval: int  # Nginx, publié par la pile Docker de l'Arena
+    vitrine_graine: int  # graine du site vitrine (contenu connu)
+    vitrine_taille: int  # nombre d'annonces du site vitrine
 
     @property
     def url_site(self) -> str:
@@ -77,4 +79,6 @@ def charger() -> Reglages:
         concurrence_max=int(os.environ.get("SHADOWLAB_CONCURRENCE_MAX", "4")),
         port_arena=int(os.environ.get("SHADOWLAB_PORT_ARENA", "8743")),
         port_aval=int(os.environ.get("SHADOWLAB_PORT_AVAL", "8781")),
+        vitrine_graine=int(os.environ.get("SHADOWLAB_VITRINE_GRAINE", "20261111")),
+        vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
     )

@@ -61,7 +61,10 @@ recommander des optimisations.
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
   `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
   signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
-- **405 tests rapides verts** (hors intégration), lint propre.
+- **Site vitrine à contenu connu** : `/lab/vitrine` (annonces immobilières fictives générées à partir
+  d'une graine, liste paginée, fiches, photos SVG, bloc chargé en JavaScript). `vitrine.verite()` donne
+  le contenu exact attendu d'une récolte. Réglages `SHADOWLAB_VITRINE_GRAINE` et `SHADOWLAB_VITRINE_TAILLE`.
+- **440 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 
@@ -106,7 +109,7 @@ src/shadowlab/
 ├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker)
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   └── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc)
-├── site/            # Site de test FastAPI (app, pages, gardien, static/)
+├── site/            # Site de test FastAPI (app, pages, vitrine, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
 ├── scenarios.py     # 15 scénarios de test
 ├── detection.py     # 39 détecteurs

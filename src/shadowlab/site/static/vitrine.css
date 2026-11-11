@@ -1,0 +1,88 @@
+/* Site vitrine de démonstration (annonces fictives). Aucune ressource externe. */
+:root {
+  --encre: #1f2937;
+  --discret: #5b6677;
+  --fond: #f5f3ee;
+  --carte: #ffffff;
+  --trait: #e2ddd2;
+  --accent: #0f5c63;
+  --accent-fonce: #0a4348;
+  --rayon: 10px;
+}
+* { box-sizing: border-box; }
+body.vitrine { margin: 0; font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--encre); background: var(--fond); }
+.conteneur { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--accent); }
+a:hover { color: var(--accent-fonce); }
+h1, h2, h3 { line-height: 1.25; margin: 0 0 .5em; }
+h1 { font-size: clamp(1.5rem, 4vw, 2.2rem); }
+h2 { font-size: 1.25rem; }
+
+.entete { background: var(--carte); border-bottom: 1px solid var(--trait); }
+.entete .conteneur { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; padding-top: 14px; padding-bottom: 14px; }
+.marque { font-size: 1.3rem; font-weight: 700; text-decoration: none; color: var(--accent); letter-spacing: .02em; }
+.entete nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.entete nav a { text-decoration: none; color: var(--encre); font-weight: 500; }
+.entete nav a:hover { color: var(--accent); }
+
+main.conteneur { padding-top: 28px; padding-bottom: 48px; min-height: 60vh; }
+
+.bandeau { background: var(--accent); color: #fff; border-radius: var(--rayon); padding: 40px 24px; margin-bottom: 32px; }
+.bandeau p { margin: 0 0 20px; opacity: .92; }
+.bouton { display: inline-block; background: #fff; color: var(--accent); padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+.bouton:hover { background: var(--fond); color: var(--accent-fonce); }
+.titre-section { margin-top: 8px; }
+
+.grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+.carte { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; display: flex; flex-direction: column; }
+.carte img { display: block; width: 100%; height: auto; aspect-ratio: 8 / 5; background: var(--trait); }
+.carte-corps { padding: 14px 16px 16px; }
+.carte h2, .carte h3 { font-size: 1.05rem; margin-bottom: .3em; }
+.carte h2 a, .carte h3 a { color: var(--encre); text-decoration: none; }
+.carte h2 a:hover, .carte h3 a:hover { color: var(--accent); text-decoration: underline; }
+.carte p { margin: 0; }
+.carte-prix { font-weight: 700; color: var(--accent); font-size: 1.1rem; }
+.carte-detail, .carte-lieu { color: var(--discret); font-size: .92rem; }
+
+.compteur { color: var(--discret); margin-top: -.25em; }
+.pagination { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
+.pagination a { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 8px 16px; text-decoration: none; font-weight: 500; }
+.pagination a:hover { border-color: var(--accent); }
+.pagination .suivant { margin-left: auto; }
+
+.fil { font-size: .9rem; color: var(--discret); margin-bottom: 16px; }
+.bien-ref { color: var(--discret); margin-top: -.25em; }
+.galerie { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0 28px; }
+.galerie img { display: block; width: 100%; height: 100%; aspect-ratio: 8 / 5; object-fit: cover; border-radius: 8px; border: 1px solid var(--trait); }
+.galerie img:first-child { grid-column: 1 / -1; }
+.bien-colonnes { display: grid; grid-template-columns: 1fr; gap: 24px; }
+.bien-prix { font-size: 1.8rem; font-weight: 700; color: var(--accent); margin: 0; line-height: 1.2; }
+.bien-resume { color: var(--discret); margin: 2px 0 0; }
+.bien-fiche { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 16px 20px; align-self: start; }
+.bien-fiche dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
+.bien-fiche dt { color: var(--discret); }
+.bien-fiche dd { margin: 0; font-weight: 500; text-align: right; }
+.agence { margin: 0; }
+.dpe { display: inline-block; min-width: 1.8em; text-align: center; padding: 0 .5em; border-radius: 4px; color: #fff; font-weight: 700; }
+.dpe-a { background: #2e8b57; } .dpe-b { background: #5aa83c; } .dpe-c { background: #9bb01f; color: #1f2937; }
+.dpe-d { background: #e3c40f; color: #1f2937; } .dpe-e { background: #eb9c1c; color: #1f2937; }
+.dpe-f { background: #e0662a; } .dpe-g { background: #c4302b; }
+.similaires { margin-top: 40px; }
+.similaires #similaires:empty { min-height: 1px; }
+
+.pied { border-top: 1px solid var(--trait); background: var(--carte); color: var(--discret); font-size: .9rem; text-align: center; padding: 20px 0; }
+
+@media (min-width: 800px) {
+  .bien-colonnes { grid-template-columns: 2fr 1fr; }
+  /* Mosaïque : la façade en grand à gauche, les autres vues en vignettes à droite puis dessous. */
+  .galerie { grid-template-columns: repeat(4, 1fr); }
+  .galerie img:first-child { grid-column: span 2; grid-row: span 2; }
+}
+@media (max-width: 480px) {
+  .bandeau { padding: 28px 18px; }
+  .pagination { flex-direction: column; }
+  .pagination .suivant { margin-left: 0; }
+}
+
+/* Lien et champs pièges (honeypots) : hors écran, jamais visibles d'un humain. Même règle que lab.css. */
+.sl-hp { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0; }

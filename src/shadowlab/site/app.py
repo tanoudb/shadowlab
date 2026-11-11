@@ -24,7 +24,7 @@ from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
 from ..config import Reglages, charger
 from ..detection import Observations, classer
-from . import comptes, gardien, pages
+from . import comptes, gardien, pages, vitrine
 
 STATIQUES = Path(__file__).parent / "static"
 JETON_VALIDE = re.compile(r"^[0-9a-f]{32}$")
@@ -202,6 +202,52 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             raise HTTPException(404, "page inexistante")
         hp = gardien.honeypots_actifs(request.state.sceau)
         return pages.catalogue(jeton_de(request), page, honeypot=hp)
+
+    # --- Site vitrine à contenu connu ---------------------------------------------------------------
+    # Les routes /lab/vitrine/* passent par le même middleware que le reste de /lab : observation,
+    # contrôle du gardien (profil de l'Arena), en-têtes de sécurité et CSP.
+    annonces_vitrine = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
+
+    def annonce_ou_404(reference: str) -> vitrine.Annonce:
+        annonce = vitrine.trouver(annonces_vitrine, reference)
+        if annonce is None:
+            raise HTTPException(404, "annonce inconnue")
+        return annonce
+
+    @app.get("/lab/vitrine", response_class=HTMLResponse, tags=["vitrine"])
+    def vitrine_accueil(request: Request) -> str:
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return vitrine.page_accueil(jeton_de(request), annonces_vitrine, honeypot=hp)
+
+    @app.get("/lab/vitrine/annonces", response_class=HTMLResponse, tags=["vitrine"])
+    def vitrine_liste(request: Request, page: int = 1) -> str:
+        if not 1 <= page <= vitrine.nb_pages(len(annonces_vitrine)):
+            raise HTTPException(404, "page inexistante")
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return vitrine.page_liste(jeton_de(request), annonces_vitrine, page, honeypot=hp)
+
+    @app.get("/lab/vitrine/annonces/{reference}", response_class=HTMLResponse, tags=["vitrine"])
+    def vitrine_fiche(request: Request, reference: str) -> str:
+        annonce = annonce_ou_404(reference)
+        hp = gardien.honeypots_actifs(request.state.sceau)
+        return vitrine.page_fiche(jeton_de(request), annonce, honeypot=hp)
+
+    @app.get("/lab/vitrine/photos/{reference}/{fichier}", tags=["vitrine"])
+    def vitrine_photo(reference: str, fichier: str) -> Response:
+        annonce = annonce_ou_404(reference)
+        m = re.fullmatch(r"([1-9]\d?)\.svg", fichier)
+        if not m or int(m.group(1)) > annonce.nb_photos:
+            raise HTTPException(404, "photo inexistante")
+        return Response(
+            vitrine.photo_svg(annonce, int(m.group(1))),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    @app.get("/lab/vitrine/api/annonces/{reference}/similaires", tags=["vitrine"])
+    def vitrine_similaires(reference: str) -> dict:
+        annonce = annonce_ou_404(reference)
+        return {"annonces": [vitrine.resume_json(a) for a in vitrine.similaires(annonces_vitrine, annonce)]}
 
     @app.get("/lab/formulaire", response_class=HTMLResponse, tags=["site"])
     def formulaire(request: Request) -> str:

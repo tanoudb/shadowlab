@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "apercu-vitrine",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SHADOWLAB_SORTIES=outputs/apercu",
+        "SHADOWLAB_BASE=outputs/apercu/apercu.sqlite3",
+        "SHADOWLAB_PORT=8799",
+        "SHADOWLAB_PORT_ARENA=8798",
+        "SHADOWLAB_VITRINE_TAILLE=60",
+        "uv", "run", "shadowlab", "site", "--silencieux"
+      ],
+      "port": 8799
+    }
+  ]
+}

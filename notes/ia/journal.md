@@ -2424,3 +2424,39 @@ n'a été écrit dans la base réelle ; tout a été nettoyé.
 **Fichiers :** `docs/PLAN.md` (§ 2 tableau de la campagne 90, § 7, § 8).
 
 **Reste :** étape 1.4 (site vitrine). Demandé à Ethan : 5 sessions humaines locales pour trancher sur `cdp`.
+
+## 2026-11-12 (1h20) — Claude (Fable 5.2) — Étape 1.4 faite : site vitrine à contenu connu
+
+**Fait :** site vitrine sous `/lab/vitrine` (annonces immobilières fictives). Écrit par un sous-agent sur
+Sonnet, relu et complété par moi.
+- `site/vitrine.py` : `generer(graine, taille)` déterministe (chaque annonce a sa propre graine, donc
+  indépendante de la taille), `verite()`, pages (accueil, liste paginée par 20, fiche avec un `data-champ`
+  par champ et `data-valeur` pour les valeurs brutes), photos SVG dessinées à la volée, API « similaires »
+  chargée par `fetch` (`static/vitrine.js`). Réglages `vitrine_graine` et `vitrine_taille` dans `config.py`.
+- Les routes passent par le même middleware que le reste de `/lab` (observation, gardien, CSP).
+- Vérifications faites par moi : 3 erreurs volontaires dans le code sont bien détectées par les tests
+  (le sous-agent n'avait pas vu ses tests échouer un par un) ; rendu regardé dans le navigateur intégré.
+- Corrigé par moi, test d'abord :
+  - le lien piège (honeypot) était **visible** sur les pages vitrine : la règle `.sl-hp` n'existe que dans
+    `lab.css`. Ajoutée à `vitrine.css`. Un humain qui aurait cliqué aurait été pris pour un bot ;
+  - nom de marque « Horizon Immo » (pourrait être une vraie agence) remplacé par « Habitat Démo » ;
+  - illustrations refaites (porte qui chevauchait une fenêtre, même maison pour tous les biens) : façade
+    de maison ou d'immeuble selon le bien, puis séjour, cuisine, chambre, salle de bain, extérieur ;
+  - prix et résumé remontés au-dessus de la galerie, galerie en mosaïque.
+- 440 tests rapides verts (+24), lint propre.
+
+**Fichiers :** `src/shadowlab/site/vitrine.py`, `site/static/vitrine.css`, `site/static/vitrine.js`,
+`site/app.py`, `config.py`, `tests/test_vitrine.py`, `.claude/launch.json` (aperçu isolé « apercu-vitrine » :
+base dans `outputs/apercu`, port 8799), `AGENTS.md`, `docs/PLAN.md`.
+
+**Constats à reprendre à l'étape 1.7 :**
+- La sonde d'empreinte termine en moins de 8 s dans un navigateur normal dont la fenêtre est visible
+  (vérifié dans le navigateur intégré). L'essai non concluant de 0h20 venait donc très probablement d'une
+  fenêtre masquée. Une page en arrière-plan pourrait ne jamais envoyer son empreinte : à mesurer.
+- Erreur de console sur toutes les pages `/lab`, anciennes comprises : « Uncaught SyntaxError: missing )
+  after argument list ». Elle vient de `observateur.js` ou d'une de ses sondes, pas du site vitrine. Elle
+  n'empêche pas l'envoi. Sonde fautive non identifiée.
+- Les photos et l'API « similaires » sont gardées comme les pages : un niveau strict peut leur répondre
+  par un défi.
+
+**Reste :** étape 1.5 (scénario de récolte et notation).
