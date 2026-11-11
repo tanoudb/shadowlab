@@ -280,3 +280,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   détecteur `DetecteurH2` (11 règles) vérifie la cohérence du profil h2 avec le navigateur annoncé :
   Chrome 5 SETTINGS + WU ~15M, Firefox 2 SETTINGS + WU ~12M, bibliothèques = profil minimal.
   Famille `transport` dans le scoring. 16 tests unitaires. 42 détecteurs au total.
+- **D-54 — 11/11/2026 — Objectif de la v1 du moteur, validé par Ethan ; plan unique `docs/PLAN.md`.**
+  NOEZIA v1 = un moteur de récolte généraliste qui, lancé depuis un serveur Linux, mène un long travail
+  sur un site protégé sans se faire bannir, et rapporte des données complètes et exactes. Il se prouve
+  par des mesures sur nos propres cibles (site vitrine factice, tor-i) : récolte, discrétion, endurance
+  « une identité » (un seul compte connecté, suivi régulier), endurance « plusieurs identités » (volume),
+  livrable. Quatre paliers. Pourquoi : sans définition de « fini », la cible a changé trois fois en trois
+  jours et le travail du 11/11 (D-47 à D-53) n'a été mesuré par aucune campagne. Les seuils chiffrés sont
+  des choix de Claude, à recaler après les premières mesures. Le périmètre (D-30) est inchangé : l'usage
+  sur des sites tiers reste une question ouverte pour Ethan.

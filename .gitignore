@@ -7,7 +7,13 @@ __pycache__/
 .ruff_cache/
 *.sqlite3*
 *.db
+*.db-wal
+*.db-shm
 downloaded_files/
+.DS_Store
+
+# Mémoire générée chaque soir (ne pas versionner)
+notes/ia/archives/etat-*
 
 # Front du laboratoire (Vite + React)
 frontend/node_modules/

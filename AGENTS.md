@@ -128,6 +128,7 @@ docker/              # Coraza WAF + Nginx (Docker Compose)
 docs/                # Architecture, décisions, recherche
 moteurs_isoles/      # pyproject.toml par environnement isolé
 ```
+**Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, étapes, règles) — à lire avant de coder.
 Décisions : `docs/DECISIONS.md`. Architecture : `docs/architecture.md`.
 Interface : front séparé dans `frontend/` (parcours Configurer → Lancer → Suivre → Comprendre → Comparer),
 servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité via `/api`.

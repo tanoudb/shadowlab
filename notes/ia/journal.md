@@ -2302,3 +2302,62 @@ Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'An
 **Décisions** : D-52 (17 règles TLS v2)
 
 **Reste** : HTTP/2 fingerprinting (frontal ne supporte que h1.1), base de JA3/JA4 connus pour classification (Chrome/Firefox/bibliothèques), test en campagne Arena réelle
+
+## 2026-11-11 (soir) — Claude (Fable 5.2) — Point d'étape vérifié et plan unique
+
+**Fait :** aucun code touché. État du projet vérifié dans git, le code et la base (pas repris du journal),
+puis plan unique écrit.
+- 405 tests rapides verts, lint propre.
+- Base `outputs/shadowlab.sqlite3` : 25 623 passages, tous `truth = automatise` (0 session humaine).
+  Dernière campagne avec des passages : n° 86 (10/11, 22h55). Campagnes 87 à 89 interrompues, 0 passage.
+  Donc D-47 à D-53 (11/11) ne sont mesurés par aucune campagne.
+- Campagnes 84 et 85 : NOEZIA classé « automatisé » (23/24, 11/12) mais 0 blocage, toutes les extractions
+  réussissent. Campagne 86 : 19 passages sur 24 en erreur technique « Arena injoignable » ; le « 23/23
+  détectés » noté plus haut dans ce journal ne se retrouve pas tel quel en base → à refaire.
+- Le détecteur `cdp` porte presque toute la détection (38 passages). Ses signaux `debugger_instant` et
+  `no_first_input` se déclenchent très probablement aussi chez un humain (lecture du code, non mesuré).
+
+**Fichiers :** `docs/PLAN.md` (nouveau), `notes/ia/contexte.md` (réécrit, il datait du 03/11),
+`notes/ia/questions-ouvertes.md`, `AGENTS.md` (une ligne de renvoi vers le plan).
+
+**Décisions :** aucune numérotée. Proposition en attente d'Ethan : objectif v1 en trois critères
+(O1 Arena calibrée, O2 Cloudflare réel sur domaine à nous, O3 livrable sur `master`).
+
+**Reste :** étapes 0 et 1 du plan (commit des fichiers non suivis, push, campagne de référence), puis les
+10 sessions humaines d'Ethan. Rien n'est commité ni poussé.
+
+## 2026-11-11 (soir, suite) — Claude (Fable 5.2) — Objectif v1 validé (D-54) et plan en quatre paliers
+
+**Fait :** aucun code touché. Objectif défini avec Ethan, question par question, puis validé :
+« un moteur de récolte généraliste qui, lancé depuis un serveur Linux, mène un long travail sur un site
+protégé sans se faire bannir, et rapporte des données complètes et exactes ». Quatre sous-agents en lecture
+seule ont établi ce qui existe et ce qui manque (mesure, Arena, moteur, sécurité d'une mise en ligne) ;
+leurs constats sont dans `notes/ia/analyse-paliers-2026-11-11.md`, les plus lourds recoupés dans le code
+et la base. `docs/PLAN.md` réécrit en quatre paliers : (1) récolte et discrétion sur le poste, (2) une
+identité qui dure, (3) serveur et Cloudflare réel, (4) plusieurs identités.
+
+**Constats recoupés :**
+- Campagne 86 : Docker est tombé pendant la campagne (19 pannes sur 24). Chiffre réel : 5 passages valides,
+  5 classés automatisés, 0 bloqué. Le « 23/23 détectés » noté plus haut est faux.
+- `taux_detection` compte les pannes au numérateur mais pas au dénominateur (`analytics.py:452-474`).
+- La base réelle est au schéma 7 : la corrélation entre sessions (D-48) n'a jamais tourné, et son calcul
+  d'empreinte lit une clé `proprietes` que `observateur.js` n'envoie pas.
+- `engines/noezia/pool.py` est du code mort (appelle une classe et deux méthodes inexistantes). Signalé,
+  non supprimé.
+- Le labo ne doit pas être mis en ligne tel quel : l'API deviendrait joignable et lance des navigateurs
+  vers n'importe quelle adresse. Il faut une application publique réduite (`docs/PLAN.md` § 5).
+
+**Fichiers :** `docs/PLAN.md` (réécrit), `docs/DECISIONS.md` (D-54), `notes/ia/analyse-paliers-2026-11-11.md`
+(nouveau), `notes/ia/contexte.md`, `notes/ia/questions-ouvertes.md`.
+
+**Décisions :** D-54 — objectif de la v1 et plan unique. Seuils chiffrés = choix de Claude, à recaler.
+
+**Reste :** étape 1.1 (commit et push, sur accord d'Ethan), puis 1.2 et 1.3. Attendu d'Ethan : voir
+`docs/PLAN.md` § 7. Rien n'est commité ni poussé.
+
+**Ajout (même soir) :** le plan a été relu par un sous-agent neuf, sans le contexte de la conversation. Six
+questions, tranchées dans `docs/PLAN.md` comme choix de Claude : façon de compter les seuils (§ 1 « Comment
+on compte »), règle du défi Cloudflare (un défi avec action = échec, le moteur ne clique pas), sessions
+humaines rejouées contre chaque niveau au lieu de passer par l'Arena, profil d'Arena « endurance » et porte
+d'entrée attendue pour la sentinelle, Arena sur le serveur lui-même au palier 3, longues exécutions sur une
+copie figée du code. Reste à Ethan : valider le plan, l'hébergement du site vitrine.

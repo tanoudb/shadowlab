@@ -7,12 +7,27 @@ type: note
 # Contexte de noezia-shadowlab, en une lecture
 
 ## Ce que c'est
-- Laboratoire local de R&D NOEZIA : compare Playwright, Selenium, Scrapling (client HTTP) et httpx face à
-  des détecteurs anti-bot (BotD + règles HTTP, JS, cohérence) sur un site de test servi par la même machine.
-- Demandé par Ethan le 03/11/2026 (cahier des charges « NOEZIA ShadowLab ») ; périmètre local strict, sans
-  contournement de CAPTCHA ni modification d'empreinte.
+- Le produit visé est le **moteur de scraping NOEZIA**. ShadowLab est le laboratoire qui le mesure :
+  15 moteurs comparés face à une Arena anti-bot locale (7 niveaux, 42 détecteurs), campagnes reproductibles.
+- Périmètre : voir `AGENTS.md` § Périmètre (D-30). Aucun solveur de CAPTCHA réel, aucun résultat inventé.
 
-## État au 2026-11-03
-- MVP complet et testé (46 tests) : voir `AGENTS.md` § État et `notes/ia/journal.md`.
-- À faire par Ethan : quelques sessions humaines sur http://127.0.0.1:8770/manuel (faux positifs).
-- Phases restantes : Docker Compose, TLS (mitmproxy), concurrence, moteurs de la phase 6.
+## Objectif (validé par Ethan le 2026-11-11, D-54)
+Un moteur de récolte généraliste qui, lancé depuis un serveur Linux, mène un long travail sur un site
+protégé sans se faire bannir, et rapporte des données complètes et exactes. Il se prouve par des mesures
+sur nos propres cibles (site vitrine factice, tor-i).
+
+## État au 2026-11-11
+- **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, quatre paliers, règles). Le lire d'abord.
+  Constats détaillés avec fichiers et lignes : `notes/ia/analyse-paliers-2026-11-11.md`.
+- Le socle est sain : 405 tests rapides verts, lint propre.
+- Les chiffres de l'Arena durcie ne sont pas fiables : aucune session humaine (0 sur 25 623 passages), le
+  moteur est classé « automatisé » sans jamais être bloqué, le taux de détection est mal calculé quand il
+  y a des pannes, et le travail du 11/11 (D-47 à D-53) n'a été mesuré par aucune campagne.
+- Manquent pour l'objectif : un site vitrine à contenu connu, le bannissement dans l'Arena, une identité
+  persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur Linux, un test contre
+  Cloudflare.
+- Branche `niveau-authentifie-perimetre` : 33 commits non poussés, pas de PR, rien sur `master`.
+
+## Prochaine action
+- Palier 1, étape 1.1 (commit et push, sur accord d'Ethan), puis 1.2 (mesure fiable) et 1.3 (campagne de
+  référence). Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7.
