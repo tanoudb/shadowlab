@@ -459,6 +459,10 @@ def statistiques(cx: sqlite3.Connection, experiment_id: int) -> dict[str, Any]:
             dets = detections.get(p["id"], {})
             for nom, classement in dets.items():
                 par_detecteur[nom].append(classement)
+            # Un passage en panne n'est pas évaluable : il sort des taux rapportés aux évaluables,
+            # sinon le numérateur dépasse le dénominateur (campagne 86 : 22 détectés / 5 évaluables).
+            if (p["issue"] if a_issue and p["issue"] else p["status"]) == "erreur_technique":
+                continue
             if any(c == "automatise" for c in dets.values()):
                 detectes += 1
             drp = db.lj(p["drapeaux"]) if p["drapeaux"] else None

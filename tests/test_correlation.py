@@ -7,18 +7,18 @@ from shadowlab.correlation import correlation_session, enregistrer_hash, hash_se
 from shadowlab.detection import Observations
 
 
-def _empreinte(ua: str = "Chrome/131", hwc: int = 8, canvas: str = "abc123") -> dict:
+def _empreinte(ua: str = "Chrome/131", hwc: int = 8, canvas: str = "a1b2c3d4e5f60718", largeur: int = 1920) -> dict:
+    """Même forme que `collecter()` dans `site/static/observateur.js` : écran et canvas au premier niveau."""
     return {
         "navigateur": {
             "userAgent": ua,
             "platform": "MacIntel",
             "hardwareConcurrency": hwc,
             "languages": ["fr"],
+            "userAgentData": None,
         },
-        "proprietes": {
-            "ecran": {"width": 1920, "height": 1080, "devicePixelRatio": 2},
-            "canvas": canvas,
-        },
+        "ecran": {"width": largeur, "height": 1080, "devicePixelRatio": 2},
+        "canvas": canvas,
     }
 
 
@@ -36,6 +36,28 @@ def test_hash_session_stable():
     assert h1 == h2
     assert "profil_complet" in h1
     assert "canvas" in h1
+
+
+def test_hash_profil_change_avec_l_ecran():
+    """L'écran fait partie du profil : deux écrans différents donnent deux profils différents."""
+    h1 = hash_session(_empreinte(largeur=1920))
+    h2 = hash_session(_empreinte(largeur=1440))
+    assert h1["profil_complet"] != h2["profil_complet"]
+
+
+def test_hash_canvas_change_avec_le_canvas():
+    h1 = hash_session(_empreinte(canvas="a1b2c3d4e5f60718"))
+    h2 = hash_session(_empreinte(canvas="0011223344556677"))
+    assert h1["canvas"] != h2["canvas"]
+
+
+def test_canvas_en_erreur_ne_produit_pas_de_hash():
+    """`empreinteCanvas()` renvoie « erreur: … » quand le canvas échoue : ce n'est pas une empreinte.
+
+    Sinon tous les navigateurs qui bloquent le canvas partageraient le même hash et seraient
+    pris pour une seule empreinte recyclée.
+    """
+    assert "canvas" not in hash_session(_empreinte(canvas="erreur: SecurityError"))
 
 
 def test_hash_session_change_avec_ua():

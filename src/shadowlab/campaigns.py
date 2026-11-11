@@ -43,6 +43,7 @@ from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre
 from .engines.base import FonctionIndisponible, RefusProtection
+from .issues import CAUSE_PANNE_ARENA
 from .mesures import PIDS_EXCLUS, Echantillonneur
 from .perimetre import verifier_url
 from .scenarios import SCENARIOS
@@ -50,6 +51,7 @@ from .scenarios import SCENARIOS
 journal = logging.getLogger("shadowlab.campagne")
 
 CODE_INTERROMPU = 3
+PANNES_ARENA_MAX = 3  # pannes d'Arena de suite avant d'arrêter la campagne
 
 METRIQUES = {
     "detection_rate",
@@ -344,6 +346,24 @@ def _controler_arena(reglages: Reglages, experience: Experience) -> None:
         raise pile.ArenaIndisponible("Arena injoignable : lancez `uv run shadowlab arena demarrer`")
 
 
+def _arena_en_panne(cx, experiment_id: int) -> bool:
+    """Vrai si les derniers passages sous Arena de la campagne sont tous des pannes d'Arena.
+
+    L'Arena n'est contrôlée qu'au lancement : si Docker s'arrête ensuite, chaque passage est
+    enregistré en panne jusqu'à la fin (campagne 86 : 19 passages sur 24). Les passages du
+    niveau de base ne traversent pas l'Arena et ne disent rien de son état.
+    """
+    causes = [
+        ligne["cause"]
+        for ligne in cx.execute(
+            "SELECT cause FROM runs WHERE experiment_id = ? AND protection != ? AND status != 'en_cours'"
+            " ORDER BY id DESC LIMIT ?",
+            (experiment_id, BASELINE, PANNES_ARENA_MAX),
+        )
+    ]
+    return len(causes) == PANNES_ARENA_MAX and all(cause == CAUSE_PANNE_ARENA for cause in causes)
+
+
 def _degrader_si_moteur_absent(cx, experiment_id: int, statut: str) -> str:
     """Rétrograde « termine » en « termine_incomplet » si un moteur n'a pas démarré.
 
@@ -516,6 +536,16 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                         dossier_artefacts,
                         engine_version=db.j(versions),
                     )
+                    if protection != BASELINE and _arena_en_panne(cx, experiment_id):
+                        journal.error(
+                            "Arena injoignable sur %d passages de suite : campagne arrêtée. "
+                            "Relancez l'Arena puis `shadowlab reprendre %d`.",
+                            PANNES_ARENA_MAX,
+                            experiment_id,
+                        )
+                        arret.parent.mkdir(parents=True, exist_ok=True)
+                        arret.touch()  # les autres unités s'arrêtent après leur passage en cours
+                        return "interrompu"
         except (KeyboardInterrupt, MemoryError) as erreur:
             journal.error("arrêt : %s", erreur)
             return "interrompu"

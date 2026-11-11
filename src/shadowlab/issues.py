@@ -21,6 +21,7 @@ ECHEC = "echec_fonctionnel"
 INDETERMINE = "indetermine"
 ISSUES = (REUSSIE, BLOQUE, CHALLENGE_NON_VALIDE, ERREUR, ECHEC, INDETERMINE)
 COUCHES_CHALLENGE = ("captcha", "turnstile", "recaptcha", "defi-js")
+CAUSE_PANNE_ARENA = "arena : chaîne de protection injoignable"
 
 
 @dataclass
@@ -86,7 +87,7 @@ def evaluer(
     if success:
         return IssuePassage(REUSSIE, None, drapeaux)
     if panne_arena:
-        return IssuePassage(ERREUR, "arena : chaîne de protection injoignable", drapeaux)
+        return IssuePassage(ERREUR, CAUSE_PANNE_ARENA, drapeaux)
     if blocages:
         return IssuePassage(BLOQUE, _description_blocage(blocages[0]), drapeaux)
     for couche in COUCHES_CHALLENGE:

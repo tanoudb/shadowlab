@@ -16,10 +16,13 @@ from . import database as db
 
 
 def hash_session(empreinte_js: dict) -> dict[str, str]:
-    """Calcule les hash de corrélation à partir de l'empreinte JS collectée."""
-    nav = empreinte_js.get("navigateur", {})
-    props = empreinte_js.get("proprietes", {})
-    ecran = props.get("ecran", nav.get("ecran", {}))
+    """Calcule les hash de corrélation à partir de l'empreinte JS collectée.
+
+    La forme lue est celle de `collecter()` dans `site/static/observateur.js` : `navigateur`,
+    `ecran` et `canvas` sont au premier niveau.
+    """
+    nav = empreinte_js.get("navigateur") or {}
+    ecran = empreinte_js.get("ecran") or {}
 
     profil_data = json.dumps(
         {
@@ -36,11 +39,12 @@ def hash_session(empreinte_js: dict) -> dict[str, str]:
         sort_keys=True,
     )
 
-    canvas = str(props.get("canvas", nav.get("canvas", "")))
+    canvas = str(empreinte_js.get("canvas") or "")
 
     result: dict[str, str] = {}
     result["profil_complet"] = hashlib.sha256(profil_data.encode()).hexdigest()[:16]
-    if canvas:
+    # Un canvas en échec renvoie « erreur: … » : ce texte commun n'est pas une empreinte.
+    if canvas and not canvas.startswith("erreur"):
         result["canvas"] = hashlib.sha256(canvas.encode()).hexdigest()[:16]
     return result
 

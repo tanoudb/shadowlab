@@ -736,6 +736,34 @@ class TestMetriquesSeparees:
         # Passages avec détection automatisé : 2, 3, 5, 6 → 4
         assert m["taux_detection"]["taux"] == round(4 / 5, 4)
 
+    def test_taux_detection_ignore_les_pannes(self, tmp_path):
+        """Un passage en panne ne compte ni au numérateur ni au dénominateur du taux de détection.
+
+        Campagne 86 : l'Arena est tombée, les passages en panne ont gardé un verdict « automatisé »
+        artificiel, et le rapport affichait 22 détectés pour 5 évaluables (440 %).
+        """
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        cx.execute(
+            "INSERT INTO detections (run_id, detector_name, detector_version, classification, confidence, signals)"
+            " VALUES (4, 'botd', '2.0.0', 'automatise', 0.8, '[]')"
+        )
+        m = statistiques(cx, 1)["moteurs"][0]
+        # Le passage 4 est l'erreur technique : toujours 4 détectés sur 5 évaluables.
+        assert m["taux_detection"]["taux"] == round(4 / 5, 4)
+
+    def test_taux_challenge_ignore_les_pannes(self, tmp_path):
+        """Un challenge déclenché sur un passage en panne ne gonfle pas le taux de challenge."""
+        import json
+
+        from shadowlab.analytics import statistiques
+
+        cx = _exp_metriques(tmp_path)
+        cx.execute("UPDATE runs SET drapeaux = ? WHERE id = 4", (json.dumps({"challenge_declenche": True}),))
+        m = statistiques(cx, 1)["moteurs"][0]
+        assert m["taux_challenge"]["taux"] == round(2 / 5, 4)
+
     def test_taux_challenge_correct(self, tmp_path):
         """taux_challenge = passages avec challenge déclenché / évaluables."""
         from shadowlab.analytics import statistiques
