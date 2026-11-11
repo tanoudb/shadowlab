@@ -267,3 +267,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-51 — 11/11/2026 — 8 profils GPU Linux (au lieu de 3).** Intel UHD 630/770/Xe, NVIDIA RTX 3060/4070
   + Tesla T4 (serveur cloud), AMD Radeon RX 6700 XT + Pro W6800. Couvre les configurations serveur et
   desktop les plus courantes.
+- **D-52 — 11/11/2026 — Détecteur TLS v2 : 17 règles d'analyse du ClientHello.** Le v1 avait 4 règles
+  structurelles (GREASE, ALPN h2). Le v2 ajoute : comptage chiffrements/extensions, suites TLS 1.3
+  (présence + position en tête), extensions Chrome-spécifiques (compress_certificate, ALPS),
+  extensions Firefox (record_size_limit), confusion cross-navigateur, groupes elliptiques (x25519,
+  ffdhe2048, ordre), algorithmes de signature, supported_versions, version TLS max, et détection
+  d'empreinte OpenSSL (AES-256-GCM en tête). 28 tests unitaires dédiés.

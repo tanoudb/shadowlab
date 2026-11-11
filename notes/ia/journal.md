@@ -2256,3 +2256,20 @@ Ergonomie parser (find_all par ressemblance, chaînage), CLI, doc, brancher l'An
 **Fichiers** : `src/shadowlab/engines/noezia/furtivite/navigateur.js`, `environnement.js`, `headless.js`, `docs/DECISIONS.md`
 
 **Reste** : investiguer le signal `proxy_dans_stack` (partagé avec Playwright), tester niveaux 05-06, validation externe complète.
+
+## 11/11/2026 — Détecteur TLS v2 (D-52)
+
+**Objectif** : remplacer les 4 règles TLS basiques par une analyse approfondie du ClientHello.
+
+**Fait** :
+- Réécriture complète de `DetecteurTls` (version 1 → 2) dans `detection.py`
+- 17 règles : GREASE/navigateur, ALPN h2, comptage chiffrements/extensions, suites TLS 1.3 (présence + ordre), extensions Chrome (compress_certificate, ALPS), extensions Firefox (record_size_limit), confusion cross-navigateur, groupes elliptiques (x25519, ffdhe2048, ordre), signatures, supported_versions, version TLS max, empreinte OpenSSL
+- Poids calibrés (0.2-0.7) pour un cumul progressif vers le seuil « automatisé » (1.0)
+- 28 tests unitaires dédiés couvrant chaque règle (389 tests au total)
+- Audit préalable du frontal TLS (`tls.py`, `frontal.py`) : les données collectées (ciphers, extensions, groupes, signatures, versions, GREASE, ALPN) sont riches et bien structurées — le problème était uniquement côté détection
+
+**Fichiers** : `src/shadowlab/detection.py`, `tests/test_detection.py`, `docs/DECISIONS.md`, `AGENTS.md`
+
+**Décisions** : D-52 (17 règles TLS v2)
+
+**Reste** : HTTP/2 fingerprinting (frontal ne supporte que h1.1), base de JA3/JA4 connus pour classification (Chrome/Firefox/bibliothèques), test en campagne Arena réelle
