@@ -454,3 +454,301 @@ def test_deep_proxy_cumul_automatise():
         js=[_empreinte_deep_proxy(toString_natif=False, error_has_proxy=True, navigator_proto=False)],
     )
     assert verdicts(obs)["deep-proxy"] == "automatise"
+
+
+# --- Détecteur TLS v2 ---
+
+UA_FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+UA_EDGE = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0"
+)
+UA_SAFARI = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+)
+
+_CHIFFREMENTS_CHROME = [
+    "1301",
+    "1302",
+    "1303",
+    "c02b",
+    "c02f",
+    "c02c",
+    "c030",
+    "cca9",
+    "cca8",
+    "c013",
+    "c014",
+    "009c",
+    "009d",
+    "002f",
+    "0035",
+]
+_EXTENSIONS_CHROME = [
+    "0000",
+    "0017",
+    "ff01",
+    "000a",
+    "000b",
+    "0023",
+    "0010",
+    "0005",
+    "000d",
+    "0012",
+    "002b",
+    "002d",
+    "0033",
+    "001b",
+    "4469",
+]
+_GROUPES_CHROME = ["001d", "0017", "0018"]
+_SIGNATURES_CHROME = ["0403", "0503", "0603", "0807", "0808", "0809", "0401", "0501", "0601"]
+
+
+def _tls_chrome(**surcharges):
+    base = {
+        "ja3": "placeholder",
+        "ja3_hash": "00000000000000000000000000000000",
+        "ja4": "t13d150900_placeholder",
+        "version_legacy": 771,
+        "versions": [772, 771],
+        "sni": "127.0.0.1",
+        "alpn": ["h2", "http/1.1"],
+        "grease": True,
+        "nb_chiffrements": 15,
+        "nb_extensions": 15,
+        "chiffrements": list(_CHIFFREMENTS_CHROME),
+        "extensions": list(_EXTENSIONS_CHROME),
+        "groupes": list(_GROUPES_CHROME),
+        "signatures": list(_SIGNATURES_CHROME),
+    }
+    base.update(surcharges)
+    return base
+
+
+def _tls_firefox(**surcharges):
+    base = _tls_chrome(
+        grease=False,
+        extensions=[
+            "0000",
+            "0017",
+            "ff01",
+            "000a",
+            "000b",
+            "0023",
+            "0010",
+            "0005",
+            "000d",
+            "0012",
+            "002b",
+            "002d",
+            "0033",
+            "001c",
+            "0022",
+        ],
+        groupes=["001d", "0017", "0100"],
+        nb_extensions=15,
+        chiffrements=[
+            "1301",
+            "1302",
+            "1303",
+            "c02b",
+            "c02f",
+            "c02c",
+            "c030",
+            "cca9",
+            "cca8",
+            "c009",
+            "c00a",
+            "c013",
+            "c014",
+            "009c",
+            "009d",
+            "002f",
+            "0035",
+        ],
+        nb_chiffrements=17,
+    )
+    base.update(surcharges)
+    return base
+
+
+def _tls_verdict(ua, tls_data):
+    obs = Observations(
+        http=[requete(entetes_navigateur(ua=ua))],
+        js=[empreinte()],
+        tls=tls_data,
+    )
+    return next(c for c in classer(obs) if c.detector_name == "tls")
+
+
+def _tls_signaux(ua, tls_data):
+    return {s.code for s in _tls_verdict(ua, tls_data).signals}
+
+
+def test_tls_chrome_authentique_humain():
+    c = _tls_verdict(UA_CHROME, _tls_chrome())
+    assert c.classification == "humain"
+
+
+def test_tls_firefox_authentique_humain():
+    c = _tls_verdict(UA_FIREFOX, _tls_firefox())
+    assert c.classification == "humain"
+
+
+def test_tls_chrome_sans_grease():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(grease=False))
+    assert "chrome_sans_grease" in s
+
+
+def test_tls_edge_sans_grease():
+    s = _tls_signaux(UA_EDGE, _tls_chrome(grease=False))
+    assert "chrome_sans_grease" in s
+
+
+def test_tls_firefox_avec_grease():
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(grease=True))
+    assert "firefox_avec_grease" in s
+
+
+def test_tls_navigateur_sans_h2():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(alpn=["http/1.1"]))
+    assert "navigateur_sans_h2" in s
+
+
+def test_tls_pile_non_navigateur():
+    tls = _tls_chrome(grease=False, alpn=["http/1.1"])
+    obs = Observations(
+        http=[requete([["host", "x"], ["user-agent", "python-httpx/0.28.1"], ["accept", "*/*"]])],
+        js=[],
+        tls=tls,
+    )
+    c = next(c for c in classer(obs) if c.detector_name == "tls")
+    assert "pile_non_navigateur" in {s.code for s in c.signals}
+
+
+def test_tls_peu_de_chiffrements():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(chiffrements=["1301", "c02b"], nb_chiffrements=2))
+    assert "peu_de_chiffrements" in s
+
+
+def test_tls_chiffrements_insuffisants_navigateur():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(chiffrements=_CHIFFREMENTS_CHROME[:8], nb_chiffrements=8))
+    assert "chiffrements_insuffisants" in s
+
+
+def test_tls_peu_d_extensions():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=["0000", "000a"], nb_extensions=2))
+    assert "peu_d_extensions" in s
+
+
+def test_tls_sans_tls13_suites():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(chiffrements=["c02b", "c02f", "c02c", "c030"] * 4, nb_chiffrements=16))
+    assert "sans_tls13_suites" in s
+
+
+def test_tls_tls13_pas_en_tete():
+    ciphers = ["c02b"] + _CHIFFREMENTS_CHROME
+    s = _tls_signaux(UA_CHROME, _tls_chrome(chiffrements=ciphers, nb_chiffrements=len(ciphers)))
+    assert "tls13_pas_en_tete" in s
+
+
+def test_tls_chrome_sans_compress_certificate():
+    ext_sans_cc = [e for e in _EXTENSIONS_CHROME if e != "001b"]
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=ext_sans_cc, nb_extensions=len(ext_sans_cc)))
+    assert "chrome_ext_manquantes" in s
+
+
+def test_tls_chrome_sans_alps():
+    ext_sans_alps = [e for e in _EXTENSIONS_CHROME if e != "4469"]
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=ext_sans_alps, nb_extensions=len(ext_sans_alps)))
+    assert "chrome_sans_alps" in s
+
+
+def test_tls_firefox_sans_record_size():
+    ext_sans_rs = [e for e in _tls_firefox()["extensions"] if e != "001c"]
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(extensions=ext_sans_rs, nb_extensions=len(ext_sans_rs)))
+    assert "firefox_sans_record_size" in s
+
+
+def test_tls_firefox_avec_compress_certificate():
+    exts = _tls_firefox()["extensions"] + ["001b"]
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(extensions=exts, nb_extensions=len(exts)))
+    assert "firefox_avec_compress_cert" in s
+
+
+def test_tls_firefox_ext_chrome():
+    exts = _tls_firefox()["extensions"] + ["001b", "4469"]
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(extensions=exts, nb_extensions=len(exts)))
+    assert "firefox_ext_chrome" in s
+
+
+def test_tls_sans_x25519():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(groupes=["0017", "0018"]))
+    assert "sans_x25519" in s
+
+
+def test_tls_chrome_avec_ffdhe():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(groupes=["001d", "0017", "0100"]))
+    assert "chrome_avec_ffdhe" in s
+
+
+def test_tls_firefox_sans_ffdhe():
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(groupes=["001d", "0017"]))
+    assert "firefox_sans_ffdhe" in s
+
+
+def test_tls_groupes_desordre():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(groupes=["0017", "001d", "0018"]))
+    assert "groupes_desordre" in s
+
+
+def test_tls_extensions_std_manquantes():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=["0000", "001b", "4469"], nb_extensions=3))
+    assert "extensions_std_manquantes" in s
+
+
+def test_tls_sans_supported_versions():
+    ext_sans_sv = [e for e in _EXTENSIONS_CHROME if e != "002b"]
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=ext_sans_sv, nb_extensions=len(ext_sans_sv)))
+    assert "sans_supported_versions" in s
+
+
+def test_tls_sans_signatures():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(signatures=[]))
+    assert "sans_signatures" in s
+
+
+def test_tls_peu_de_signatures():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(signatures=["0403", "0503"]))
+    assert "peu_de_signatures" in s
+
+
+def test_tls_pas_tls13_version():
+    s = _tls_signaux(UA_CHROME, _tls_chrome(versions=[771]))
+    assert "pas_tls13_version" in s
+
+
+def test_tls_pile_openssl():
+    tls = _tls_chrome(grease=False, alpn=["http/1.1"], chiffrements=["1302", "1301", "c02f", "c030"] * 3)
+    obs = Observations(
+        http=[requete([["host", "x"], ["user-agent", "python-httpx/0.28.1"], ["accept", "*/*"]])],
+        js=[],
+        tls=tls,
+    )
+    c = next(c for c in classer(obs) if c.detector_name == "tls")
+    assert "pile_openssl" in {s.code for s in c.signals}
+
+
+def test_tls_cumul_signaux_automatise():
+    """Plusieurs signaux TLS faibles doivent cumuler en « automatisé »."""
+    tls = _tls_chrome(
+        grease=False,
+        alpn=["http/1.1"],
+        chiffrements=["c02b", "c02f"],
+        nb_chiffrements=2,
+    )
+    c = _tls_verdict(UA_CHROME, tls)
+    assert c.classification == "automatise"
+    assert len(c.signals) >= 3

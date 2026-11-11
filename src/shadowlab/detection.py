@@ -250,10 +250,25 @@ class DetecteurCoherence:
 
 
 class DetecteurTls:
-    """Cohérence entre le ClientHello TLS et le navigateur annoncé (règles de structure, sans liste d'empreintes)."""
+    """Analyse approfondie du ClientHello TLS : profils navigateur, cohérence UA/TLS,
+    détection de piles de bibliothèques, anomalies structurelles.
+
+    V2 : 17 règles couvrant GREASE, ALPN, chiffrements (compte, ordre, TLS 1.3),
+    extensions (Chrome/Firefox-spécifiques, comptage), groupes (courbes, ordre),
+    signatures, version TLS, et détection OpenSSL.
+    """
 
     name = "tls"
-    version = "1"
+    version = "2"
+
+    _TLS13_SUITES = frozenset({"1301", "1302", "1303"})
+    _CIPHERS_NAVIGATEUR = frozenset({"1301", "1302", "1303", "c02b", "c02f"})
+    _EXT_NAVIGATEUR = frozenset({"0000", "000a", "000b", "000d", "002b", "0033"})
+    _EXT_CHROME_OBLIGATOIRES = frozenset({"001b"})
+    _EXT_CHROME_SPECIFIQUES = frozenset({"4469", "001b"})
+    _GRP_X25519 = "001d"
+    _GRP_P256 = "0017"
+    _GRP_FFDHE = "0100"
 
     def classer(self, obs: Observations) -> Classement:
         t = obs.tls
@@ -261,24 +276,287 @@ class DetecteurTls:
             return _indetermine(self.name, self.version, "sans_tls", "session hors Arena : TLS non observé")
         documents = obs.documents
         ua = _entetes(documents[0]).get("user-agent", "").lower() if documents else ""
-        details = t
-        grease = details.get("grease")
-        alpn = details.get("alpn") or []
-        chrome = "chrome/" in ua
+
+        grease = t.get("grease")
+        alpn = t.get("alpn") or []
+        chiffrements = t.get("chiffrements", [])
+        extensions = t.get("extensions", [])
+        groupes = t.get("groupes", [])
+        signatures = t.get("signatures", [])
+        versions = t.get("versions", [])
+        nb_chiffr = t.get("nb_chiffrements", len(chiffrements))
+        nb_ext = t.get("nb_extensions", len(extensions))
+
+        chrome = "chrome/" in ua and "edg/" not in ua
+        edge = "edg/" in ua
         firefox = "firefox/" in ua
+        safari = "safari/" in ua and "chrome/" not in ua
+        navigateur = chrome or edge or firefox or safari
+
+        ext_set = frozenset(extensions)
+        cipher_set = frozenset(chiffrements)
+        groupe_set = frozenset(groupes)
+
         signaux: list[Signal] = []
-        if chrome and not grease:
+
+        # ── GREASE ──
+        if (chrome or edge) and not grease:
             signaux.append(
-                Signal("chrome_sans_grease", "Chrome annoncé, mais aucune valeur GREASE dans le ClientHello", 1.0)
+                Signal(
+                    "chrome_sans_grease",
+                    "Chrome/Edge annoncé sans valeur GREASE dans le ClientHello",
+                    0.7,
+                )
             )
         if firefox and grease:
             signaux.append(
-                Signal("firefox_avec_grease", "Firefox annoncé, mais des valeurs GREASE que Firefox n'envoie pas", 1.0)
+                Signal(
+                    "firefox_avec_grease",
+                    "Firefox annoncé avec valeurs GREASE (Firefox n'en envoie pas)",
+                    0.7,
+                )
             )
-        if (chrome or firefox) and "h2" not in alpn:
-            signaux.append(Signal("navigateur_sans_h2", f"navigateur annoncé sans HTTP/2 dans l'ALPN : {alpn}", 1.0))
-        if not grease and "h2" not in alpn and not (chrome or firefox):
-            signaux.append(Signal("pile_non_navigateur", "ni GREASE ni HTTP/2 proposé : pile TLS de bibliothèque", 1.0))
+
+        # ── ALPN (HTTP/2) ──
+        if navigateur and "h2" not in alpn:
+            signaux.append(
+                Signal(
+                    "navigateur_sans_h2",
+                    f"navigateur annoncé sans HTTP/2 dans l'ALPN : {alpn}",
+                    0.6,
+                )
+            )
+        if not navigateur and not grease and "h2" not in alpn:
+            signaux.append(
+                Signal(
+                    "pile_non_navigateur",
+                    "ni GREASE ni HTTP/2 : pile TLS de bibliothèque",
+                    0.5,
+                )
+            )
+
+        # ── Comptage de chiffrements ──
+        if nb_chiffr < 5:
+            signaux.append(
+                Signal(
+                    "peu_de_chiffrements",
+                    f"seulement {nb_chiffr} chiffrements (navigateur moderne : 15+)",
+                    0.5,
+                )
+            )
+        elif navigateur and nb_chiffr < 10:
+            signaux.append(
+                Signal(
+                    "chiffrements_insuffisants",
+                    f"{nb_chiffr} chiffrements pour un navigateur (attendu : 15+)",
+                    0.4,
+                )
+            )
+
+        # ── Comptage d'extensions ──
+        if nb_ext < 5:
+            signaux.append(
+                Signal(
+                    "peu_d_extensions",
+                    f"seulement {nb_ext} extensions TLS (navigateur : 13+)",
+                    0.5,
+                )
+            )
+        elif navigateur and nb_ext < 10:
+            signaux.append(
+                Signal(
+                    "extensions_insuffisantes",
+                    f"{nb_ext} extensions pour un navigateur (attendu : 13+)",
+                    0.4,
+                )
+            )
+
+        # ── Suites TLS 1.3 ──
+        tls13 = cipher_set & self._TLS13_SUITES
+        if navigateur and not tls13:
+            signaux.append(
+                Signal(
+                    "sans_tls13_suites",
+                    "navigateur annoncé sans suite TLS 1.3",
+                    0.6,
+                )
+            )
+        elif tls13 and chiffrements and chiffrements[0] not in self._TLS13_SUITES and navigateur:
+            signaux.append(
+                Signal(
+                    "tls13_pas_en_tete",
+                    f"première suite = {chiffrements[0]}, pas TLS 1.3 (navigateurs : TLS 1.3 en tête)",
+                    0.4,
+                )
+            )
+
+        # ── Extensions Chrome obligatoires ──
+        if chrome or edge:
+            manquantes = self._EXT_CHROME_OBLIGATOIRES - ext_set
+            if manquantes:
+                signaux.append(
+                    Signal(
+                        "chrome_ext_manquantes",
+                        f"Chrome/Edge sans compress_certificate ({', '.join(sorted(manquantes))})",
+                        0.5,
+                    )
+                )
+            if "4469" not in ext_set:
+                signaux.append(
+                    Signal(
+                        "chrome_sans_alps",
+                        "Chrome annoncé sans extension ALPS (application_settings)",
+                        0.3,
+                    )
+                )
+
+        # ── Extensions Firefox ──
+        if firefox:
+            if "001c" not in ext_set:
+                signaux.append(
+                    Signal(
+                        "firefox_sans_record_size",
+                        "Firefox annoncé sans record_size_limit",
+                        0.3,
+                    )
+                )
+            if "001b" in ext_set:
+                signaux.append(
+                    Signal(
+                        "firefox_avec_compress_cert",
+                        "Firefox annoncé avec compress_certificate (extension Chrome, pas Firefox)",
+                        0.5,
+                    )
+                )
+
+        # ── Confusion cross-navigateur ──
+        if not chrome and not edge and firefox:
+            if self._EXT_CHROME_SPECIFIQUES & ext_set:
+                signaux.append(
+                    Signal(
+                        "firefox_ext_chrome",
+                        "Firefox annoncé avec extensions Chrome-only (ALPS/compress_certificate)",
+                        0.5,
+                    )
+                )
+
+        # ── Groupes (courbes elliptiques) ──
+        if navigateur and groupes:
+            if self._GRP_X25519 not in groupe_set:
+                signaux.append(
+                    Signal(
+                        "sans_x25519",
+                        "navigateur annoncé sans x25519 dans les groupes",
+                        0.5,
+                    )
+                )
+            if (chrome or edge) and self._GRP_FFDHE in groupe_set:
+                signaux.append(
+                    Signal(
+                        "chrome_avec_ffdhe",
+                        "Chrome annoncé avec ffdhe2048 (groupe Firefox, pas Chrome)",
+                        0.4,
+                    )
+                )
+            if firefox and self._GRP_FFDHE not in groupe_set:
+                signaux.append(
+                    Signal(
+                        "firefox_sans_ffdhe",
+                        "Firefox annoncé sans ffdhe2048",
+                        0.3,
+                    )
+                )
+
+        # ── Ordre des groupes ──
+        if navigateur and self._GRP_X25519 in groupe_set and self._GRP_P256 in groupe_set:
+            if groupes.index(self._GRP_X25519) > groupes.index(self._GRP_P256):
+                signaux.append(
+                    Signal(
+                        "groupes_desordre",
+                        "x25519 après P-256 (navigateurs : x25519 d'abord)",
+                        0.3,
+                    )
+                )
+
+        # ── Extensions navigateur standard manquantes ──
+        if navigateur:
+            manquantes_std = self._EXT_NAVIGATEUR - ext_set
+            nb_manq = len(manquantes_std)
+            if nb_manq >= 3:
+                signaux.append(
+                    Signal(
+                        "extensions_std_manquantes",
+                        f"{nb_manq} extensions standard manquantes : {', '.join(sorted(manquantes_std))}",
+                        0.5,
+                    )
+                )
+            elif nb_manq >= 1:
+                signaux.append(
+                    Signal(
+                        "extensions_std_partielles",
+                        f"extension(s) standard manquante(s) : {', '.join(sorted(manquantes_std))}",
+                        0.2,
+                    )
+                )
+
+        # ── Chiffrements navigateur communs manquants ──
+        if navigateur and len(self._CIPHERS_NAVIGATEUR - cipher_set) >= 3:
+            signaux.append(
+                Signal(
+                    "ciphers_communs_manquants",
+                    f"{len(self._CIPHERS_NAVIGATEUR - cipher_set)} chiffrements navigateur de base manquants",
+                    0.4,
+                )
+            )
+
+        # ── supported_versions absent ──
+        if navigateur and "002b" not in ext_set:
+            signaux.append(
+                Signal(
+                    "sans_supported_versions",
+                    "navigateur annoncé sans extension supported_versions",
+                    0.5,
+                )
+            )
+
+        # ── Signatures ──
+        if navigateur and not signatures:
+            signaux.append(
+                Signal(
+                    "sans_signatures",
+                    "navigateur annoncé sans algorithmes de signature",
+                    0.5,
+                )
+            )
+        elif navigateur and len(signatures) < 5:
+            signaux.append(
+                Signal(
+                    "peu_de_signatures",
+                    f"seulement {len(signatures)} algorithmes de signature (navigateur : 8+)",
+                    0.3,
+                )
+            )
+
+        # ── Version TLS maximale ──
+        if navigateur and versions and max(versions) < 0x0304:
+            signaux.append(
+                Signal(
+                    "pas_tls13_version",
+                    "navigateur annoncé sans support TLS 1.3 dans supported_versions",
+                    0.5,
+                )
+            )
+
+        # ── Empreinte OpenSSL (TLS_AES_256_GCM en tête) ──
+        if not grease and "h2" not in alpn and chiffrements and chiffrements[0] == "1302":
+            signaux.append(
+                Signal(
+                    "pile_openssl",
+                    "ordre chiffrements caractéristique OpenSSL (AES-256-GCM en tête, pas AES-128-GCM)",
+                    0.4,
+                )
+            )
+
         return _verdict(self.name, self.version, signaux)
 
 
