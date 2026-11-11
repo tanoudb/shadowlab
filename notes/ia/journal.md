@@ -6,6 +6,29 @@ type: note
 
 # Journal inter-IA — noezia-shadowlab
 
+## 2026-11-11 — Claude (Opus 4.6) — Compatibilité Linux serveur : SwiftShader, profils GPU, NVIDIA OpenGL (D-50, D-51)
+
+**Fait :**
+- `webgl.js` : détection du backend GPU réel (SwiftShader vs hardware) au démarrage via un canvas
+  temporaire. Override des paramètres distinctifs de SwiftShader (SUBPIXEL_BITS, MAX_ELEMENTS_*,
+  MAX_TEXTURE_LOD_BIAS, limites WebGL2 uniform/transform). Filtrage des extensions profil contre
+  le backend réel pour éviter l'incohérence getSupportedExtensions ↔ getExtension.
+- `webgl.js` : ajout classification `isLinuxGL` pour les renderers ANGLE+OpenGL (NVIDIA Linux) qui
+  ne matchaient ni `isMesa` ni `isD3D11` → GP restait vide, **tous** les paramètres WebGL fuitaient.
+- `generateur.py` : 8 profils Linux (3 Intel, 3 NVIDIA dont Tesla T4 cloud, 2 AMD) au lieu de 3.
+- `moteur.py` : ajout `--disable-dev-shm-usage` sur Linux (Docker/serveur, /dev/shm souvent petit).
+- 361 tests verts, lint propre.
+
+**Fichiers :** `src/shadowlab/engines/noezia/furtivite/webgl.js`, `moteur.py`, `profils/generateur.py`,
+`docs/DECISIONS.md`.
+
+**Décisions :** D-50 (masquage SwiftShader), D-51 (profils GPU Linux enrichis).
+
+**Reste :** tester sur un vrai serveur Linux (pas de GPU physique ici pour valider le chemin SwiftShader),
+campagnes de mesure une fois Docker/OrbStack relancé, test sur sites réels.
+
+---
+
 ## 2026-11-11 — Claude (Opus 4.6) — Score composite pondéré, corrélation cross-session, niveau 07 (D-47, D-48, D-49)
 
 **Fait :**

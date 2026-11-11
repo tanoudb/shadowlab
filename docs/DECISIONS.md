@@ -258,3 +258,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-49 — 11/11/2026 — Niveau 07 « État de l'art ».** Tous les 41 détecteurs, seuil composite 0.3,
   WAF paranoia 4, rate limit 1 req/s, honeypots, Turnstile + reCAPTCHA, connexion à 2 tentatives max.
   Objectif : équivalent Cloudflare Enterprise Bot Management en local.
+- **D-50 — 11/11/2026 — Masquage SwiftShader pour Linux headless sans GPU.** Sur un serveur Linux sans GPU,
+  Chromium utilise Google SwiftShader (logiciel) dont les limites WebGL (SUBPIXEL_BITS=4,
+  MAX_ELEMENTS_*=65536, extensions réduites) trahissent un bot. Le script webgl.js détecte le backend
+  réel au démarrage, override les paramètres distinctifs, et filtre les extensions du profil contre celles
+  réellement disponibles. Correction aussi de la classification NVIDIA Linux (ANGLE+OpenGL sans D3D11
+  ni Mesa → isLinuxGL) qui laissait GP vide.
+- **D-51 — 11/11/2026 — 8 profils GPU Linux (au lieu de 3).** Intel UHD 630/770/Xe, NVIDIA RTX 3060/4070
+  + Tesla T4 (serveur cloud), AMD Radeon RX 6700 XT + Pro W6800. Couvre les configurations serveur et
+  desktop les plus courantes.
