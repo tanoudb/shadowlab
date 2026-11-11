@@ -35,17 +35,20 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (10/11/2026)
+## État (11/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
-  FastAPI. **6 niveaux progressifs** (01 baseline → 06 multicouche, D-18). JS proof-of-work, demo CAPTCHA,
-  FingerprintJS 5.3.0, BotD 2.0, 39 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe cross-contexte, deep Proxy — D-37), honeypots (lien piège + champ piège), fingerprinting actif,
-  Turnstile Cloudflare (test keys, niveaux 05-06), reCAPTCHA v2 Google (test keys, niveaux 05-06).
-- **Niveau authentifié** (05-06) : login `/lab/connexion` gardé par une porte comportementale
+  FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
+  FingerprintJS 5.3.0, BotD 2.0, 41 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
+  cross-contexte, deep Proxy, corrélation cross-session — D-48), honeypots (lien piège + champ piège),
+  fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
+  niveaux 05-07). Score composite pondéré par famille (D-47).
+- **Niveau authentifié** (05-07) : login `/lab/connexion` gardé par une porte comportementale
   (empreinte + comportement + honeypot + limite de tentatives), espace privé `/lab/espace`, comptes de
   test locaux. Scénario `connexion` (le moteur franchit le login).
 - **Démo reCAPTCHA v3 RÉEL** : `/lab/recaptcha-v3` charge le vrai v3 et relève le score attribué au
   moteur (clés dans `.env`, secret jamais exposé). Passer = être perçu comme humain (v3 ne fait que noter).
-- **Moteur NOEZIA** : GPU Metal réel en headless (anti-SwiftShader), profils cohérents avec l'OS hôte.
+- **Moteur NOEZIA** : GPU Metal réel sur macOS, masquage SwiftShader sur Linux sans GPU (D-50),
+  8 profils GPU Linux (Intel/NVIDIA/AMD — D-51), profils cohérents avec l'OS hôte.
 - **Dashboard avancé** : vue Arena (décisions par couche, matrice moteur × protection, durées).
 - **15 moteurs** : 9 intégrés (playwright, selenium, scrapling, httpx, curl-cffi, patchright, scrapling-furtif,
   noezia, noezia-experimental), 6 isolés opérationnels (camoufox, seleniumbase, seleniumbase-uc,
@@ -57,9 +60,9 @@ recommander des optimisations.
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
   `similaires()` (auto-match de liste façon Scrapling), `extraire_adaptatif()` (relocalisation par
   signature si le sélecteur casse). Page `/lab/adaptatif` (classes CSS mutées). CLI `shadowlab recolter`.
-- **338 tests rapides verts** (hors intégration), lint propre.
+- **361 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
-  auto-résolution (test keys flaky), moteur expérimental propre, couche IA.
+  auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
