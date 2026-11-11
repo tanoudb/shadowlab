@@ -2361,3 +2361,39 @@ on compte »), règle du défi Cloudflare (un défi avec action = échec, le mot
 humaines rejouées contre chaque niveau au lieu de passer par l'Arena, profil d'Arena « endurance » et porte
 d'entrée attendue pour la sentinelle, Arena sur le serveur lui-même au palier 3, longues exécutions sur une
 copie figée du code. Reste à Ethan : valider le plan, l'hébergement du site vitrine.
+
+## 2026-11-11 (nuit) — Claude (Fable 5.2) — Palier 1 : étapes 1.1 et 1.2 faites, campagne de référence lancée
+
+**Fait :**
+- **1.1 Sol propre** : audits, brainstormings et configs du 10/11 versionnés (`9a2f0f1`), plan et D-54
+  (`f0c2f5e`), `.gitignore` complété, branche poussée (accord d'Ethan).
+- **1.2 Mesure fiable** (`74c301a`), chaque correctif précédé d'un test vu en échec :
+  - `analytics.py` : un passage en panne ne compte plus au numérateur des taux de détection et de
+    challenge. Campagne 86 recalculée : 80 % (4 passages valides classés automatisés sur 5), au lieu de
+    440 %. Le détail par détecteur garde les passages en panne : c'est le choix du jeu de données de
+    référence (`tests/test_validation.py`, verdict « indéterminé » attendu).
+  - `campaigns.py` : arrêt de la campagne quand les 3 derniers passages sous Arena sont des pannes
+    d'Arena (`_arena_en_panne`, `PANNES_ARENA_MAX`). Cause partagée : `issues.CAUSE_PANNE_ARENA`.
+  - `correlation.py` : `hash_session` lit `ecran` et `canvas` au premier niveau (forme réelle de
+    `observateur.js`). Un canvas en erreur ne produit pas de hash.
+  - 416 tests rapides verts (+11), lint propre.
+- **1.3 Campagne de référence** : `configs/experiments/reference-palier1.yaml` (`208e020`), campagne n° 90
+  lancée à 22h25 (315 passages, un à la fois, environ 1 h 30). Avant : ancien site arrêté (il tournait
+  depuis le 10/11 avec l'ancien code), base sauvegardée
+  (`outputs/shadowlab-avant-migration8-2026-11-11.sqlite3`, 632 Mo, à supprimer quand la migration 8 est
+  jugée saine), moteur Docker d'OrbStack démarré, Arena démarrée. La base est passée au schéma 8.
+
+**Constats :**
+- Correction d'un chiffre écrit plus haut : campagne 86, c'est 4 passages classés automatisés sur 5
+  valides, pas 5 sur 5.
+- Le navigateur embarqué est Chromium 156.0.8078.4 ; le moteur annonce Chrome 129 à 132 (à corriger en 1.9).
+- Les trois dernières empreintes NOEZIA de la base ont le même hash de profil et le même hash canvas :
+  à regarder en 1.9 (non conclu).
+- Le détecteur de corrélation, une fois réparé, classera tout visiteur qui revient 5 fois (noté au plan).
+- Relecture automatique du push : 3 points de sécurité sur le frontal HTTP/2 et la collecte, consignés
+  dans `docs/securite-a-finaliser.md`, non corrigés (frontal local uniquement).
+- Démarrer OrbStack a aussi relancé les autres conteneurs de la machine : ils tournent pendant la campagne.
+
+**Reste :** lire les résultats de la campagne 90 (tableau moteur × niveau), mettre à jour le suivi du
+plan, puis 1.4 (site vitrine). Les quatre commits de ce soir ne sont pas encore tous poussés (`74c301a`
+et `208e020` sont locaux).

@@ -8,9 +8,6 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
-- **2026-11-11 — Commit et push** : accord pour committer les fichiers non suivis utiles et pousser la
-  branche `niveau-authentifie-perimetre` (33 commits ne sont que sur ce poste). Étape 1.1 du plan.
-  Recommandation : oui, tout de suite.
 - **2026-11-11 — Mise en ligne du site vitrine** : où l'héberger, sur quel domaine à toi, derrière
   Cloudflare gratuit (étapes 1.6 et 1.8). Recommandation : un sous-domaine dédié, sur une petite machine
   séparée du labo. La mise en ligne reste à toi ; les conditions sont dans `docs/PLAN.md` § 5.
@@ -33,6 +30,7 @@ Ce qui attend Ethan.
 - **2026-11-09 — Clé reCAPTCHA v3** : enregistrer une clé v3 (localhost autorisé) et la mettre dans `.env`.
 
 ## Tranchées
+- **2026-11-11 — Commit et push** : accord d'Ethan, branche poussée le 11/11 (étape 1.1).
 - **2026-11-11 — Objectif de la v1** : validé par Ethan (D-54). Voir `docs/PLAN.md` § 1.
 - **2026-11-03 — Moteurs anti-détection** : Ethan autorise leur intégration contre nos propres protections (D-15).
 - **2026-11-03 — Docker Compose** : devenu nécessaire pour l'Arena (Coraza, Nginx) ; OrbStack est disponible.

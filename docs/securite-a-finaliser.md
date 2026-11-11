@@ -42,3 +42,22 @@ interrupteur, pas réécrire. C'est voulu : « on sécurise à la fin » doit re
 - `src/shadowlab/engines/base.py` — `liste_directe` renvoie `["*"]` (verrou réseau levé) en illimité.
 - `src/shadowlab/config.py` — défaut `SHADOWLAB_HOTES_AUTORISES=*`.
 - `src/shadowlab/site/app.py` — `hotes_servis` filtre le `*` (le serveur de test reste strict).
+
+## Relevé par la relecture automatique du push du 11/11/2026
+
+Trois points sur du code déjà en place (D-48, D-53). Non corrigés ce jour-là : le frontal n'écoute que sur
+127.0.0.1 et le labo ne se met pas en ligne (`docs/PLAN.md` § 5). À traiter avant toute exposition, et au
+plus tard à l'étape 2.1 du plan (mémoire des visiteurs de l'Arena).
+
+- [ ] `src/shadowlab/arena/frontal.py` — corps HTTP/2 sans plafond : `DataReceived` accumule
+      `flux["corps"]` sans appliquer `TAILLE_CORPS_MAX`, et le nombre de flux simultanés n'est pas limité.
+      Risque : épuisement de la mémoire. Correctif : plafond par flux (réinitialiser le flux au-delà),
+      `MAX_CONCURRENT_STREAMS`, accusé de réception après le contrôle de taille.
+- [ ] `src/shadowlab/arena/frontal.py` — listes d'empreinte HTTP/2 sans plafond (`_h2_settings`,
+      `_h2_priorites`). Correctif : ne garder que les premières entrées (une trentaine), ne plus enregistrer
+      les PRIORITY une fois l'empreinte figée.
+- [ ] `src/shadowlab/site/app.py` — `correlation.enregistrer_hash` s'exécute pour n'importe quel jeton
+      envoyé à la collecte : un tiers peut remplir `empreintes_vues` et faire classer « recyclée »
+      l'empreinte d'un autre visiteur. Correctif : n'enregistrer que pour une session émise par le serveur,
+      compter des sources distinctes (cookie, compte, adresse) plutôt que des jetons, et traiter la
+      corrélation comme un signal faible. Lié au § 5 point 4 et à l'étape 2.1 du plan.

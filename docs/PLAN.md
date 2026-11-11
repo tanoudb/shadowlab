@@ -66,7 +66,7 @@ Vérifié dans le code, git ou la base (`outputs/shadowlab.sqlite3`), pas repris
 | Socle du labo | 15 moteurs, campagnes matricielles, interface `/labo`, 405 tests rapides verts, lint propre | `pytest -m "not integration"`, `ruff` |
 | Moteur contre les 39 détecteurs d'origine | Passe tout : 72/72 extractions, niveaux 01 à 06 | campagne 82 |
 | Arena durcie (10/11) | NOEZIA est **classé** automatisé (23/24) mais **jamais bloqué** : la décision de bloquer se prend avant que l'empreinte arrive, et les scénarios n'ouvrent qu'une page | campagnes 84 et 85 |
-| Campagne 86 (« 100 % ») | Docker est tombé pendant la campagne : 19 pannes sur 24 passages. Chiffre réel : 5 passages valides, 5 classés automatisés, 0 bloqué | base ; campagne 87 créée à 22h57 avec 0 passage |
+| Campagne 86 (« 100 % ») | Docker est tombé pendant la campagne : 19 pannes sur 24 passages. Chiffre réel : 5 passages valides, 4 classés automatisés, 0 bloqué | base ; campagne 87 créée à 22h57 avec 0 passage |
 | Calcul du taux de détection | Faux quand il y a des pannes : elles comptent au numérateur, pas au dénominateur (22 détectés / 5 évaluables pour la campagne 86) | `analytics.py:452-474` |
 | Travail du 11/11 (D-47 à D-53) | Tests unitaires seulement, aucune campagne. La base réelle est encore au schéma 7 : la corrélation entre sessions n'a jamais tourné | `PRAGMA user_version` = 7 |
 | Corrélation entre sessions | Le calcul d'empreinte lit une clé `proprietes` que le navigateur n'envoie pas | `correlation.py:19-39`, `observateur.js` |
@@ -78,7 +78,8 @@ Vérifié dans le code, git ou la base (`outputs/shadowlab.sqlite3`), pas repris
 | Protection commerciale réelle | Jamais testée | — |
 | Git | Branche `niveau-authentifie-perimetre` : 33 commits non poussés, 86 d'avance sur `master`, pas de PR | `git status -sb` |
 
-Non vérifié : le moteur annonce Chrome 129 à 132 ; la version du Chromium réellement embarqué reste à lire.
+Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
+le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -115,6 +116,11 @@ But : on mesure juste, l'Arena est crédible, le moteur récolte tout et passe.
 
 Limite du calibrage public : le site public n'a ni le frontal TLS ni la chaîne Nginx et Coraza. Les
 détecteurs TLS et HTTP/2 se calibrent en local, avec les navigateurs d'Ethan à travers l'Arena.
+
+Point connu pour 1.7 et 2.1 : le détecteur de corrélation, réparé en 1.2, classe « recyclée » toute
+empreinte vue 5 fois. Un humain qui revient, ou une identité persistante (palier 2), a par nature la même
+empreinte : il faudra compter la même empreinte sur des cookies, comptes ou adresses différents, pas ses
+simples retours. La table est globale : les résultats des niveaux 06 et 07 dépendent de l'historique.
 
 En parallèle possible : 1.2 et 1.4 (fichiers distincts). 1.9 est la seule étape dont la taille est
 inconnue : elle sera chiffrée après 1.3, 1.7 et 1.8, pas avant.
@@ -208,9 +214,9 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 
 | Étape | État | Date | Preuve (n° de campagne, commit) |
 |-------|------|------|---------------------------------|
-| 1.1 Sol propre | à faire (attend l'accord d'Ethan) | | |
-| 1.2 Mesure fiable | à faire | | |
-| 1.3 Campagne de référence | à faire | | |
+| 1.1 Sol propre | **fait** | 11/11 | commits `9a2f0f1`, `f0c2f5e`, branche poussée, `git status` propre |
+| 1.2 Mesure fiable | **fait** | 11/11 | commit `74c301a` ; 416 tests rapides verts ; campagne 86 recalculée : 80 % (4/5) au lieu de 440 % ; hash canvas présent sur des données réelles de la base |
+| 1.3 Campagne de référence | **en cours** | 11/11 | campagne 90 lancée à 22h25 (`208e020`), base passée au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | à faire | | |
 | 1.5 Scénario de récolte et notation | à faire | | |
 | 1.6 Application publique réduite | à faire | | |
