@@ -1790,7 +1790,12 @@ def test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse(client):
     try:
         champs = champs_du_formulaire(client.get("/contact").text, "/contact")
         for n in range(2):  # sans « X-Forwarded-For » : l'adresse de la connexion sert de repli
-            r = client.post("/contact", data={**champs, "message": f"essai {n}"}, headers={"Origin": ORIGINE})
+            r = client.post(
+                "/contact",
+                data={**champs, "message": f"essai {n}"},
+                headers={"Origin": ORIGINE},
+                follow_redirects=False,  # sinon le client suit la redirection et rend 200
+            )
             assert r.status_code == 303
         assert len(avertissements) == 1, "un avertissement, une seule fois"
         assert "X-Forwarded-For" in avertissements[0]
