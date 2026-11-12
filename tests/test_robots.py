@@ -232,8 +232,8 @@ def test_ligne_trop_longue_ignoree_et_comptee():
 
 
 def test_regles_en_trop_ignorees_et_comptees():
-    texte = "User-agent: *\n" + "".join(f"Disallow: /r{i}\n" for i in range(1500))
+    texte = "User-agent: *\n" + "".join(f"Disallow: /r{i}/\n" for i in range(1500))
     robots = lire(texte)
-    assert not robots.permis("/r0") and not robots.permis("/r999")
-    assert robots.permis("/r1000")
+    assert not robots.permis("/r0/") and not robots.permis("/r999/")
+    assert robots.permis("/r1000/")
     assert robots.resume("x")["ignore"]["regles_en_trop"] == 500

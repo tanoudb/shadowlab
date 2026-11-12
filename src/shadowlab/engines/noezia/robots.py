@@ -5,7 +5,11 @@ Règles retenues :
   plusieurs groupes du même agent se cumulent ; aucun groupe correspondant = tout est permis ;
 - `Allow` / `Disallow` : motif comparé au début de « chemin + ?requête » ; `*` = n'importe quelle suite de
   caractères, `$` final = fin de l'adresse ; le motif le plus long l'emporte, à longueur égale `Allow` ;
-  un `Disallow:` vide ne bloque rien ;
+  un `Disallow:` vide ne bloque rien ; comparaison en temps linéaire, sans expression régulière (le fichier
+  vient du site visé : un motif à nombreuses `*` ferait exploser une expression régulière) ;
+- bornes contre un fichier hostile : 500 Kio lus au plus (RFC 9309), ligne de plus de 2 000 caractères ignorée,
+  1 000 règles gardées par groupe (un vrai fichier en a quelques dizaines ; au-delà c'est du bourrage) ;
+  ce qui est ignoré est compté et rendu par `resume` ;
 - `Crawl-delay` : nombre de secondes positif du groupe retenu (hors RFC, d'usage courant) ;
 - fichier absent (4xx, sauf 429) = tout permis ; erreur serveur (5xx), 429 ou pas de réponse = rien de permis
   pour cette passe.
@@ -32,18 +36,51 @@ def _normaliser(texte: str) -> str:
     return _RE_POURCENT.sub(remplacer, texte)
 
 
-def _motif_en_expression(motif: str) -> re.Pattern[str]:
+TAILLE_MAX_OCTETS = 500 * 1024
+LIGNE_MAX = 2000
+REGLES_MAX_PAR_GROUPE = 1000
+
+
+def _compacter(motif: str) -> str:
+    """Réduit les `*` consécutifs à un seul."""
+    while "**" in motif:
+        motif = motif.replace("**", "*")
+    return motif
+
+
+def _correspond(motif: str, cible: str) -> bool:
+    """Le motif (`*`, `$` final) correspond-il au début de `cible` ? Temps linéaire : aucune expression régulière."""
     ancre = motif.endswith("$")
-    corps = motif[:-1] if ancre else motif
-    expression = ".*".join(re.escape(morceau) for morceau in corps.split("*"))
-    return re.compile(expression + ("$" if ancre else ""), re.DOTALL)
+    morceaux = (motif[:-1] if ancre else motif).split("*")
+    if len(morceaux) == 1:
+        return cible == morceaux[0] if ancre else cible.startswith(morceaux[0])
+    premier, dernier = morceaux[0], morceaux[-1]
+    if not cible.startswith(premier):
+        return False
+    position = len(premier)
+    for morceau in morceaux[1:-1]:
+        trouve = cible.find(morceau, position)
+        if trouve < 0:
+            return False
+        position = trouve + len(morceau)
+    if ancre:
+        return cible.endswith(dernier) and len(cible) - len(dernier) >= position
+    return cible.find(dernier, position) >= 0
 
 
 @dataclass(frozen=True)
 class _Regle:
     autorise: bool
     motif: str
-    expression: re.Pattern[str]
+
+
+@dataclass
+class _Ignore:
+    """Ce que les bornes ont écarté."""
+
+    fichier_tronque: bool = False
+    lignes_trop_longues: int = 0
+    regles_en_trop: int = 0
 
 
 @dataclass
@@ -53,11 +90,18 @@ class _Groupe:
     crawl_delay: float | None = None
 
 
-def _groupes(texte: str) -> list[_Groupe]:
+def _groupes(texte: str, ignore: _Ignore) -> list[_Groupe]:
+    octets = texte.encode("utf-8", errors="replace")
+    if len(octets) > TAILLE_MAX_OCTETS:
+        ignore.fichier_tronque = True
+        texte = octets[:TAILLE_MAX_OCTETS].decode("utf-8", errors="ignore")
     groupes: list[_Groupe] = []
     courant: _Groupe | None = None
     dernier_etait_agent = False
     for brute in texte.lstrip("﻿").splitlines():
+        if len(brute) > LIGNE_MAX:
+            ignore.lignes_trop_longues += 1
+            continue
         ligne = brute.split("#", 1)[0].strip()
         if ":" not in ligne:
             continue
@@ -75,8 +119,10 @@ def _groupes(texte: str) -> list[_Groupe]:
             continue  # règle avant tout User-agent : ignorée
         if nom in ("allow", "disallow"):
             if valeur:  # `Disallow:` vide : rien n'est bloqué ; `Allow:` vide : sans effet
-                motif = _normaliser(valeur)
-                courant.regles.append(_Regle(nom == "allow", motif, _motif_en_expression(motif)))
+                if len(courant.regles) >= REGLES_MAX_PAR_GROUPE:
+                    ignore.regles_en_trop += 1
+                else:
+                    courant.regles.append(_Regle(nom == "allow", _compacter(_normaliser(valeur))))
         elif nom == "crawl-delay" and courant.crawl_delay is None:
             try:
                 delai = float(valeur)
@@ -98,6 +144,7 @@ class Robots:
         regles: list[_Regle],
         groupe: str | None,
         crawl_delay: float | None,
+        ignore: _Ignore | None = None,
     ) -> None:
         self.agent = agent
         self.etat = etat  # « lu », « absent » (tout permis) ou « inaccessible » (rien de permis)
@@ -105,6 +152,7 @@ class Robots:
         self._regles = regles
         self.groupe = groupe  # l'agent ou « * » : le groupe retenu, None s'il n'y en a pas
         self.crawl_delay = crawl_delay
+        self.ignore = ignore or _Ignore()
 
     @classmethod
     def inaccessible(cls, agent: str = "noezia", statut: int | None = None) -> Robots:
@@ -116,7 +164,8 @@ class Robots:
             return cls.inaccessible(agent, statut)
         if 400 <= statut < 500 or not 200 <= statut < 300:
             return cls(agent, "absent", statut, [], None, None)
-        groupes = _groupes(texte)
+        ignore = _Ignore()
+        groupes = _groupes(texte, ignore)
         nom = agent.lower()
         retenus = [g for g in groupes if nom in g.agents]
         groupe = agent if retenus else None
@@ -125,7 +174,7 @@ class Robots:
             groupe = "*" if retenus else None
         regles = [r for g in retenus for r in g.regles]
         delais = [g.crawl_delay for g in retenus if g.crawl_delay is not None]
-        return cls(agent, "lu", statut, regles, groupe, delais[0] if delais else None)
+        return cls(agent, "lu", statut, regles, groupe, delais[0] if delais else None, ignore)
 
     def permis(self, chemin_et_requete: str) -> bool:
         """`chemin_et_requete` : `/chemin?parametres` (sans hôte)."""
@@ -134,7 +183,7 @@ class Robots:
         cible = _normaliser(chemin_et_requete)
         meilleure: _Regle | None = None
         for regle in self._regles:
-            if not regle.expression.match(cible):
+            if not _correspond(regle.motif, cible):
                 continue
             if (
                 meilleure is None
@@ -154,4 +203,9 @@ class Robots:
             "etat": self.etat,
             "groupe": self.groupe,
             "crawl_delay": self.crawl_delay,
+            "ignore": {
+                "fichier_tronque": self.ignore.fichier_tronque,
+                "lignes_trop_longues": self.ignore.lignes_trop_longues,
+                "regles_en_trop": self.ignore.regles_en_trop,
+            },
         }
