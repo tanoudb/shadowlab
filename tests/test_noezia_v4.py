@@ -108,8 +108,40 @@ class TestIdentiteNative:
         conf = DriverNoezia(("127.0.0.1",), {"identite_native": True}).configuration()
         for cle in ("furtivite_canvas", "furtivite_webgl", "furtivite_audio", "furtivite_navigateur"):
             assert conf[cle] is False, cle
+        assert conf["locale"] is None and conf["viewport"] is None, "ni langue ni fenêtre imposées"
         defaut = DriverNoezia(("127.0.0.1",)).configuration()
         assert defaut["furtivite_navigateur"] is True, "sans l'option, rien ne change"
+        assert defaut["locale"] == "fr-FR" and defaut["viewport"] == "1920x1080"
+
+    def test_identite_native_ne_reecrit_aucun_en_tete(self):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        def filtrer(**options):
+            continuations = []
+
+            class Requete:
+                url = "http://127.0.0.1:8770/a"
+                resource_type = "document"
+                headers = {
+                    "user-agent": "Mozilla/5.0 HeadlessChrome/156.0.0.0",
+                    "sec-ch-ua": '"HeadlessChrome";v="156"',
+                }
+
+                def is_navigation_request(self):
+                    return False
+
+            class Route:
+                request = Requete()
+
+                def continue_(self, **k):
+                    continuations.append(k)
+
+            DriverNoezia(("127.0.0.1", "localhost"), options)._filtrer(Route())
+            return continuations
+
+        assert filtrer(identite_native=True) == [{}], "la requête repart telle que le navigateur l'a faite"
+        reecrits = filtrer()[0]["headers"]
+        assert "HeadlessChrome" not in reecrits["user-agent"] + reecrits["sec-ch-ua"], "sans l'option, rien ne change"
 
 
 class TestProfilCoherence:
