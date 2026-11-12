@@ -7,6 +7,8 @@ import base64
 import http.client
 import json
 import os
+import random
+import string
 import uuid
 
 import pytest
@@ -57,6 +59,42 @@ def test_niveau_07_laisse_valider_un_captcha_tiers(chemin, champ):
     decision = decision_du_waf("07", chemin, f"{champ}=XXXX.DUMMY.TOKEN.XXXX&retour={retour}")
     assert decision["decision"] != "bloque", decision
     assert REGLE_CARACTERES_SPECIAUX not in [regle["id"] for regle in decision["regles"]]
+
+
+def _jeton_de_forme_recaptcha() -> str:
+    """Fabriqué, jamais valide : environ 1 800 caractères (lettres, chiffres, « - » et « _ »), préfixe « 03A »."""
+    alphabet = string.ascii_letters + string.digits + "-_"
+    hasard = random.Random(20261112)
+    return "03A" + "".join(hasard.choice(alphabet) for _ in range(1800))
+
+
+def _jeton_de_forme_turnstile() -> str:
+    """Fabriqué, jamais valide : segments séparés par des points, avec des tirets, environ 900 caractères."""
+    alphabet = string.ascii_letters + string.digits + "-_"
+    hasard = random.Random(20261113)
+
+    def segment(longueur: int) -> str:
+        return "".join(hasard.choice(alphabet) for _ in range(longueur))
+
+    return f"0.{segment(40)}-{segment(300)}.{segment(40)}-{segment(300)}.{segment(120)}-{segment(60)}"
+
+
+@pytest.mark.parametrize(
+    ("chemin", "champ", "fabriquer"),
+    [
+        ("/lab/recaptcha/verifier", "g-recaptcha-response", _jeton_de_forme_recaptcha),
+        ("/lab/turnstile/verifier", "cf-turnstile-response", _jeton_de_forme_turnstile),
+    ],
+)
+def test_niveau_07_laisse_passer_un_jeton_de_la_forme_d_un_vrai_jeton(chemin, champ, fabriquer):
+    # Le jeton factice du test ci-dessus est court. Un vrai jeton fait des centaines de caractères, avec des
+    # « - », « _ » et (Turnstile) des points : une autre règle de paranoïa 4 (longueur, caractères spéciaux,
+    # injection SQL ou XSS sur des suites aléatoires) pourrait le bloquer. Jeton fabriqué, pas un vrai.
+    jeton = fabriquer()
+    assert len(jeton) > 500
+    retour = gardien.encoder_retour("/lab/vitrine/annonces?page=2")
+    decision = decision_du_waf("07", chemin, f"{champ}={jeton}&retour={retour}")
+    assert decision["decision"] != "bloque", decision
 
 
 def test_niveau_07_garde_la_regle_hors_des_captchas_tiers():

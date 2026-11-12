@@ -143,6 +143,57 @@ class TestIdentiteNative:
         reecrits = filtrer()[0]["headers"]
         assert "HeadlessChrome" not in reecrits["user-agent"] + reecrits["sec-ch-ua"], "sans l'option, rien ne change"
 
+    def test_avertit_quand_l_identite_native_tourne_sans_interface(self, caplog):
+        """Sans interface, le navigateur annonce « HeadlessChrome » sur toutes ses requêtes : on le dit au journal."""
+        import logging
+
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        def avertissements(**options):
+            caplog.clear()
+            with caplog.at_level(logging.WARNING, logger="shadowlab.engines.noezia.moteur"):
+                DriverNoezia(("127.0.0.1",), options)._avertir_identite_native_sans_interface()
+            return [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
+        messages = avertissements(identite_native=True)  # headless vaut vrai par défaut
+        assert len(messages) == 1
+        assert "HeadlessChrome" in messages[0]
+        assert "headless: false" in messages[0] and "channel: chrome" in messages[0]
+        assert len(avertissements(identite_native=True, headless=True)) == 1
+        assert avertissements(identite_native=True, headless=False, channel="chrome") == [], "configuration conseillée"
+        assert avertissements(headless=True) == [], "sans identité native, rien à signaler"
+
+    def test_identite_native_garde_le_refus_hors_perimetre(self):
+        """Le refus d'une adresse hors liste passe avant la branche native : abort, jamais continue_."""
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        actions = []
+
+        class Requete:
+            url = "http://ailleurs.test/"
+            resource_type = "document"
+            headers = {"user-agent": "Mozilla/5.0 Chrome/156.0.0.0"}
+
+            def is_navigation_request(self):
+                return False
+
+        class Route:
+            request = Requete()
+
+            def abort(self, *a):
+                actions.append(("abort", a))
+
+            def continue_(self, **k):
+                actions.append(("continue", k))
+
+        moteur = DriverNoezia(("127.0.0.1", "localhost"), {"identite_native": True})
+        moteur.mesures.details["requetes_bloquees"] = 0
+        moteur.mesures.details["ressources_bloquees"] = 0
+        moteur._filtrer(Route())
+        assert actions == [("abort", ("blockedbyclient",))]
+        assert moteur.mesures.details["requetes_bloquees"] == 1
+        assert moteur.mesures.details["ressources_bloquees"] == 0
+
 
 class TestProfilCoherence:
     def test_profil_genere_coherent(self):
