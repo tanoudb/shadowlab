@@ -366,8 +366,8 @@ class Etat:
             self._cx.execute("SELECT decision, COUNT(*) FROM pages WHERE passe = ? GROUP BY decision", (passe,))
         )
         somme = self._cx.execute(
-            "SELECT COALESCE(SUM(liens_hors_site), 0), COALESCE(SUM(liens_exclus), 0), COALESCE(SUM(relocalisations), 0)"
-            " FROM pages WHERE passe = ?",
+            "SELECT COALESCE(SUM(liens_hors_site), 0), COALESCE(SUM(liens_exclus), 0),"
+            " COALESCE(SUM(relocalisations), 0) FROM pages WHERE passe = ?",
             (passe,),
         ).fetchone()
         return {
