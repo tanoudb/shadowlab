@@ -1208,6 +1208,67 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
 
 
+def test_contact_absent_du_fichier_de_journal(client, tmp_path):
+    """D-57 : un message n'est que son texte et son jour. Le journal tournant, horodaté à la milliseconde, ne garde
+    rien des pages de contact ni de ce qu'un navigateur charge avec elles (feuille de style, icône) : rapprochées
+    des requêtes notées d'une session à la même milliseconde, ces lignes dateraient l'envoi ; une feuille de style
+    chargée sans page notée trahirait aussi une page de contact."""
+    from shadowlab.journal import configurer
+    from shadowlab.public import ROTATION_JOURNAL
+
+    racine = logging.getLogger("shadowlab")
+    anciens, niveau, propage = list(racine.handlers), racine.level, racine.propagate
+    enregistrements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            enregistrements.append(record.getMessage())
+
+    def messages_du_fichier() -> list[str]:
+        return [json.loads(ligne)["message"] for ligne in fichier.read_text(encoding="utf-8").splitlines()]
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.DEBUG)
+    try:
+        configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
+        fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
+        commencer(client)  # pendant une session : ses requêtes /lab/… sont notées en base, à la milliseconde
+        avant = messages_du_fichier()
+        assert avant, "les autres requêtes restent journalisées"
+        journal.addHandler(capture)
+        # Ce qu'un navigateur demande : la page, sa feuille de style, l'icône ; l'envoi ; la page de confirmation.
+        for chemin in ("/contact", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        assert ecrire(client, "Bonjour, merci d'effacer ma session.").status_code == 303
+        for chemin in ("/contact/envoye", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        journal.removeHandler(capture)
+        assert enregistrements == [], "aucun enregistrement, donc rien pour le fichier"
+        apres = messages_du_fichier()
+        assert apres == avant, "aucune ligne, pas même celles de la feuille de style ou de l'icône"
+        assert not [ligne for ligne in apres if "/contact" in ligne or "message" in ligne]
+        client.get("/lab/vitrine")
+        assert "GET /lab/vitrine 200" in messages_du_fichier(), "les pages du site restent journalisées"
+    finally:
+        journal.removeHandler(capture)
+        for gestionnaire in racine.handlers:
+            gestionnaire.close()
+        racine.handlers[:] = anciens
+        racine.setLevel(niveau)
+        racine.propagate = propage
+
+
+def test_contact_avis_a_l_ecran_seulement_sur_un_terminal(client, capsys, monkeypatch):
+    """L'avis « message de contact reçu » passe par la sortie standard, jamais par le journal ; et seulement si elle
+    est un terminal : recueillie (journald sous systemd, fichier), sa ligne horodatée daterait l'envoi."""
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert ecrire(client, "premier").status_code == 303
+    assert "message de contact reçu" in capsys.readouterr().out
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    assert ecrire(client, "second").status_code == 303
+    assert "message" not in capsys.readouterr().out
+
+
 def test_contact_origine_null_refusee(client, reglages_publics):
     # Pourquoi `Referrer-Policy: no-referrer` est interdit sur /contact : sous cette politique, un vrai
     # navigateur envoie `Origin: null` au POST du formulaire (norme Fetch), même vers le même site. Le garde
