@@ -294,7 +294,14 @@ Points connus pour 1.7 et 1.9, lus le 12/11 dans les relevés de comportement de
   geste continu de 50 événements, soit environ 1,5 seconde, suffit : c'est le cas d'une page par passage
   arrêté (délai maximal 58 à 60 ms sur 50 délais, alors que la page dure 2,7 à 3,4 s). Très probable aussi
   chez un humain qui balaie l'écran en arrivant.
-- Conséquence : ces deux signaux font le score composite 0,85 qui arrête NOEZIA au niveau 05. Ne pas
+- **`device_memory_invalide` (détecteur `coherence-profonde`) n'admet que 8 Go au plus.** Le Chromium 156
+  des témoins annonce 32 sur ce poste, et Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors
+  Android, [annonce Blink](https://groups.google.com/a/chromium.org/g/blink-dev/c/vXtAmrVZeDk)). Tout
+  humain sur une machine de 16 Go ou plus serait classé : 0,5 point, presque le seuil du niveau 05 à lui seul.
+- **`Accept-Language`** : Chrome prévoit de réduire l'en-tête à la première langue et sa langue de base
+  (`fr-FR,fr;q=0.9`, [annonce Blink](https://groups.google.com/a/chromium.org/g/blink-dev/c/NBEBB81RjaI)),
+  ni la liste complète ni la langue seule que NOEZIA envoie selon la requête. À lire sur le Chrome d'Ethan.
+- Conséquence : `pas_de_scroll` et `pas_de_pause` font le score composite 0,85 qui arrête NOEZIA au niveau 05. Ne pas
   « corriger le moteur » sur eux avant d'avoir le taux humain ; si les humains les déclenchent, c'est le
   détecteur qu'on corrige (hauteur de page dans le relevé, pauses cherchées sur toute la page).
 
