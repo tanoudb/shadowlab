@@ -36,7 +36,8 @@ def test_rythme_nomme_et_detaille():
     assert rythme_de(recette(hote="exemple.fr", rythme="rythme: libre")) == Rythme()
     detail = rythme_de(
         recette(
-            rythme="rythme: {delai_s: [1, 2, 5], pages_par_heure_max: 100, pause_longue: {minutes: [1, 2], toutes_les: [10, 20]}}"
+            rythme="rythme: {delai_s: [1, 2, 5], pages_par_heure_max: 100,"
+            " pause_longue: {minutes: [1, 2], toutes_les: [10, 20]}}"
         )
     )
     assert detail.delai_s == (1, 2, 5) and detail.pages_par_heure_max == 100
