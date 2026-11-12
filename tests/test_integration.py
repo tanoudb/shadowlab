@@ -2,7 +2,7 @@
 
 import pytest
 
-from shadowlab import campaigns
+from shadowlab import campaigns, detection
 from shadowlab import database as db
 from shadowlab.engines import registre
 from shadowlab.perimetre import DestinationRefusee
@@ -57,7 +57,9 @@ def test_campagne_complete_tous_moteurs(reglages, tmp_path):
     for moteur in ("scrapling", "httpx"):
         assert statuts[(moteur, "javascript_content")] == "echec"  # sans JavaScript : attendu
         assert statuts[(moteur, "static_html")] == "reussi"
-    nb_detecteurs = len(__import__("shadowlab.detection", fromlist=["registre"]).registre())
+    # Chaque passage reçoit un verdict par détecteur du registre, plus celui du méta-détecteur
+    # `meta-composite` que `classer` ajoute à la fin.
+    nb_detecteurs = len(detection.registre()) + 1
     assert cx.execute("SELECT COUNT(*) FROM detections").fetchone()[0] == 16 * nb_detecteurs
     assert cx.execute("SELECT COUNT(*) FROM metrics WHERE cpu_time_ms IS NOT NULL").fetchone()[0] == 16
 

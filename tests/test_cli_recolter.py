@@ -8,6 +8,7 @@ import pytest
 
 from shadowlab import campaigns
 from shadowlab.cli import main
+from shadowlab.site.pages import REFERENCES_STATIQUES
 
 
 @pytest.mark.integration
@@ -17,7 +18,7 @@ def test_recolter_texte_brut(reglages, capsys):
         code = main(["recolter", f"{reglages.url_site}/lab/statique?sl=test"])
     assert code == 0
     sortie = capsys.readouterr().out
-    assert "REF-001" in sortie  # une des références statiques
+    assert REFERENCES_STATIQUES[0] in sortie  # une des références statiques du site
 
 
 @pytest.mark.integration
@@ -28,7 +29,7 @@ def test_recolter_selecteur_css(reglages, capsys):
     assert code == 0
     sortie = capsys.readouterr().out
     assert "résultat(s)" in sortie
-    assert "REF-001" in sortie
+    assert REFERENCES_STATIQUES[0] in sortie
 
 
 @pytest.mark.integration
@@ -49,7 +50,7 @@ def test_recolter_json(reglages, capsys):
     assert code == 0
     donnees = json.loads(capsys.readouterr().out)
     assert isinstance(donnees, list)
-    assert "REF-001" in donnees
+    assert REFERENCES_STATIQUES[0] in donnees
 
 
 def test_recolter_url_hors_perimetre(capsys):
