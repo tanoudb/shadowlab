@@ -110,13 +110,16 @@ def empreinte(n: int = 0, **modifs) -> dict:
         },
         "paint_timing": {"count": 2, "has_first_paint": True, "has_first_contentful_paint": True},
         "webrtc_test": {"disponible": True, "rtc_natif": True, "candidats_host": 0},
-        "cdp_detection": {"debugger_delta_ms": 3.2, "has_first_input": True, "console_log_natif": True},
+        "cdp_detection": dict(CDP_HUMAIN),
     }
     p.update(modifs)
     return p
 
 
-CDP_SUSPECT = {"debugger_delta_ms": 0, "has_first_input": False}
+# Ce qu'envoie un vrai Chrome, outils de développement fermés : `debugger` ne coûte rien (0 ms) et aucun clic n'a
+# encore eu lieu quand l'empreinte part, 0,2 s après le chargement.
+CDP_HUMAIN = {"debugger_delta_ms": 0, "has_first_input": False, "console_log_natif": True}
+CDP_SUSPECT = {**CDP_HUMAIN, "stack_has_evaluate": True}  # code injecté par Runtime.evaluate dans la pile
 COMPORTEMENT_HUMAIN = {"evenements": {"mousemove": 150, "click": 2, "scroll": 6, "keydown": 0}, "duree_page_ms": 12000}
 COMPORTEMENT_ROBOT = {"evenements": {}, "duree_page_ms": 100}  # aucune interaction, page éclair : 0,5 + 0,5
 
@@ -218,13 +221,7 @@ def test_cdp_arrete_aux_seuls_niveaux_qui_le_listent(cx):
             assert v["motifs"] == [
                 {
                     "detecteur": "cdp",
-                    "signaux": [
-                        {"code": "debugger_instant", "description": "debugger résolu en 0.000ms (CDP)"},
-                        {
-                            "code": "no_first_input",
-                            "description": "aucune entrée first-input (pas de vraie interaction)",
-                        },
-                    ],
+                    "signaux": [{"code": "cdp_evaluate", "description": "Runtime.evaluate dans la stack trace"}],
                 }
             ]
         else:
@@ -478,11 +475,7 @@ def test_agregat_par_niveau_avec_wilson(cx):
     assert (quatre["rejouees"], quatre["arretees"], quatre["passees"]) == (3, 1, 2)
     assert quatre["taux_arret"] == analytics.wilson(1, 3)
     assert quatre["classes"] == [
-        {
-            "detecteur": "cdp",
-            "sessions": 1,
-            "signaux": [{"code": "debugger_instant", "sessions": 1}, {"code": "no_first_input", "sessions": 1}],
-        }
+        {"detecteur": "cdp", "sessions": 1, "signaux": [{"code": "cdp_evaluate", "sessions": 1}]}
     ]
 
 

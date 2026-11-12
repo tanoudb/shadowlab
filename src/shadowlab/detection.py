@@ -2244,15 +2244,18 @@ class DetecteurCDP:
     """Détection d'artefacts Chrome DevTools Protocol (Playwright, Puppeteer, etc.).
 
     Exploite les données collectées par cdpDetectionTest() dans observateur.js :
-    - Timing du debugger statement (quasi-instantané sous CDP)
+    - Runtime.evaluate ou bindings CDP dans la pile d'une erreur
     - Ressources CDP dans les performance entries
     - Scripts vides injectés (addScriptToEvaluateOnNewDocument)
     - console.log patchée par les bindings CDP
-    - Absence d'entrée first-input (pas d'interaction réelle)
+
+    V2 (12/11/2026) : retrait de `debugger_instant` et `no_first_input`, que tout navigateur déclenche
+    (outils de développement fermés, relevé fait avant le premier clic) ; la V1 classait humains et moteurs
+    à l'identique. L'absence d'interaction reste jugée par `comportement`, en fin de page.
     """
 
     name = "cdp"
-    version = "1"
+    version = "2"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -2271,11 +2274,6 @@ class DetecteurCDP:
         if cdp.get("stack_has_cdp_session"):
             signaux.append(Signal("cdp_session", "bindings CDP dans la stack trace", 1.0))
 
-        debugger_delta = cdp.get("debugger_delta_ms")
-        if isinstance(debugger_delta, (int, float)):
-            if cdp.get("debugger_suspect") or debugger_delta < 0.05:
-                signaux.append(Signal("debugger_instant", f"debugger résolu en {debugger_delta:.3f}ms (CDP)", 0.6))
-
         if (cdp.get("cdp_resource_entries") or 0) > 0:
             signaux.append(Signal("cdp_resources", f"{cdp['cdp_resource_entries']} ressource(s) CDP/DevTools", 0.8))
 
@@ -2291,9 +2289,6 @@ class DetecteurCDP:
 
         if cdp.get("console_log_natif") is False:
             signaux.append(Signal("console_patche", "console.log patchée (bindings CDP)", 0.5))
-
-        if cdp.get("has_first_input") is False:
-            signaux.append(Signal("no_first_input", "aucune entrée first-input (pas de vraie interaction)", 0.4))
 
         return _verdict(self.name, self.version, signaux)
 
