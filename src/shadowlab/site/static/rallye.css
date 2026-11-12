@@ -110,6 +110,10 @@ p.annulee { background: #fdecea; border: 1px solid #f0b9b3; border-left: 5px sol
 
 @media (max-width: 600px) {
   .tableau th, .tableau td { padding: 8px 10px; }
+  /* Une ligne = une hauteur : sans cela, « Voiture » ou le lieu passent sur plusieurs lignes et laissent une
+     bande vide sous le copilote ; le tableau défile en largeur à la place. */
+  .tableau td { white-space: nowrap; }
+  .tableau .equipage { min-width: 0; }
   .pages { grid-template-columns: 1fr 1fr; }
   .pages .etat { grid-column: 1 / -1; grid-row: 1; text-align: center; }
   .actions .bouton { flex: 1 1 100%; text-align: center; }
