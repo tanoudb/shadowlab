@@ -1,0 +1,119 @@
+/* Site de résultats de rallye de démonstration (données fictives). Aucune ressource externe. */
+:root {
+  --encre: #18202f;
+  --discret: #5d6778;
+  --fond: #f2f3f6;
+  --carte: #ffffff;
+  --trait: #dcdfe6;
+  --marine: #14213d;
+  --lien: #1f4aa8;
+  --lien-fonce: #153680;
+  --accent: #c2410c;
+  --accent-fonce: #9a3412;
+  --rayon: 10px;
+}
+* { box-sizing: border-box; }
+body.rallye { margin: 0; font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--encre); background: var(--fond); }
+.conteneur { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--lien); }
+a:hover { color: var(--lien-fonce); }
+h1, h2 { line-height: 1.25; margin: 0 0 .5em; }
+h1 { font-size: clamp(1.5rem, 4vw, 2.1rem); }
+h2 { font-size: 1.2rem; margin-top: 1.8em; }
+
+.entete { background: var(--marine); border-bottom: 4px solid var(--accent); }
+.entete .conteneur { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; padding-top: 14px; padding-bottom: 14px; }
+.marque { display: inline-flex; align-items: center; gap: 10px; font-size: 1.3rem; font-weight: 700; letter-spacing: .02em; text-decoration: none; color: #fff; }
+.marque:hover { color: #fff; }
+.fanion { display: inline-block; width: 22px; height: 22px; border-radius: 4px; background: conic-gradient(#fff 25%, var(--marine) 0 50%, #fff 0 75%, var(--marine) 0) 0 0 / 11px 11px; border: 2px solid #fff; }
+.entete nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.entete nav a { color: #d6dcec; text-decoration: none; font-weight: 500; }
+.entete nav a:hover { color: #fff; text-decoration: underline; }
+
+main.conteneur { padding-top: 22px; padding-bottom: 48px; min-height: 60vh; }
+.fil { font-size: .9rem; color: var(--discret); margin-bottom: 18px; }
+.fil a { text-decoration: none; }
+.fil a:hover { text-decoration: underline; }
+.fil [aria-current] { color: var(--encre); font-weight: 600; }
+.chapeau { color: var(--discret); margin: -.2em 0 1.4em; max-width: 46em; }
+.infos { color: var(--discret); margin: -.2em 0 1.2em; }
+
+/* Saisons : une carte par saison. */
+.saisons { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.saisons li { background: var(--carte); border: 1px solid var(--trait); border-left: 5px solid var(--accent); border-radius: var(--rayon); padding: 16px 20px; display: flex; flex-direction: column; gap: 2px; }
+.saisons a { font-size: 1.3rem; font-weight: 700; text-decoration: none; }
+.saisons a:hover { text-decoration: underline; }
+.saisons .detail { color: var(--discret); font-size: .92rem; }
+
+/* Fiche : une grille de petites cartes libellé / valeur. */
+.fiche { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 0 0 8px; }
+.fiche .ligne { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 10px 14px; }
+.fiche dt { color: var(--discret); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+.fiche dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 0; }
+.bouton { display: inline-block; background: var(--accent); color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+.bouton:hover, .bouton:focus-visible { background: var(--accent-fonce); color: #fff; }
+.bouton.engages { background: var(--marine); }
+.bouton.engages:hover, .bouton.engages:focus-visible { background: #0b1428; }
+
+/* Tableaux : défilement en largeur sur petit écran, chiffres alignés. */
+.tableau { overflow-x: auto; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); }
+.tableau table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.tableau th { background: #e9ecf2; color: #2c3547; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; text-align: left; white-space: nowrap; padding: 10px 14px; border-bottom: 1px solid var(--trait); }
+.tableau td { padding: 9px 14px; border-bottom: 1px solid #edeff3; vertical-align: top; }
+.tableau tbody tr:last-child td { border-bottom: 0; }
+.tableau tbody tr:nth-child(even) { background: #f8f9fb; }
+.tableau tbody tr:hover { background: #eef2fb; }
+.tableau .droite { text-align: right; }
+.tableau td.droite, .tableau td.chrono, .tableau td.ecart { font-variant-numeric: tabular-nums; }
+.tableau td.chrono, .tableau td.ecart { text-align: right; white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .92rem; }
+.tableau td.ecart { color: var(--discret); }
+.tableau td.pos { font-weight: 700; text-align: center; width: 3.5em; }
+.tableau td.num { font-weight: 600; text-align: center; width: 3.5em; font-variant-numeric: tabular-nums; }
+.tableau td.es { font-weight: 700; white-space: nowrap; }
+.tableau td.date, .tableau td.resultat { white-space: nowrap; }
+.tableau th:first-child { text-align: center; }
+.calendrier th:first-child, .speciales th:first-child, .historique th:first-child, .engagements th:first-child { text-align: left; }
+.tableau .equipage { min-width: 13em; }
+.tableau .equipage a { font-weight: 600; text-decoration: none; }
+.tableau .equipage a:hover { text-decoration: underline; }
+.tableau .equipage br { display: none; }
+.tableau .copilote { display: block; color: var(--discret); font-size: .88rem; }
+.tableau tr.podium td.pos { color: var(--accent); }
+.tableau tr.podium td { background: #fff8f1; }
+.tableau tr.abandon td { color: #7c8494; }
+.tableau tr.abandon td.chrono, .tableau tr.abandon td.resultat { font-style: italic; }
+.tableau tr.annulee td { color: #7c8494; }
+.legende { color: var(--discret); font-size: .88rem; margin: 10px 2px 0; }
+
+.surface { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.surface-asphalte { background: #e5e7eb; color: #374151; }
+.surface-terre { background: #f4e4d0; color: #7a4a12; }
+.surface-neige { background: #dff0fa; color: #17506f; }
+.surface-mixte { background: #e8e2f6; color: #46308a; }
+.etiquette { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; }
+.etiquette-annulee { background: #fde8e6; color: #8a2a22; }
+
+.details { font-size: 1.05rem; color: var(--discret); margin: -.2em 0 1.4em; }
+.details .km { color: var(--encre); font-weight: 700; }
+p.annulee { background: #fdecea; border: 1px solid #f0b9b3; border-left: 5px solid #c4302b; color: #7f241f; border-radius: 8px; padding: 14px 18px; margin: 0; font-weight: 500; }
+
+.pages { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-top: 24px; }
+.pages a { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 8px 16px; text-decoration: none; font-weight: 500; }
+.pages a:hover { border-color: var(--lien); }
+.pages .etat { color: var(--discret); font-size: .92rem; }
+.pages .suivante { justify-self: end; }
+.pages .precedente { justify-self: start; }
+
+.pied { border-top: 1px solid var(--trait); background: var(--carte); color: var(--discret); font-size: .9rem; text-align: center; padding: 20px 0; }
+
+@media (max-width: 600px) {
+  .tableau th, .tableau td { padding: 8px 10px; }
+  .pages { grid-template-columns: 1fr 1fr; }
+  .pages .etat { grid-column: 1 / -1; grid-row: 1; text-align: center; }
+  .actions .bouton { flex: 1 1 100%; text-align: center; }
+}
+
+/* Lien et champs pièges (honeypots) : hors écran, jamais visibles d'un humain. Même règle que lab.css. */
+.sl-hp { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0; }

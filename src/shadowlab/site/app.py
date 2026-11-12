@@ -24,7 +24,7 @@ from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
 from ..config import Reglages, charger
 from ..detection import Observations, classer
-from . import comptes, gardien, pages, vitrine
+from . import comptes, gardien, pages, rallye, vitrine
 
 STATIQUES = Path(__file__).parent / "static"
 JETON_VALIDE = re.compile(r"^[0-9a-f]{32}$")
@@ -248,6 +248,71 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
     def vitrine_similaires(reference: str) -> dict:
         annonce = annonce_ou_404(reference)
         return {"annonces": [vitrine.resume_json(a) for a in vitrine.similaires(annonces_vitrine, annonce)]}
+
+    # --- Second site à contenu connu : résultats de rallye fictifs (arbre de pages et tableaux) -------
+    # Mêmes protections que la vitrine : /lab/rallye/* passe par le middleware de /lab (observation, gardien,
+    # en-têtes de sécurité). Labo seulement : ces routes n'existent pas dans l'application publique.
+    univers_rallye = rallye.construire(reglages.rallye_graine, reglages.rallye_taille)
+
+    def avec_honeypot(request: Request) -> bool:
+        return gardien.honeypots_actifs(request.state.sceau)
+
+    def rallye_ou_404(identifiant: str) -> rallye.Rallye:
+        r = univers_rallye.trouver_rallye(rallye.lire_identifiant(identifiant) or 0)
+        if r is None:
+            raise HTTPException(404, "rallye inconnu")
+        return r
+
+    @app.get("/lab/rallye", tags=["rallye"])
+    def rallye_accueil() -> RedirectResponse:
+        return RedirectResponse(rallye.adresse_saisons(), status_code=307)
+
+    @app.get("/lab/rallye/saisons", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_saisons(request: Request) -> str:
+        return rallye.page_saisons(jeton_de(request), univers_rallye, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/saisons/{saison}", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_calendrier(request: Request, saison: str, page: int = 1) -> str:
+        annee = rallye.lire_saison(saison)
+        if annee not in univers_rallye.saisons or not 1 <= page <= univers_rallye.nb_pages_calendrier(annee):
+            raise HTTPException(404, "saison ou page inexistante")
+        return rallye.page_calendrier(jeton_de(request), univers_rallye, annee, page, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/rallyes/{identifiant}", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_fiche(request: Request, identifiant: str) -> str:
+        r = rallye_ou_404(identifiant)
+        return rallye.page_rallye(jeton_de(request), univers_rallye, r, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/rallyes/{identifiant}/classement", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_classement(request: Request, identifiant: str) -> str:
+        r = rallye_ou_404(identifiant)
+        return rallye.page_classement(jeton_de(request), univers_rallye, r, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/rallyes/{identifiant}/engages", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_engages(request: Request, identifiant: str) -> str:
+        r = rallye_ou_404(identifiant)
+        return rallye.page_engages(jeton_de(request), univers_rallye, r, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/speciales/{identifiant}", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_speciale(request: Request, identifiant: str) -> str:
+        s = univers_rallye.trouver_speciale(rallye.lire_identifiant(identifiant) or 0)
+        if s is None:
+            raise HTTPException(404, "spéciale inconnue")
+        return rallye.page_speciale(jeton_de(request), univers_rallye, s, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/chassis/{code}", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_chassis(request: Request, code: str) -> str:
+        c = univers_rallye.trouver_chassis(code)
+        if c is None:
+            raise HTTPException(404, "châssis inconnu")
+        return rallye.page_chassis(jeton_de(request), univers_rallye, c, honeypot=avec_honeypot(request))
+
+    @app.get("/lab/rallye/pilotes/{identifiant}", response_class=HTMLResponse, tags=["rallye"])
+    def rallye_pilote(request: Request, identifiant: str) -> str:
+        p = univers_rallye.trouver_pilote(rallye.lire_identifiant(identifiant) or 0)
+        if p is None:
+            raise HTTPException(404, "pilote inconnu")
+        return rallye.page_pilote(jeton_de(request), univers_rallye, p, honeypot=avec_honeypot(request))
 
     @app.get("/lab/formulaire", response_class=HTMLResponse, tags=["site"])
     def formulaire(request: Request) -> str:

@@ -23,6 +23,8 @@ class Reglages:
     port_aval: int  # Nginx, publié par la pile Docker de l'Arena
     vitrine_graine: int  # graine du site vitrine (contenu connu)
     vitrine_taille: int  # nombre d'annonces du site vitrine
+    rallye_graine: int  # graine du site de résultats de rallye (contenu connu)
+    rallye_taille: int  # nombre de rallyes du site de résultats de rallye
 
     @property
     def url_site(self) -> str:
@@ -103,6 +105,8 @@ def charger() -> Reglages:
         port_aval=int(os.environ.get("SHADOWLAB_PORT_AVAL", "8781")),
         vitrine_graine=int(os.environ.get("SHADOWLAB_VITRINE_GRAINE", "20261111")),
         vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
+        rallye_graine=int(os.environ.get("SHADOWLAB_RALLYE_GRAINE", "20261112")),
+        rallye_taille=max(1, int(os.environ.get("SHADOWLAB_RALLYE_TAILLE", "24"))),
     )
 
 
