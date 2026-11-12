@@ -8,11 +8,14 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 from parsel import Selector
 
-from .engines.base import Driver, RefusProtection, ResultatNavigation
+from .config import RACINE
+from .engines.base import Driver, FonctionIndisponible, RefusProtection, ResultatNavigation
+from .engines.noezia.parcours import MoteurDriver, Parcours
+from .engines.noezia.recettes import Recette, lire_texte
 from .notation import noter_recolte
 from .site import pages, vitrine
 
@@ -601,6 +604,119 @@ def recolte_vitrine(d: Driver, base: str, jeton: str, rng: random.Random) -> Iss
     return Issue(note["completude"] == 1 and note["exactitude"] == 1, details)
 
 
+class _MoteurDuPassage(MoteurDriver):
+    """Le pilote du passage vu comme moteur de récolte : il appartient à la campagne (ouvert et fermé par elle,
+    ni double ouverture ni session perdue), et chaque adresse demandée porte le jeton du passage.
+
+    Le jeton `sl` est ce qui donne son niveau à la requête : le frontal de l'Arena lit le niveau (01 à 07) dans la
+    table des passages, par ce jeton ; sans lui la requête reçoit `PROFIL_SANS_SESSION`.
+    """
+
+    def __init__(self, driver: Driver, nom: str, jeton: str) -> None:
+        super().__init__(driver, nom)
+        self._jeton = jeton
+
+    def ouvrir(self) -> None:
+        pass
+
+    def fermer(self) -> None:
+        pass
+
+    def lire(self, adresse: str):  # noqa: ANN201 — `Reponse` du parcours
+        if "sl" not in parse_qs(urlsplit(adresse).query):  # un seul `sl` : deux jetons = aucune session
+            adresse = _avec_jeton(adresse, self._jeton)
+        return super().lire(adresse)
+
+
+def _moteur_de_recolte(d: Driver) -> str:
+    """`http` pour curl-cffi, `navigateur` pour noezia en identité native ; tout autre moteur est refusé."""
+    if d.name == "curl-cffi":
+        return "http"
+    if d.name == "noezia":
+        if d.configuration().get("identite_native") is True:
+            return "navigateur"
+        raise FonctionIndisponible(
+            "la récolte ne pilote noezia qu'en identité native (`identite_native: true`, vrai Chrome) : "
+            "c'est la seule configuration du moteur « navigateur »"
+        )
+    raise FonctionIndisponible(
+        f"la récolte ne sait pas piloter le moteur « {d.name} » : seuls curl-cffi (moteur http) "
+        "et noezia en identité native (moteur navigateur) sont pris en charge"
+    )
+
+
+def recette_du_passage(nom: str, base: str) -> tuple[Recette, str]:
+    """La recette `configs/recettes/<nom>.yaml` pointée vers l'entrée du passage (`base`, ex. l'Arena), avec le
+    paramètre `sl` ignoré dans les adresses canoniques. Rend la recette et le texte du fichier."""
+    chemin = RACINE / "configs" / "recettes" / f"{nom}.yaml"
+    texte = chemin.read_text(encoding="utf-8")
+    recette = lire_texte(texte, source=str(chemin))
+    departs = []
+    for depart in recette.depart:
+        morceaux = urlsplit(depart.url)
+        cible = morceaux.path + (f"?{morceaux.query}" if morceaux.query else "")
+        departs.append(depart.model_copy(update={"url": urljoin(f"{base}/", cible.lstrip("/"))}))
+    ignores = list(dict.fromkeys([*recette.parametres_ignores, "sl"]))
+    recette = recette.model_copy(
+        update={"depart": departs, "hotes": [urlsplit(base).hostname or ""], "parametres_ignores": ignores}
+    )
+    return recette, texte
+
+
+def _recolter_avec_recette(
+    d: Driver, base: str, jeton: str, rng: random.Random, recette_nom: str, verite: str
+) -> Issue:
+    """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage, puis le note."""
+    import tempfile
+    from pathlib import Path
+
+    from . import commande_recolte
+    from .config import charger
+    from .engines.noezia.etat import Etat
+
+    nom_moteur = _moteur_de_recolte(d)
+    reglages = charger()
+    recette, texte = recette_du_passage(recette_nom, base)
+    moteur = _MoteurDuPassage(d, nom_moteur, jeton)
+    avant = getattr(d, "hotes_navigation", None)
+    if nom_moteur == "navigateur":  # garde du cadre principal : seuls les hôtes de la recette
+        d.hotes_navigation = tuple(h.lower() for h in recette.hotes)  # type: ignore[attr-defined]
+    try:
+        with tempfile.TemporaryDirectory(prefix="shadowlab-recolte-") as dossier:
+            parcours = Parcours(recette, texte, recette_nom, moteur, Path(dossier), ecran=lambda _: None, alea=rng)
+            bilan = parcours.lancer()
+            etat = Etat(Path(dossier) / "etat.sqlite3")
+            try:
+                note = commande_recolte.evaluer_passe(etat, bilan.passe, verite, reglages)
+            finally:
+                etat.fermer()
+    finally:
+        if nom_moteur == "navigateur":
+            d.hotes_navigation = avant  # type: ignore[attr-defined]
+    details: dict[str, Any] = {
+        "moteur": nom_moteur,
+        "recette": recette_nom,
+        "statut": bilan.statut,
+        "arret": bilan.arret,
+        "pages_faites": bilan.resume["pages"]["faites"],
+        "pages_en_echec": bilan.resume["pages"]["echecs"],
+        "recolte": note,
+    }
+    if bilan.arret:
+        details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
+    return Issue(note["reussi"] and bilan.statut == "terminee", details)
+
+
+def recolte_recette_vitrine(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Récolte générale de la vitrine (recette `vitrine.yaml`) : pages, enregistrements et champs notés, 99 % requis."""
+    return _recolter_avec_recette(d, base, jeton, rng, "vitrine", "vitrine")
+
+
+def recolte_recette_rallye(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
+    """Récolte générale du site de rallye (recette `rallye-demo.yaml`) : saisons, rallyes, spéciales, temps, pilotes…"""
+    return _recolter_avec_recette(d, base, jeton, rng, "rallye-demo", "rallye")
+
+
 SCENARIOS: dict[str, Scenario] = {
     s.name: s
     for s in (
@@ -625,6 +741,18 @@ SCENARIOS: dict[str, Scenario] = {
             "Récolter tout le site vitrine (liste et fiches) et noter complétude et exactitude",
             True,
             recolte_vitrine,
+        ),
+        Scenario(
+            "recolte_recette_vitrine",
+            "Récolte générale (recette) du site vitrine, notée en pages, enregistrements et champs",
+            True,
+            recolte_recette_vitrine,
+        ),
+        Scenario(
+            "recolte_recette_rallye",
+            "Récolte générale (recette) du site de rallye, notée en pages, enregistrements et champs",
+            True,
+            recolte_recette_rallye,
         ),
         Scenario(
             "extraction_adaptative",
