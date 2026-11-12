@@ -10,7 +10,7 @@ from . import campaigns, reports
 from . import database as db
 from .arena import pile
 from .arena.frontal import Frontal
-from .config import RACINE, charger
+from .config import RACINE, Reglages, charger
 from .journal import configurer
 
 
@@ -79,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("action", choices=["servir", "purger", "supprimer"])
     p.add_argument("identifiant", nargs="?", help="identifiant de la session à supprimer (avec `supprimer`)")
+    p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
+    p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
+    p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
     args = parseur.parse_args(argv)
 
     if args.commande == "public":
@@ -177,6 +180,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(_nettoyer(texte[:3000]))
         return 0
+
+    if args.commande == "rejeu":
+        return _rejeu(args, reglages)
 
     cx = db.ouvrir(reglages.base_donnees)
     if args.commande == "liste":
@@ -359,6 +365,83 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{label:<22} {delta:>12} {pv:>10} {pc:>10} {sig:>6} {duree:>12}")
         return 0
     return 1
+
+
+def _pourcent(valeur: float) -> str:
+    return f"{valeur * 100:.0f} %"
+
+
+def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
+    """`shadowlab rejeu` : clôt les sessions manuelles abandonnées (labo seulement), puis rejoue."""
+    import json
+
+    from . import rejeu
+
+    clos = 0
+    if args.base:
+        try:
+            cx = rejeu.ouvrir_publique(args.base)
+        except ValueError as erreur:
+            print(f"Refus : {erreur}", file=sys.stderr)
+            return 2
+        resultat = rejeu.rejouer(cx, publique=True)
+    else:
+        cx = db.ouvrir(reglages.base_donnees)
+        clos = rejeu.clore_inactives(cx)
+        resultat = rejeu.rejouer(cx)
+    cx.close()
+    if args.format_json:
+        print(json.dumps({**resultat, "clos": clos}, ensure_ascii=False, indent=2))
+        return 0
+    s = resultat["sessions"]
+    origine = f"base publique {args.base} (lecture seule)" if args.base else f"base du labo ({resultat['experience']})"
+    print(f"Rejeu des sessions humaines — {_nettoyer(origine)}")
+    if clos:
+        minutes = rejeu.DELAI_INACTIVITE_S // 60
+        print(f"{clos} session(s) en cours clôturée(s) : aucune activité depuis {minutes} min.")
+    if s["inutilisables"]:
+        print(f"{s['inutilisables']} session(s) inutilisable(s) (aucune empreinte reçue) : à part, hors de tout taux.")
+    if not s["rejouees"]:
+        print("Aucune session humaine à rejouer : ouvrir /manuel (labo) ou le site public dans un navigateur.")
+        return 0
+    ligne = "{:<7} {:<22} {:>8} {:>8} {:>8}  {:<12} {}"
+    print("\n" + ligne.format("Niveau", "Nom", "Rejouées", "Arrêtées", "Passées", "Taux d'arrêt", "IC 95 %"))
+    for n in resultat["niveaux"]:
+        if n["bloque"]:
+            w = n["taux_arret"]
+            taux, intervalle = _pourcent(w["taux"]), f"[{_pourcent(w['bas'])}, {_pourcent(w['haut'])}]"
+        else:
+            taux, intervalle = "—", "ne bloque pas" if n["consulte"] else "fingerprinting inactif"
+        nom = _nettoyer(n["nom"])[:22]
+        print(ligne.format(n["niveau"], nom, n["rejouees"], n["arretees"], n["passees"], taux, intervalle))
+    print("\nJalon A : au moins 9 humains sur 10 passent à chaque niveau ; un détecteur gardé classe au plus")
+    print("1 humain sur 10 en automatisé. « composite » : signaux faibles cumulés au-delà du seuil du niveau.")
+    for n in resultat["niveaux"]:
+        if not n["consulte"]:
+            continue
+        print(f"\nNiveau {n['niveau']} — {_nettoyer(n['nom'])}")
+        if n["classes"]:
+            print("  Classés « automatisé » (sessions) :")
+            for c in n["classes"]:
+                part = f"{c['sessions']}/{n['rejouees']}"
+                alerte = "au-delà de 1 sur 10" if c["sessions"] * 10 > n["rejouees"] else ""
+                codes = ", ".join(f"{_nettoyer(g['code'])} ({g['sessions']})" for g in c["signaux"][:5])
+                print(f"    {_nettoyer(c['detecteur']):<24} {part:>7}  {alerte:<19}  {codes}")
+        else:
+            print("  Classés « automatisé » : aucun.")
+        if n["non_evalues"]:
+            print("  Non évalués faute de données (écartés du rejeu : effet sur les humains inconnu) :")
+            for d in n["non_evalues"]:
+                print(f"    {d['detecteur']:<24} {d['sessions']:>3}/{n['rejouees']:<3}  {d['raison']}")
+        for r in n["regles_ecartees"]:
+            print(f"  Règle écartée : {r['detecteur']}/{r['regle']} ({r['sessions']}/{n['rejouees']}) — {r['raison']}")
+        if n["correlation_historique"]:
+            h = n["correlation_historique"]
+            print(
+                f"  correlation-session avec la table actuelle empreintes_vues : {h['sessions']}/{h['sur']}"
+                " classée(s) automatisée(s) — dépend de l'historique, hors du taux."
+            )
+    return 0
 
 
 def _public(args: argparse.Namespace) -> int:

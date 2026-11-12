@@ -1,0 +1,27 @@
+# Récolte du site vitrine à sa taille par défaut : 500 annonces (docs/PLAN.md § 1, seuil « Récolte »).
+# À lancer SANS régler SHADOWLAB_VITRINE_TAILLE (500 par défaut) :
+#   uv run shadowlab campagne configs/experiments/recolte-500.yaml
+# La récolte se mesure au niveau 01 : elle dit si le moteur sait tout parcourir et tout lire.
+# Un passage = la liste paginée puis les 500 fiches, soit plus de 500 pages.
+# Durée attendue d'après la campagne 92 (7 s par page pour noezia) : environ 1 h par passage noezia,
+# quelques secondes pour les témoins, soit environ 3 h pour la campagne.
+# 3 moteurs × 1 niveau × 1 scénario × 3 répétitions = 9 passages, un à la fois.
+#   noezia     : le moteur étudié
+#   patchright : sa base, sans nos ajouts
+#   playwright : témoin sans furtivité
+experiment:
+  name: recolte_500
+  description: >-
+    Récolte du site vitrine de 500 annonces (liste paginée puis chaque fiche, 14 champs) par noezia,
+    patchright et playwright au niveau 01, notée en complétude et en exactitude.
+  environment: local
+  engines:
+    - noezia
+    - patchright
+    - playwright
+  protections: ["01"]
+  scenarios:
+    - recolte_vitrine
+  repetitions: 3
+  seed: 20261112
+  output: [json, html]

@@ -18,7 +18,7 @@ from .. import correlation, scoring
 from .. import database as db
 from ..arena import defis, profils
 from ..arena import secret as secrets_arena
-from ..detection import Observations, Signal, registre
+from ..detection import Detecteur, Observations, Signal, registre
 from . import pages
 
 COOKIE_DEFI = "sl_defi"
@@ -113,7 +113,28 @@ def suspicion(
     detecteurs: list[str] | None = None,
     seuil_composite: float | None = None,
 ) -> list[dict]:
-    """Motifs de suspicion connus à cet instant.
+    """Motifs de suspicion connus à cet instant, d'après les observations en base (voir `motifs_suspicion`)."""
+    http, js = db.observations(cx, jeton)
+    observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
+    if observations.empreinte_js is not None:
+        observations.correlation = correlation.correlation_session(cx, observations.empreinte_js)
+    pieges = cx.execute(
+        "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
+        (jeton,),
+    ).fetchone()[0]
+    return motifs_suspicion(observations, pieges, inclure_js, exclure, detecteurs, seuil_composite)
+
+
+def motifs_suspicion(
+    observations: Observations,
+    pieges: int = 0,
+    inclure_js: bool = True,
+    exclure: list[str] | None = None,
+    detecteurs: list[str] | None = None,
+    seuil_composite: float | None = None,
+    tous: dict[str, Detecteur] | None = None,
+) -> list[dict]:
+    """Règle de décision de l'Arena, sans base : motifs pour ces observations et `pieges` pièges déclenchés.
 
     *detecteurs* : liste explicite de noms de détecteurs à consulter (depuis le profil Arena).
     Si absent ou vide, les constantes REGLES_REQUETE / REGLES_JAVASCRIPT s'appliquent.
@@ -122,11 +143,9 @@ def suspicion(
     cumulés. Si leur somme ≥ seuil_composite et qu'aucun détecteur individuel n'a bloqué,
     un motif synthétique « composite » est ajouté. Permet de détecter les moteurs bien patchés
     qui passent sous le seuil de chaque détecteur pris isolément.
+
+    *tous* remplace le registre des détecteurs (le rejeu y retire les règles dont une session n'a pas la donnée).
     """
-    http, js = db.observations(cx, jeton)
-    observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
-    if observations.empreinte_js is not None:
-        observations.correlation = correlation.correlation_session(cx, observations.empreinte_js)
     if detecteurs:
         noms = [d for d in detecteurs if d in DETECTEURS_HTTP]
         if inclure_js and observations.empreinte_js is not None:
@@ -137,7 +156,7 @@ def suspicion(
             noms += REGLES_JAVASCRIPT
     if exclure:
         noms = [n for n in noms if n not in exclure]
-    tous = registre()
+    tous = registre() if tous is None else tous
     motifs: list[dict] = []
     signaux_par_detecteur: list[tuple[str, list[Signal]]] = []
     for nom in noms:
@@ -159,13 +178,26 @@ def suspicion(
                     "signaux": [_signal(s) for s in tous_signaux],
                 }
             )
-    hp = cx.execute(
-        "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
-        (jeton,),
-    ).fetchone()[0]
-    if hp:
-        motifs.append({"detecteur": "honeypot", "signaux": [{"code": "honeypot", "description": f"{hp} piège(s)"}]})
+    if pieges:
+        motifs.append({"detecteur": "honeypot", "signaux": [{"code": "honeypot", "description": f"{pieges} piège(s)"}]})
     return motifs
+
+
+def parametres(profil: profils.Profil) -> dict:
+    """Réglages de `suspicion` pour ce profil, les mêmes à la réception d'une empreinte (/lab/collecte) et à
+    chaque page contrôlée : un détecteur exclu, ou le JavaScript en `bloquer: http`, ne décide nulle part."""
+    f = profil.fingerprinting
+    return {
+        "inclure_js": f.bloquer != "http",
+        "exclure": f.exclure or None,
+        "detecteurs": f.detecteurs or None,
+        "seuil_composite": f.seuil_composite,
+    }
+
+
+def protegee(chemin: str, methode: str) -> bool:
+    """Requête que `controler` examine : une page du site de test en GET, hors échanges techniques."""
+    return chemin.startswith("/lab") and not chemin.startswith(HORS_PROTECTION) and methode == "GET"
 
 
 def _signal(s: Signal) -> dict:
@@ -202,7 +234,7 @@ def controler(
     request: Request, cx: sqlite3.Connection, secret: bytes, sceau: Sceau, jeton: str, chemin: str
 ) -> Response | None:
     """Renvoie la réponse de la protection qui s'applique, ou None si la requête peut passer."""
-    if not chemin.startswith("/lab") or chemin.startswith(HORS_PROTECTION) or request.method != "GET":
+    if not protegee(chemin, request.method):
         return None
     profil = profils.charger().de(sceau.profil)
     if profil is None:
@@ -233,15 +265,7 @@ def controler(
             db.enregistrer_decision(
                 cx, jeton, "fingerprinting", "suspect", chemin, [{"detecteur": "composite-differe"}]
             )
-        inclure_js = profil.fingerprinting.bloquer != "http"
-        motifs = suspicion(
-            cx,
-            jeton,
-            inclure_js=inclure_js,
-            exclure=profil.fingerprinting.exclure or None,
-            detecteurs=profil.fingerprinting.detecteurs or None,
-            seuil_composite=profil.fingerprinting.seuil_composite,
-        )
+        motifs = suspicion(cx, jeton, **parametres(profil))
         if motifs:
             if profil.fingerprinting.bloquer != "non":
                 db.enregistrer_decision(cx, jeton, "fingerprinting", "bloque", chemin, motifs)

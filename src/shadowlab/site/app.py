@@ -438,12 +438,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 if sceau:
                     profil = charger_profils().de(sceau.profil)
                     if profil and profil.fingerprinting.actif:
-                        motifs = gardien.suspicion(
-                            cx,
-                            jeton,
-                            detecteurs=profil.fingerprinting.detecteurs or None,
-                            seuil_composite=profil.fingerprinting.seuil_composite,
-                        )
+                        motifs = gardien.suspicion(cx, jeton, **gardien.parametres(profil))
                         composite = [m for m in motifs if m.get("detecteur") == "composite"]
                         if composite:
                             db.enregistrer_decision(
