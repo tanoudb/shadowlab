@@ -158,6 +158,19 @@ def verite(graine: int, taille: int) -> dict:
     }
 
 
+def pages_attendues(graine: int, taille: int) -> list[str]:
+    """Adresses qu'une récolte complète doit visiter : pages de liste (la première sans paramètre), puis fiches.
+
+    Sans jeton de session ni hôte. Même ordre que le parcours : chaque page de liste suivie de ses fiches.
+    """
+    annonces = generer(graine, taille)
+    adresses: list[str] = []
+    for page in range(1, nb_pages(taille) + 1):
+        adresses.append("/lab/vitrine/annonces" if page == 1 else f"/lab/vitrine/annonces?page={page}")
+        adresses += [f"/lab/vitrine/annonces/{a.reference}" for a in page_annonces(annonces, page)]
+    return adresses
+
+
 def trouver(annonces: list[Annonce], reference: str) -> Annonce | None:
     m = RE_REFERENCE.match(reference)
     if not m:
