@@ -187,6 +187,22 @@ donneront la référence) avant de corriger en 1.9 :
   **Le moteur se contredit lui-même, sans référence extérieure** (mesuré, même passage de la campagne 94) :
   dans la même page, `navigator.userAgent` annonce Chrome 129 et `navigator.userAgentData` Chrome 156, et
   l'en-tête `sec-ch-ua` dit 129. Correction visée : annoncer partout la version réelle du navigateur.
+
+Empreinte JavaScript : NOEZIA comparé champ par champ au même Chromium piloté sans réglage (patchright,
+campagne 94, niveau 04 sans `cdp` ; 84 champs différents sur 306). La différence est mesurée ; ce que fait
+un vrai Chrome reste **à lire dans les sessions humaines**, qui trancheront champ par champ. Candidats
+pour 1.9, du plus net au moins net :
+- `navigator.webdriver` **absent** chez NOEZIA (ni valeur, ni propriété sur le prototype) ; le témoin a
+  `false`, propriété native sur le prototype ;
+- `plugins` = 4 et `mimeTypes` = 4 (témoin sans interface : 0 et 0) ;
+- `performance.memory` posée comme propriété propre, et `devicePixelRatio`, `outerWidth`, `outerHeight`
+  devenues énumérables sur `window` : traces de redéfinition ;
+- fenêtre plus haute que la zone utile de l'écran (`outerHeight` 1108 pour `availHeight` 1092), et 28 px
+  seulement entre la fenêtre et la page ;
+- `deviceMemory` = 8 annoncé avec une puce M5 Pro (le Chromium réel donne 32 sur ce poste) ;
+- WebRTC : aucun candidat (le témoin en donne 4) ; 4 voix de synthèse ; une ligne de pile en plus dans une
+  erreur (fonction enveloppée) ; `chrome.runtime` présent.
+
 Aucun détecteur de l'Arena ne relève ces écarts aujourd'hui : leur effet se mesurera contre Cloudflare (1.8).
 Une règle « version du User-Agent différente de celle de `userAgentData` » la mesurerait dans l'Arena ; à
 décider avec Ethan (règle 4 du § 8 : on n'ajoute à l'Arena que ce qu'un palier exige).
