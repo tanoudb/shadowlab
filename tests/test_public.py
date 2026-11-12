@@ -642,6 +642,40 @@ def test_liste_des_donnees_tiree_de_l_observateur():
     assert {cle for cle, _ in DONNEES_COMPORTEMENT} == comportement
 
 
+def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
+    """`pas_de_scroll` et `pas_de_pause` lisent ces deux champs (12/11/2026) : envoyés et décrits sur la page."""
+    _, comportement = cles_collectees(OBSERVATEUR.read_text(encoding="utf-8"))
+    nouveaux = {"page_defilable", "delai_souris_max_ms"}
+    assert nouveaux <= comportement
+    assert nouveaux <= {cle for cle, _ in DONNEES_COMPORTEMENT}
+
+
+def test_collecte_accepte_le_releve_de_comportement_complet(client, reglages_publics):
+    """Un relevé de comportement tel qu'observateur.js l'envoie, listes pleines, passe les bornes de la collecte
+    et s'enregistre tel quel."""
+    jeton = commencer(client)
+    releve = {
+        "evenements": {"mousemove": 4000, "click": 12, "keydown": 40, "scroll": 300, "touchstart": 0},
+        "premiere_interaction_ms": 850,
+        "duree_page_ms": 600000,
+        "delais_souris_ms": [16.67] * 50,
+        "delai_souris_max_ms": 12345.67,
+        "angles_segments": [0.123] * 40,
+        "delais_clavier_ms": [140.25] * 40,
+        "delais_scroll_ms": [33.33] * 50,
+        "wheel_deltas": [-120.5] * 50,
+        "page_defilable": True,
+    }
+    assert set(releve) == {cle for cle, _ in DONNEES_COMPORTEMENT}
+    assert collecter(client, jeton, "comportement", releve).status_code == 204
+    ligne = (
+        ouvrir(reglages_publics)
+        .execute("SELECT payload FROM observations_js WHERE session_token = ? AND kind = 'comportement'", (jeton,))
+        .fetchone()
+    )
+    assert json.loads(ligne["payload"]) == releve
+
+
 def test_page_d_information_complete(client):
     r = client.get("/")
     texte = r.text

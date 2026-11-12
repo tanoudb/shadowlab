@@ -1,3 +1,5 @@
+import random
+
 from shadowlab.detection import Observations, classer
 
 UA_CHROME = (
@@ -211,6 +213,74 @@ def test_entropie_frappe_humaine_passe():
     )
     v = verdicts(obs)
     assert v["entropie-interaction"] == "humain"
+
+
+# --- Règles `pas_de_scroll` et `pas_de_pause` justes envers les humains (12/11/2026, campagne 94) ---
+
+
+def _signaux(obs, detecteur):
+    """Signaux d'un détecteur : code → poids."""
+    return {s.code: s.poids for s in next(c for c in classer(obs) if c.detector_name == detecteur).signals}
+
+
+def _session(*pages):
+    return Observations(http=[requete(entetes_navigateur())], js=[empreinte(), *pages])
+
+
+def _page_sans_defilement(**kw):
+    """Relevé d'une page où la souris bouge (30 mouvements) sans aucun événement `scroll`."""
+    return _comportement(evenements={"mousemove": 30, "click": 1, "keydown": 0, "scroll": 0, "touchstart": 0}, **kw)
+
+
+def _geste_continu(n=50):
+    """Délais d'un geste de souris continu : de 8 à 70 ms, aucun au-delà de 80 ms."""
+    rng = random.Random(7)
+    return [round(rng.uniform(8, 70), 2) for _ in range(n)]
+
+
+def test_pas_de_scroll_ignore_les_pages_plus_courtes_que_la_fenetre():
+    """`/lab/catalogue` (campagne 94) : la molette tourne mais la page, plus courte que la fenêtre, n'émet aucun
+    `scroll`. Un humain y serait classé de même : seules les pages qui pouvaient défiler comptent."""
+    courte = _page_sans_defilement(page_defilable=False, wheel_deltas=[100.0, 120.0, 100.0, 80.0, 100.0])
+    assert "pas_de_scroll" not in _signaux(_session(courte, courte), "comportement")
+    # Une page qui pouvait défiler et une page courte : une seule page comptée, il en faut deux.
+    defilable = _page_sans_defilement(page_defilable=True)
+    assert "pas_de_scroll" not in _signaux(_session(defilable, courte), "comportement")
+
+
+def test_pas_de_scroll_deux_pages_defilables_sans_defilement():
+    defilable = _page_sans_defilement(page_defilable=True)
+    assert _signaux(_session(defilable, defilable), "comportement").get("pas_de_scroll") == 0.35
+
+
+def test_pas_de_scroll_releve_ancien_ne_conclut_pas():
+    """Relevé d'avant le 12/11, sans `page_defilable` : on ne sait pas si la page pouvait défiler."""
+    ancienne = _page_sans_defilement()
+    assert "pas_de_scroll" not in _signaux(_session(ancienne, ancienne), "comportement")
+
+
+def test_pas_de_pause_juge_la_page_entiere():
+    """Campagne 94 : un geste continu remplit les 50 délais gardés (≈ 1,5 s) ; la pause vient plus tard."""
+    releve = _comportement(delais_souris_ms=_geste_continu(), delai_souris_max_ms=900.0, duree_page_ms=3200)
+    assert "pas_de_pause" not in _signaux(_session(releve), "entropie-interaction")
+
+
+def test_pas_de_pause_page_entiere_sans_pause():
+    delais = _geste_continu()
+    releve = _comportement(delais_souris_ms=delais, delai_souris_max_ms=max(delais))
+    assert _signaux(_session(releve), "entropie-interaction").get("pas_de_pause") == 0.5
+
+
+def test_pas_de_pause_releve_ancien_plafonne_ne_conclut_pas():
+    """Relevé d'avant le 12/11, sans `delai_souris_max_ms`, liste pleine (50) : la suite de la page est inconnue."""
+    releve = _comportement(delais_souris_ms=_geste_continu(50))
+    assert "pas_de_pause" not in _signaux(_session(releve), "entropie-interaction")
+
+
+def test_pas_de_pause_releve_ancien_sous_le_plafond_juge_sa_liste():
+    """Sous le plafond, la liste d'un relevé ancien contient tous les délais de la page : la règle reste valable."""
+    releve = _comportement(delais_souris_ms=_geste_continu(30))
+    assert _signaux(_session(releve), "entropie-interaction").get("pas_de_pause") == 0.5
 
 
 # --- Détecteur AudioContext ---
