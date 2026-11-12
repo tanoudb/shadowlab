@@ -54,3 +54,5 @@ class ConfigNoezia:
     furtivite: ConfigFurtivite = field(default_factory=ConfigFurtivite)
     interaction_post_page: bool = True
     eviter_pieges: bool = True
+    channel: str | None = None  # navigateur installé à piloter (« chrome ») ; None = le Chromium embarqué
+    identite_native: bool = False  # le navigateur tel qu'il est : ni profil, ni User-Agent, ni script d'empreinte

@@ -2,10 +2,13 @@
 # Constat : le réglage du User-Agent par noezia ne couvre pas toutes ses requêtes, et « HeadlessChrome »
 # fuit sur 16 % d'entre elles. La documentation de Patchright, la base du moteur, recommande l'inverse de
 # ce que fait noezia : un vrai Chrome (channel="chrome"), avec interface (headless=False), sans User-Agent
-# ni en-têtes imposés. Cette campagne mesure cette configuration avec des options déjà permises, sans
-# changer de code. À comparer, niveau par niveau, à la campagne de référence lancée le même jour.
-# Écart avec la recommandation complète : le pilote garde la fenêtre par défaut de Playwright (1280 × 720)
-# et un contexte neuf à chaque passage ; `no_viewport` et le profil persistant ne sont pas des options.
+# ni en-têtes imposés. Cette campagne mesure cette configuration de deux façons, à comparer niveau par
+# niveau à la campagne de référence lancée le même jour :
+#   patchright-chrome-interface : la base du moteur telle que sa documentation la recommande, sans rien
+#                                 de noezia (le pilote garde la fenêtre par défaut de Playwright, 1280 × 720) ;
+#   noezia-natif                : noezia avec l'option `identite_native` (ni profil, ni User-Agent, ni
+#                                 script d'empreinte) et son comportement humain, ses défis, sa récolte.
+# Écart avec la recommandation complète : un contexte neuf à chaque passage, pas de profil persistant.
 #
 #   uv run shadowlab campagne configs/experiments/ablation-interface.yaml
 #
@@ -15,15 +18,15 @@ experiment:
   name: ablation_interface
   description: >-
     Patchright dans sa configuration recommandée (vrai Chrome, avec interface, rien d'imposé) et noezia
-    avec interface, sur les niveaux 01 à 07, mêmes scénarios et répétitions que la référence.
+    en identité native, sur les niveaux 01 à 07, mêmes scénarios et répétitions que la référence.
   environment: local
   engines:
     - name: patchright
       label: patchright-chrome-interface
       options: {headless: false, channel: chrome}
     - name: noezia
-      label: noezia-interface
-      options: {headless: false}
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
   protections: ["01", "02", "03", "04", "05", "06", "07"]
   scenarios:
     - static_html

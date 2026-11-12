@@ -79,6 +79,10 @@ class DriverNoezia(Driver):
         "resoudre_defis": bool,
         "bloquer_ressources": bool,
         "nb_essais": int,
+        # Configuration recommandée par Patchright (« Best Practice - use Chrome without Fingerprint
+        # Injection ») : un vrai Chrome, et rien d'imposé à son identité.
+        "channel": str,
+        "identite_native": bool,
     }
 
     # Types de ressources coupées en mode rapide (gros gain de vitesse sur un vrai site chargé).
@@ -104,7 +108,7 @@ class DriverNoezia(Driver):
     @staticmethod
     def _construire_config(options: dict[str, Any]) -> ConfigNoezia:
         kwargs: dict[str, Any] = {}
-        for cle in ("headless", "locale", "interaction_post_page", "eviter_pieges"):
+        for cle in ("headless", "locale", "interaction_post_page", "eviter_pieges", "channel", "identite_native"):
             if cle in options:
                 kwargs[cle] = options[cle]
         if "profil" in options:
@@ -122,18 +126,21 @@ class DriverNoezia(Driver):
     # ── Configuration et versions ──────────────────────────────────────
 
     def configuration(self) -> dict[str, Any]:
+        reecrite = not self._config.identite_native  # en identité native, aucun réglage d'empreinte ne s'applique
         conf: dict[str, Any] = {
             "browser": "chromium-patchright",
+            "channel": self._config.channel,
+            "identite_native": self._config.identite_native,
             "headless": self._config.headless,
             "locale": self._config.locale,
             "viewport": f"{self._config.viewport_width}x{self._config.viewport_height}",
             "simuler_souris": self._config.souris.actif,
             "simuler_frappe": self._config.clavier.actif,
             "simuler_defilement": self._config.defilement.actif,
-            "furtivite_canvas": self._config.furtivite.canvas_noise,
-            "furtivite_webgl": self._config.furtivite.webgl_spoof,
-            "furtivite_audio": self._config.furtivite.audio_noise,
-            "furtivite_navigateur": self._config.furtivite.navigator_patches,
+            "furtivite_canvas": reecrite and self._config.furtivite.canvas_noise,
+            "furtivite_webgl": reecrite and self._config.furtivite.webgl_spoof,
+            "furtivite_audio": reecrite and self._config.furtivite.audio_noise,
+            "furtivite_navigateur": reecrite and self._config.furtivite.navigator_patches,
             "eviter_pieges": self._config.eviter_pieges,
             "interaction_post_page": self._config.interaction_post_page,
             "bloquer_ressources": self._bloquer_ressources,
@@ -159,18 +166,24 @@ class DriverNoezia(Driver):
         from patchright.sync_api import sync_playwright
 
         # Charger ou générer un profil
-        if self._config.profil:
+        natif = self._config.identite_native
+        if natif:
+            # Identité native : aucun profil, le navigateur se présente tel qu'il est.
+            self._profil = None
+            log.info("NOEZIA en identité native (navigateur : %s)", self._config.channel or "Chromium embarqué")
+        elif self._config.profil:
             self._profil = charger_ou_creer(self._config.profil)
         else:
             # Profil cohérent avec l'OS de l'hôte : le GPU réel (Metal sur
             # Apple Silicon) correspond alors au renderer WebGL annoncé.
             self._profil = generer_profil(os=_HOTE_OS)
-        log.info(
-            "Profil NOEZIA : %s (OS=%s, GPU=%s)",
-            self._profil.nom,
-            self._profil.os,
-            self._profil.gpu_renderer[:50],
-        )
+        if self._profil is not None:
+            log.info(
+                "Profil NOEZIA : %s (OS=%s, GPU=%s)",
+                self._profil.nom,
+                self._profil.os,
+                self._profil.gpu_renderer[:50],
+            )
 
         # Démarrer Patchright avec verrou réseau
         self._pw = sync_playwright().start()
@@ -181,7 +194,9 @@ class DriverNoezia(Driver):
             "--enable-features=NetworkService,NetworkServiceInProcess",
         ]
         # ── GPU / backend graphique : cohérence avec le profil déclaré ──
-        if self._profil.os == "macos" and _HOTE_OS == "macos":
+        if natif:
+            args = []  # aucun réglage de lancement : ceux de Patchright seulement
+        elif self._profil.os == "macos" and _HOTE_OS == "macos":
             # macOS + profil macOS : Metal réel, cohérent avec renderer Apple.
             args += ["--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist"]
         elif _HOTE_OS == "linux":
@@ -193,9 +208,12 @@ class DriverNoezia(Driver):
 
         self._navigateur = self._pw.chromium.launch(
             headless=self._config.headless,
+            channel=self._config.channel,
             proxy=verrou,
             args=args,
-            ignore_default_args=[
+            ignore_default_args=None
+            if natif
+            else [
                 "--disable-extensions",
                 "--disable-default-apps",
                 "--disable-component-extensions-with-background-pages",
@@ -223,40 +241,45 @@ class DriverNoezia(Driver):
         self.mesures.details["defis_resolus"] = []
 
         profil = self._profil
-        vp = profil.viewport()
+        if profil is None:
+            # Identité native : rien n'est imposé au navigateur, ni fenêtre, ni User-Agent, ni en-tête, ni
+            # script d'empreinte. Seul reste ce que le périmètre exige (certificat local, filtre réseau).
+            self._contexte = self._navigateur.new_context(ignore_https_errors=True, no_viewport=True)
+        else:
+            vp = profil.viewport()
 
-        # Contexte navigateur avec paramètres du profil
-        self._contexte = self._navigateur.new_context(
-            ignore_https_errors=True,
-            locale=profil.locale,
-            viewport=vp,
-            user_agent=profil.user_agent,
-            device_scale_factor=profil.device_pixel_ratio,
-            timezone_id=profil.timezone,
-            extra_http_headers={
-                "sec-ch-ua": profil.sec_ch_ua,
-                "sec-ch-ua-platform": profil.sec_ch_ua_platform,
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-full-version-list": profil.sec_ch_ua.replace(
-                    f'v="{profil.chrome_major}"',
-                    f'v="{profil.chrome_full}"',
-                ),
-                "sec-ch-ua-model": '""',
-                "sec-ch-ua-arch": '"x86"' if profil.os != "macos" else '"arm"',
-                "sec-ch-ua-bitness": '"64"',
-                "accept-language": profil.accept_language,
-            },
-        )
+            # Contexte navigateur avec paramètres du profil
+            self._contexte = self._navigateur.new_context(
+                ignore_https_errors=True,
+                locale=profil.locale,
+                viewport=vp,
+                user_agent=profil.user_agent,
+                device_scale_factor=profil.device_pixel_ratio,
+                timezone_id=profil.timezone,
+                extra_http_headers={
+                    "sec-ch-ua": profil.sec_ch_ua,
+                    "sec-ch-ua-platform": profil.sec_ch_ua_platform,
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-full-version-list": profil.sec_ch_ua.replace(
+                        f'v="{profil.chrome_major}"',
+                        f'v="{profil.chrome_full}"',
+                    ),
+                    "sec-ch-ua-model": '""',
+                    "sec-ch-ua-arch": '"x86"' if profil.os != "macos" else '"arm"',
+                    "sec-ch-ua-bitness": '"64"',
+                    "accept-language": profil.accept_language,
+                },
+            )
 
-        # Injecter les scripts de furtivité
-        injecter_furtivite(
-            self._contexte,
-            profil,
-            canvas=self._config.furtivite.canvas_noise,
-            webgl=self._config.furtivite.webgl_spoof,
-            audio=self._config.furtivite.audio_noise,
-            navigateur=self._config.furtivite.navigator_patches,
-        )
+            # Injecter les scripts de furtivité
+            injecter_furtivite(
+                self._contexte,
+                profil,
+                canvas=self._config.furtivite.canvas_noise,
+                webgl=self._config.furtivite.webgl_spoof,
+                audio=self._config.furtivite.audio_noise,
+                navigateur=self._config.furtivite.navigator_patches,
+            )
 
         # Filtre réseau : périmètre + widgets de challenge
         self._contexte.route("**/*", self._filtrer)
@@ -267,6 +290,9 @@ class DriverNoezia(Driver):
         self._page.on("requestfailed", lambda _: self._compter("error_count"))
         self._page.on("response", self._noter_reponse)
         self._reponse = None
+        if profil is None:  # taille réelle de la fenêtre, pour les mouvements de souris
+            largeur, hauteur = self._page.evaluate("[window.innerWidth, window.innerHeight]")
+            vp = {"width": int(largeur), "height": int(hauteur)}
 
         # Simulateurs de comportement humain
         cfg_s = self._config.souris
