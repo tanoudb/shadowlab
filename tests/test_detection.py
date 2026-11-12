@@ -1,3 +1,5 @@
+import pytest
+
 from shadowlab.detection import Observations, classer
 
 UA_CHROME = (
@@ -454,6 +456,76 @@ def test_deep_proxy_cumul_automatise():
         js=[_empreinte_deep_proxy(toString_natif=False, error_has_proxy=True, navigator_proto=False)],
     )
     assert verdicts(obs)["deep-proxy"] == "automatise"
+
+
+# --- Détecteur CDP ---
+
+
+def _cdp_ordinaire(**kw):
+    """Bloc `cdp_detection` d'un navigateur ordinaire : outils de développement fermés, relevé fait environ
+    0,2 s après le chargement, donc avant tout clic. L'instruction `debugger` ne coûte que quelques
+    microsecondes (0 ms au grain de l'horloge, 0,1 ms) et aucune entrée first-input n'existe encore. Les trois
+    moteurs des campagnes 90 à 94 envoient exactement ces valeurs."""
+    base = {
+        "stack_has_evaluate": False,
+        "stack_has_cdp_session": False,
+        "debugger_delta_ms": 0,
+        "debugger_suspect": True,
+        "cdp_resource_entries": 0,
+        "empty_script_tags": 0,
+        "heap_ratio": 0.012,
+        "console_log_natif": True,
+        "console_debug_natif": True,
+        "trusted_types_available": True,
+        "tt_policy_count": 0,
+        "has_first_input": False,
+    }
+    base.update(kw)
+    return _avec_sonde("cdp_detection", **base)
+
+
+def _cdp(**kw):
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_cdp_ordinaire(**kw)])
+    return next(c for c in classer(obs) if c.detector_name == "cdp")
+
+
+@pytest.mark.parametrize(
+    ("delta", "suspect", "premier_clic"),
+    [
+        (0, True, False),  # outils fermés, horloge sans tic entre les deux lectures, relevé avant tout clic
+        (0.1, False, False),  # même navigateur, un tic d'horloge tombé entre les deux lectures
+        (0, True, True),  # une personne qui a déjà cliqué
+        (2500.0, False, False),  # outils de développement ouverts : `debugger` met la page en pause
+    ],
+)
+def test_cdp_navigateur_ordinaire_n_est_pas_classe(delta, suspect, premier_clic):
+    """Ni la durée de `debugger` ni l'absence d'un premier clic au moment du relevé ne trahissent un pilotage :
+    aucun signal, donc rien non plus pour le score composite."""
+    c = _cdp(debugger_delta_ms=delta, debugger_suspect=suspect, has_first_input=premier_clic)
+    assert c.classification == "humain"
+    assert c.signals == []
+
+
+@pytest.mark.parametrize(
+    ("releve", "code", "poids"),
+    [
+        ({"stack_has_evaluate": True}, "cdp_evaluate", 1.0),
+        ({"stack_has_cdp_session": True}, "cdp_session", 1.0),
+        ({"cdp_resource_entries": 2}, "cdp_resources", 0.8),
+        ({"empty_script_tags": 1}, "scripts_injectes", 0.5),
+        ({"console_log_natif": False}, "console_patche", 0.5),
+    ],
+)
+def test_cdp_signal_garde_son_effet(releve, code, poids):
+    c = _cdp(**releve)
+    assert [(s.code, s.poids) for s in c.signals] == [(code, poids)]
+    assert c.classification == ("automatise" if poids >= 1.0 else "indetermine")
+
+
+def test_cdp_signaux_moyens_cumules():
+    c = _cdp(empty_script_tags=1, console_log_natif=False)
+    assert c.classification == "automatise"
+    assert {s.code for s in c.signals} == {"scripts_injectes", "console_patche"}
 
 
 # --- Détecteur TLS v2 ---
