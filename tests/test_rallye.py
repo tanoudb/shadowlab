@@ -292,7 +292,10 @@ def duree_ms(valeur: str) -> int:
 def lignes(table):
     """Lignes d'un tableau : {nom de colonne: cellule}. L'en-tête est la première ligne à cellules th."""
     toutes = table.css("tr")
-    entetes = [texte(th) for th in next(tr for tr in toutes if tr.css("th")).css("th")]
+    avec_entete = [tr for tr in toutes if tr.css("th")]
+    if not avec_entete:  # pas de tableau (spéciale annulée) : aucune ligne, la vérité n'en attend aucune
+        return
+    entetes = [texte(th) for th in avec_entete[0].css("th")]
     for tr in toutes:
         cellules = tr.css("td")
         if cellules:
