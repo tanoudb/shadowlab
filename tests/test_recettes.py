@@ -862,3 +862,63 @@ def test_les_liens_vers_un_autre_hote_sont_ecartes_et_comptes():
     resultat = recettes.extraire(recette, html, f"{BASE}/p", "page")
     assert len(resultat.liens) == 2 and resultat.liens[0].adresse == f"{BASE}/s/2025"
     assert resultat.hors_site == 2
+
+
+# --- Défauts relevés en exécutant les exemples du guide (lecture d'un champ) --------------------
+
+PAGE_ESSAI = """\
+pages:
+  page:
+    url: '^/p$'
+    enregistrements:
+      - collection: essais
+        cle: id
+        champs:
+          id: {adresse: '/(p)$'}
+"""
+
+
+def _lire_essai(champ: str, html: str, signatures=None):
+    recette = _recette(PAGE_ESSAI + f"          {champ}\n")
+    return recettes.extraire(recette, html, f"{BASE}/p", "page", signatures=signatures)
+
+
+def test_un_motif_sans_correspondance_alerte():
+    resultat = _lire_essai("n: {css: 'p.n', motif: 'REF-(\\d+)'}", '<p class="n">AN-12</p>')
+    assert resultat.enregistrements[0].donnees["n"] is None
+    assert len(resultat.alertes) == 1 and "n" in resultat.alertes[0] and "motif ne correspond pas" in resultat.alertes[0]
+
+
+def test_un_motif_sans_correspondance_n_alerte_pas_quand_le_vide_est_normal():
+    champ = "n: {css: 'p.n', motif: 'REF-(\\d+)', vide_si: ['Sans objet']}"
+    assert _lire_essai(champ, '<p class="n">Sans objet</p>').alertes == []  # vide_si couvre la valeur
+    assert _lire_essai(champ, '<p class="n">   </p>').alertes == []  # la valeur lue était déjà vide
+    assert _lire_essai(champ, "<p>rien</p>").alertes == []  # élément absent : pas de valeur lue
+    assert _lire_essai(champ, '<p class="n">REF-12</p>').alertes == []  # le motif correspond
+
+
+def test_une_relocalisation_ratee_alerte_avec_le_meilleur_score():
+    champ = "t: {css: 'p.ref', adaptatif: true}"
+    signatures = Signatures()
+    connue = '<div><p class="ref corps">Réf. AN-1</p></div>'
+    assert _lire_essai(champ, connue, signatures).alertes == []
+    ratee = _lire_essai(champ, "<div><p>autre chose du tout</p><p>encore</p></div>", signatures)
+    assert ratee.enregistrements[0].donnees["t"] is None
+    assert len(ratee.alertes) == 1
+    assert "relocalisation" in ratee.alertes[0] and "échoué" in ratee.alertes[0] and "score" in ratee.alertes[0]
+
+
+def test_un_champ_adaptatif_absent_de_la_page_sans_signature_n_alerte_pas():
+    """Sans mémoire de signatures, l'extraction adaptative n'est pas en jeu : pas d'alerte de relocalisation."""
+    assert _lire_essai("t: {css: 'p.ref', adaptatif: true}", "<div></div>").alertes == []
+
+
+def test_lien_vrai_retire_le_fragment_comme_un_lien_a_suivre():
+    resultat = _lire_essai("l: {css: 'a', attribut: href, lien: true}", '<a href="/a/1#photos">x</a>')
+    assert resultat.enregistrements[0].donnees["l"] == f"{BASE}/a/1"
+
+
+def test_le_rythme_refuse_la_cle_comportement_a_la_lecture_de_la_recette():
+    with pytest.raises(recettes.RecetteInvalide) as erreur:
+        _recette("rythme: {comportement: humain}\n" + PAGE_ESSAI)
+    assert "comportement" in str(erreur.value) and "rythme" in str(erreur.value)

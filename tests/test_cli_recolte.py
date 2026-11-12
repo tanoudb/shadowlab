@@ -573,3 +573,104 @@ def test_noter_apres_tout_refaire_est_inchange_et_etat_n_est_pas_incremental(pil
     assert "pages 48/48" in capsys.readouterr().out
     main(["recolte", "etat", "vitrine-annonces"])
     assert "incrémentale" not in capsys.readouterr().out
+
+
+# --- Défauts relevés en exécutant les exemples du guide -----------------------------------------
+
+
+def test_reprendre_sans_option_continue_sans_limite(pilote, capsys):
+    """La limite `--pages-max` valait pour le lancement : reprendre sans option n'en garde aucune."""
+    assert lancer("--pages-max", "3") == 0
+    capsys.readouterr()
+    assert main(["recolte", "reprendre", "vitrine-annonces"]) == 0
+    sortie = capsys.readouterr().out
+    assert "Terminée : 48 pages" in sortie and "Limite atteinte" not in sortie
+
+
+def test_reprendre_pages_max_lit_n_pages_de_plus(pilote, capsys):
+    assert lancer("--pages-max", "3") == 0
+    capsys.readouterr()
+    assert main(["recolte", "reprendre", "vitrine-annonces", "--pages-max", "2"]) == 0
+    assert "Limite atteinte (5 pages lues" in capsys.readouterr().out
+    assert len(pilote.pages_lues()) == 5
+
+
+def test_limite_atteinte_dit_ce_qui_est_compte_et_comment_continuer(pilote, capsys):
+    assert lancer("--pages-max", "3") == 0
+    sortie = capsys.readouterr().out
+    assert "3 pages lues, échecs compris" in sortie
+    assert "reprendre vitrine-annonces` (sans limite)" in sortie and "--pages-max <N>` (N pages de plus)" in sortie
+
+
+def test_une_seule_page_faite_s_accorde_au_singulier(pilote, capsys):
+    assert lancer("--pages-max", "1") == 0
+    sortie = capsys.readouterr().out
+    assert "1 page faite," in sortie and "1 pages faites" not in sortie
+
+
+def test_la_commande_conseillee_garde_sortie(pilote, tmp_path, capsys):
+    ailleurs = tmp_path / "ailleurs"
+    assert lancer("--pages-max", "3", "--sortie", str(ailleurs)) == 0
+    assert f"reprendre vitrine-annonces --sortie {ailleurs}" in capsys.readouterr().out
+    assert lancer("--sortie", str(ailleurs)) == 2  # passe non finie : le refus conseille la même commande
+    assert f"reprendre vitrine-annonces --sortie {ailleurs}" in capsys.readouterr().err
+
+
+def test_la_commande_conseillee_apres_alerte_garde_sortie(pilote, tmp_path, capsys):
+    pilote.reponses["AN-000010"] = (429, "non")
+    ailleurs = tmp_path / "ailleurs"
+    assert lancer("--sortie", str(ailleurs)) == 3
+    assert f"reprendre vitrine-annonces --sortie {ailleurs}" in capsys.readouterr().out
+    assert main(["recolte", "reprendre", "vitrine-annonces", "--sortie", str(ailleurs)]) == 2  # trop tôt
+    assert f"reprendre vitrine-annonces --sortie {ailleurs} --maintenant" in capsys.readouterr().err
+
+
+def test_la_commande_conseillee_protege_un_chemin_avec_espaces(pilote, tmp_path, capsys):
+    ailleurs = tmp_path / "mon dossier"
+    assert lancer("--pages-max", "3", "--sortie", str(ailleurs)) == 0
+    assert f"--sortie '{ailleurs}'" in capsys.readouterr().out
+
+
+def test_une_recette_fautive_sort_une_faute_par_ligne(pilote, tmp_path, capsys):
+    texte = RECETTE_VITRINE.read_text(encoding="utf-8")
+    fautive = tmp_path / "fautive.yaml"
+    fautive.write_text(texte + 'inconnue_1: 1\n"inconnue\\x1b[2J_2": 2\n', encoding="utf-8")
+    assert lancer(recette=fautive) == 2
+    erreur = capsys.readouterr().err
+    fautes = [ligne for ligne in erreur.splitlines() if ligne.startswith("  - ")]
+    assert len(fautes) == 2
+    assert "\x1b" not in erreur and "inconnue?[2J_2" in erreur
+
+
+def test_essayer_une_page_non_conforme_rend_1_avec_la_raison(pilote, tmp_path, capsys):
+    html = tmp_path / "vide.html"
+    html.write_text("<html><body></body></html>", encoding="utf-8")
+    adresse = "http://127.0.0.1:8770/lab/vitrine/annonces/AN-000002"
+    code = main(["recolte", "essayer", str(RECETTE_VITRINE), str(html), "--type", "fiche", "--base", adresse])
+    assert code == 1
+    assert "non conforme" in capsys.readouterr().err
+
+
+def test_essayer_une_page_non_lue_rend_1_avec_la_raison(pilote, capsys):
+    pilote.reponses["AN-000002"] = (404, "non")
+    code = main(["recolte", "essayer", str(RECETTE_VITRINE), "http://127.0.0.1:8770/lab/vitrine/annonces/AN-000002"])
+    assert code == 1
+    assert "statut 404" in capsys.readouterr().err
+
+
+def test_etat_finit_sans_message_quand_le_lecteur_ferme_le_tube(pilote, monkeypatch, capsys):
+    import sys
+
+    lancer()
+    capsys.readouterr()
+
+    class TubeFerme:
+        def write(self, texte):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            raise BrokenPipeError(32, "Broken pipe")
+
+    monkeypatch.setattr(sys, "stdout", TubeFerme())
+    assert main(["recolte", "etat", "vitrine-annonces", "--pages"]) == 0
+    assert capsys.readouterr().err == ""
