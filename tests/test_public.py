@@ -12,6 +12,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
@@ -1381,6 +1382,31 @@ def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
     # Les espaces insécables (posées par macOS et iOS avant « ? » et « ! ») deviennent des espaces ordinaires.
     assert ecrire(client, "Jean\u00a0Dupont, d'accord\u202f?").status_code == 303
     assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
+
+
+def test_contact_garde_les_emoji_recents_et_les_drapeaux(client, reglages_publics):
+    """`str.isprintable()` retirait aussi les caractères inconnus de la version d'Unicode de Python : un emoji
+    récent, les lettres à balises d'un drapeau. Ils sont gardés : seuls les caractères de contrôle partent."""
+    recent = "\U0001fae9"  # visage aux yeux cernés, Unicode 16 : inconnu de Python 3.12 (Unicode 15)
+    ecosse = "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"  # drapeau à balises
+    famille = "\U0001f469\u200d\U0001f469\u200d\U0001f467"  # emoji composé, liants U+200D
+    texte = f"Merci {recent} depuis l'{ecosse} {famille}"
+    assert ecrire(client, texte).status_code == 303
+    assert messages_recus(reglages_publics) == [texte]
+
+
+def test_nettoyer_ne_laisse_aucun_caractere_de_controle():
+    """Sûr dans un terminal : ni caractère de contrôle (ESC, C1…), ni demi-paire de substitution, ni marque de sens
+    d'écriture. Saut de ligne et tabulation gardés ; les espaces particulières deviennent des espaces ordinaires."""
+    tous = "".join(map(chr, [*range(0x3100), *range(0xD800, 0xE000), *range(0xE0000, 0xE0080), 0x1FAE9]))
+    sens = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+    propre = boite.nettoyer(tous)
+    restes = [c for c in propre if c not in "\n\t" and (unicodedata.category(c) in ("Cc", "Cs") or c in sens)]
+    assert restes == []
+    assert "\U0001fae9" in propre and "\U000e0067" in propre and "\u200d" in propre
+    assert boite.nettoyer("a\nb\tc\r\nd\re") == "a\nb\tc\nd\ne"
+    assert boite.nettoyer("a\u00a0b\u202fc\u3000d\x0be") == "a b c d e"
+    assert boite.nettoyer("\x1b[2J\x9b2J\x07\x00fin\u202e") == "[2J2Jfin"
 
 
 def test_contact_limite_par_adresse(reglages_publics):
