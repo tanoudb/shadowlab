@@ -454,7 +454,8 @@ def test_session_non_consentie_ignoree(cx):
 def test_correlation_non_evaluee_et_historique_signale(cx):
     jeton = session_labo(cx)
     visite(cx, jeton)
-    for autre in [jeton, *(passages.nouveau_jeton() for _ in range(5))]:  # même empreinte, 6 sessions
+    # Même empreinte, 10 sessions : un seul signal (profil et canvas comptés ensemble), de poids 1 dès 10.
+    for autre in [jeton, *(passages.nouveau_jeton() for _ in range(9))]:
         correlation.enregistrer_hash(cx, autre, empreinte())
     premier = rejeu.rejouer(cx)
     assert not verdict(premier, jeton, "06")["arretee"]
