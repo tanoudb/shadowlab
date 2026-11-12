@@ -1,0 +1,35 @@
+# Discrétion du moteur en identité native, au compte de l'objectif (docs/PLAN.md § 1) : au moins 30 passages par
+# niveau, de 01 à 06, sur l'Arena corrigée du 12/11 (D-60 à D-66).
+# Les campagnes 97 et 98 donnent 15 sur 15 à chaque niveau, mais avec 15 passages seulement, et les niveaux 01 à
+# 03 ont été mesurés avant la correction D-66. Cette campagne refait la mesure d'un seul tenant :
+#   noezia-natif : vrai Chrome avec interface, identité d'origine, comportement et défis de noezia.
+# Pas de témoin ici : il est arrêté à chaque passage des niveaux 02 à 06 dans les campagnes 97 et 98 du même jour.
+# Niveau 06 sans le détecteur correlation-session (profil `06scorr`) ; le niveau 06 complet est mesuré à part
+# (`discretion-native-correlation.yaml`), car la corrélation compte les sessions de toute la base.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi à tout le monde : passages étiquetés `captcha_test`,
+# qui ne valent pas contre un vrai CAPTCHA.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/discretion-native-30.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
+# 1 configuration × 6 niveaux × 3 scénarios × 10 répétitions = 180 passages (environ 1 h, estimation).
+experiment:
+  name: discretion_identite_native
+  description: >-
+    noezia en identité native, 30 passages par niveau de 01 à 06 (06 sans corrélation entre sessions),
+    sur l'Arena corrigée du 12/11.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["01", "02", "03", "04", "05", "06scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 10
+  seed: 20261113
+  output: [json, html]

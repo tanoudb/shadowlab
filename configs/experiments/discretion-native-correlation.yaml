@@ -1,0 +1,24 @@
+# Le niveau 06 complet, avec le détecteur correlation-session, pour le moteur en identité native.
+# La corrélation compte les sessions de toute la base qui ont eu la même empreinte : un vrai Chrome qui
+# repasse sans rien réécrire a la même empreinte à chaque passage. On s'attend donc à ce qu'elle l'arrête ;
+# cette campagne mesure si c'est le cas, et à partir de combien de sessions (palier 2, « une identité qui dure »,
+# et palier 4, « plusieurs identités » ; docs/recherche/correlation-entre-sessions-2026-11-12.md).
+# À lancer sans SHADOWLAB_PROFILS_EXTRA, après `uv run shadowlab arena appliquer`.
+# 1 configuration × 1 niveau × 3 scénarios × 5 répétitions = 15 passages.
+experiment:
+  name: discretion_native_correlation
+  description: >-
+    noezia en identité native au niveau 06 complet (avec corrélation entre sessions), 15 passages.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["06"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261113
+  output: [json, html]
