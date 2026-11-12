@@ -1,5 +1,7 @@
 """Lecteur de robots.txt : groupes par agent, Allow/Disallow avec `*` et `$`, motif le plus long, Crawl-delay."""
 
+import time
+
 import pytest
 
 from shadowlab.engines.noezia.robots import Robots
@@ -179,4 +181,59 @@ def test_resume_pour_resume_json():
         "etat": "absent",
         "groupe": None,
         "crawl_delay": None,
+        "ignore": {"fichier_tronque": False, "lignes_trop_longues": 0, "regles_en_trop": 0},
     }
+
+
+# --- Entrée hostile : le robots.txt vient du site visé ----------------------------------------
+
+
+def test_motif_a_nombreuses_etoiles_reste_lineaire():
+    robots = lire("User-agent: *\nDisallow: /" + "*a" * 30 + "b\n")
+    adresse = "/" + "a" * 5000
+    debut = time.perf_counter()
+    assert robots.permis(adresse)  # pas de « b » : le motif ne correspond pas
+    assert time.perf_counter() - debut < 0.05
+    assert not robots.permis(adresse + "b")
+
+
+def test_etoiles_consecutives_valent_une_etoile():
+    robots = lire("User-agent: *\nDisallow: /a***b\n")
+    assert not robots.permis("/a-b") and not robots.permis("/ab") and robots.permis("/a-c")
+
+
+def test_cas_normaux_inchanges_par_la_comparaison_lineaire():
+    robots = lire("User-agent: *\nDisallow: /*a*b$\nDisallow: /x*\nAllow: /x*y\n")
+    assert not robots.permis("/zzazzb")
+    assert robots.permis("/zzazzbc")  # $ : le dernier morceau finit l'adresse
+    assert not robots.permis("/xq") and robots.permis("/xqy")  # le plus long l'emporte
+    assert not lire("User-agent: *\nDisallow: /ab$\n").permis("/ab")
+    assert lire("User-agent: *\nDisallow: /ab$\n").permis("/abc")
+    # les morceaux se cherchent dans l'ordre, sans recouvrement
+    assert lire("User-agent: *\nDisallow: /*ab*ab$\n").permis("/ab")
+    assert not lire("User-agent: *\nDisallow: /*ab*ab$\n").permis("/abab")
+
+
+def test_fichier_de_plus_de_500_kio_tronque_sans_erreur():
+    texte = "User-agent: *\nDisallow: /tot\n" + "# bourrage\n" * 60_000 + "Disallow: /tard\n"
+    assert len(texte.encode()) > 500 * 1024
+    robots = lire(texte)
+    assert not robots.permis("/tot")
+    assert robots.permis("/tard")  # au-delà des 500 Kio : jamais lu
+    assert robots.resume("x")["ignore"]["fichier_tronque"] is True
+
+
+def test_ligne_trop_longue_ignoree_et_comptee():
+    texte = "User-agent: *\nDisallow: /" + "a" * 2500 + "\nDisallow: /court\n"
+    robots = lire(texte)
+    assert robots.permis("/" + "a" * 2500)
+    assert not robots.permis("/court")
+    assert robots.resume("x")["ignore"]["lignes_trop_longues"] == 1
+
+
+def test_regles_en_trop_ignorees_et_comptees():
+    texte = "User-agent: *\n" + "".join(f"Disallow: /r{i}\n" for i in range(1500))
+    robots = lire(texte)
+    assert not robots.permis("/r0") and not robots.permis("/r999")
+    assert robots.permis("/r1000")
+    assert robots.resume("x")["ignore"]["regles_en_trop"] == 500
