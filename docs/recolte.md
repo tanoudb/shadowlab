@@ -762,7 +762,6 @@ Limites, sans les adoucir :
 - **une recette modifiée entre deux passes ne force pas la relecture** : les pages déjà lues restent évitées avec
   l'ancienne recette. Pour appliquer la nouvelle à tout le site : `--tout-refaire` ;
 - un enregistrement n'est vu « modifié » que si sa page est relue dans la passe ;
-  l'état gardé juste avant ;
 - seul le moteur `http` a été rejoué.
 
 ## 7. Les deux moteurs
