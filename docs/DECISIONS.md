@@ -234,9 +234,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   montrait 0/72 détections NOEZIA (score=0, `_verdict()` retourne "humain" par défaut). Cause racine :
   modèle à signaux négatifs uniquement — si aucun signal connu n'est trouvé, humain par défaut. Trois
   ajouts :
-  1) **DetecteurCDP** : exploite les artefacts Chrome DevTools Protocol (debugger timing <0.05ms,
+  ~~1) **DetecteurCDP** : exploite les artefacts Chrome DevTools Protocol (debugger timing <0.05ms,
   absence de first-input, console patchée, scripts vides injectés, ressources CDP). Score 1.0 quand
-  le debugger répond instantanément.
+  le debugger répond instantanément.~~ Point 1 remplacé par D-62
+  (deux de ses signaux se déclenchaient chez tout le monde).
   2) **DetecteurComportement v2** : signaux de naturalité — ratio mousemove/click < 8 (trajectoires
   Bézier directes), absence de scroll, durée des pages trop régulière (CV < 0.2), navigation linéaire.
   3) **DetecteurMetaComposite** : méta-analyse — session avec >80% des détecteurs à 0 signal = suspecte.
@@ -314,3 +315,75 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   ablations faites avant le 12/11 (campagne 8) sont fausses pour tout détecteur qui tranche à la collecte.
   Pourquoi : jalon A du plan (étape 1.7) et règle « un détecteur n'est valide que s'il laisse passer les
   humains ». Limites : le rejeu ne rejoue ni le WAF, ni la limite de débit de Nginx, ni les défis et CAPTCHA.
+- **D-57 — 12/11/2026 — Site public : un formulaire de contact à la place d'une adresse affichée.** Ethan
+  ne veut pas afficher son adresse e-mail sur un lien très partagé. Choix : la page d'information nomme le
+  responsable (`SHADOWLAB_PUBLIC_CONTACT` ; Ethan y met un pseudonyme, c'est son choix : le RGPD demande
+  l'identité du responsable, voir `notes/ia/questions-ouvertes.md`) et renvoie vers `/contact` ; un
+  message n'est que son texte et le jour de sa réception (ni adresse IP, ni session, ni navigateur, ni
+  heure), 2 000 caractères au plus, caractères de contrôle retirés ; il est gardé dans un fichier à part de la base des sessions
+  (`messages.sqlite3`, droits 600, `secure_delete`) et purgé à la même échéance ; lecture et effacement par
+  `shadowlab public messages` et `effacer-message`. Limites : 3 messages par heure et par adresse, 30 par
+  jour, 500 gardés. Pourquoi un fichier à part : la base des sessions garde le schéma du labo sans migration
+  (la migration 9 est réservée au palier 2) et peut être copiée pour le rejeu sans emporter des messages où
+  un visiteur a écrit comment le joindre. Limite : aucun envoi au responsable ; `shadowlab public servir`
+  donne le nombre de messages au démarrage et écrit une ligne à l'écran à chaque arrivée. Écarté : un envoi par e-mail (il faudrait un
+  compte d'envoi et son secret sur le poste).
+- **D-58 — 12/11/2026 — (réservé)** : version réelle annoncée par le moteur, branche `moteur-version-reelle`, gardée de côté en attendant la mesure de l'identité native.
+- **D-59 — 12/11/2026 — NOEZIA peut tourner en « identité native » (options `channel` et `identite_native`).**
+  Mesuré dans la campagne 94 : l'identité réécrite par le moteur (User-Agent, `sec-ch-ua`, scripts
+  d'empreinte) ne couvre pas toutes ses requêtes : « HeadlessChrome » apparaît sur 182 requêtes sur 1 160, la
+  version annoncée se contredit, et 84 champs d'empreinte sur 315 diffèrent du même navigateur sans réglage.
+  La documentation de Patchright, la base du moteur, recommande l'inverse : un vrai Chrome
+  (`channel="chrome"`), avec interface, `no_viewport`, sans User-Agent ni en-têtes imposés (« Best Practice -
+  use Chrome without Fingerprint Injection »). Choix : deux options déclarées, sans effet par défaut.
+  `channel` choisit le navigateur installé ; `identite_native` retire le profil, les réglages de lancement,
+  le User-Agent, les en-têtes, la fenêtre imposée et les scripts d'empreinte, et garde le comportement
+  humain, la résolution des défis de l'Arena, la récolte et le verrou de périmètre. Pourquoi une option et
+  pas un remplacement : la règle du projet veut une mesure avant de trancher
+  (`configs/experiments/ablation-interface.yaml`, à comparer à la référence du même jour). Non couvert : le
+  profil persistant recommandé par Patchright (identité qui dure, palier 2) ; le serveur Linux sans écran
+  (palier 3). Reste imposé en identité native : le filtre réseau du périmètre (`route`), qui coupe le cache
+  HTTP du navigateur, et les réglages par défaut d'un contexte Playwright (langue), à lire dans la mesure.
+  Les options `profil` et `locale` sont alors sans effet.
+- **D-60 — 12/11/2026 — Arena : « HeadlessChrome » cherché dans toutes les requêtes d'une session.** La règle
+  `ua_headless` de `regles-http` ne lisait que la première page. Mesuré dans la campagne 94 : NOEZIA réécrit
+  son identité sur cette page, mais 182 de ses 1 160 requêtes (envois de fin de page, redirections) disent
+  « HeadlessChrome » dans `User-Agent` ou `sec-ch-ua`, et l'Arena ne le voyait pas. Choix : nouveau signal
+  `headless_dans_une_requete` (poids 1, comme `ua_headless`), détecteur `regles-http` en 2.1. Accord d'Ethan
+  (« Oui, ajoute-la ») : la règle 4 du plan demande son avis pour tout ajout à l'Arena. Pourquoi : aucun
+  vrai navigateur n'envoie ce mot, donc aucun humain ne peut la déclencher, et sans elle l'Arena notait
+  15/15 un moteur qu'un anti-bot réel arrêterait. Effet attendu, à mesurer par la campagne de référence
+  du 12/11 : NOEZIA arrêté sur les scénarios à plusieurs pages dès qu'un envoi non réécrit est arrivé.
+- **D-61 — 12/11/2026 — `pas_de_scroll` et `pas_de_pause` ne jugent que ce qu'ils peuvent voir.** Le relevé
+  `comportement` d'`observateur.js` porte deux champs de plus : `page_defilable` (la page dépasse sa zone
+  visible, mesuré à la sortie de la page) et `delai_souris_max_ms` (le plus grand délai entre deux mouvements
+  de souris sur toute la page, sans plafond). `pas_de_scroll` ne compte que les pages qui pouvaient défiler ;
+  `pas_de_pause` juge la page entière. Seuils et poids inchangés : on corrige ce que la règle regarde, pas sa
+  sévérité. Un ancien relevé auquel il manque l'information ne fait conclure aucune des deux règles ; sous le
+  plafond de 50 délais, la liste contient toute la page et fait foi. Versions : `comportement` 2.1,
+  `entropie-interaction` 1.1 ; texte d'information du site public en version 2026-11-12.4. Pourquoi :
+  campagne 94. La molette tournée sur `/lab/catalogue`, plus courte que la fenêtre, ne produit aucun `scroll`
+  ; un seul geste continu de 50 événements (environ 1,5 s) suffisait à `pas_de_pause`, alors que les pages
+  duraient 2,7 à 3,4 s. Un humain serait classé de même (règle « un détecteur n'est valide que s'il laisse
+  passer les humains »). Ces deux signaux faisaient le score composite 0,85 qui arrêtait NOEZIA au niveau 05.
+  Limites : un geste unique suivi d'un clic, sans arrêt entre deux mouvements, déclenche encore
+  `pas_de_pause` ; non vérifié dans un vrai navigateur. Décidé par : coordination (travail d'un sous-agent
+  Opus, relu).
+- **D-62 — 12/11/2026 — Détecteur `cdp` V2 : retrait de `debugger_instant` et `no_first_input` (révise D-45,
+  point 1).** Les deux signaux se déclenchent chez tout le monde par construction. `debugger_instant`
+  chronomètre une instruction `debugger`, sans effet quand les outils de développement sont fermés : 0 ms
+  dans 803 relevés sur 835 (campagnes 90, 93, 94, les trois moteurs), les 32 autres valant un tic d'horloge ;
+  seul un humain aux outils ouverts y échappe. `no_first_input` lit l'entrée first-input au moment du relevé,
+  environ 0,2 s après le chargement, avant tout clic possible ; l'absence d'interaction reste jugée par
+  `comportement`, sur le relevé de fin de page. Les cinq autres signaux gardent leur poids ; aucun ne s'est
+  déclenché sur les trois moteurs (0 sur 835). Le relevé d'`observateur.js` est inchangé. Pourquoi : dans la
+  campagne 90, `cdp` arrêtait les trois moteurs à l'identique aux niveaux 04 à 07, et aurait arrêté les
+  humains de même ; étape 1.7 du plan, un détecteur gardé classe au plus 1 humain sur 10. Conséquence : au
+  niveau 04, l'Arena n'a plus de signal contre NOEZIA (campagne 94 : 15/15) ; les témoins restent arrêtés par
+  les détecteurs d'origine. À confirmer par le rejeu des sessions humaines : aucune ne doit porter de signal
+  `cdp`. Fusionné avant ces sessions parce que le défaut tient au fonctionnement du navigateur, pas à une
+  supposition. Décidé par : coordination (analyse d'un sous-agent Opus, relue).
+- **D-63 — 12/11/2026 — `device_memory_invalide` admet 16 et 32 Go.** La règle de `coherence-profonde`
+  n'admettait que 8 Go au plus. Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) et le
+  Chromium 156 piloté sans réglage annonce 32 sur ce poste (campagne 94) : tout humain sur une machine de 16
+  Go ou plus était classé. Détecteur en 1.1. Décidé par : coordination.

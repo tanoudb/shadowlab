@@ -98,11 +98,12 @@ sert un site vitrine, un consentement et la collecte de sessions humaines ; elle
 laboratoire.
 
 ```bash
-SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr" uv run shadowlab public servir
-SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr" scripts/site-public-tunnel.sh   # en ligne par tunnel Cloudflare
+SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme" uv run shadowlab public servir
+SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme" scripts/site-public-tunnel.sh   # en ligne par tunnel Cloudflare
 ```
 
-`SHADOWLAB_PUBLIC_CONTACT` est obligatoire : sans lui, l'application refuse de démarrer. Conditions,
+`SHADOWLAB_PUBLIC_CONTACT` est obligatoire : sans lui, l'application refuse de démarrer. Les visiteurs écrivent au responsable par le formulaire de
+contact du site ; aucune adresse n'a besoin d'être affichée. Conditions,
 réglages et mode d'emploi : [`docs/site-public.md`](docs/site-public.md).
 
 **Le laboratoire lui-même (`shadowlab site`) ne se met JAMAIS en ligne** : son API lance des navigateurs vers
@@ -133,7 +134,7 @@ Application publique (`SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` et 
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `SHADOWLAB_PUBLIC_CONTACT` | — (obligatoire) | Responsable et moyen de le joindre, affiché sur la page d'information |
+| `SHADOWLAB_PUBLIC_CONTACT` | — (obligatoire) | Responsable (nom ou pseudonyme), affiché sur la page d'information |
 | `SHADOWLAB_PUBLIC_HOTES` | `localhost,127.0.0.1` | Noms acceptés dans l'en-tête `Host` |
 | `SHADOWLAB_PUBLIC_PORT` | `8771` | Port d'écoute (sur `127.0.0.1`, derrière un mandataire HTTPS) |
 | `SHADOWLAB_PUBLIC_HTTPS` | `1` | Cookies `Secure` et HSTS ; `0` pour un essai local |

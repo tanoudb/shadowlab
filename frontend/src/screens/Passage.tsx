@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { obtenir } from "../api";
+import { mo } from "../format";
 import type { Detection, PassageDetail } from "../types";
 import { Etat, Puce } from "../ui";
 
 const ms = (v: number | null) => (v == null ? "—" : `${Math.round(v)} ms`);
-const mo = (v: number | null | undefined) => (v == null ? "—" : `${(v / 1_048_576).toFixed(1)} Mo`);
 
 function classement(c: string): string {
   return c === "automatise" ? "détecté automate" : c === "humain" ? "vu humain" : "indéterminé";

@@ -8,6 +8,9 @@ const debut = performance.now();
 const evenements = { mousemove: 0, click: 0, keydown: 0, scroll: 0, touchstart: 0 };
 let premiereInteraction = null;
 const delais_souris = [];
+// Plus grand délai entre deux mouvements de souris sur toute la page, non plafonné : la liste ne garde que les
+// 50 premiers délais, soit un seul geste continu d'environ 1,5 s.
+let delaiSourisMax = null;
 let dernierMouvementMs = null;
 // Trajectoire spatiale : angles entre segments consécutifs (détection linéarité)
 const angles_segments = [];
@@ -26,8 +29,10 @@ for (const type of Object.keys(evenements)) {
     evenements[type] += 1;
     if (premiereInteraction === null) premiereInteraction = Math.round(maintenant);
     if (type === 'mousemove') {
-      if (delais_souris.length < 50 && dernierMouvementMs !== null) {
-        delais_souris.push(Math.round((maintenant - dernierMouvementMs) * 100) / 100);
+      if (dernierMouvementMs !== null) {
+        const delai = Math.round((maintenant - dernierMouvementMs) * 100) / 100;
+        if (delais_souris.length < 50) delais_souris.push(delai);
+        if (delaiSourisMax === null || delai > delaiSourisMax) delaiSourisMax = delai;
       }
       dernierMouvementMs = maintenant;
       // Collecter les changements d'angle entre 3 points consécutifs
@@ -1230,14 +1235,23 @@ async function demarrer() {
   document.dispatchEvent(new Event('shadowlab:collecte-finie'));
 }
 
+// La page pouvait-elle défiler verticalement ? Sur une page plus courte que la fenêtre, la molette ne produit
+// aucun événement `scroll`. Lu à la sortie de la page, quand le contenu chargé en JavaScript est en place.
+function pageDefilable() {
+  const racine = document.scrollingElement || document.documentElement;
+  return racine.scrollHeight > racine.clientHeight;
+}
+
 addEventListener('pagehide', () => {
   envoyer('comportement', {
     evenements, premiere_interaction_ms: premiereInteraction, duree_page_ms: Math.round(performance.now() - debut),
     delais_souris_ms: delais_souris,
+    delai_souris_max_ms: delaiSourisMax,
     angles_segments: angles_segments,
     delais_clavier_ms: delais_clavier,
     delais_scroll_ms: delais_scroll,
     wheel_deltas: wheel_deltas,
+    page_defilable: pageDefilable(),
   }, true);
 });
 

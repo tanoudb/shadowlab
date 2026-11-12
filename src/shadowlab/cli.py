@@ -77,8 +77,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser(
         "public", help="application publique réduite : vitrine et sessions humaines (docs/site-public.md)"
     )
-    p.add_argument("action", choices=["servir", "purger", "supprimer"])
-    p.add_argument("identifiant", nargs="?", help="identifiant de la session à supprimer (avec `supprimer`)")
+    p.add_argument("action", choices=["servir", "purger", "supprimer", "messages", "effacer-message"])
+    p.add_argument(
+        "identifiant",
+        nargs="?",
+        help="identifiant de la session (avec `supprimer`) ou numéro du message (avec `effacer-message`)",
+    )
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
@@ -447,7 +451,7 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
 def _public(args: argparse.Namespace) -> int:
     """`shadowlab public …` : n'utilise que les réglages `SHADOWLAB_PUBLIC_*`, jamais ceux du laboratoire."""
     from .config import charger_public
-    from .public import ROTATION_JOURNAL, creer_app_publique, donnees
+    from .public import ROTATION_JOURNAL, creer_app_publique, donnees, messages
 
     reglages = charger_public()
     configurer(reglages.base_donnees.parent, args.verbeux, rotation=ROTATION_JOURNAL)
@@ -460,6 +464,11 @@ def _public(args: argparse.Namespace) -> int:
             print(f"Refus : {erreur}", file=sys.stderr)
             return 2
         print(f"Application publique : http://127.0.0.1:{reglages.port}/ (derrière un mandataire HTTPS)", flush=True)
+        boite = messages.connexion(messages.chemin(reglages.base_donnees))
+        recus = messages.nombre(boite)
+        boite.close()
+        if recus:
+            print(f"{recus} message(s) de contact à lire : uv run shadowlab public messages", flush=True)
         # Toujours en local : seul le mandataire HTTPS est exposé. Pas de journal d'accès d'uvicorn (il écrirait
         # l'adresse du visiteur et la chaîne de requête, où passe le jeton) ; l'application tient le sien.
         uvicorn.run(
@@ -473,14 +482,36 @@ def _public(args: argparse.Namespace) -> int:
         )
         return 0
     try:
+        boite = messages.connexion(messages.chemin(reglages.base_donnees))  # refuse une base homonyme
         cx = donnees.ouvrir(reglages.base_donnees)
     except ValueError as erreur:
         print(f"Refus : {erreur}", file=sys.stderr)
         return 2
     if args.action == "purger":
         n = donnees.purger(cx, reglages.conservation_jours)
-        print(f"{n} session(s) de plus de {reglages.conservation_jours} jours effacée(s).")
+        m = messages.purger(boite, reglages.conservation_jours)
+        print(f"{n} session(s) et {m} message(s) de contact de plus de {reglages.conservation_jours} jours effacé(s).")
         return 0
+    if args.action == "messages":
+        recus = messages.lister(boite)
+        if not recus:
+            print("Aucun message de contact.")
+            return 0
+        print(f"{len(recus)} message(s) de contact (effacer : uv run shadowlab public effacer-message <n°>)")
+        for message in recus:
+            print(f"\nn° {message['id']} — reçu le {message['recu_le']}")
+            for ligne in messages.nettoyer(message["texte"]).splitlines():
+                print(f"    {ligne}")
+        return 0
+    if args.action == "effacer-message":
+        if not (args.identifiant or "").strip().isdecimal():
+            print("Erreur : numéro du message requis.", file=sys.stderr)
+            return 2
+        if messages.effacer(boite, int(args.identifiant)):
+            print("Message effacé.")
+            return 0
+        print("Aucun message avec ce numéro.", file=sys.stderr)
+        return 1
     if not args.identifiant:
         print("Erreur : identifiant de session requis.", file=sys.stderr)
         return 2

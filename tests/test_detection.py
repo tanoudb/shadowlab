@@ -1,3 +1,7 @@
+import random
+
+import pytest
+
 from shadowlab.detection import Observations, classer
 
 UA_CHROME = (
@@ -48,6 +52,44 @@ def empreinte(**surcharges):
 
 def verdicts(obs):
     return {c.detector_name: c.classification for c in classer(obs)}
+
+
+def regles_http(obs):
+    return next(c for c in classer(obs) if c.detector_name == "regles-http")
+
+
+def test_headless_dans_une_requete_tardive_classe_automatise():
+    """Campagne 94 : la première page a une identité réécrite, 16 % des requêtes suivantes disent « HeadlessChrome »."""
+    envoi = [
+        ["host", "127.0.0.1:8770"],
+        ["user-agent", UA_CHROME.replace("Chrome/", "HeadlessChrome/")],
+        ["content-type", "application/json"],
+    ]
+    obs = Observations(http=[requete(entetes_navigateur()), requete(envoi, "/lab/collecte")], js=[empreinte()])
+    verdict = regles_http(obs)
+    assert verdict.classification == "automatise"
+    assert [s.code for s in verdict.signals] == ["headless_dans_une_requete"]
+    assert "1 requête(s) sur 2" in verdict.signals[0].description
+
+    marque = [
+        e if e[0] != "sec-ch-ua" else ["sec-ch-ua", '"Chromium";v="156", "HeadlessChrome";v="156"']
+        for e in entetes_navigateur()
+    ]
+    obs = Observations(http=[requete(entetes_navigateur()), requete(marque, "/lab/catalogue")], js=[empreinte()])
+    assert regles_http(obs).classification == "automatise", "le mot dans sec-ch-ua suffit, User-Agent réécrit ou non"
+
+
+def test_headless_des_la_premiere_page_n_est_pas_compte_deux_fois():
+    entetes = entetes_navigateur(UA_CHROME.replace("Chrome/", "HeadlessChrome/"))
+    obs = Observations(http=[requete(entetes), requete(entetes, "/lab/static/a.js")], js=[])
+    codes = [s.code for s in regles_http(obs).signals]
+    assert "ua_headless" in codes and "headless_dans_une_requete" not in codes
+
+
+def test_navigateur_ordinaire_sur_plusieurs_requetes_reste_humain():
+    entetes = entetes_navigateur()
+    http = [requete(entetes), requete(entetes, "/lab/static/a.js"), requete(entetes, "/lab/collecte")]
+    assert regles_http(Observations(http=http, js=[empreinte()])).classification == "humain"
 
 
 def test_navigateur_ordinaire_classe_humain():
@@ -173,6 +215,74 @@ def test_entropie_frappe_humaine_passe():
     )
     v = verdicts(obs)
     assert v["entropie-interaction"] == "humain"
+
+
+# --- Règles `pas_de_scroll` et `pas_de_pause` justes envers les humains (12/11/2026, campagne 94) ---
+
+
+def _signaux(obs, detecteur):
+    """Signaux d'un détecteur : code → poids."""
+    return {s.code: s.poids for s in next(c for c in classer(obs) if c.detector_name == detecteur).signals}
+
+
+def _session(*pages):
+    return Observations(http=[requete(entetes_navigateur())], js=[empreinte(), *pages])
+
+
+def _page_sans_defilement(**kw):
+    """Relevé d'une page où la souris bouge (30 mouvements) sans aucun événement `scroll`."""
+    return _comportement(evenements={"mousemove": 30, "click": 1, "keydown": 0, "scroll": 0, "touchstart": 0}, **kw)
+
+
+def _geste_continu(n=50):
+    """Délais d'un geste de souris continu : de 8 à 70 ms, aucun au-delà de 80 ms."""
+    rng = random.Random(7)
+    return [round(rng.uniform(8, 70), 2) for _ in range(n)]
+
+
+def test_pas_de_scroll_ignore_les_pages_plus_courtes_que_la_fenetre():
+    """`/lab/catalogue` (campagne 94) : la molette tourne mais la page, plus courte que la fenêtre, n'émet aucun
+    `scroll`. Un humain y serait classé de même : seules les pages qui pouvaient défiler comptent."""
+    courte = _page_sans_defilement(page_defilable=False, wheel_deltas=[100.0, 120.0, 100.0, 80.0, 100.0])
+    assert "pas_de_scroll" not in _signaux(_session(courte, courte), "comportement")
+    # Une page qui pouvait défiler et une page courte : une seule page comptée, il en faut deux.
+    defilable = _page_sans_defilement(page_defilable=True)
+    assert "pas_de_scroll" not in _signaux(_session(defilable, courte), "comportement")
+
+
+def test_pas_de_scroll_deux_pages_defilables_sans_defilement():
+    defilable = _page_sans_defilement(page_defilable=True)
+    assert _signaux(_session(defilable, defilable), "comportement").get("pas_de_scroll") == 0.35
+
+
+def test_pas_de_scroll_releve_ancien_ne_conclut_pas():
+    """Relevé d'avant le 12/11, sans `page_defilable` : on ne sait pas si la page pouvait défiler."""
+    ancienne = _page_sans_defilement()
+    assert "pas_de_scroll" not in _signaux(_session(ancienne, ancienne), "comportement")
+
+
+def test_pas_de_pause_juge_la_page_entiere():
+    """Campagne 94 : un geste continu remplit les 50 délais gardés (≈ 1,5 s) ; la pause vient plus tard."""
+    releve = _comportement(delais_souris_ms=_geste_continu(), delai_souris_max_ms=900.0, duree_page_ms=3200)
+    assert "pas_de_pause" not in _signaux(_session(releve), "entropie-interaction")
+
+
+def test_pas_de_pause_page_entiere_sans_pause():
+    delais = _geste_continu()
+    releve = _comportement(delais_souris_ms=delais, delai_souris_max_ms=max(delais))
+    assert _signaux(_session(releve), "entropie-interaction").get("pas_de_pause") == 0.5
+
+
+def test_pas_de_pause_releve_ancien_plafonne_ne_conclut_pas():
+    """Relevé d'avant le 12/11, sans `delai_souris_max_ms`, liste pleine (50) : la suite de la page est inconnue."""
+    releve = _comportement(delais_souris_ms=_geste_continu(50))
+    assert "pas_de_pause" not in _signaux(_session(releve), "entropie-interaction")
+
+
+def test_pas_de_pause_releve_ancien_sous_le_plafond_juge_sa_liste():
+    """Sous le plafond, la liste d'un relevé ancien contient tous les délais de la page : la règle reste valable."""
+    releve = _comportement(delais_souris_ms=_geste_continu(30))
+    assert _signaux(_session(releve), "entropie-interaction").get("pas_de_pause") == 0.5
 
 
 # --- Détecteur AudioContext ---
@@ -454,6 +564,76 @@ def test_deep_proxy_cumul_automatise():
         js=[_empreinte_deep_proxy(toString_natif=False, error_has_proxy=True, navigator_proto=False)],
     )
     assert verdicts(obs)["deep-proxy"] == "automatise"
+
+
+# --- Détecteur CDP ---
+
+
+def _cdp_ordinaire(**kw):
+    """Bloc `cdp_detection` d'un navigateur ordinaire : outils de développement fermés, relevé fait environ
+    0,2 s après le chargement, donc avant tout clic. L'instruction `debugger` ne coûte que quelques
+    microsecondes (0 ms au grain de l'horloge, 0,1 ms) et aucune entrée first-input n'existe encore. Les trois
+    moteurs des campagnes 90 à 94 envoient exactement ces valeurs."""
+    base = {
+        "stack_has_evaluate": False,
+        "stack_has_cdp_session": False,
+        "debugger_delta_ms": 0,
+        "debugger_suspect": True,
+        "cdp_resource_entries": 0,
+        "empty_script_tags": 0,
+        "heap_ratio": 0.012,
+        "console_log_natif": True,
+        "console_debug_natif": True,
+        "trusted_types_available": True,
+        "tt_policy_count": 0,
+        "has_first_input": False,
+    }
+    base.update(kw)
+    return _avec_sonde("cdp_detection", **base)
+
+
+def _cdp(**kw):
+    obs = Observations(http=[requete(entetes_navigateur())], js=[_cdp_ordinaire(**kw)])
+    return next(c for c in classer(obs) if c.detector_name == "cdp")
+
+
+@pytest.mark.parametrize(
+    ("delta", "suspect", "premier_clic"),
+    [
+        (0, True, False),  # outils fermés, horloge sans tic entre les deux lectures, relevé avant tout clic
+        (0.1, False, False),  # même navigateur, un tic d'horloge tombé entre les deux lectures
+        (0, True, True),  # une personne qui a déjà cliqué
+        (2500.0, False, False),  # outils de développement ouverts : `debugger` met la page en pause
+    ],
+)
+def test_cdp_navigateur_ordinaire_n_est_pas_classe(delta, suspect, premier_clic):
+    """Ni la durée de `debugger` ni l'absence d'un premier clic au moment du relevé ne trahissent un pilotage :
+    aucun signal, donc rien non plus pour le score composite."""
+    c = _cdp(debugger_delta_ms=delta, debugger_suspect=suspect, has_first_input=premier_clic)
+    assert c.classification == "humain"
+    assert c.signals == []
+
+
+@pytest.mark.parametrize(
+    ("releve", "code", "poids"),
+    [
+        ({"stack_has_evaluate": True}, "cdp_evaluate", 1.0),
+        ({"stack_has_cdp_session": True}, "cdp_session", 1.0),
+        ({"cdp_resource_entries": 2}, "cdp_resources", 0.8),
+        ({"empty_script_tags": 1}, "scripts_injectes", 0.5),
+        ({"console_log_natif": False}, "console_patche", 0.5),
+    ],
+)
+def test_cdp_signal_garde_son_effet(releve, code, poids):
+    c = _cdp(**releve)
+    assert [(s.code, s.poids) for s in c.signals] == [(code, poids)]
+    assert c.classification == ("automatise" if poids >= 1.0 else "indetermine")
+
+
+def test_cdp_signaux_moyens_cumules():
+    c = _cdp(empty_script_tags=1, console_log_natif=False)
+    assert c.classification == "automatise"
+    assert {s.code for s in c.signals} == {"scripts_injectes", "console_patche"}
 
 
 # --- Détecteur TLS v2 ---
@@ -905,3 +1085,30 @@ def test_h2_cumul_signaux_automatise():
     c = _h2_verdict(UA_CHROME, h2)
     assert c.classification == "automatise"
     assert len(c.signals) >= 3
+
+
+def _codes_coherence_profonde(**navigateur):
+    from shadowlab.detection import DetecteurCoherenceProfonde
+
+    obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte(**navigateur)])
+    return {s.code for s in DetecteurCoherenceProfonde().classer(obs).signals}
+
+
+def test_device_memory_16_go_accepte():
+    """Chrome 2026 annonce 16 hors Android : un humain sur 16 Go ne doit pas être signalé."""
+    assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=16)
+
+
+def test_device_memory_32_go_accepte():
+    """Le Chromium 156 des témoins annonce 32 sur une machine de 64 Go (campagne 94)."""
+    assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=32)
+
+
+def test_device_memory_anciens_paliers_toujours_acceptes():
+    for valeur in (0.25, 0.5, 1, 2, 4, 8):
+        assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=valeur), valeur
+
+
+def test_device_memory_valeur_inconnue_des_navigateurs_signalee():
+    for valeur in (3, 12, 64):
+        assert "device_memory_invalide" in _codes_coherence_profonde(deviceMemory=valeur), valeur

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Met le site public en ligne depuis ce poste, par un tunnel Cloudflare « rapide » (sans compte ni domaine).
 #
-#   SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme — adresse@exemple.fr" scripts/site-public-tunnel.sh
+#   SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme" scripts/site-public-tunnel.sh
 #
 # Ce que fait le script :
 #   1. ouvre un tunnel cloudflared vers http://127.0.0.1:<port> (aucun port ouvert sur la box) ;
@@ -15,7 +15,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -z "${SHADOWLAB_PUBLIC_CONTACT:-}" ]; then
-    echo "SHADOWLAB_PUBLIC_CONTACT est vide : donner le responsable et une adresse où lui écrire." >&2
+    echo "SHADOWLAB_PUBLIC_CONTACT est vide : donner le nom ou le pseudonyme du responsable." >&2
     exit 2
 fi
 for outil in cloudflared uv caffeinate; do

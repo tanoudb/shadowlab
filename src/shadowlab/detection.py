@@ -18,6 +18,7 @@ from typing import Any, Protocol
 SEUIL_AUTOMATISE = 1.0
 SEUIL_RYTHME_PAR_S = 4.0
 SEUIL_DUREE_PAGE_MS = 500
+PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délais de souris d'une page
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
 MARQUEURS_UA_OUTILS = re.compile(r"python|curl|httpx|requests|aiohttp|wget|go-http|java/|okhttp", re.I)
@@ -86,6 +87,12 @@ def _entetes(obs_http: dict[str, Any]) -> dict[str, str]:
     return {nom.lower(): valeur for nom, valeur in obs_http["headers"]}
 
 
+def _annonce_headless(obs_http: dict[str, Any]) -> bool:
+    """« HeadlessChrome » dans le User-Agent ou dans les marques annoncées (`sec-ch-ua`) d'une requête."""
+    e = _entetes(obs_http)
+    return any("headlesschrome" in e.get(nom, "").lower() for nom in ("user-agent", "sec-ch-ua"))
+
+
 def _verdict(nom: str, version: str, signaux: list[Signal], appui_humain: float = 0.6) -> Classement:
     # `confidence` ici est un score heuristique non calibré (somme de poids plafonnée,
     # ou `appui_humain` constant). Il sert à trier/afficher, jamais à calculer un taux.
@@ -125,10 +132,15 @@ class DetecteurBotD:
 
 
 class DetecteurReglesHttp:
-    """Règles sur les en-têtes HTTP des requêtes de pages, sans JavaScript."""
+    """Règles sur les en-têtes HTTP des requêtes de pages, sans JavaScript.
+
+    V2.1 (12/11/2026) : « HeadlessChrome » cherché dans toutes les requêtes de la session, pas seulement dans
+    la première page. Un moteur qui réécrit son identité laisse passer des requêtes non réécrites
+    (campagne 94 : 182 requêtes de NOEZIA sur 1 160). Aucun vrai navigateur n'envoie ce mot.
+    """
 
     name = "regles-http"
-    version = "2"
+    version = "2.1"
 
     def classer(self, obs: Observations) -> Classement:
         documents = obs.documents
@@ -143,6 +155,11 @@ class DetecteurReglesHttp:
             signaux.append(Signal("ua_outil", f"User-Agent d'outil : {ua[:80]}", 1.0))
         if "headlesschrome" in ua.lower():
             signaux.append(Signal("ua_headless", "User-Agent HeadlessChrome", 1.0))
+        else:
+            fuites = sum(1 for o in obs.http if _annonce_headless(o))
+            if fuites:
+                description = f"« HeadlessChrome » dans les en-têtes de {fuites} requête(s) sur {len(obs.http)}"
+                signaux.append(Signal("headless_dans_une_requete", description, 1.0))
         if "accept-language" not in e:
             signaux.append(Signal("langue_absente", "en-tête Accept-Language absent", 0.5))
         navigateur_annonce = "mozilla/" in ua.lower()
@@ -570,10 +587,12 @@ class DetecteurComportement:
     patterns imparfaits (ratio mousemove/click élevé, hover erratique, micro-pauses
     dans les trajectoires, retours en arrière). L'absence de ces imperfections est
     elle-même un signal.
+    V2.1 (12/11/2026) : `pas_de_scroll` ne compte que les pages qui pouvaient défiler (`page_defilable`) ;
+    la V2 classait aussi la molette tournée sur une page plus courte que la fenêtre (campagne 94).
     """
 
     name = "comportement"
-    version = "2"
+    version = "2.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -599,7 +618,6 @@ class DetecteurComportement:
         evenements = [r.get("evenements", {}) for r in releves]
         total_moves = sum(e.get("mousemove", 0) for e in evenements)
         total_clicks = sum(e.get("click", 0) for e in evenements)
-        total_scrolls = sum(e.get("scroll", 0) for e in evenements)
         interactions = sum(sum(e.values()) for e in evenements)
         duree = sum(r.get("duree_page_ms") or 0 for r in releves)
 
@@ -625,12 +643,18 @@ class DetecteurComportement:
                     )
                 )
 
-        # Absence totale de scroll sur des pages longues : un humain scrolle pour lire
-        if total_moves > 20 and total_scrolls == 0 and len(releves) >= 2:
+        # Absence totale de scroll sur des pages longues : un humain scrolle pour lire.
+        # Seules comptent les pages qui pouvaient défiler (`page_defilable`, lu par l'observateur à la sortie de la
+        # page) : sur une page plus courte que la fenêtre, la molette ne produit aucun événement `scroll`, pour un
+        # humain comme pour un robot. Un relevé ancien, sans ce champ, n'est pas compté : la règle ne conclut pas.
+        defilables = [r.get("evenements", {}) for r in releves if r.get("page_defilable") is True]
+        moves_defilables = sum(e.get("mousemove", 0) for e in defilables)
+        scrolls_defilables = sum(e.get("scroll", 0) for e in defilables)
+        if moves_defilables > 20 and scrolls_defilables == 0 and len(defilables) >= 2:
             signaux.append(
                 Signal(
                     "pas_de_scroll",
-                    "mouvements souris sans aucun défilement sur plusieurs pages",
+                    "mouvements souris sans aucun défilement sur plusieurs pages plus hautes que la fenêtre",
                     0.35,
                 )
             )
@@ -723,11 +747,13 @@ class DetecteurCoherenceProfonde:
     - outerWidth doit être ≥ innerWidth (barre de titre, bordures)
     - devicePixelRatio doit correspondre au type d'écran
     - hardwareConcurrency doit être une puissance de 2 ≤ 128
-    - deviceMemory doit être dans {0.25, 0.5, 1, 2, 4, 8}
+    - deviceMemory doit être dans {0.25, 0.5, 1, 2, 4, 8, 16, 32}
+
+    V1.1 (12/11/2026) : deviceMemory 16 et 32 acceptés ; la V1 signalait tout humain sur une machine de 16 Go ou plus.
     """
 
     name = "coherence-profonde"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -786,9 +812,10 @@ class DetecteurCoherenceProfonde:
             if hwc > 128:
                 signaux.append(Signal("hwc_excessif", f"hardwareConcurrency={hwc} > 128", 0.5))
 
-        # deviceMemory : doit être dans {0.25, 0.5, 1, 2, 4, 8}
+        # deviceMemory : Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) ; le Chromium 156
+        # piloté sans réglage annonce 32 sur une machine de 64 Go (campagne 94).
         dm = nav.get("deviceMemory")
-        if isinstance(dm, (int, float)) and dm not in (0.25, 0.5, 1, 2, 4, 8, "unknown"):
+        if isinstance(dm, (int, float)) and dm not in (0.25, 0.5, 1, 2, 4, 8, 16, 32, "unknown"):
             signaux.append(Signal("device_memory_invalide", f"deviceMemory={dm} invalide", 0.5))
 
         # colorDepth : doit être 24 ou 30 (HDR)
@@ -804,16 +831,33 @@ class DetecteurCoherenceProfonde:
         return _verdict(self.name, self.version, signaux)
 
 
+def _plus_longue_pause(releve: dict[str, Any], delais: list[float]) -> float | None:
+    """Plus grand délai entre deux mouvements de souris sur toute la page ; None si le relevé ne le dit pas.
+
+    Relevé récent : `delai_souris_max_ms`, tenu par l'observateur sur toute la page. Relevé ancien, sans ce champ :
+    sous le plafond, la liste contient tous les délais de la page et son maximum fait foi ; plafonnée, la suite de
+    la page est inconnue et la règle ne conclut pas.
+    """
+    maximum = releve.get("delai_souris_max_ms")
+    if isinstance(maximum, (int, float)) and not isinstance(maximum, bool):
+        return maximum
+    if not delais or len(delais) >= PLAFOND_DELAIS_SOURIS:
+        return None
+    return max(delais)
+
+
 class DetecteurEntropieInteraction:
     """Analyse l'entropie temporelle des interactions souris.
 
     Un humain a une distribution de délais entre mouvements souris qui suit
     approximativement une loi log-normale. Un robot a des délais trop réguliers
     (faible écart-type) ou trop uniformément distribués.
+    V1.1 (12/11/2026) : `pas_de_pause` juge la page entière (`delai_souris_max_ms`) ; la V1 ne lisait que les
+    50 premiers délais, soit un seul geste continu d'environ 1,5 s (campagne 94).
     """
 
     name = "entropie-interaction"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -851,10 +895,11 @@ class DetecteurEntropieInteraction:
                     Signal("timing_quantifie", f"{ratio_unique:.0%} de délais uniques ({uniques}/{len(delais)})", 0.5)
                 )
 
-            # Aucun délai long (> 500ms) → pas de pause humaine
-            if len(delais) > 20 and max(delais) < 80:
+            # Aucune pause entre deux mouvements de souris sur toute la page → pas de pause humaine
+            plus_longue = _plus_longue_pause(r, delais)
+            if len(delais) > 20 and plus_longue is not None and plus_longue < 80:
                 signaux.append(
-                    Signal("pas_de_pause", f"max délai souris = {max(delais):.0f}ms (pas de pause humaine)", 0.5)
+                    Signal("pas_de_pause", f"max délai souris = {plus_longue:.0f}ms (pas de pause humaine)", 0.5)
                 )
 
             # Trajectoire trop linéaire : angles entre segments consécutifs
@@ -2199,15 +2244,18 @@ class DetecteurCDP:
     """Détection d'artefacts Chrome DevTools Protocol (Playwright, Puppeteer, etc.).
 
     Exploite les données collectées par cdpDetectionTest() dans observateur.js :
-    - Timing du debugger statement (quasi-instantané sous CDP)
+    - Runtime.evaluate ou bindings CDP dans la pile d'une erreur
     - Ressources CDP dans les performance entries
     - Scripts vides injectés (addScriptToEvaluateOnNewDocument)
     - console.log patchée par les bindings CDP
-    - Absence d'entrée first-input (pas d'interaction réelle)
+
+    V2 (12/11/2026) : retrait de `debugger_instant` et `no_first_input`, que tout navigateur déclenche
+    (outils de développement fermés, relevé fait avant le premier clic) ; la V1 classait humains et moteurs
+    à l'identique. L'absence d'interaction reste jugée par `comportement`, en fin de page.
     """
 
     name = "cdp"
-    version = "1"
+    version = "2"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -2226,11 +2274,6 @@ class DetecteurCDP:
         if cdp.get("stack_has_cdp_session"):
             signaux.append(Signal("cdp_session", "bindings CDP dans la stack trace", 1.0))
 
-        debugger_delta = cdp.get("debugger_delta_ms")
-        if isinstance(debugger_delta, (int, float)):
-            if cdp.get("debugger_suspect") or debugger_delta < 0.05:
-                signaux.append(Signal("debugger_instant", f"debugger résolu en {debugger_delta:.3f}ms (CDP)", 0.6))
-
         if (cdp.get("cdp_resource_entries") or 0) > 0:
             signaux.append(Signal("cdp_resources", f"{cdp['cdp_resource_entries']} ressource(s) CDP/DevTools", 0.8))
 
@@ -2246,9 +2289,6 @@ class DetecteurCDP:
 
         if cdp.get("console_log_natif") is False:
             signaux.append(Signal("console_patche", "console.log patchée (bindings CDP)", 0.5))
-
-        if cdp.get("has_first_input") is False:
-            signaux.append(Signal("no_first_input", "aucune entrée first-input (pas de vraie interaction)", 0.4))
 
         return _verdict(self.name, self.version, signaux)
 
