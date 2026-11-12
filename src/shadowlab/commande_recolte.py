@@ -357,6 +357,49 @@ def _diagnostic(
     )
 
 
+def evaluer_passe(etat: Etat, numero: int, nom_verite: str, reglages: Reglages) -> dict[str, Any]:
+    """Note une passe contre la vérité du site factice (`vitrine` ou `rallye`) : pages, enregistrements, champs.
+
+    Même notation que `recolte noter`, rendue en données (scénarios de campagne). `champs` vaut 0 quand aucun champ
+    n'est comparable (rien retrouvé) : ce n'est jamais un succès. `reussi` : les trois mesures atteignent `SEUIL`.
+    """
+    _, _, collections, verite, attendues = _verite_du_labo(argparse.Namespace(verite=nom_verite), reglages)
+    pages = notation.noter_pages(attendues, etat.adresses_couvertes(numero))
+    notes = {
+        nom: notation.noter_recolte(etat.enregistrements(nom), verite, liste=liste, cle=cle)
+        for nom, (liste, cle) in collections.items()
+    }
+    attendus = sum(n["enregistrements_attendus"] for n in notes.values())
+    retrouves = sum(n["enregistrements_retrouves"] for n in notes.values())
+    champs_attendus = sum(n["champs_attendus"] for n in notes.values())
+    champs_exacts = sum(n["champs_exacts"] for n in notes.values())
+    mesures = {
+        "pages": pages["completude_pages"],
+        "enregistrements": retrouves / attendus if attendus else 0.0,
+        "champs": champs_exacts / champs_attendus if champs_attendus else 0.0,
+    }
+    return {
+        **mesures,
+        "seuil": SEUIL,
+        "reussi": all(v >= SEUIL for v in mesures.values()),
+        "pages_lues": pages["pages_lues"],
+        "pages_attendues": pages["pages_attendues"],
+        "pages_manquantes": pages["pages_manquantes"],
+        "enregistrements_retrouves": retrouves,
+        "enregistrements_attendus": attendus,
+        "champs_exacts": champs_exacts,
+        "champs_attendus": champs_attendus,
+        "par_collection": {
+            nom: {
+                "enregistrements": f"{n['enregistrements_retrouves']}/{n['enregistrements_attendus']}",
+                "champs": f"{n['champs_exacts']}/{n['champs_attendus']}",
+                "erreurs_par_champ": n["erreurs_par_champ"],
+            }
+            for nom, n in notes.items()
+        },
+    }
+
+
 def _noter(args: argparse.Namespace, reglages: Reglages) -> int:
     if not args.verite:
         raise RefusParcours("noter demande --verite vitrine|rallye")

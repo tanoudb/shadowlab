@@ -1,0 +1,26 @@
+# Premier lancement de la récolte générale en campagne : même chose que recolte-generale.yaml, en petit.
+# Une répétition, petites tailles : à lancer avant la grande campagne pour voir que tout tourne.
+#
+# TAILLES : vitrine 20 annonces = 1 page de liste + 20 fiches = 21 pages ; rallye 3 rallyes = 85 pages.
+# DURÉE, à 7 s par page en navigateur : 106 pages × 7 s × 1 répétition = 742 s, soit 12 min 22 s ; HTTP en plus :
+#   moins de 1 min. Total attendu : environ 13 min (moins de 30). Chrome s'ouvre en fenêtre visible.
+#
+# POUR LE LANCER :
+#   SHADOWLAB_VITRINE_TAILLE=20 SHADOWLAB_RALLYE_TAILLE=3 uv run shadowlab campagne configs/experiments/recolte-generale-essai.yaml
+experiment:
+  name: recolte_generale_essai
+  description: >-
+    Essai court de la récolte générale en campagne (vitrine 20 annonces, rallye 3 rallyes), niveau 01,
+    une répétition.
+  environment: local
+  engines:
+    - curl-cffi
+    - name: noezia
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["01"]
+  scenarios:
+    - recolte_recette_vitrine
+    - recolte_recette_rallye
+  repetitions: 1
+  seed: 20261112
+  output: [json, html]

@@ -1,0 +1,46 @@
+# Campagne de la récolte générale (docs/PLAN.md, étape 6) : la commande de récolte, mesurée par le labo.
+#
+# CE QU'ELLE MESURE
+#   Deux sites factices à contenu connu, récoltés par le parcours de `shadowlab recolte` (les recettes
+#   configs/recettes/vitrine.yaml et rallye-demo.yaml), avec deux moteurs, dans le niveau de protection du passage :
+#     recolte_recette_vitrine : liste paginée, puis chaque fiche d'annonce (14 champs).
+#     recolte_recette_rallye  : saisons, calendrier, rallyes, spéciales, temps, classements, engagés, pilotes, châssis.
+#   Chaque passage est noté contre la vérité du site : pages lues, enregistrements retrouvés, champs exacts.
+#   Réussi = les trois mesures à 99 % ou plus (SEUIL de commande_recolte). Résultat détaillé dans `recolte`
+#   (par collection, pages manquantes, erreurs par champ). Un arrêt sur alerte (page de blocage) est un échec noté.
+#   Moteurs : curl-cffi (moteur « http ») ; noezia en identité native, vrai Chrome visible (moteur « navigateur »).
+#   Les deux autres moteurs ne sont pas pris en charge par la récolte : le scénario les refuse.
+#
+# NIVEAU 01 : le site du labo sans protection (preuve que la récolte est exacte). Pour la mesurer à un niveau de
+#   l'Arena, ajouter "02" à "07" dans `protections` : le passage porte alors son jeton et entre par l'Arena
+#   (le niveau vient du jeton `sl` du passage).
+#
+# TAILLES (réglées par l'environnement, lues par le site et par la notation ; défauts 500 et 24) :
+#   SHADOWLAB_VITRINE_TAILLE=150 : 150 annonces = 8 pages de liste + 150 fiches = 158 pages.
+#   SHADOWLAB_RALLYE_TAILLE=24   : 24 rallyes = 427 pages (158 spéciales, 93 châssis, 97 pilotes…).
+#   Un tour (les deux scénarios) = 585 pages.
+#
+# DURÉE, à 7 s par page en navigateur (HTTP : quelques minutes en tout) :
+#   navigateur : 585 pages × 7 s × 3 répétitions = 12 285 s, soit 3 h 25 min ; HTTP en plus : environ 5 min.
+#   Total attendu : de l'ordre de 3 h 30 (une nuit, avec marge). Le Mac doit rester éveillé, l'écran libre
+#   (Chrome s'ouvre en fenêtre visible) ; ne rien lancer d'autre pendant la campagne (CPU et durées faussés).
+#
+# POUR LA LANCER (après `shadowlab valider`, voir aussi recolte-generale-essai.yaml, à lancer d'abord) :
+#   SHADOWLAB_VITRINE_TAILLE=150 SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-generale.yaml
+experiment:
+  name: recolte_generale
+  description: >-
+    Récolte générale (recettes vitrine et rallye) par curl-cffi et noezia en identité native, niveau 01 :
+    pages, enregistrements et champs à 99 % ou plus.
+  environment: local
+  engines:
+    - curl-cffi
+    - name: noezia
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["01"]
+  scenarios:
+    - recolte_recette_vitrine
+    - recolte_recette_rallye
+  repetitions: 3
+  seed: 20261112
+  output: [json, html]
