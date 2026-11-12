@@ -82,6 +82,11 @@ def effacer(cx: sqlite3.Connection, numero: int) -> bool:
     return cx.execute("DELETE FROM messages WHERE id = ?", (numero,)).rowcount > 0
 
 
+def effacer_tout(cx: sqlite3.Connection) -> int:
+    """Vide la boîte (les numéros suivants ne reprennent pas à 1). Renvoie le nombre de messages effacés."""
+    return cx.execute("DELETE FROM messages").rowcount
+
+
 def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = None) -> int:
     """Efface les messages reçus il y a plus de `jours` jours. Renvoie leur nombre."""
     limite = _jour((maintenant or datetime.now(UTC)) - timedelta(days=jours))

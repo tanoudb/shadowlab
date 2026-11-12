@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import re
@@ -72,23 +73,41 @@ class Limites:
     duree_session_s: int = 2 * 3600  # au-delà, la session n'est plus « en cours »
     taille_max_base: int = 2 * 1024**3  # au-delà, plus aucune session ne s'ouvre et plus rien ne s'écrit
     messages_par_adresse: int = 3  # messages de contact par heure glissante et par adresse (en mémoire seulement)
+    # Par 24 h glissantes et par adresse (en mémoire) : un visiteur écrit une ou deux fois. Une adresse seule
+    # n'épuise plus le plafond du jour (30), ni la boîte avant la purge (5 × 90 jours = 450 < 500).
+    messages_par_adresse_jour: int = 5
     messages_par_jour: int = 30  # messages de contact par jour UTC, toutes adresses confondues
     messages_gardes: int = 500  # au-delà, le formulaire refuse jusqu'à la purge (8 Ko au pire par message)
     taille_message: int = 2000  # caractères d'un message de contact
 
 
+def bloc_d_adresse(adresse: str) -> str:
+    """Ce que comptent les limites par adresse. Une adresse IPv6 compte pour son bloc /64 : un abonné en reçoit au
+    moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6 (`::ffff:a.b.c.d`),
+    reste elle-même ; une valeur qui n'est pas une adresse reste telle quelle."""
+    try:
+        ip = ipaddress.ip_address(adresse)
+    except ValueError:
+        return adresse
+    if isinstance(ip, ipaddress.IPv4Address):
+        return adresse
+    if ip.ipv4_mapped is not None:
+        return str(ip.ipv4_mapped)
+    return f"{ipaddress.IPv6Address(int(ip) >> 64 << 64)}/64"  # par l'entier : sans la zone (%eth0) éventuelle
+
+
 class Limiteur:
-    """Ouvertures de session par adresse sur une heure glissante.
+    """Actions par adresse (ouvertures de session, messages) sur une fenêtre glissante, une heure par défaut.
 
     L'adresse n'est jamais écrite : elle n'existe qu'en mémoire, sous forme d'empreinte salée par un sel tiré
-    au démarrage, et disparaît au redémarrage.
+    au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /64 (`bloc_d_adresse`).
     """
 
-    FENETRE_S = 3600
     ADRESSES_MAX = 10_000
 
-    def __init__(self, maximum: int, horloge: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, maximum: int, fenetre_s: int = 3600, horloge: Callable[[], float] = time.monotonic) -> None:
         self.maximum = maximum
+        self.fenetre_s = fenetre_s
         self._horloge = horloge
         self._sel = secrets.token_bytes(16)
         self._vues: dict[bytes, deque[float]] = {}
@@ -96,12 +115,12 @@ class Limiteur:
     def autoriser(self, adresse: str) -> bool:
         maintenant = self._horloge()
         if len(self._vues) >= self.ADRESSES_MAX:
-            self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.FENETRE_S}
+            self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.fenetre_s}
             if len(self._vues) >= self.ADRESSES_MAX:  # inondation : on repart de zéro, le plafond du jour tient
                 self._vues.clear()
-        cle = hashlib.blake2b(adresse.encode(), key=self._sel, digest_size=16).digest()
+        cle = hashlib.blake2b(bloc_d_adresse(adresse).encode(), key=self._sel, digest_size=16).digest()
         vues = self._vues.setdefault(cle, deque())
-        while vues and maintenant - vues[0] >= self.FENETRE_S:
+        while vues and maintenant - vues[0] >= self.fenetre_s:
             vues.popleft()
         if len(vues) >= self.maximum:
             return False
@@ -164,6 +183,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     cookie_droits = f"{prefixe}slp-droits"  # retrouver et supprimer sa session, dans ce navigateur
     limiteur = Limiteur(limites.sessions_par_adresse)
     limiteur_messages = Limiteur(limites.messages_par_adresse)
+    limiteur_messages_jour = Limiteur(limites.messages_par_adresse_jour, fenetre_s=UNE_JOURNEE_S)
     fichier_messages = messages.chemin(reglages.base_donnees)
     taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
@@ -482,7 +502,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 pleine = "Le formulaire n'accepte plus de message pour le moment. Réessayez dans quelques jours."
                 return page_contact(request, pleine, texte, status_code=503)
             trop = messages.du_jour(cx) >= limites.messages_par_jour
-            if trop or not limiteur_messages.autoriser(adresse_de(request)):
+            adresse = adresse_de(request)
+            # L'heure d'abord : un envoi qu'elle refuse ne doit pas user le quota du jour.
+            if trop or not limiteur_messages.autoriser(adresse) or not limiteur_messages_jour.autoriser(adresse):
                 return page_contact(request, "Trop de messages ont été envoyés. Réessayez plus tard.", texte, 429)
             messages.ajouter(cx, texte)
         _avis_au_responsable("message de contact reçu")  # jamais son texte, jamais dans le journal
