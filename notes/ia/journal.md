@@ -2765,3 +2765,33 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `Mac OS X 10_15_7`, trois indices de marque, `Accept-Language` complet, 5 plugins, `webdriver` faux.
 - **Campagne 97 lancée à 13 h 35** (`ablation-interface.yaml`, 525 passages, profils `06scorr`/`07scorr` appliqués).
 **Reste :** voir `notes/ia/contexte.md`.
+
+## 2026-11-12 (17h) — Claude (Sonnet 5.5) — Campagnes 97 et 98, orphelins (D-68), bilan de l'après-midi
+
+- **Campagne 97** (525 passages, 0 panne) : `noezia` tel qu'il est passe 01 seul (15, 10, 10, 10, 0, 0, 0 sur
+  15) ; identité native et vrai Chrome seul : 15 sur 15 aux niveaux 01 à 03, 0 du 04 au 07 (quatre règles de
+  l'Arena) ; témoins arrêtés dès le 02.
+- **D-66 et campagne 98** (135 passages, 0 panne, 16 h 19 à 16 h 52) : `noezia` en identité native fait 15 sur
+  15 aux niveaux 04, 05 et 06 sans corrélation, donc 15 sur 15 aux six niveaux avec la 97 ; le même Chrome
+  sans le comportement de noezia fait 10, 5 et 0 (`aucune_interaction`) ; le témoin 0 sur 45. D-66 confirmée.
+  Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de test (35 passages `captcha_test`), 06 sans
+  corrélation, aucun humain en base, un seul Chrome sur macOS.
+- **Site public** : deuxième et troisième relectures (D-65, D-67) ; parcours vérifié à l'écran à 16 h 17 ;
+  tunnel jamais lancé avec un vrai tunnel (filtre du journal de `cloudflared` jamais éprouvé).
+- **Corrélation** (D-64) : calcul réparé (libellés, un signal par fait, débit sur 60 min), fusionné.
+- **Passages orphelins** (D-68) : 18 passages du 08/11 rattachés à une expérience 99 absente ; numéro jamais
+  réutilisé, migration 9 adopte les orphelins ; sauvegarde
+  `outputs/shadowlab-avant-migration9-2026-11-12.sqlite3.gz`. Migration appliquée à 16 h 57 : schéma 9,
+  expérience `orpheline_99` créée (18 passages), prochain numéro 100.
+- **Tests** : 753 verts à 16 h 57, après D-68 (731 rapides et 22 d'intégration), lint propre ; poussé.
+- **Consignes d'Ethan** : bilan concret par rapport à l'objectif ; il aura besoin du moteur pour de vrais
+  sites (annonces immobilières, site de rallye).
+- **Conception de la récolte générale** écrite (`docs/recherche/recolte-generale-2026-11-12.md`), soumise à
+  Ethan à 16 h 43, réponse attendue. Étapes 1, 3 et 5 préparées par trois agents dans des branches à part
+  (`recolte-1-recette`, `recolte-3-notation`, `recolte-5-rallye`) : rien n'est fusionné sans son accord.
+- **Écrit** : `docs/PLAN.md` (§ 2 bloc 98, § 8 lignes 1.7 et 1.9), `docs/DECISIONS.md` (D-68), `AGENTS.md`
+  (État), `contexte.md`.
+- **En cours** (lancé à 17 h 01) : `discretion-native-30.yaml` (identité native, 30 passages par niveau de 01
+  à 06 sans corrélation, 180 passages), puis `discretion-native-correlation.yaml` (niveau 06 complet, 15).
+- **Reste** : écrire ces deux résultats au plan ; sessions humaines à 20 h puis `shadowlab rejeu` ; identité
+  native comme réglage de référence ; `recolte-rythme.yaml` reporté au 13/11.

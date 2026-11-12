@@ -80,17 +80,20 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **749 tests verts** (`uv run pytest`, 12/11 à 16 h 16, hors campagne : 727 rapides et 22 d'intégration avec de
+- **753 tests verts** (`uv run pytest`, 12/11 à 16 h 57, hors campagne : 731 rapides et 22 d'intégration avec de
   vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
-  `niveau-authentifie-perimetre` (fusion `759ca18`, assemblage `integration-12-11-b`), rien sur `master`.
+  `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
   qu'il est fait 15, 10, 10, 10, 0, 0, 0 sur 15 aux niveaux 01 à 07 (06 et 07 sans corrélation), avec une seule
   cause d'échec, le signal `headless_dans_une_requete`. `noezia` en identité native (`headless: false`,
   `channel: chrome`, `identite_native: true`) et un vrai Chrome seul font 15 sur 15 aux niveaux 01 à 03, puis
   0 sur 15 du 04 au 07, à cause de quatre règles corrigées depuis (D-66). Les deux témoins sont arrêtés dès
   le niveau 02.
-- **Campagne de contrôle en cours** (lancée le 12/11 à 16 h 19, `controle-vrai-chrome.yaml`, 135 passages,
-  niveaux 04 à 06 sans corrélation, après D-66) : résultat pas encore connu.
+- **Campagne 98** (contrôle de D-66, 135 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` en identité native fait
+  15 sur 15 aux niveaux 04, 05 et 06 sans corrélation, donc aux six niveaux de l'objectif avec la 97 ; le même Chrome
+  sans le comportement de noezia fait 10, 5 et 0 (`aucune_interaction`), le témoin 0 sur 45.
+  Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 sans corrélation,
+  aucun humain en base, un seul Chrome sur macOS.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, commande de récolte générale (liste puis fiches, tableaux, arbre ; conception en cours dans `docs/recherche/recolte-generale-2026-11-12.md`, attend l'accord d'Ethan).
 

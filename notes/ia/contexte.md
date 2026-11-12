@@ -21,19 +21,23 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 12/11 à 16 h 16, sans campagne : **749 verts** (`uv run pytest` : 727 rapides et 22 d'intégration
-  avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
-  `niveau-authentifie-perimetre` poussée à 16 h 17 (fusion `759ca18`, assemblage `integration-12-11-b`), rien
-  sur `master`.
+- Tests au 12/11 à 16 h 57, sans campagne : **753 verts** (`uv run pytest` : 731 rapides et 22 d'intégration
+  avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 16 h 16), lint propre. Branche
+  `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
+  passages orphelins), rien sur `master`.
 - Mesuré, campagne 97 (525 passages, 0 panne, `docs/PLAN.md` § 2) : le moteur `noezia` tel qu'il est fait
   15, 10, 10, 10, 0, 0, 0 sur 15 aux niveaux 01 à 07 (06 et 07 sans corrélation), une seule cause d'échec :
   `headless_dans_une_requete`. `noezia` en identité native et un vrai Chrome seul : 15 sur 15 aux niveaux 01 à
   03, puis 0 sur 15 du 04 au 07, à cause de quatre règles de l'Arena, corrigées depuis par D-66. Les deux
   témoins sont arrêtés dès le niveau 02.
-- **Campagne de contrôle en cours** (lancée à 16 h 19, `controle-vrai-chrome.yaml`, 135 passages, niveaux 04,
-  05 et 06 sans corrélation, après D-66) : résultat pas encore connu.
+- **Campagne 98** (contrôle de D-66, 135 passages, 0 panne, 16 h 19 à 16 h 52, `docs/PLAN.md` § 2) : `noezia` en
+  identité native fait 15 sur 15 aux niveaux 04, 05 et 06 sans corrélation, donc 15 sur 15 aux six niveaux de
+  l'objectif avec la campagne 97 ; le même Chrome sans le comportement de noezia fait 10, 5 et 0 (arrêté pour
+  `aucune_interaction`) ; le témoin 0 sur 45. Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de
+  test aux niveaux 05 et 06, 06 sans corrélation, aucun humain en base, un seul Chrome sur macOS.
 - Décisions du jour : D-64 (corrélation entre sessions, détecteur en 1.1), D-65 et D-67 (site public, deuxième
-  et troisième relectures), D-66 (quatre règles de l'Arena qui classaient tout vrai Chrome).
+  et troisième relectures), D-66 (quatre règles de l'Arena qui classaient tout vrai Chrome), D-68 (numéro
+  d'expérience jamais réutilisé, passages orphelins adoptés par la migration 9).
 - Site public : parcours vérifié à l'écran à 16 h 17, feu vert à la mise en ligne, réserve : le script de tunnel
   n'a jamais tourné avec un vrai tunnel (le filtre du journal de `cloudflared` n'a jamais vu une vraie ligne).
 - Consigne d'Ethan du 12/11 : il aura besoin du scraper pour de vrais sites (premiers visés : annonces
@@ -63,19 +67,22 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
 | `moteur-version-reelle` | version réelle annoncée (D-58) | de côté ; sans objet si l'identité native l'emporte |
 
 ## Prochaine action (12/11)
-1. **Campagne de contrôle en cours** (`configs/experiments/controle-vrai-chrome.yaml`, lancée à 16 h 19,
-   135 passages, 45 min à 1 h 40) : ni test ni modification de `src/` d'ici là. Elle exige
-   `SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml` (avant : `shadowlab arena appliquer`
-   avec la variable ; après : `uv run shadowlab arena appliquer` sans elle, pour retirer `06scorr`).
-2. À sa fin : lire le résultat et l'écrire au § 2 du plan (le vrai Chrome passe-t-il les niveaux 04 à 06 ?).
-3. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours. Ethan fait 5 sessions humaines
+1. **Campagnes de discrétion en cours** (lancées à 17 h 01, fin vers 18 h 15) : `discretion-native-30.yaml`
+   (identité native, 30 passages par niveau de 01 à 06 sans corrélation), puis
+   `discretion-native-correlation.yaml` (niveau 06 complet, 15 passages). Ni test ni modification de `src/`
+   d'ici là. À leur fin : lire les résultats, les écrire au § 2 du plan, vérifier que l'Arena est revenue
+   à ses profils d'origine (`uv run shadowlab arena appliquer` sans variable, fait par la commande lancée).
+   Migration 9 (D-68) appliquée à 16 h 57 : schéma 9, `orpheline_99` créée, prochain numéro 100.
+2. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours. Ethan fait 5 sessions humaines
    locales (`uv run shadowlab site`, puis `http://127.0.0.1:8770/manuel`), puis `uv run shadowlab rejeu`
    (jalon A sur l'Arena corrigée) ; comparer ses en-têtes et son empreinte à NOEZIA.
-4. **Conception de la récolte générale** : `docs/recherche/recolte-generale-2026-11-12.md` à soumettre à
-   Ethan ; aucune réalisation avant son accord.
-5. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
+3. **Conception de la récolte générale** : `docs/recherche/recolte-generale-2026-11-12.md`, soumise à Ethan
+   à 16 h 43, réponse attendue. Étapes 1, 3 et 5 préparées dans des branches à part (`recolte-1-recette`,
+   `recolte-3-notation`, `recolte-5-rallye`, dossiers de travail à côté du dépôt) : écrites sans être
+   exécutées pendant les campagnes, à tester ensuite ; rien n'est fusionné sans son accord.
+4. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
-6. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
-7. Plan (§ 2, § 8), `AGENTS.md` (État), journal, pousser.
+5. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
+6. Plan (§ 2, § 8), `AGENTS.md` (État), journal, pousser.
 
 Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.

@@ -475,3 +475,18 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   pas qu'un humain était là (question ouverte pour Ethan) ; le filtre du journal de `cloudflared` n'a jamais
   été vérifié avec un vrai tunnel. Décidé par : coordination (relecture d'un sous-agent, corrections d'un
   autre, relues).
+- **D-68 — 12/11/2026 — Numéro d'expérience jamais réutilisé, passages orphelins adoptés.** Constat : la base
+  du labo contenait 18 passages du 08/11 rattachés à une expérience n° 99 qui n'existe pas (tous `en_cours`,
+  moteur playwright, niveaux 05 et 06). `experiments.id` est un `INTEGER PRIMARY KEY` sans `AUTOINCREMENT` :
+  la campagne suivante (ou les sessions humaines du soir, qui créent leur expérience `sessions-manuelles`)
+  aurait pris le n° 99 et hérité de ces passages. Choix : tout `INSERT INTO experiments` prend
+  `db.PROCHAIN_ID_EXPERIENCE`, au-dessus de la plus grande expérience et du plus grand `runs.experiment_id` ;
+  la migration 9 crée une expérience `orpheline_<n°>` (statut `interrompu` s'il reste des passages `en_cours`,
+  sinon `termine_incomplet`, date du premier passage) pour chaque numéro de passages sans expérience, sans
+  rien supprimer. Pourquoi : `AUTOINCREMENT` aurait exigé de reconstruire la table ; l'adoption garde les
+  données. Sauvegarde avant migration : `outputs/shadowlab-avant-migration9-2026-11-12.sqlite3.gz`. Limites :
+  la cause reste une hypothèse (une connexion SQLite sans clés étrangères, hors du lanceur ; le code
+  applicatif active les clés étrangères et supprime en cascade) ; `/progression`, `/matrice` et `/reprendre`
+  de l'API renvoient une erreur pour une expérience dont la configuration n'est pas une campagne (déjà vrai
+  pour `sessions-manuelles`) ; `reports.supprimer` laisse des lignes dans `decisions`, `observations_tls` et
+  `empreintes_vues` ; rien n'empêche de supprimer une campagne en cours. Décidé par : coordination.
