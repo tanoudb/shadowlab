@@ -381,7 +381,7 @@ def test_une_variable_inconnue_est_refusee():
 
 # --- Tableaux lus par le nom de leurs colonnes (forme « rallye » du § 4) ------------------------
 
-RECETTE_TABLEAUX = ENTETE + (
+RECETTE_TABLEAUX = ENTETE.replace("type: page", "type: speciale") + (
     textwrap.dedent(
         """\
         pages:
