@@ -1907,3 +1907,61 @@ def test_le_labo_charge_toujours_tout_le_fichier_env(environnement_isole):
     reglages = config.charger()
     assert reglages.jeton_api == "jeton-du-labo"
     assert environnement_isole["CLE_API_DU_LABO"] == "secret-du-labo"
+
+
+# --- Journal de cloudflared : filtré avant d'être écrit --------------------------------------------------------
+
+SCRIPT_TUNNEL = Path(__file__).parents[1] / "scripts" / "site-public-tunnel.sh"
+HOTE_TUNNEL = "abc-def.trycloudflare.com"
+
+
+def filtre_du_tunnel() -> str:
+    """L'expression `sed` du script (variable `FILTRE_JOURNAL`), lue telle qu'il l'applique."""
+    trouve = re.search(r"^FILTRE_JOURNAL='([^']+)'$", SCRIPT_TUNNEL.read_text(encoding="utf-8"), re.M)
+    assert trouve, "le script doit garder son expression de filtrage dans la variable FILTRE_JOURNAL='…'"
+    return trouve.group(1)
+
+
+def filtrer_comme_le_tunnel(lignes: list[str]) -> list[str]:
+    sortie = subprocess.run(
+        ["sed", "-E", filtre_du_tunnel()], input="\n".join(lignes) + "\n", capture_output=True, text=True, check=True
+    )
+    return sortie.stdout.splitlines()
+
+
+@pytest.mark.skipif(shutil.which("sed") is None, reason="sed absent")
+def test_journal_du_tunnel_filtre_chemins_requetes_et_jetons():
+    jeton = "0123456789abcdef0123456789abcdef"
+    lignes = [
+        f'2026-11-12T10:00:00Z ERR Request failed error="dial tcp 127.0.0.1:8771: refused" connIndex=0 '
+        f"dest=https://{HOTE_TUNNEL}/lab/collecte?sl={jeton} event=1 ip=198.41.200.1 type=http",
+        f"2026-11-12T10:00:01Z INF |  https://{HOTE_TUNNEL}                                        |",
+        "2026-11-12T10:00:02Z INF Settings: map[url:http://127.0.0.1:8771] originService=http://127.0.0.1:8771",
+        f'2026-11-12T10:00:03Z ERR msg="GET https://{HOTE_TUNNEL}/lab/vitrine/annonces/AN-000001?q=prive HTTP/1.1"',
+        f"2026-11-12T10:00:04Z ERR path=/lab/collecte?sl={jeton}&x=1 status=502",
+        f"2026-11-12T10:00:05Z ERR champ sl={jeton} perdu",
+    ]
+    sortie = filtrer_comme_le_tunnel(lignes)
+    assert len(sortie) == len(lignes), "une ligne en entrée, une ligne en sortie"
+    texte = "\n".join(sortie)
+    for interdit in (jeton, "sl=" + jeton[:8], "/lab/", "collecte", "prive", "AN-000001", "q=", "?sl", "&x=1"):
+        assert interdit not in texte, interdit
+    assert f"dest=https://{HOTE_TUNNEL} event=1" in sortie[0], "l'adresse est réduite à schéma://hôte, le reste intact"
+    assert re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", sortie[1]), "le script retrouve toujours l'adresse"
+    assert HOTE_TUNNEL in sortie[1]
+    assert "originService=http://127.0.0.1:8771" in sortie[2], "l'hôte local reste lisible"
+    assert "status=502" in sortie[4] and "perdu" in sortie[5], "seul ce qui doit être masqué l'est"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash absent")
+def test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie():
+    script = SCRIPT_TUNNEL.read_text(encoding="utf-8")
+    assert subprocess.run(["bash", "-n", str(SCRIPT_TUNNEL)], capture_output=True).returncode == 0
+    lancement = re.search(r"^cloudflared tunnel .*$", script, re.M)
+    assert lancement, "cloudflared est lancé en arrière-plan"
+    ligne = lancement.group(0)
+    assert "> >(sed -l -E" in ligne and "FILTRE_JOURNAL" in ligne and ligne.rstrip().endswith("&")
+    assert "|" not in ligne.replace("> >(", ""), "pas de tube : `$!` resterait le PID de cloudflared, pas de sed"
+    assert re.search(r"^tunnel=\$!$", script, re.M) and 'kill "$tunnel"' in script
+    assert "n'écrit aucune requête" not in script, "cette affirmation n'a jamais été vérifiée"
+    assert "Non vérifié" in script or "jamais vérifié" in script
