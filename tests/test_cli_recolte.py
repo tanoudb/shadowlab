@@ -464,8 +464,8 @@ def test_noter_dit_pourquoi_quand_la_cle_attendue_n_existe_nulle_part(reglages, 
     assert main(["recolte", "noter", "cle-fausse", "--verite", "vitrine"]) == 1
     sortie = capsys.readouterr().out
     assert "la clé attendue est `reference`" in sortie and "ont les champs : code, titre" in sortie
-    assert "champs 0/0" not in sortie.replace("rien à comparer", "")  # jamais 0/0 sans explication
-    assert "rien à comparer" in sortie and "Sous le seuil" in sortie
+    assert "champs 0/0 (" not in sortie.replace("(rien à comparer)", "")  # jamais 0/0 avec un pourcentage
+    assert "rien à comparer, ce n'est pas un succès" in sortie and "Sous le seuil" in sortie
 
 
 def test_noter_dit_quand_aucun_enregistrement_de_la_collection_n_est_recolte(reglages, capsys):

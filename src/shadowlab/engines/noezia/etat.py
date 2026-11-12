@@ -463,7 +463,9 @@ class Etat:
                     "SELECT 1 FROM alertes_lecture WHERE passe = ? AND type_page = ? AND champ = ? AND gabarit = ?", cle
                 ).fetchone()
                 if not existe:
-                    nb = self._cx.execute("SELECT COUNT(*) FROM alertes_lecture WHERE passe = ?", (passe,)).fetchone()[0]
+                    nb = self._cx.execute("SELECT COUNT(*) FROM alertes_lecture WHERE passe = ?", (passe,)).fetchone()[
+                        0
+                    ]
                     if nb >= self.MAX_GROUPES_ALERTES:  # trop de sortes : le reste va dans « autres »
                         cle = (passe, "", "", AUTRES)
                     self._cx.execute(

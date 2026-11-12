@@ -243,9 +243,7 @@ def lignes_alertes(alertes: Mapping[str, Any]) -> list[str]:
         return ["Alertes de lecture : aucune."]
     lignes = [f"Alertes de lecture : {total} au total, {len(groupes)} sorte(s) parmi les plus fréquentes :"]
     for g in groupes:
-        lignes.append(
-            nettoyer(f"  {g['nb']} × {g['type']} · {g['exemple_message']} (ex. {g['exemple_adresse']})")
-        )
+        lignes.append(nettoyer(f"  {g['nb']} × {g['type']} · {g['exemple_message']} (ex. {g['exemple_adresse']})"))
     return lignes
 
 
