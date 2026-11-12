@@ -46,10 +46,13 @@ Un dossier de travail git par chantier de code, à côté du dépôt. Rien n'y e
 | Règle « HeadlessChrome partout » (D-60) | `arena-headless-partout` (`../noezia-shadowlab-arena`) | session principale | écrit ; à tester puis fusionner avant la référence (accord d'Ethan) |
 | NOEZIA en identité native (D-59) | `moteur-identite-native` (`../noezia-shadowlab-moteur`) | session principale, relu par Sonnet | écrit ; à tester puis fusionner (option sans effet par défaut) |
 | Version réelle annoncée (D-58) | `moteur-version-reelle` (sans dossier) | session principale | en attente de la mesure « interface » |
-| Mémoire 16 et 32 Go admise | `arena-memoire-32` (`../noezia-shadowlab-memoire`) | sous-agent Sonnet | en cours ; à fusionner après le rejeu des sessions humaines |
+| Mémoire 16 et 32 Go admise | `arena-memoire-32` (`../noezia-shadowlab-memoire`) | sous-agent Sonnet | écrit et relu ; à tester, puis fusionner avec les autres règles de l'Arena avant la référence |
 | `pas_de_scroll` et `pas_de_pause` justes | `arena-comportement-pages` (`../noezia-shadowlab-comportement`) | sous-agent Opus | en cours ; à fusionner après le rejeu des sessions humaines |
-| Origine des 84 écarts d'empreinte | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet, lecture seule | en cours |
-| Chrome avec interface sur serveur Linux | `docs/recherche/chrome-interface-serveur-linux-2026-11-12.md` | sous-agent Sonnet, recherche Web | en cours |
+| Origine des 84 écarts d'empreinte | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet, lecture seule | fait, contrôlé par sondage, poussé |
+| Chrome avec interface sur serveur Linux | `docs/recherche/chrome-interface-serveur-linux-2026-11-12.md` | sous-agent Sonnet, recherche Web | fait, poussé (rien d'installé ni de testé) |
+| Détecteur `cdp` juste envers les humains | `arena-cdp-juste` (`../noezia-shadowlab-cdp`) | sous-agent Opus | en cours ; à fusionner après le rejeu des sessions humaines |
+| Mémoire affichée « 0.0 Mo » dans la fiche d'un passage | `interface-memoire-mo` (`../noezia-shadowlab-interface`) | sous-agents Sonnet (enquête puis correctif) | écrit et relu ; à tester (`npm --prefix frontend test`) puis fusionner. La mesure en base est juste, en Mo |
+| Écarts entre `AGENTS.md`, `README.md` et le code | compte rendu à venir | sous-agent Sonnet, lecture seule | en cours |
 | WAF du niveau 07 | `tests/test_arena_waf.py` (non suivi), `configs/experiments/controle-waf-07.yaml` | session principale | prêt ; image du WAF à reconstruire hors campagne |
 
 ## Prochaine action (12/11, après la récolte 95 qui finit vers 13 h 10)

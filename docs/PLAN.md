@@ -218,6 +218,11 @@ pour 1.9, du plus net au moins net :
 - WebRTC : aucun candidat (le témoin en donne 4) ; 4 voix de synthèse ; une ligne de pile en plus dans une
   erreur (fonction enveloppée) ; `chrome.runtime` présent.
 
+Origine de chaque écart dans le code du moteur : `docs/recherche/empreinte-noezia-2026-11-12.md` (analyse du
+12/11, quelques renvois contrôlés). Sur les 84 champs : 31 ne servent qu'à masquer le mode sans interface,
+25 sont des traces laissées par la réécriture elle-même, 18 viennent du profil généré, 10 sont de l'aléa.
+Avec un vrai Chrome, son interface et aucune réécriture, les 74 premiers n'ont plus de raison d'être.
+
 Aucun détecteur de l'Arena ne relève ces écarts aujourd'hui : leur effet se mesurera contre Cloudflare (1.8).
 Deux règles les mesureraient dans l'Arena : « HeadlessChrome » dans un en-tête de n'importe quelle requête
 d'une session (pas seulement la première), et une version du `User-Agent` différente de celle de
