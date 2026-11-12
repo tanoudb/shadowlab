@@ -219,10 +219,12 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   contact, **dans un fichier à part** : le texte (caractères de contrôle retirés, espaces insécables changées
   en espaces) et le **jour** de réception, rien d'autre. Ni adresse IP, ni session, ni navigateur, ni heure.
   La base des sessions peut ainsi être copiée pour le rejeu sans emporter des messages où un visiteur a
-  écrit comment le joindre. Les pages de contact répondent avec `Referrer-Policy: no-referrer` : la page
-  ouverte ensuite ne dit pas qu'on en vient. Reste une trace indirecte : pendant une session en cours, la
+  écrit comment le joindre. Les pages de contact répondent avec `Referrer-Policy: origin` : la page
+  ouverte ensuite ne reçoit que l'origine, pas le chemin (jamais `no-referrer` : le navigateur enverrait
+  `Origin: null` au POST du formulaire, refusé en 403, et l'envoi serait cassé).
+  Reste une trace indirecte : pendant une session en cours, la
   feuille de style que ces pages chargent (`/lab/static/vitrine.css`) est notée comme toute requête
-  `/lab/…`, sans référent ; avec le seul jour du message, elle ne suffit pas à désigner son auteur dès que
+  `/lab/…`, avec le seul référent « / » ; avec le seul jour du message, elle ne suffit pas à désigner son auteur dès que
   plusieurs sessions ont lieu ce jour-là. Une base nommée `messages.sqlite3` est refusée au démarrage.
 - `<dossier de la base>/secret` (droits 600) : clé de signature des cookies. Le dossier `outputs/` est
   ignoré par git. Un fichier `secret` vide est refusé (erreur claire au démarrage, labo compris) : sinon
@@ -261,7 +263,7 @@ Corrections après relecture et audit (12/11/2026) :
 | D. JSON trop imbriqué | `test_json_trop_imbrique_refuse` |
 | D. Panne de base → 503 avec les en-têtes | `test_erreur_de_base_donne_503_avec_les_entetes` |
 | D. Secret vide | `test_secret_vide_refuse`, `test_secret_valide_inchange_et_cree_s_il_manque` |
-| E. Formulaire de contact (D-57) | `test_contact_remplace_l_adresse_dans_les_pages`, `test_contact_textes_exacts`, `test_contact_enregistre_le_message_a_part_sans_adresse` (jour seul, pas de référent), `test_contact_protege` (origine, CSRF, texte rendu), `test_contact_message_vide_ou_trop_long`, `test_contact_retire_les_caracteres_de_controle`, `test_contact_limite_par_adresse`, `test_contact_plafond_par_jour_et_boite_pleine`, `test_purge_des_messages`, `test_commandes_messages`, `test_base_nommee_comme_la_boite_refusee` |
+| E. Formulaire de contact (D-57) | `test_contact_remplace_l_adresse_dans_les_pages`, `test_contact_textes_exacts`, `test_contact_enregistre_le_message_a_part_sans_adresse` (jour seul, pas de référent), `test_contact_protege` (origine, CSRF, texte rendu), `test_contact_message_vide_ou_trop_long`, `test_contact_retire_les_caracteres_de_controle`, `test_contact_limite_par_adresse`, `test_contact_plafond_par_jour_et_boite_pleine`, `test_purge_des_messages`, `test_commandes_messages`, `test_base_nommee_comme_la_boite_refusee`, `test_contact_origine_null_refusee`, `test_contact_referent_reduit_a_l_origine`, `test_contact_s_envoie_depuis_un_vrai_navigateur` (intégration, Chromium réel) |
 
 ## Les huit conditions du § 5 du plan
 

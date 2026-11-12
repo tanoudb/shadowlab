@@ -1192,7 +1192,7 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert client.get("/contact/envoye").status_code == 200
     assert messages_recus(reglages_publics) == [texte]
     for reponse in (r, client.get("/contact"), client.get("/contact/envoye")):
-        assert reponse.headers["referrer-policy"] == "no-referrer", "la page suivante ne dit pas d'où l'on vient"
+        assert reponse.headers["referrer-policy"] == "origin", "la page suivante ne reçoit que l'origine"
     assert client.get("/").headers["referrer-policy"] == "same-origin"
 
     fichier = boite.chemin(reglages_publics.base_donnees)
@@ -1206,6 +1206,33 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert IP not in tout and "testclient" not in tout, "ni adresse, ni client : le texte et sa date seulement"
     assert "moi@exemple.test" not in contenu_de_la_base(reglages_publics), "jamais dans la base des sessions"
     assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
+
+
+def test_contact_origine_null_refusee(client, reglages_publics):
+    # Pourquoi `Referrer-Policy: no-referrer` est interdit sur /contact : sous cette politique, un vrai
+    # navigateur envoie `Origin: null` au POST du formulaire (norme Fetch), même vers le même site. Le garde
+    # le refuse (403) et le formulaire ne s'envoie plus jamais. La politique `origin` garde la vraie origine.
+    champs = champs_du_formulaire(client.get("/contact").text, "/contact")
+    r = client.post("/contact", data={**champs, "message": "essai"}, headers={"Origin": "null"})
+    assert r.status_code == 403
+    assert messages_recus(reglages_publics) == []
+
+
+def test_contact_referent_reduit_a_l_origine(client, reglages_publics):
+    # Sous la politique `origin`, la page suivante reçoit `https://<hôte>/` : noté « / », jamais « /contact ».
+    jeton = commencer(client)
+    r = client.get("/lab/static/vitrine.css", headers={"Referer": f"{ORIGINE}/"})
+    assert r.status_code == 200
+    lignes = (
+        ouvrir(reglages_publics)
+        .execute(
+            "SELECT headers FROM observations_http WHERE session_token = ? AND path = ?",
+            (jeton, "/lab/static/vitrine.css"),
+        )
+        .fetchall()
+    )
+    referents = [valeur for ligne in lignes for nom, valeur in json.loads(ligne["headers"]) if nom.lower() == "referer"]
+    assert referents == ["/"], referents
 
 
 def test_contact_protege(client, reglages_publics):

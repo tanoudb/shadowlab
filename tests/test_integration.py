@@ -174,3 +174,70 @@ def test_noezia_identite_native_une_seule_identite_celle_du_navigateur(reglages,
     navigateur = json.loads(releve["payload"])["navigateur"]
     assert navigateur["userAgent"] == agent
     assert navigateur["webdriver"] is False, "propriété d'origine, ni supprimée ni vraie"
+
+
+def test_contact_s_envoie_depuis_un_vrai_navigateur(tmp_path):
+    """Le formulaire de contact de l'application publique, envoyé par Chromium : adresse et message reçu.
+
+    Les tests rapides fabriquent l'en-tête `Origin` ; seul un vrai navigateur envoie `Origin: null` quand la
+    politique de référent est `no-referrer` (le POST était alors refusé en 403).
+    """
+    import socket
+    import threading
+    import time
+    from datetime import UTC, datetime
+
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+
+    from shadowlab.config import ReglagesPublics
+    from shadowlab.public import creer_app_publique
+    from shadowlab.public import messages as boite
+
+    with socket.socket() as s:  # port libre (même méthode que conftest.port_libre)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    reglages = ReglagesPublics(
+        hotes=("127.0.0.1", "localhost"),
+        contact="Responsable de test",
+        conservation_jours=90,
+        https=False,
+        port=port,
+        base_donnees=tmp_path / "public" / "public.sqlite3",
+        entete_ip="X-Forwarded-For",
+        vitrine_graine=20261111,
+        vitrine_taille=10,
+    )
+    serveur = uvicorn.Server(
+        uvicorn.Config(creer_app_publique(reglages), host="127.0.0.1", port=port, log_level="warning")
+    )
+    fil = threading.Thread(target=serveur.run, daemon=True)
+    fil.start()
+    try:
+        fin = time.monotonic() + 10
+        while not serveur.started and time.monotonic() < fin:
+            time.sleep(0.05)
+        assert serveur.started, "l'application publique n'a pas démarré"
+        texte = f"Bonjour, message envoyé par un vrai navigateur ({datetime.now(UTC).isoformat()})."
+        with sync_playwright() as p:
+            navigateur = p.chromium.launch(headless=True)
+            try:
+                page = navigateur.new_page()
+                page.goto(f"http://127.0.0.1:{port}/contact")
+                page.fill('textarea[name="message"]', texte)
+                with page.expect_navigation(timeout=10_000) as navigation:
+                    page.click('form[action="/contact"] button[type="submit"]')
+                reponse = navigation.value
+                assert page.url.endswith("/contact/envoye"), (
+                    f"{page.url} -> {reponse.status} : {page.inner_text('body')[:200]}"
+                )
+            finally:
+                navigateur.close()
+        cx = boite.connexion(boite.chemin(reglages.base_donnees))
+        try:
+            assert [ligne["texte"] for ligne in boite.lister(cx)] == [texte]
+        finally:
+            cx.close()
+    finally:
+        serveur.should_exit = True
+        fil.join(timeout=10)

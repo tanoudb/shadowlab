@@ -314,10 +314,11 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 reponse = await call_next(request)
         reponse.headers["Content-Security-Policy"] = CSP
         reponse.headers["X-Content-Type-Options"] = "nosniff"
-        # Depuis une page de contact, la page suivante ne reçoit aucun référent : une session en cours ne
-        # note pas qu'on en vient.
+        # Depuis une page de contact, la page suivante ne reçoit que l'origine (sans chemin, donc « / » une fois
+        # réduite par `donnees._referent`) : une session en cours ne note pas qu'on en vient. Pas `no-referrer` :
+        # le navigateur enverrait `Origin: null` au POST du formulaire, que `meme_origine` refuse (403).
         depuis_contact = request.url.path.startswith("/contact")
-        reponse.headers["Referrer-Policy"] = "no-referrer" if depuis_contact else "same-origin"
+        reponse.headers["Referrer-Policy"] = "origin" if depuis_contact else "same-origin"
         reponse.headers["X-Frame-Options"] = "DENY"
         reponse.headers.setdefault("Cache-Control", "no-store")
         if reglages.https:
