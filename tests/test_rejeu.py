@@ -622,6 +622,54 @@ def test_meme_verdict_que_l_arena(client, reglages, monkeypatch, tmp_path):
     cx.close()
 
 
+def test_detecteur_exclu_ne_fait_pas_servir_le_captcha(client, reglages, monkeypatch, tmp_path):
+    """Un détecteur retiré par `exclure` ne décide nulle part, pas même de servir le CAPTCHA démo. Sans quoi une
+    ablation mesure encore le détecteur retiré : campagne 93, niveau 04 sans `cdp`, CAPTCHA servi 15 fois sur 15
+    pour un motif `cdp`."""
+    sans_cdp = {"actif": True, "bloquer": "tout", "detecteurs": ["regles-http", "cdp"], "exclure": ["cdp"]}
+    extra = {
+        "93": {
+            "limitation": {"debit": 1000, "rafale": 1000},
+            "waf": {"mode": "detection", "paranoia": 1, "seuil": 100},
+            "defi_js": {"actif": False},
+            "captcha": {"actif": True},
+            "fingerprinting": sans_cdp,
+        }
+    }
+    fichier = tmp_path / "profils-extra.yaml"
+    fichier.write_text(yaml.safe_dump(extra), encoding="utf-8")
+    monkeypatch.setenv("SHADOWLAB_PROFILS_EXTRA", str(fichier))
+    secret = secrets_arena.charger(reglages.dossier_arena)
+    cx = db.ouvrir(reglages.base_donnees)
+    r = client.post("/manuel/commencer", data={"protection": "93", "consentement": "oui"})
+    jeton = re.search(r"sl=([0-9a-f]{32})", r.text).group(1)
+    sceau = {
+        "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", "93", jeton, ""),
+        "x-shadowlab-obs": "obs",
+        "x-shadowlab-profil": "93",
+        "x-shadowlab-session": jeton,
+        "x-shadowlab-ja4": "",
+    }
+    for chemin, cookies, referent in (
+        ("/lab/vitrine", [], None),
+        ("/lab/static/observateur.js", ["sl_session"], None),
+        ("/lab/vitrine/annonces", ["sl_session"], "http://127.0.0.1:8770/lab/vitrine"),
+    ):
+        cx.execute(
+            "INSERT INTO observations_http (session_token, received_at, method, path, http_version, headers,"
+            " cookies, source) VALUES (?, ?, 'GET', ?, '1.1', ?, ?, 'frontal')",
+            (jeton, db.maintenant(), chemin, db.j(entetes(referent)), db.j(cookies)),
+        )
+    payload = empreinte(1, cdp_detection=CDP_SUSPECT)
+    corps = json.dumps({"kind": "empreinte", "page": "/lab/vitrine", "payload": payload})
+    assert client.post(f"/lab/collecte?sl={jeton}", content=corps, headers=sceau).status_code == 204
+
+    assert client.get(f"/lab/vitrine/annonces?sl={jeton}", headers=sceau).status_code == 200
+    couches = [d["couche"] for d in db.decisions_session(cx, jeton)]
+    assert "captcha" not in couches
+    cx.close()
+
+
 # --- Commande -------------------------------------------------------------------------------------
 
 

@@ -291,12 +291,7 @@ def controler(
     if profil.captcha.actif and not defis.cookie_valide(
         secret, "captcha", request.cookies.get(COOKIE_CAPTCHA), jeton, lie
     ):
-        motifs = suspicion(
-            cx,
-            jeton,
-            detecteurs=profil.fingerprinting.detecteurs or None,
-            seuil_composite=profil.fingerprinting.seuil_composite,
-        )
+        motifs = suspicion(cx, jeton, **parametres(profil))
         if motifs:
             db.enregistrer_decision(cx, jeton, "captcha", "emis", chemin, motifs)
             cible = encoder_retour(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
