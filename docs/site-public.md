@@ -83,6 +83,33 @@ server {
 
 Dans tous les cas : rediriger le HTTP vers le HTTPS au niveau du mandataire.
 
+### Mise en ligne rapide depuis ce poste (tunnel sans compte ni domaine)
+
+```bash
+SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme — adresse@exemple.fr" scripts/site-public-tunnel.sh
+```
+
+Le script ouvre un tunnel Cloudflare « rapide » (`cloudflared`, installé par Homebrew), affiche l'adresse
+publique tirée au hasard (`https://…trycloudflare.com`, aussi écrite dans `outputs/public/adresse-publique.txt`),
+puis lance l'application pour cette adresse seulement, avec `CF-Connecting-IP` et le Mac tenu éveillé
+(`caffeinate`). Ctrl+C arrête l'application et le tunnel. Il se lance **par Ethan** : l'ouverture d'un tunnel
+est refusée à l'assistant par le garde-fou de l'application, et la mise en ligne reste à lui.
+
+Limites de cette voie, à connaître avant de partager le lien :
+
+- **L'adresse change à chaque lancement** : un lien déjà partagé meurt si le script, le Mac ou la connexion
+  s'arrête. Cloudflare donne ces tunnels sans garantie de disponibilité.
+- **Aucune limitation de débit** devant l'application (pas de règles Cloudflare sans domaine) : le plafond
+  de 40 sessions par jour peut être vidé par un script (voir « Limites connues »).
+- **Le site tourne sur le poste de travail**, qui porte d'autres projets. L'application n'écoute que sur
+  `127.0.0.1` et le tunnel ne relaie que son port.
+- Le journal du tunnel (`outputs/public/tunnel.log`, niveau `info`) ne contient aucune requête.
+
+Pour un lien stable : un domaine chez Cloudflare (option A) ou une petite machine à part (options B et C).
+Vercel et Netlify ne conviennent pas : pas de processus continu ni de disque durable pour la base SQLite.
+Non vérifié au 12/11 : le script n'a jamais tourné avec un vrai tunnel (syntaxe, refus sans contact et
+lecture de l'adresse vérifiés à vide).
+
 ## Réglages
 
 | Variable | Défaut | Rôle |

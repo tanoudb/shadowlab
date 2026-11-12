@@ -34,6 +34,13 @@ Ce qui attend Ethan.
   limitation de débit, le Mac doit rester allumé et éveillé (il s'endort après 1 minute sans activité : à
   tenir éveillé avec `caffeinate` tant que le site tourne). Pour un lien stable à partager largement, il
   faut un domaine à toi chez Cloudflare (points 1 et 2).
+  **9 h 15 — tu veux un pseudonyme comme responsable.** `cloudflared` est installé et le script
+  `scripts/site-public-tunnel.sh` est prêt. Deux choses restent à toi : (a) **une adresse e-mail** où
+  l'on peut t'écrire (la page dit « écrivez à : … » pour faire supprimer une session ; je ne peux pas créer
+  de boîte à ta place) ; recommandation : un alias dédié, pseudonyme proposé « Labo Vitrine » ; (b) **lancer
+  le script toi-même** : l'ouverture du tunnel m'est refusée par le garde-fou de l'application.
+  `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine — <adresse>" scripts/site-public-tunnel.sh`, puis me donner la
+  main : je vérifie le parcours complet depuis l'adresse publique.
 - **2026-11-11 — Code mort `engines/noezia/pool.py`** : il appelle une classe et deux méthodes qui
   n'existent pas, rien ne l'importe. Recommandation : le supprimer (le palier 4 le remplace).
 - **2026-11-11 — Pour le palier 3** : un serveur Linux, un proxy résidentiel, et l'environnement de tor-i

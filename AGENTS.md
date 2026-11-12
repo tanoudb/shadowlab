@@ -102,6 +102,7 @@ uv run shadowlab campagne configs/experiments/extraction-adaptative.yaml  # relo
 uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
+scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
