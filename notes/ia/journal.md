@@ -2795,3 +2795,30 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   à 06 sans corrélation, 180 passages), puis `discretion-native-correlation.yaml` (niveau 06 complet, 15).
 - **Reste** : écrire ces deux résultats au plan ; sessions humaines à 20 h puis `shadowlab rejeu` ; identité
   native comme réglage de référence ; `recolte-rythme.yaml` reporté au 13/11.
+
+## 2026-11-12 (18h15) — Claude (Sonnet 5.5) — Campagnes 100 et 101, correctif du WAF (D-69)
+
+- **Campagne 100** (`discretion-native-30.yaml`, 180 passages, 0 panne, 16 h 58 à 17 h 52) : `noezia` en identité
+  native, 30 passages par niveau, 179 sur 180 (niveaux 01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30).
+  Wilson à 95 % : 30 sur 30 → 88,6 à 100 % ; 29 sur 30 → 83,3 à 99,4 %. Taux observé ≥ 90 % à chaque niveau, mais
+  borne basse sous 90 % partout. 60 passages `captcha_test` (niveaux 05 et 06), dont 59 réussis. Durées médianes :
+  7,6 / 7,8 / 8,8 / 8,9 / 15,5 / 15,6 s. Seuil de discrétion atteint sur l'Arena, 06 sans corrélation seulement.
+- **Campagne 101** (`discretion-native-correlation.yaml`, 15 passages, 0 panne, 17 h 52 à 18 h 06) : niveau 06
+  complet, 0 sur 15, tous `challenge_non_valide`, signal `recycling_canvas` (profil vu dans 333 à 347 sessions,
+  canvas dans 485 à 499). Même empreinte à chaque passage : ce n'est pas une mesure de site réel, mais c'est ce
+  qui attend une longue récolte (paliers 2 et 4).
+- **D-69** : l'unique échec de la 100 (passage 34119) est un blocage du WAF (règle 942210) sur le jeton du
+  reCAPTCHA en clés de test. Règle 1015 (`docker/arena/coraza/main.go`) : plus de règles `attack-sqli` sur les
+  deux champs de jeton, sur les deux adresses de vérification. Branche `arena-waf-jetons` fusionnée et poussée :
+  6 tests rouges avant, 21 verts après reconstruction de l'image (18 h 07) ; suite complète à 18 h 11 : 769
+  tests verts, lint propre. Écart non expliqué : 1 blocage sur 121 vérifications, plus que le calcul.
+- **Récolte générale** : trois briques préparées dans des branches à part (`recolte-1-recette`,
+  `recolte-3-notation`, `recolte-5-rallye`), écrites pendant les campagnes puis exécutées : chaque commit de
+  tests vu en échec, trois tests à corriger (deux recettes de test fautives, un lecteur de tableaux du test),
+  aucun défaut du code. Assemblées dans `recolte-integration` (dossier `../noezia-shadowlab-recolte`) : 820
+  tests rapides verts. Site de rallye factice vu à l'écran (ordinateur et téléphone) : 427 pages, 2 745 lignes
+  de temps, dix pièges présents. Rien n'est fusionné dans la branche de travail sans l'accord d'Ethan.
+- **Écrit** : `docs/PLAN.md` (§ 2 blocs 100 et 101, § 8 lignes 1.7 et 1.9), `docs/DECISIONS.md` (D-69),
+  `AGENTS.md` (État), `contexte.md`.
+- **Reste** : sessions humaines à 20 h puis `shadowlab rejeu` ; faire de l'identité native le réglage de
+  référence du moteur ; corrélation et identité qui dure (palier 2) ; `recolte-rythme.yaml` reporté au 13/11.

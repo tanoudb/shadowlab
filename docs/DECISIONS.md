@@ -490,3 +490,21 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   de l'API renvoient une erreur pour une expérience dont la configuration n'est pas une campagne (déjà vrai
   pour `sessions-manuelles`) ; `reports.supprimer` laisse des lignes dans `decisions`, `observations_tls` et
   `empreintes_vues` ; rien n'empêche de supprimer une campagne en cours. Décidé par : coordination.
+- **D-69 — 12/11/2026 — Le WAF de l'Arena n'applique plus ses règles d'injection SQL aux jetons de CAPTCHA
+  tiers.** Constat : dans la campagne 100, le passage 34119 (niveau 06 sans corrélation, `static_html`) a été
+  bloqué par le WAF sur `POST /lab/recaptcha/verifier`, règle CRS 942210 (« Detects chained SQL injection
+  attempts 1/2 »), à cause de la valeur du jeton du reCAPTCHA en clés de test. Choix : la règle 1015 de
+  `docker/arena/coraza/main.go` retire, sur `/lab/turnstile/verifier` et `/lab/recaptcha/verifier` seulement,
+  toutes les règles de l'étiquette `attack-sqli` pour `ARGS:g-recaptcha-response` et
+  `ARGS:cf-turnstile-response`. Tout autre champ de ces deux adresses, et les mêmes champs sur une autre
+  adresse (`/lab/connexion`), restent inspectés. La règle 1014 (retrait de 942432, nom du champ) est gardée.
+  Pourquoi : le jeton est une suite aléatoire dont le nom de champ est imposé par le fournisseur, donc un
+  humain est bloqué comme un robot. La règle 942210 se déclenche sur « chiffre, or ou and, chiffres, tiret » :
+  environ un jeton sur mille d'après un essai sur 5 000 jetons simulés. La règle 942440 (« -- ») bloquerait
+  bien plus souvent un vrai jeton Turnstile, qui contient des points : environ 16 % des jetons simulés. Preuve
+  : campagne 100, passage 34119 ; sur la branche `arena-waf-jetons`, `tests/test_arena_waf.py` avait 6 tests
+  en échec contre le pare-feu en service, il en a 21 verts après reconstruction de l'image (18 h 07). Limites
+  : les simulations sont des expressions régulières rejouées hors du WAF, pas le WAF lui-même ; les familles
+  XSS, commandes et fichiers n'ont pas été étudiées ; la base compte 1 blocage sur 121 vérifications de
+  CAPTCHA de la campagne 100 (61 reCAPTCHA, 60 Turnstile), soit plus que le calcul ne le prévoit : écart non
+  expliqué. Le passage 34119 reste compté comme échec dans la campagne 100. Décidé par : coordination.

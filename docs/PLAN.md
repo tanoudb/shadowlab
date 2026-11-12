@@ -358,6 +358,74 @@ Ce que la base dit :
   - Une seule machine, un seul Chrome, avec interface, sur macOS. Rien n'a été mesuré contre une protection
     réelle.
 
+### Campagne 100 : discrétion de l'identité native, 30 passages par niveau (12/11, 180 passages, 0 panne, 54 min)
+
+Elle refait la mesure d'un seul tenant, au nombre de passages que demande l'objectif (§ 1). Moteur `noezia` seul,
+en identité native (libellé `noezia-natif` : `headless: false`, `channel: chrome`, `identite_native: true`).
+16 h 58 à 17 h 52, heure locale. Niveaux 01 à 06, niveau 06 sans corrélation (profil `06scorr`), sur l'Arena
+corrigée du jour (D-60 à D-66). 3 scénarios × 10 répétitions = 30 passages par niveau. Configuration :
+`configs/experiments/discretion-native-30.yaml`. Pas de témoin dans cette campagne : il est arrêté à chaque
+passage des niveaux 02 à 06 dans les campagnes 97 et 98 du même jour.
+
+| Niveau | Réussis sur 30 | Taux | Wilson à 95 % | dont `captcha_test` (réussis / passages) | Durée médiane d'un passage réussi |
+|--------|----------------|------|---------------|------------------------------------------|-----------------------------------|
+| 01 | 30 | 100 % | 88,6 à 100 % | 0 / 0 | 7,6 s |
+| 02 | 30 | 100 % | 88,6 à 100 % | 0 / 0 | 7,8 s |
+| 03 | 30 | 100 % | 88,6 à 100 % | 0 / 0 | 8,8 s |
+| 04 | 30 | 100 % | 88,6 à 100 % | 0 / 0 | 8,9 s |
+| 05 | 30 | 100 % | 88,6 à 100 % | 30 / 30 | 15,5 s |
+| 06 sans corrélation | 29 | 96,7 % | 83,3 à 99,4 % | 29 / 30 | 15,6 s |
+
+Total : 179 passages réussis sur 180, 0 panne. Issues : 179 `extraction_reussie`, 1 `bloque`.
+Colonne à part (règle du § 1) : 60 passages portent une décision `captcha_test` (Turnstile et reCAPTCHA en clés
+de test, niveaux 05 et 06), dont 59 réussis. Les 120 autres passages (niveaux 01 à 04) n'en ont aucune.
+
+Ce que la base dit :
+- **Le taux observé est au moins 90 % à chacun des six niveaux, avec 30 passages par niveau.** Les deux
+  premières conditions de l'objectif (taux ≥ 90 % à chaque niveau, au moins 30 passages) sont remplies par
+  `noezia` en identité native, sur l'Arena, niveau 06 sans corrélation.
+- **Ce que dit l'intervalle de Wilson** (la troisième condition : l'afficher) : la borne basse est sous 90 % à
+  chaque niveau, même à 30 sur 30 (88,6 %). Avec 30 passages, on ne peut donc pas exclure un taux réel un peu
+  inférieur à 90 %. Pour que la borne basse atteigne 90 % avec 100 % observé, il faut au moins 35 passages
+  par niveau (calcul seul, pas une mesure).
+- **Le seul échec n'est pas imputable au moteur** : passage 34119, niveau 06 sans corrélation, scénario
+  `static_html`. Le défi JavaScript et le Turnstile en clés de test sont validés, puis `POST /lab/recaptcha/verifier`
+  est bloqué par le WAF, règle CRS 942210 (« Detects chained SQL injection attempts 1/2 »), sur le jeton du
+  reCAPTCHA en clés de test. Un humain aurait été bloqué de la même façon : c'est un défaut de l'Arena, corrigé
+  par D-69. Il reste compté comme échec dans le tableau : on ne retire aucun passage après coup.
+- **Aucun des 180 passages n'a été classé « automatisé »** (`classe_automatise` faux partout).
+
+Réserves :
+- Niveaux 05 et 06 passés avec des CAPTCHA en clés de test (`captcha_test`) : cela ne vaut rien contre un vrai
+  CAPTCHA.
+- Niveau 06 complet, avec `correlation-session` : 0 sur 15 (campagne 101, bloc suivant).
+- L'Arena n'est pas calibrée sur des humains : aucune session humaine en base, 5 sessions prévues le soir même
+  (1.7). On ne sait pas si elle laisse passer des humains à ces niveaux.
+- Une seule machine, un seul Chrome avec interface, sur macOS.
+- Pas de témoin dans cette campagne ; il est arrêté à chaque passage dans les campagnes 97 et 98 du même jour.
+- Rien n'a été mesuré contre une protection réelle, ni depuis un serveur.
+- L'identité native n'est pas encore le réglage par défaut du moteur (option `identite_native`, D-59).
+- Seule la qualité « Discrétion » est concernée, et seulement sur l'Arena. Le produit n'est pas atteint (§ 1).
+
+### Campagne 101 : le niveau 06 complet, avec la corrélation entre sessions (12/11, 15 passages, 0 panne, 14 min)
+
+Même moteur et même réglage que la campagne 100, niveau 06 avec `correlation-session` (profil d'origine), 3
+scénarios × 5 répétitions. 17 h 52 à 18 h 06, heure locale. Configuration :
+`configs/experiments/discretion-native-correlation.yaml`.
+
+- **0 sur 15** (Wilson : 0 à 20,4 %). Les 15 passages sont `challenge_non_valide` : défi JavaScript émis, puis
+  refusé pour empreinte suspecte (`rejete-empreinte`), sur le seul signal `recycling_canvas` du détecteur
+  `correlation-session`. Libellé du premier passage : « profil vu dans 333 sessions et canvas vu dans 485
+  sessions de la base, celle-ci comprise (seuil 10) ». Les compteurs montent d'un par passage, jusqu'à
+  « profil vu dans 347 sessions et canvas vu dans 499 sessions » au quinzième (bornes : 333 à 347 et 485 à 499).
+- **Lecture** : un vrai Chrome qui repasse sans rien réécrire a la même empreinte à chaque passage, et la base en
+  avait gardé des centaines depuis le matin (campagnes 96 à 100). Ce n'est donc pas mesuré comme le ferait un
+  site réel, qui ne voit pas des centaines de visites du même navigateur en quelques heures. Mais cela montre ce qui
+  attend une longue récolte : c'est l'objet du palier 2 (une identité qui dure) et du palier 4 (plusieurs
+  identités). Analyse : `docs/recherche/correlation-entre-sessions-2026-11-12.md`.
+- **Conséquence pour l'objectif** : le niveau 06 de l'objectif n'est pas tenu avec la corrélation. Le seuil de
+  discrétion n'est atteint que niveau 06 sans corrélation (campagne 100).
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -553,9 +621,9 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
 | 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 ; campagne 95 (12/11) : seuil « Récolte » confirmé sur le site à 500 annonces, 9 passages sur 9 sans faute |
 | 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`). 12/11 : voie courte par tunnel Cloudflare, `scripts/site-public-tunnel.sh` (`ccf24c9`), jamais lancé avec un vrai tunnel ; le lancement revient à Ethan |
-| 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté |
+| 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
-| 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Reste : en faire le réglage de référence du moteur, 30 passages par niveau, corrélation, humains |
+| 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

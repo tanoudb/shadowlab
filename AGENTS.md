@@ -80,7 +80,7 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **753 tests verts** (`uv run pytest`, 12/11 à 16 h 57, hors campagne : 731 rapides et 22 d'intégration avec de
+- **769 tests verts** (`uv run pytest`, 12/11 à 18 h 11, hors campagne : 731 rapides et 38 d'intégration avec de
   vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
@@ -94,6 +94,12 @@ recommander des optimisations.
   sans le comportement de noezia fait 10, 5 et 0 (`aucune_interaction`), le témoin 0 sur 45.
   Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 sans corrélation,
   aucun humain en base, un seul Chrome sur macOS.
+- **Campagnes 100 et 101** (12/11, `docs/PLAN.md` § 2) : `noezia` en identité native, 30 passages par niveau
+  de 01 à 06 sans corrélation, 179 sur 180 (06 : 29 sur 30, le seul échec est un blocage du WAF corrigé par D-69).
+  Taux observé ≥ 90 % à chaque niveau, mais borne basse de Wilson sous 90 % (88,6 % à 30 sur 30). Réserves :
+  CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 complet à 0 sur 15 (corrélation entre sessions,
+  campagne 101), aucun humain en base, une machine, un Chrome sur macOS, pas de témoin, rien contre une
+  protection réelle ; l'identité native n'est pas le réglage par défaut. Le produit n'est pas atteint.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, commande de récolte générale (liste puis fiches, tableaux, arbre ; conception en cours dans `docs/recherche/recolte-generale-2026-11-12.md`, attend l'accord d'Ethan).
 
