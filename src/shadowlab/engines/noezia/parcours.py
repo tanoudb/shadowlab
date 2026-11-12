@@ -34,12 +34,13 @@ from .extraction import Signatures
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
 from .rythme import Cadence, rythme_de
-from .sentinelle import FENETRE, Alerte, Sentinelle
+from .sentinelle import FENETRE, Alerte, Sentinelle, detecter_defi
 
 NOUVEAUX_ESSAIS = 2  # sur panne réseau, 500, 502, 504 (après le premier essai), attente croissante
 STATUTS_A_RETENTER = frozenset({500, 502, 504})
 ATTENTE_APRES_ALERTE_S = 3600  # « reprendre » conseille d'attendre 1 h (choix du document, § 5)
 PAS_AFFICHAGE = 25
+PAS_ATTENTE_PORTE_S = 1.0  # la porte d'entrée relit la page toutes les secondes, sans rien faire d'autre
 REDIRECTIONS = frozenset({301, 302, 303, 307, 308})
 REDIRECTIONS_MAX = 5  # sauts suivis un à un, chacun contrôlé avant d'être demandé
 PASSES_NON_FINIES = ("en_cours", "arretee", "interrompue", "limitee")
@@ -115,6 +116,9 @@ class Reponse:
     html: str
     duree_ms: float
     location: str | None = None  # destination d'une redirection que le moteur n'a pas suivie
+    entetes: dict[str, str] = field(
+        default_factory=dict
+    )  # en-têtes de la réponse (clés en minuscules), si le moteur les donne
 
 
 class Moteur(Protocol):
@@ -125,6 +129,11 @@ class Moteur(Protocol):
     def fermer(self) -> None: ...
 
     def lire(self, adresse: str) -> Reponse: ...
+
+    def relire(self) -> Reponse | None:
+        """La page courante telle qu'elle est maintenant, SANS nouvelle requête ; None si le moteur ne peut pas
+        (pas de JavaScript : la page ne change pas seule). Sert à la porte d'entrée."""
+        ...
 
     def description(self) -> dict[str, Any]: ...
 
@@ -153,13 +162,22 @@ class MoteurDriver:
     def lire(self, adresse: str) -> Reponse:
         self.driver.verifier(adresse)
         navigation = self.driver.navigate(adresse)
+        etat_page = getattr(self.driver, "etat_page", None)
         return Reponse(
             navigation.status,
             navigation.url,
             self.driver.dom(),
             navigation.duration_ms,
             getattr(self.driver, "location", None),
+            dict(etat_page()[2]) if etat_page is not None else {},
         )
+
+    def relire(self) -> Reponse | None:
+        etat_page = getattr(self.driver, "etat_page", None)
+        if etat_page is None or not self.driver.executes_javascript:
+            return None
+        statut, adresse, entetes = etat_page()
+        return Reponse(statut, adresse, self.driver.dom(), 0.0, None, dict(entetes))
 
     def description(self) -> dict[str, Any]:
         return {
@@ -459,6 +477,8 @@ class Parcours:
         self._ignores = recette.parametres_ignores
         self._sans = set(self.options.sans)
         self._hotes = set(recette.hotes)
+        self._premiere_page = not reprise and etat.compteurs(passe)["lues"] == 0  # la porte d'entrée n'y est que là
+        self._porte: dict[str, Any] | None = None
         self._annoncer(etat, passe, reprise)
         statut, arret = "terminee", None
         try:
@@ -561,6 +581,12 @@ class Parcours:
             self._evenement(etat, self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(page.type, "echec", page.adresse), 1
 
+        if self._premiere_page:
+            self._premiere_page = False
+            reponse, alerte = self._porte_d_entree(page, reponse)
+            if alerte is not None:
+                etat.rendre(page)
+                return alerte, 0
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -572,6 +598,8 @@ class Parcours:
             statut=reponse.statut,
             adresse_finale=reponse.adresse_finale,
             dans_le_motif=dans_le_motif,
+            html=reponse.html,
+            entetes=reponse.entetes,
         )
         if alerte is not None:
             etat.rendre(page)  # la page n'a pas été lue : elle reste à faire
@@ -593,6 +621,36 @@ class Parcours:
         else:
             decision = self._lire_la_page(page, reponse, total_ms)
         return self._sentinelle.noter(page.type, decision, page.adresse), 1
+
+    def _porte_d_entree(self, page: Page, reponse: Reponse) -> tuple[Reponse, Alerte | None]:
+        """Première page de la passe, `porte_entree` déclarée : un défi qui se valide seul est attendu SANS AUCUNE
+        action (ni clic, ni rechargement, ni résolution), `attendre_s` secondes au plus. Il passe : la page lue est
+        celle qui est apparue, la porte est comptée à part dans `resume.json`. Il ne passe pas : alerte, arrêt.
+        Un défi qui arrive plus tard dans la passe n'attend pas : `Sentinelle.examiner` l'arrête."""
+        porte = self.recette.porte_entree
+        defi = detecter_defi(reponse.html, reponse.entetes)
+        if porte is None or defi is None:
+            return reponse, None
+        attendu = 0.0
+        while True:
+            courante = self.moteur.relire()
+            if courante is None:  # un moteur sans JavaScript : rien ne changera tout seul
+                break
+            if detecter_defi(courante.html, courante.entetes) is None:
+                courante.duree_ms = reponse.duree_ms
+                self._porte = {"defi": defi, "franchie": True, "attente_s": attendu}
+                self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+                self._ecran(f"Porte d'entrée : défi ({defi}) validé seul après {attendu:g} s, sans action.")
+                return courante, None
+            if attendu >= porte.attendre_s:
+                break
+            pas = min(PAS_ATTENTE_PORTE_S, porte.attendre_s - attendu)
+            self._dormir(pas)
+            attendu += pas
+        self._porte = {"defi": defi, "franchie": False, "attente_s": attendu}
+        self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+        detail = f"page de défi ({defi}) toujours là après {attendu:g} s d'attente sans action"
+        return reponse, Alerte("defi", detail, page.adresse, reponse.statut)
 
     def _lire_la_page(self, page: Page, reponse: Reponse, total_ms: Callable[[], float]) -> str:
         etat = self._etat
@@ -743,6 +801,7 @@ class Parcours:
             },
             "enregistrements": etat.nb_enregistrements(),
             "relocalisations": c["relocalisations"],
+            "porte_entree": self._porte,
             "arret": arret,
         }
         if len(origines) > 1:

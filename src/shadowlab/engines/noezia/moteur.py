@@ -19,6 +19,7 @@ import random
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from ...config import RACINE
 from ...perimetre import est_autorisee
@@ -83,6 +84,9 @@ class DriverNoezia(Driver):
         # Injection ») : un vrai Chrome, et rien d'imposé à son identité.
         "channel": str,
         "identite_native": bool,
+        # Vrai : le certificat des sites visités est vérifié. Faux (défaut du labo : certificat local auto-signé) :
+        # les erreurs de certificat sont ignorées. La récolte le met vrai hors du labo local.
+        "verifier_tls": bool,
     }
 
     # Types de ressources coupées en mode rapide (gros gain de vitesse sur un vrai site chargé).
@@ -95,6 +99,10 @@ class DriverNoezia(Driver):
         self._config = self._construire_config(self.options)
         self._bloquer_ressources = bool(self.options.get("bloquer_ressources", False))
         self._nb_essais = max(1, int(self.options.get("nb_essais", 1)))
+        # Hôtes que le cadre principal a le droit de demander (récolte : `hotes` de la recette).
+        # None : pas de garde.
+        # Réglé par l'appelant, jamais une option de campagne. Ne couvre pas les sous-ressources (voir `_filtrer`).
+        self.hotes_navigation: tuple[str, ...] | None = None
         self._signatures = extraction.Signatures(RACINE / "outputs" / "signatures_adaptatives.json")
         self._profil: ProfilNavigateur | None = None
         self._pw = None
@@ -114,6 +122,10 @@ class DriverNoezia(Driver):
         if "profil" in options:
             kwargs["profil"] = options["profil"]
         return ConfigNoezia(**kwargs)
+
+    @property
+    def _verifier_tls(self) -> bool:
+        return bool(self.options.get("verifier_tls", False))
 
     @classmethod
     def manque(cls) -> str | None:
@@ -144,6 +156,7 @@ class DriverNoezia(Driver):
             "eviter_pieges": self._config.eviter_pieges,
             "interaction_post_page": self._config.interaction_post_page,
             "bloquer_ressources": self._bloquer_ressources,
+            "verifier_tls": self._verifier_tls,
         }
         if self._profil:
             conf["profil"] = self._profil.nom
@@ -254,13 +267,13 @@ class DriverNoezia(Driver):
         if profil is None:
             # Identité native : rien n'est imposé au navigateur, ni fenêtre, ni User-Agent, ni en-tête, ni
             # script d'empreinte. Seul reste ce que le périmètre exige (certificat local, filtre réseau).
-            self._contexte = self._navigateur.new_context(ignore_https_errors=True, no_viewport=True)
+            self._contexte = self._navigateur.new_context(ignore_https_errors=not self._verifier_tls, no_viewport=True)
         else:
             vp = profil.viewport()
 
             # Contexte navigateur avec paramètres du profil
             self._contexte = self._navigateur.new_context(
-                ignore_https_errors=True,
+                ignore_https_errors=not self._verifier_tls,
                 locale=profil.locale,
                 viewport=vp,
                 user_agent=profil.user_agent,
@@ -347,6 +360,16 @@ class DriverNoezia(Driver):
 
     def _filtrer(self, route) -> None:
         url = route.request.url
+        # Garde de la récolte : le cadre principal ne demande que les hôtes de la recette. Elle ne voit que ce que
+        # `route` intercepte (D-07 : pas les sauts d'une redirection) ; les sous-ressources (images, scripts, CDN)
+        # ne sont pas concernées. Le contrôle de l'adresse où l'on atterrit est refait par le parcours.
+        if self.hotes_navigation is not None and route.request.is_navigation_request():
+            cadre = route.request.frame
+            hote = (urlsplit(url).hostname or "").lower()
+            if (cadre is None or cadre.parent_frame is None) and hote not in self.hotes_navigation:
+                self.mesures.details["requetes_bloquees"] += 1
+                route.abort("blockedbyclient")
+                return
         autorise = est_autorisee(url, self.hotes_autorises)
         challenge = not autorise and est_autorisee(url, HOTES_CHALLENGES)
 
@@ -658,6 +681,13 @@ class DriverNoezia(Driver):
 
     def content(self) -> str:
         return self._reponse.text() if self._reponse is not None else ""
+
+    def etat_page(self) -> tuple[int | None, str, dict[str, str]]:
+        """(statut, adresse, en-têtes) de la dernière page du cadre principal, telle que le navigateur en est là
+        maintenant : la page peut avoir changé seule (un défi qui se valide) sans que rien ne soit redemandé."""
+        reponse = self._reponse
+        entetes = {k.lower(): v for k, v in reponse.headers.items()} if reponse is not None else {}
+        return (reponse.status if reponse is not None else None), self._page.url, entetes
 
     def dom(self) -> str:
         return self._page.content()

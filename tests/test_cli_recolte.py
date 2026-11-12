@@ -35,6 +35,12 @@ def sortie_vitrine(reglages):
     return reglages.sorties / "recoltes" / "vitrine-annonces"
 
 
+def lu_resume(dossier):
+    import json
+
+    return json.loads((dossier / "passe-001" / "resume.json").read_text(encoding="utf-8"))
+
+
 def lancer(*options, recette=RECETTE_VITRINE):
     return main(["recolte", "lancer", str(recette), *options])
 
@@ -99,9 +105,9 @@ def test_site_tiers_sans_autorisation_code_2_avant_toute_requete(pilote, tmp_pat
     assert "autorisation" in capsys.readouterr().err and pilote.demandes == [] and pilote.sessions == 0
 
 
-def test_moteur_navigateur_pas_encore_disponible_code_2(pilote, capsys):
-    assert lancer("--moteur", "navigateur") == 2
-    assert "navigateur" in capsys.readouterr().err and pilote.demandes == []
+def test_moteur_navigateur_est_accepte(pilote, sortie_vitrine):
+    assert lancer("--moteur", "navigateur") == 0  # (le moteur réel est remplacé par le pilote factice)
+    assert lu_resume(sortie_vitrine)["moteur"]["nom"] == "navigateur"
 
 
 def test_robots_qui_refuse_le_depart_code_2(pilote, capsys):
@@ -150,10 +156,9 @@ def test_un_refus_de_lancer_ne_demarre_pas_le_site(pilote, entrees_du_site, sort
     finally:
         verrou.liberer()
     assert "verrou" in capsys.readouterr().err and entrees_du_site == []
-    # variable inconnue, type inconnu, moteur indisponible
+    # variable inconnue, type inconnu
     assert lancer("--tranche", "saison=2025") == 2
     assert lancer("--sans", "rallye") == 2
-    assert lancer("--moteur", "navigateur") == 2
     assert entrees_du_site == []
     # passe non finie
     pilote.reponses["AN-000010"] = (429, "non")

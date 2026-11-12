@@ -20,6 +20,7 @@ from . import campaigns, notation
 from .config import Reglages
 from .engines.curl_cffi_engine import DriverCurlCffi
 from .engines.noezia.etat import Etat
+from .engines.noezia.navigateur import MoteurNavigateur
 from .engines.noezia.parcours import (
     Moteur,
     MoteurDriver,
@@ -34,7 +35,7 @@ from .engines.noezia.recettes import Recette, RecetteInvalide, _est_local, lire_
 from .site import rallye, vitrine
 
 SEUIL = 0.99  # « Récolte » du § 1 du plan : pages, enregistrements et champs, chacun ≥ 99 %
-MOTEURS_DISPONIBLES = ("http",)
+MOTEURS_DISPONIBLES = ("http", "navigateur")
 _LOCAUX = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -51,13 +52,15 @@ def _pourcent(valeur: float | None) -> str:
 
 def _moteur_disponible(nom: str) -> str:
     if nom not in MOTEURS_DISPONIBLES:
-        raise RefusParcours(f"moteur {nom} pas encore disponible (étape 4 de la récolte générale) : utiliser http")
+        raise RefusParcours(f"moteur inconnu : « {nom} » (disponibles : {', '.join(MOTEURS_DISPONIBLES)})")
     return nom
 
 
 def construire_moteur(nom: str, recette: Recette, reglages: Reglages) -> Moteur:
     """Le moteur de la passe. Il se construit avec le périmètre du labo (`SHADOWLAB_HOTES_AUTORISES`)."""
     _moteur_disponible(nom)
+    if nom == "navigateur":  # le vrai Chrome en identité native ; rien n'est lancé avant `ouvrir()`
+        return MoteurNavigateur.depuis(recette, reglages)
     local = all(_est_local(h) for h in recette.hotes)
     pilote = DriverCurlCffi(
         reglages.hotes_autorises,
