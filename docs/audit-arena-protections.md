@@ -18,6 +18,8 @@ L'Arena dispose de 6 détecteurs. Chacun classe une session en `automatise`, `hu
 - `ua_absent` — User-Agent absent
 - `ua_outil` — User-Agent contient python/curl/httpx/requests/aiohttp/wget…
 - `ua_headless` — User-Agent contient HeadlessChrome
+- `headless_dans_une_requete` (v2.1, 12/11/2026) — « HeadlessChrome » dans le User-Agent ou dans `sec-ch-ua`
+  d'une requête quelconque de la session (fichiers, envois, redirections), pas seulement de la première page
 - `langue_absente` — Accept-Language absent
 - `sec_fetch_absent` — Navigateur annoncé sans Sec-Fetch-*
 - `accept_generique` — Navigation avec Accept: */*
