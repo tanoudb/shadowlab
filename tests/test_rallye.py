@@ -656,7 +656,11 @@ def test_echappement_des_attributs_et_des_adresses():
         u.rallyes,
         [replace(s, depart="2024-05-17T08:" + MAL) if s.id == 1 else s for s in u.speciales],
         [
-            replace(e, chassis=MAL if e.chassis == ancien else e.chassis, pilote_id=MAL if e.pilote_id == pilote_ancien else e.pilote_id)
+            replace(
+                e,
+                chassis=MAL if e.chassis == ancien else e.chassis,
+                pilote_id=MAL if e.pilote_id == pilote_ancien else e.pilote_id,
+            )
             for e in u.engages
         ],
         u.temps,
