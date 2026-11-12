@@ -3,8 +3,8 @@
 import sqlite3
 
 import pytest
-from shadowlab.engines.noezia.etat import Etat, canonique
 
+from shadowlab.engines.noezia.etat import Etat, canonique
 from shadowlab.engines.noezia.recettes import Enregistrement
 
 QUAND = "2026-11-12T10:00:00+00:00"
