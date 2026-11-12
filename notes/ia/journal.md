@@ -2718,3 +2718,34 @@ retour (20 h). Le site doit rester libre à 20 h pour ses sessions.
 
 **Reste, dans l'ordre :** résultats de la récolte 95 ; tests puis fusion du formulaire ; correctif du WAF et
 contrôle ; campagne de référence ; campagne « interface » ; mise à jour du plan ; site libre à 20 h.
+
+## 2026-11-12 (12h40) — Claude (Fable 5.2) — Direction : sous-agents en parallèle pendant la récolte, huit branches assemblées
+
+Consigne d'Ethan (11 h 46) : « je veux que [quand] tu attends un résultat tu travailles sur autre chose en même
+temps et tu utilises des sous-agents pour travailler, tu es juste le lead ». Appliquée : la session principale
+décide, contrôle et intègre ; onze sous-agents (Sonnet ou Opus, jamais Fable) ont travaillé, chacun dans son
+dossier git, sans rien exécuter (campagne 95 en cours). Tableau des chantiers : `notes/ia/contexte.md`.
+
+**Rendu et contrôlé :**
+- Arena : `device_memory_invalide` admet 16 et 32 Go (D-63) ; `pas_de_scroll` et `pas_de_pause` ne jugent que
+  ce qu'ils voient, deux champs de plus dans le relevé (D-61) ; détecteur `cdp` en V2, `debugger_instant` et
+  `no_first_input` retirés : 0 ms dans 803 relevés sur 835, tous moteurs (D-62, révise D-45 point 1) ; règle
+  « HeadlessChrome dans toute requête » (D-60, accord d'Ethan).
+- Moteur : option `identite_native` (D-59), relue ; le filtre réseau réécrivait encore les en-têtes, corrigé.
+- Interface : la fiche d'un passage divisait la mémoire par 1 048 576 (« 0.0 Mo ») ; la mesure en base est
+  juste, en Mo. Site public : formulaire de contact (D-57, accord d'Ethan).
+- Documents poussés : `docs/recherche/` (origine des 84 écarts d'empreinte ; Chrome avec interface sur serveur
+  Linux ; corrélation entre sessions), `README.md` réécrit d'après le code, `AGENTS.md` corrigé.
+- **Branche `integration-12-11`** (`../noezia-shadowlab-integration`) : les sept branches assemblées, lint
+  propre, décisions D-57 à D-63. **Aucun test n'a tourné dessus.**
+
+**Décisions de la coordination (Ethan peut revenir dessus) :** `cdp` V2 fusionné avant la campagne et les
+sessions humaines (défaut prouvé par le fonctionnement du navigateur) ; une seule campagne de 525 passages
+(`ablation-interface.yaml`) au lieu de la référence puis de l'ablation ; niveaux 06 et 07 mesurés sans la
+corrélation entre sessions (elle compte toute la base : 443 sessions pour l'empreinte des témoins).
+
+**Récolte 95, passages finis à cette heure :** noezia 2 sur 3, 500 annonces et 7 000 champs exacts chacun
+(61 min et 58 min ; le chargement des pages n'en prend que 30 s) ; patchright 3 sur 3, sans faute, 45 s.
+
+**Non vérifié :** tout le code ci-dessus (tests écrits d'abord, jamais lancés).
+**Reste :** voir `notes/ia/contexte.md`, « Prochaine action ».
