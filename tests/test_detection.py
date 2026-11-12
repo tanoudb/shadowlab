@@ -905,3 +905,30 @@ def test_h2_cumul_signaux_automatise():
     c = _h2_verdict(UA_CHROME, h2)
     assert c.classification == "automatise"
     assert len(c.signals) >= 3
+
+
+def _codes_coherence_profonde(**navigateur):
+    from shadowlab.detection import DetecteurCoherenceProfonde
+
+    obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte(**navigateur)])
+    return {s.code for s in DetecteurCoherenceProfonde().classer(obs).signals}
+
+
+def test_device_memory_16_go_accepte():
+    """Chrome 2026 annonce 16 hors Android : un humain sur 16 Go ne doit pas être signalé."""
+    assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=16)
+
+
+def test_device_memory_32_go_accepte():
+    """Le Chromium 156 des témoins annonce 32 sur une machine de 64 Go (campagne 94)."""
+    assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=32)
+
+
+def test_device_memory_anciens_paliers_toujours_acceptes():
+    for valeur in (0.25, 0.5, 1, 2, 4, 8):
+        assert "device_memory_invalide" not in _codes_coherence_profonde(deviceMemory=valeur), valeur
+
+
+def test_device_memory_valeur_inconnue_des_navigateurs_signalee():
+    for valeur in (3, 12, 64):
+        assert "device_memory_invalide" in _codes_coherence_profonde(deviceMemory=valeur), valeur
