@@ -2979,3 +2979,16 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Reste** : résultat de la suite complète ; relancer la campagne de preuve ; sessions humaines et tunnel du
   site public (Ethan) ; valider la conception du palier 2 (`docs/recherche/identite-qui-dure-2026-11-12.md`) ;
   réponses d'Ethan sur l'usage des données de rallye et l'accord du site réel (`docs/PLAN.md` § 7).
+
+## 2026-11-12 (21h55) — Claude (Fable 5.2, coordination) — Fusion de la récolte vérifiée, campagne de preuve relancée
+
+- **Suite complète après la fusion `b1a40ed`** (21 h 45 à 21 h 52, aucune campagne en cours) : 1 247 tests verts
+  (1 207 rapides et 40 d'intégration, dont la récolte par un vrai Chrome et la reprise après `SIGKILL`),
+  11 tests de l'interface, lint propre. Poussé (`9c948d8`). Dossier de travail de la récolte retiré ; la base à
+  part de l'essai est gardée dans `outputs/recolte-essai-2026-11-12.sqlite3` (non versionnée).
+- **Campagne de preuve relancée à 21 h 54 dans la base du labo** : `configs/experiments/recolte-generale.yaml`
+  (campagne n° 102), `curl-cffi` et `noezia` en identité native, niveau 01, vitrine à 150 annonces et site de
+  rallye à 24 rallyes, 3 répétitions, environ 3 h 30. Lancée avec `SHADOWLAB_PORT=8785` pour laisser le port
+  8770 libre aux sessions humaines d'Ethan ; journal dans `outputs/campagne-recolte-generale.log`.
+- **Reste** : lire la campagne 102 et l'écrire au § 2 du plan ; sessions humaines d'Ethan puis `shadowlab
+  rejeu` ; conception du palier 2 à valider ; récolte par un niveau protégé de l'Arena jamais lancée.
