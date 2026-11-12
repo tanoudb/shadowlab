@@ -1322,12 +1322,13 @@ def test_voix_lues_avant_leur_chargement_ne_concluent_pas():
         assert "voices_vide" not in _positifs(_releve(headless_signals=voix), "headless")
 
 
-def test_voix_lues_avant_la_fin_de_l_attente_ne_concluent_pas():
-    voix = {**VRAI_CHROME_VOIX, "voices_attente_ms": 120, "voices_evenement": False}
+@pytest.mark.parametrize("attente", [120, 200])
+def test_voix_lues_avant_la_fin_de_l_attente_ne_concluent_pas(attente):
+    voix = {**VRAI_CHROME_VOIX, "voices_attente_ms": attente, "voices_evenement": False}
     assert "voices_vide" not in _positifs(_releve(headless_signals=voix), "headless")
 
 
-@pytest.mark.parametrize(("attente", "evenement"), [(250, False), (412, False), (40, True)])
+@pytest.mark.parametrize(("attente", "evenement"), [(250, False), (245, False), (412, False), (40, True)])
 def test_voix_vides_apres_l_attente_gardent_leur_poids(attente, evenement):
     """Nouveau relevé : liste lue après l'annonce du navigateur (`voiceschanged`) ou au bout de 250 ms. Vide alors,
     le signal garde son poids. Le nombre de voix est celui du témoin ; les deux champs d'attente viennent du nouvel
@@ -1423,13 +1424,29 @@ def test_connexion_signaux_gardes(modif, code, poids):
 # Le relevé lui-même (observateur.js), exécuté par node avec un navigateur imité.
 
 OBSERVATEUR = Path(__file__).parents[1] / "src" / "shadowlab" / "site" / "static" / "observateur.js"
-avec_node = pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+avec_node = pytest.mark.skipif(
+    shutil.which("node") is None,
+    reason=(
+        "node absent du PATH : Node 22 est un prérequis du projet (mise), "
+        "les tests d'observateur.js ne tournent pas sans lui"
+    ),
+)
 
 
 def _fonction_js(nom):
     """Texte d'une fonction de premier niveau d'observateur.js, de sa déclaration à l'accolade en colonne 0."""
     source = OBSERVATEUR.read_text(encoding="utf-8")
-    return re.search(rf"^(?:async )?function {nom}\(.*?^\}}$", source, re.S | re.M).group(0)
+    trouvee = re.search(rf"^(?:async )?function {nom}\(.*?^\}}$", source, re.S | re.M)
+    if trouvee is None:
+        pytest.fail(
+            f"fonction `{nom}` introuvable dans {OBSERVATEUR} (déclaration en colonne 0, fin par `}}` en colonne 0)"
+        )
+    return trouvee.group(0)
+
+
+def test_fonction_js_introuvable_echoue_avec_un_message_clair():
+    with pytest.raises(pytest.fail.Exception, match="fonction `inexistante` introuvable dans .*observateur.js"):
+        _fonction_js("inexistante")
 
 
 def _node(script):
@@ -1438,12 +1455,22 @@ def _node(script):
 
 
 def test_observateur_attente_des_voix_bornee():
-    """L'empreinte part environ 0,2 s après le chargement : l'attente des voix ne dépasse pas 300 ms, et l'appel
-    part dès le chargement du script, pendant que les autres sondes tournent."""
+    """L'attente des voix est bornée et son appel part dès le chargement du script, pendant que les autres sondes
+    tournent. Mesuré (campagne 97, `duree_collecte_ms` avant ce changement) : médiane de 233 à 327 ms selon le
+    moteur, jusqu'à 4,4 s quand une sonde attend son délai de 3 s (WebRTC, iframe, worker)."""
     source = OBSERVATEUR.read_text(encoding="utf-8")
     delai = int(re.search(r"^const DELAI_VOIX_MS = (\d+);", source, re.M).group(1))
     assert 0 < delai <= 300
     assert re.search(r"^const voixPretes = attendreVoix\(DELAI_VOIX_MS\);", source, re.M)
+
+
+def test_delai_des_voix_identique_dans_l_observateur_et_le_detecteur():
+    """Deux copies de la même constante : l'attente envoyée par la page et celle que la règle juge complète."""
+    from shadowlab.detection import DetecteurHeadless
+
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    delai = int(re.search(r"^const DELAI_VOIX_MS = (\d+);", source, re.M).group(1))
+    assert delai == DetecteurHeadless.DELAI_VOIX_MS
 
 
 _SCRIPT_VOIX = """
