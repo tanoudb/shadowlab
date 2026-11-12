@@ -11,10 +11,16 @@ from .http_base import DriverHttp, ReponseBrute
 class DriverCurlCffi(DriverHttp):
     name = "curl-cffi"
     categorie = "anti_detection"
-    options_permises = {"timeout": (int, float), "impersonate": str}
+    # verifier_tls : faux par défaut (Arena locale, certificat auto-signé) ; vrai pour un site qui n'est pas à nous
+    options_permises = {"timeout": (int, float), "impersonate": str, "verifier_tls": bool}
 
     def configuration(self) -> dict[str, Any]:
-        return {"impersonate": None, **self.options, "follow_redirects": False, "tls_non_verifie": True}
+        return {
+            "impersonate": None,
+            **self.options,
+            "follow_redirects": False,
+            "tls_non_verifie": not self.options.get("verifier_tls", False),
+        }
 
     def versions(self) -> dict[str, str]:
         return {"curl_cffi": importlib.metadata.version("curl_cffi")}
@@ -22,7 +28,9 @@ class DriverCurlCffi(DriverHttp):
     def _ouvrir_client(self) -> None:
         from curl_cffi import requests
 
-        self._client = requests.Session(impersonate=self.options.get("impersonate"), verify=False)
+        self._client = requests.Session(
+            impersonate=self.options.get("impersonate"), verify=self.options.get("verifier_tls", False)
+        )
 
     def _envoyer(self, methode: str, url: str, donnees: dict[str, str] | None) -> ReponseBrute:
         reponse = self._client.request(
