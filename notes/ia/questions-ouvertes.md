@@ -34,13 +34,29 @@ Ce qui attend Ethan.
   limitation de débit, le Mac doit rester allumé et éveillé (il s'endort après 1 minute sans activité : à
   tenir éveillé avec `caffeinate` tant que le site tourne). Pour un lien stable à partager largement, il
   faut un domaine à toi chez Cloudflare (points 1 et 2).
-  **9 h 15 — tu veux un pseudonyme comme responsable.** `cloudflared` est installé et le script
+  **9 h — tu veux un pseudonyme comme responsable.** `cloudflared` est installé et le script
   `scripts/site-public-tunnel.sh` est prêt. Deux choses restent à toi : (a) **une adresse e-mail** où
   l'on peut t'écrire (la page dit « écrivez à : … » pour faire supprimer une session ; je ne peux pas créer
   de boîte à ta place) ; recommandation : un alias dédié, pseudonyme proposé « Labo Vitrine » ; (b) **lancer
   le script toi-même** : l'ouverture du tunnel m'est refusée par le garde-fou de l'application.
   `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine — <adresse>" scripts/site-public-tunnel.sh`, puis me donner la
   main : je vérifie le parcours complet depuis l'adresse publique.
+  **10 h 15 — tu as donné une adresse en conversation (volontairement pas recopiée dans le dépôt), sans
+  enthousiasme pour l'afficher.** Elle contient ton pseudo habituel : le pseudonyme protège donc peu sur un
+  lien très partagé. À trancher avant de partager (le lien change à chaque relance) : garder l'adresse, ou
+  la remplacer par un **formulaire de contact** sur le site (aucune adresse affichée ; une à deux heures de
+  travail, code et tests). Recommandation : le formulaire si le partage est large. Reste dans les deux cas
+  (b) : lancer le script toi-même.
+- **2026-11-12 — CAPTCHA démo jamais servi aux niveaux 04 à 07** : une session suspecte est bloquée avant
+  d'y arriver, une session propre n'est pas défiée (dernière émission à un niveau normal : campagnes 3 à 5).
+  Le tableau des niveaux l'annonce pourtant au niveau 04. Recommandation : ne rien changer à l'Arena avant
+  les sessions humaines ; corriger seulement la description des niveaux, et décider au palier 2 s'il faut
+  une « zone grise » où il serait servi.
+- **2026-11-12 — WAF du niveau 07 : Turnstile et reCAPTCHA impossibles à valider** : en paranoïa 4, le nom
+  des champs `cf-turnstile-response` et `g-recaptcha-response` déclenche la règle 942432 (reproduit).
+  Personne ne passe, humain compris. Pas une question : je corrige (exclusion étroite, test vu en échec
+  d'abord) dès qu'aucune campagne ne tourne, puis une courte campagne de contrôle. Dis-le si tu préfères
+  que je n'y touche pas.
 - **2026-11-11 — Code mort `engines/noezia/pool.py`** : il appelle une classe et deux méthodes qui
   n'existent pas, rien ne l'importe. Recommandation : le supprimer (le palier 4 le remplace).
 - **2026-11-11 — Pour le palier 3** : un serveur Linux, un proxy résidentiel, et l'environnement de tor-i

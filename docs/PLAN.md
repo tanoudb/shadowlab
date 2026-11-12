@@ -126,6 +126,49 @@ Ce que la base dit :
   par page (rythme humain). C'est le prix de la discrétion ; le débit entre dans l'endurance du palier 4.
 - **Niveaux 04 à 07** : même refus que dans la campagne 90 (détecteur `cdp`), aucune fiche ouverte.
 
+### Ablations n° 93 et 94 (12/11, niveaux 04 à 07 sans `cdp`, 180 passages chacune, 0 panne)
+
+Profils `04scdp` à `07scdp` (`configs/arena/profils-sans-cdp.yaml`) : les niveaux 04 à 07 tels quels, détecteur
+`cdp` retiré. Entre les deux campagnes, deux défauts de l'Arena ont été corrigés (`c2fbdfc`, `f713b39`).
+Passages réussis sur 15 (Wilson : 12/15 → 55 à 93 % ; 2/15 → 4 à 38 %).
+
+| Moteur | 04 sans cdp | 05 sans cdp | 06 sans cdp | 07 sans cdp |
+|--------|-------------|-------------|-------------|-------------|
+| noezia, campagne 93 (Arena avec défauts) | 0 | 0 | 0 | 0 |
+| noezia, campagne 94 (défauts corrigés) | 15 | 12 | 2 | 0 |
+| patchright, campagnes 93 et 94 | 0 | 0 | 0 | 0 |
+| playwright, campagnes 93 et 94 | 0 | 0 | 0 | 0 |
+
+Ce que la base dit (campagne 94) :
+- **Les témoins restent arrêtés sans `cdp`** (60/60 chacun), dès la page du défi, par les détecteurs
+  d'origine : `regles-http`, `botd`, `chrome-apis`, `coherence-profonde`, `regles-js`, plus `headless` pour
+  playwright. L'Arena garde donc des signaux valides contre eux.
+- **Niveau 04** : NOEZIA passe 15/15.
+- **Niveau 05** : 12/15. Les 3 arrêts sont sur `pagination` : score composite 0,85 (seuil 0,6) =
+  `pas_de_scroll` + `pas_de_pause` (délai maximal entre deux mouvements de souris : 58 à 60 ms). Turnstile
+  et reCAPTCHA sont franchis **en clés de test** (`captcha_test`) : cela ne prouve rien contre un vrai CAPTCHA.
+- **Niveau 06** : 2/15. 11 arrêts par `correlation-session` (la même empreinte revue 5 fois ou plus, ou plus
+  de 30 sessions par heure), 2 par le composite 0,85 sur `pagination`. Les 2 réussites sont des premiers
+  passages, avant que l'empreinte ait été vue 5 fois.
+- **Niveau 07** : 0/15. 13 arrêts par `correlation-session`, 2 par le WAF sur `/lab/turnstile/verifier`.
+- **Défaut de l'Arena au niveau 07** (reproduit le 12/11 par 6 requêtes directes au WAF) : en paranoïa 4,
+  le nom même du champ `cf-turnstile-response` (deux tirets) déclenche la règle CRS 942432, et
+  `g-recaptcha-response` aussi. Personne ne peut valider Turnstile ni reCAPTCHA au niveau 07, humain
+  compris. Jamais vu avant : `cdp` arrêtait tout le monde plus tôt (la règle n'apparaît que 2 fois dans
+  tout le journal du WAF, dans la campagne 94). Correctif à faire hors campagne (exclusion dans
+  `docker/arena/coraza/main.go`, image à reconstruire).
+
+Campagne 93, gardée pour mémoire, chiffres faussés par les deux défauts : au 04, le CAPTCHA démo était émis
+sur un motif `cdp` pourtant exclu (15/15) ; au 05, composite 0,65 = `chrome_sans_alps` (faux positif sur
+tout Chrome récent) + `pas_de_scroll` (15/15).
+
+Lecture, une fois `cdp` retiré : ce qui arrête NOEZIA est (1) son comportement sur plusieurs pages, ni
+défilement ni pause, à corriger en 1.9 si le rejeu confirme que les humains n'ont pas ce profil ; (2) la
+corrélation entre sessions, qui tient autant à la forme de la campagne (la même empreinte à chaque passage)
+qu'au moteur, voir le point connu du § 4 ; (3) le défaut du WAF au niveau 07.
+**Non vérifié** : si `cdp`, `correlation-session` et le composite arrêtent aussi des humains (sessions
+humaines, 1.7).
+
 Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
 le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
@@ -269,7 +312,7 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 | Quoi | Pour |
 |------|------|
 | Accord pour committer et pousser la branche | 1.1 |
-| Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`) | 1.6, 1.8 |
+| Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`). Voie courte demandée le 12/11 : tunnel depuis le poste, `scripts/site-public-tunnel.sh`, à lancer par lui (lien temporaire, ne couvre pas 1.8) | 1.6, 1.8 |
 | **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`, en visitant aussi `/lab/vitrine` (la liste, une fiche). Arrêter le site, puis `uv run shadowlab rejeu` : il dit, niveau par niveau, si `cdp` et les autres détecteurs arrêtent les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
 | Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
@@ -295,8 +338,8 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.3 Campagne de référence | **fait** | 11/11 | campagne 90 : 315 passages, 0 panne (critère < 5 %), 1 h 52. Tableau et lecture au § 2. Base au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
 | 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 |
-| 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`) |
-| 1.7 Sessions humaines et calibrage | à faire (attend la mise en ligne) | | |
+| 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`). 12/11 : voie courte par tunnel Cloudflare, `scripts/site-public-tunnel.sh` (`ccf24c9`), jamais lancé avec un vrai tunnel ; le lancement revient à Ethan |
+| 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | à faire | | |
 | Palier 2 — Une identité qui dure | à faire | | |

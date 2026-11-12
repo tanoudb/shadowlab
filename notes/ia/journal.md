@@ -2630,3 +2630,43 @@ Cloudflare depuis le Mac mini ; détail et limites dans `notes/ia/questions-ouve
 
 **Reste :** campagne 94 (même ablation, défauts corrigés), récolte à 500 annonces, campagne de référence ;
 remettre l'Arena sur ses profils normaux après la 94 (`uv run shadowlab arena appliquer`).
+
+## 2026-11-12 (10h20) — Claude (Fable 5.2) — Campagne 94 (ablation sans cdp, défauts corrigés), défaut du WAF au niveau 07, script de tunnel
+
+**Fait :**
+- **Campagne 94** (`ablation_cdp_04_07`, 180 passages, 0 panne, 1 h 17, 8 h 50 → 10 h 07) : même ablation que
+  la 93, après les correctifs `c2fbdfc` (ALPS) et `f713b39` (CAPTCHA démo). NOEZIA réussit 15/15 au niveau 04
+  sans `cdp`, 12/15 au 05, 2/15 au 06, 0/15 au 07 (campagne 93 : 0/60). patchright et playwright : 0/60
+  chacun, arrêtés dès la page du défi par les détecteurs d'origine. Tableau et lecture : `docs/PLAN.md` § 2.
+- **Ce qui arrête NOEZIA sans `cdp`** (table `decisions`, campagne 94) : au 05, 3 passages `pagination`,
+  composite 0,85 = `pas_de_scroll` + `pas_de_pause` ; au 06, 11 `correlation-session` et 2 composite ; au 07,
+  13 `correlation-session` et 2 blocages du WAF sur `/lab/turnstile/verifier` (règle 942432).
+- **Défaut de l'Arena n° 4, reproduit, pas encore corrigé** : au niveau 07 (paranoïa 4, seuil 2), le nom du
+  champ `cf-turnstile-response` suffit à déclencher la règle CRS 942432 (deux caractères spéciaux), et
+  `g-recaptcha-response` aussi. Reproduction : 6 requêtes POST directes à Nginx (`127.0.0.1:8781`, en-tête
+  `X-ShadowLab-Profil`, amont volontairement injoignable pour ne rien envoyer au site ; session
+  `diagnostic-waf-942432` dans `coraza.jsonl`). `cf-turnstile-response=abc` → 403 avec 942432 ;
+  `jeton=abc` → pas de 942432 ; niveau 06 → pas de 942432. Faites pendant la récolte 95 : charge négligeable,
+  aucune requête n'atteint le site.
+- **Arena remise sur ses profils normaux** à 10 h 08 (`uv run shadowlab arena appliquer` sans
+  `SHADOWLAB_PROFILS_EXTRA`) ; vérifié : plus aucun profil `scdp` dans `outputs/arena/generes/`.
+- **Récolte à 500 annonces lancée** à 10 h 09 (campagne 95, `configs/experiments/recolte-500.yaml`, journal
+  `outputs/campagne-recolte-500.log`). Fin attendue vers 13 h 15.
+- **Site public** (commit `ccf24c9`) : `cloudflared` 2026.10.7 installé par Homebrew ; `scripts/site-public-tunnel.sh`
+  ouvre le tunnel, lit l'adresse, lance l'application pour cet hôte seulement, tient le Mac éveillé.
+  L'ouverture du tunnel par l'agent a été **refusée par le garde-fou de Claude Code** (exposition d'un
+  service local) : pas contourné, le lancement revient à Ethan, ce qui rejoint « la mise en production reste
+  à moi ». Vercel et Netlify écartés (pas de processus continu ni de disque durable).
+
+**Décisions d'Ethan :** responsable affiché sous pseudonyme (« Labo Vitrine » proposé) ; une adresse de
+contact donnée en conversation à 10 h 15, sans enthousiasme pour l'afficher (non recopiée dans le dépôt).
+Formulaire de contact proposé à la place : à trancher (`notes/ia/questions-ouvertes.md`).
+
+**Non vérifié :** le script n'a jamais tourné avec un vrai tunnel (transmission de l'hôte, `CF-Connecting-IP`,
+cookies `__Host-`) ; si `cdp`, `correlation-session` et le composite arrêtent des humains (sessions de ce
+soir) ; le correctif du WAF (à écrire, test d'abord, hors campagne).
+
+**Fichiers :** `docs/PLAN.md` (§ 2, § 7, § 8), `AGENTS.md` (605 tests), `notes/ia/questions-ouvertes.md`.
+
+**Reste :** résultats de la récolte 95 ; correctif du WAF au niveau 07 puis courte campagne de contrôle ;
+campagne de référence ; tout arrêter avant 20 h (sessions humaines d'Ethan, puis `uv run shadowlab rejeu`).
