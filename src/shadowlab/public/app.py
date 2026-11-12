@@ -51,10 +51,10 @@ PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers 
 UNE_JOURNEE_S = 24 * 3600
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
 ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
-# Chemins jamais journalisés : les pages de contact, et ce que le navigateur charge avec chacune d'elles (feuille
-# de style, icône). Horodatées à la milliseconde, rapprochées des requêtes notées d'une session, ces lignes
-# dateraient un message, que D-57 ne garde qu'au jour ; une feuille de style chargée sans page notée trahirait
-# aussi une page de contact. Il ne reste qu'une ligne par page, et aucune pour une page de contact.
+# Le journal ne garde que les réponses d'erreur (code 400 ou plus) : une requête réussie ou redirigée n'écrit rien.
+# Même parmi les erreurs, jamais les pages de contact (feuille de style comprise, servie sous /contact/) ni ce que
+# le navigateur charge avec une page (fichiers statiques, icône) : horodatées à la milliseconde, rapprochées des
+# requêtes notées d'une session, ces lignes dateraient un message, que D-57 ne garde qu'au jour.
 NON_JOURNALISES = ("/contact", "/lab/static/", "/favicon.ico")
 journal = logging.getLogger("shadowlab.public")
 
@@ -301,8 +301,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             poser(reponse, cookie_csrf, csrf)
         return reponse
 
-    def refus(status_code: int, titre: str, message: str) -> HTMLResponse:
-        return HTMLResponse(pages.erreur(titre, message), status_code=status_code)
+    def refus(status_code: int, titre: str, message: str, *, contact: bool = False) -> HTMLResponse:
+        return HTMLResponse(pages.erreur(titre, message, contact=contact), status_code=status_code)
 
     def plein() -> bool:
         """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte."""
@@ -348,18 +348,20 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 reponse = await call_next(request)
         reponse.headers["Content-Security-Policy"] = CSP
         reponse.headers["X-Content-Type-Options"] = "nosniff"
-        # Depuis une page de contact, la page suivante ne reçoit que l'origine (sans chemin, donc « / » une fois
-        # réduite par `donnees._referent`) : une session en cours ne note pas qu'on en vient. Pas `no-referrer` :
-        # le navigateur enverrait `Origin: null` au POST du formulaire, que `meme_origine` refuse (403).
+        # Les pages de contact ne chargent rien sous /lab/ et ne mènent qu'à « / » ou « /contact… » (ni notés en
+        # base pendant une session, ni journalisés). Si un lien en sortait quand même, la page suivante ne
+        # recevrait que l'origine, sans chemin. Pas `no-referrer` : le navigateur enverrait `Origin: null` au POST
+        # du formulaire, que `meme_origine` refuse (403).
         depuis_contact = request.url.path.startswith("/contact")
         reponse.headers["Referrer-Policy"] = "origin" if depuis_contact else "same-origin"
         reponse.headers["X-Frame-Options"] = "DENY"
         reponse.headers.setdefault("Cache-Control", "no-store")
         if reglages.https:
             reponse.headers["Strict-Transport-Security"] = "max-age=31536000"
-        # Ni adresse, ni chaîne de requête (le jeton y passe), ni en-têtes : méthode, chemin, statut. Niveau DEBUG :
-        # le fichier tournant le reçoit, l'écran seulement en mode verbeux. Rien pour NON_JOURNALISES.
-        if not request.url.path.startswith(NON_JOURNALISES):
+        # Erreurs seulement (statut 400 ou plus) : ni adresse, ni chaîne de requête (le jeton y passe), ni en-têtes,
+        # ni identifiant de session : méthode, chemin, statut. Niveau DEBUG : le fichier tournant le reçoit, l'écran
+        # seulement en mode verbeux. Rien pour NON_JOURNALISES.
+        if reponse.status_code >= 400 and not request.url.path.startswith(NON_JOURNALISES):
             journal.debug("%s %s %s", _nettoyer(request.method), _nettoyer(request.url.path), reponse.status_code)
         return reponse
 
@@ -478,13 +480,19 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     def contact_envoye() -> HTMLResponse:
         return HTMLResponse(pages.contact_envoye())
 
+    @app.get("/contact/style.css")
+    def contact_style() -> FileResponse:
+        """La feuille du site, servie sous /contact/ : une page de contact ne charge rien sous /lab/, que la base
+        d'une session en cours noterait (un référent « / », à la milliseconde)."""
+        return FileResponse(STATIQUES / "vitrine.css", media_type="text/css")
+
     @app.post("/contact")
     async def ecrire(request: Request) -> Response:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
+            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.", contact=True)
         champs = await formulaire(request, taille_formulaire_contact)
         if champs is None:
-            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.")
+            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.", contact=True)
         # À partir d'ici, un refus rend le formulaire avec le texte tapé : il n'est jamais perdu.
         texte = messages.nettoyer(champs.get("message", ""))
         if not csrf_valide(request, champs):

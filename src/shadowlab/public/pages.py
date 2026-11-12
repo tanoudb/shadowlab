@@ -14,7 +14,7 @@ from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-12.6"
+VERSION_INFORMATION = "2026-11-12.7"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -119,7 +119,18 @@ def _duree(secondes: int) -> str:
     return f"{secondes // 60} minutes"
 
 
-def _page(titre: str, corps: str) -> str:
+def _page(titre: str, corps: str, *, contact: bool = False) -> str:
+    """Gabarit commun. Une page de contact ne charge rien sous /lab/ et ne mène qu'à « / » ou « /contact… » : pendant
+    une session, la base noterait toute requête /lab/ (à la milliseconde), donc l'ouverture du formulaire."""
+    if contact:
+        feuille, marque, navigation = (
+            "/contact/style.css",
+            "/",
+            '<a href="/">Participer</a><a href="/contact">Contact</a>',
+        )
+    else:
+        feuille, marque = "/lab/static/vitrine.css", "/lab/vitrine"
+        navigation = '<a href="/">Participer</a><a href="/lab/vitrine">Le site</a><a href="/session">Ma session</a>'
     return f"""<!doctype html>
 <html lang="fr">
 <head>
@@ -127,12 +138,12 @@ def _page(titre: str, corps: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="sl-sans-tiers" content="1">
 <title>{escape(titre)} — {MARQUE}</title>
-<link rel="stylesheet" href="/lab/static/vitrine.css">
+<link rel="stylesheet" href="{feuille}">
 </head>
 <body class="vitrine">
 <header class="entete"><div class="conteneur">
-<a class="marque" href="/lab/vitrine">{MARQUE}</a>
-<nav aria-label="Navigation principale"><a href="/">Participer</a><a href="/lab/vitrine">Le site</a><a href="/session">Ma session</a></nav>
+<a class="marque" href="{marque}">{MARQUE}</a>
+<nav aria-label="Navigation principale">{navigation}</nav>
 </div></header>
 <main class="conteneur public">
 {corps}
@@ -158,7 +169,7 @@ def bandeau(csrf: str | None) -> str:
 <div class="actions"><a href="/session">Ma session</a>{_bouton_terminer(csrf)}</div>
 </div></aside>"""
     return """<aside class="session-publique" aria-label="Recherche"><div class="conteneur">
-<p>Site fictif, sans vraies annonces. Vous visitez sans participer : rien n'est enregistré.</p>
+<p>Site fictif, sans vraies annonces. Vous visitez sans participer : rien n'est enregistré, hors le journal technique des erreurs décrit sur la page d'information.</p>
 <a href="/">Participer à la recherche</a>
 </div></aside>"""
 
@@ -225,7 +236,8 @@ def information(
 <section>
 <h2>Ce qui n'est pas relevé</h2>
 <p>Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni mesure d'audience, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré. Seule exception : ce que vous écrivez vous-même dans le formulaire de contact.</p>
-<p>Comme pour tout site web, l'hébergement (le serveur) et le service placé devant le site pour le protéger voient passer toutes les données en transit pour les acheminer : votre adresse IP, les pages demandées et ce que la page envoie. L'application de recherche, elle, n'enregistre pas votre adresse IP.</p>
+<p>Comme pour tout site web, l'hébergement (le serveur) et le service placé devant le site pour le protéger voient passer toutes les données en transit pour les acheminer : votre adresse IP, les pages demandées et ce que la page envoie. L'application de recherche, elle, n'enregistre pas votre adresse IP. Pour compter les ouvertures de session et les messages d'un même visiteur, une empreinte non réversible de votre adresse est gardée en mémoire, 24 heures au plus, le temps de limiter les abus ; elle n'est jamais écrite sur le disque.</p>
+<p>Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, le code de réponse et l'heure, sans adresse IP ni identifiant de session. Une requête réussie n'y laisse rien.</p>
 <p>Ces données ne disent pas qui vous êtes. Mais une empreinte de navigateur peut, rapprochée d'autres sources, permettre de reconnaître un appareil : c'est pourquoi elles sont traitées comme des données personnelles.</p>
 </section>
 
@@ -247,7 +259,7 @@ def information(
 
 <section>
 <h2>Combien de temps</h2>
-<p>Chaque session est effacée automatiquement {jours} jours après son début.</p>
+<p>Chaque session est effacée automatiquement {jours} jours après son début. La vérification a lieu au démarrage du serveur, puis une fois par jour au plus : l'effacement peut avoir lieu un jour plus tard, ou davantage si le serveur est éteint.</p>
 </section>
 
 <section>
@@ -332,16 +344,16 @@ def contact(csrf: str, jours: int, taille: int, *, erreur: str = "", texte: str 
 </form>
 <p class="discret">Seuls le texte de votre message et le jour de sa réception sont enregistrés : ni adresse IP, ni navigateur, ni identifiant de session. Le message ne sert qu'à vous répondre ; le responsable du site le lit, puis il est effacé automatiquement au bout de {jours} jours.</p>
 </article>"""
-    return _page("Contact", corps)
+    return _page("Contact", corps, contact=True)
 
 
 def contact_envoye() -> str:
     corps = """<article class="info">
 <h1>Message envoyé</h1>
 <p>Votre message a bien été enregistré. Le responsable le lira ; il ne pourra vous répondre que si vous avez indiqué comment vous joindre.</p>
-<p><a href="/lab/vitrine">Revenir au site</a></p>
+<p><a href="/">Revenir à la page d'information</a></p>
 </article>"""
-    return _page("Message envoyé", corps)
+    return _page("Message envoyé", corps, contact=True)
 
 
 def supprimee(existait: bool) -> str:
@@ -358,10 +370,10 @@ def supprimee(existait: bool) -> str:
     return _page("Session supprimée", corps)
 
 
-def erreur(titre: str, message: str) -> str:
+def erreur(titre: str, message: str, *, contact: bool = False) -> str:
     corps = f"""<article class="info">
 <h1>{escape(titre)}</h1>
 <p>{escape(message)}</p>
 <p><a href="/">Revenir à la page d'information</a></p>
 </article>"""
-    return _page(titre, corps)
+    return _page(titre, corps, contact=contact)
