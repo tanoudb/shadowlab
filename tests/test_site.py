@@ -1,7 +1,11 @@
 import json
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 
+import shadowlab
 from shadowlab import database as db
 from shadowlab.site import pages
 
@@ -358,3 +362,18 @@ def test_connexion_porte_bloque_un_bot(client, reglages):
         follow_redirects=False,
     )
     assert r.status_code == 403
+
+
+SCRIPTS_SERVIS = sorted(
+    script
+    for dossier in ("site/static", "tableau_static")
+    for script in (Path(shadowlab.__file__).parent / dossier).glob("*.js")
+)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node absent : syntaxe des scripts non vérifiée")
+@pytest.mark.parametrize("script", SCRIPTS_SERVIS, ids=lambda p: f"{p.parent.name}/{p.name}")
+def test_script_servi_syntaxe_valide(script):
+    """Un script qui ne s'analyse pas ne s'exécute pas du tout : la page reste morte sans rien dire."""
+    resultat = subprocess.run(["node", "--check", str(script)], capture_output=True, text=True)
+    assert resultat.returncode == 0, resultat.stderr

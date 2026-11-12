@@ -324,7 +324,7 @@ const VUES = {
     const blocs = [
       h('h1', {}, 'Arena'),
       h('p', { class: 'chapeau' }, 'Décisions des couches de protection et résultats par niveau. '
-        + 'Les compteurs couvrent tous les passages de l'expérience sélectionnée.'),
+        + 'Les compteurs couvrent tous les passages de l\'expérience sélectionnée.'),
     ];
     if (compteurs.length) {
       blocs.push(h('section', { class: 'carte' }, h('h2', {}, 'Décisions par couche'),
