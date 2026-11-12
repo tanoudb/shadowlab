@@ -336,6 +336,7 @@ class Parcours:
                 pages_max=pages_max if pages_max is not None else gardees.get("pages_max"),
                 sans=tuple(gardees.get("sans", ())),
                 ignorer_robots=bool(gardees.get("ignorer_robots", False)),
+                tout_refaire=bool(gardees.get("tout_refaire", False)),  # une passe « tout refaire » reste complète
             )
             self._controles(reprise=True)
             self.moteur.ouvrir()
@@ -436,6 +437,7 @@ class Parcours:
             "pages_max": o.pages_max,
             "sans": list(o.sans),
             "ignorer_robots": o.ignorer_robots,
+            "tout_refaire": o.tout_refaire,
         }
 
     def _pages_max(self) -> int | None:
@@ -488,6 +490,10 @@ class Parcours:
         self._ignores = recette.parametres_ignores
         self._sans = set(self.options.sans)
         self._hotes = set(recette.hotes)
+        # Récolte incrémentale : les pages lues par les passes d'avant (depuis le dernier --tout-refaire) ne sont
+        # redemandées que si la recette le dit (`revisiter`). Aucune passe d'avant, ou --tout-refaire : tout est lu.
+        self._base = etat.passe_de_base()
+        self._incrementale = not self.options.tout_refaire and passe > self._base
         self._premiere_page = not reprise and etat.compteurs(passe)["lues"] == 0  # la porte d'entrée n'y est que là
         self._porte: dict[str, Any] | None = None
         self._annoncer(etat, passe, reprise)
@@ -566,6 +572,9 @@ class Parcours:
         if _hote(page.adresse) not in self._hotes:  # défense en profondeur : jamais d'hôte hors recette
             etat.terminer_page(page, etat="interdite", decision="hors_hotes", quand=quand())
             return None, 0
+        if self._incrementale and not self._a_revisiter(page):
+            etat.terminer_page(page, etat="evitee", decision="deja_lue", quand=quand())
+            return None, 0
         if not self.options.ignorer_robots:
             robots = self._robots_de(page.adresse)
             if not robots.permis(_chemin_et_requete(page.adresse)):
@@ -632,6 +641,20 @@ class Parcours:
         else:
             decision = self._lire_la_page(page, reponse, total_ms)
         return self._sentinelle.noter(page.type, decision, page.adresse), 1
+
+    def _a_revisiter(self, page: Page) -> bool:
+        """Vrai si la page doit être demandée dans cette passe : jamais lue (réussie) avant, ou `revisiter` de son
+        type la rend due (`toujours`, ou `<n>j` : dernière lecture plus vieille que n jours)."""
+        derniere = self._etat.derniere_lecture(page.canon, self._base, self._passe)
+        if derniere is None:
+            return True
+        regle = self.recette.pages[page.type].revisiter
+        if regle == "toujours":
+            return True
+        if regle == "jamais":
+            return False
+        age = datetime.fromisoformat(self._horodatage()) - datetime.fromisoformat(derniere)
+        return age.total_seconds() >= int(regle[:-1]) * 86400
 
     def _porte_d_entree(self, page: Page, reponse: Reponse) -> tuple[Reponse, Alerte | None]:
         """Première page de la passe, `porte_entree` déclarée : un défi qui se valide seul est attendu SANS AUCUNE
@@ -760,7 +783,7 @@ class Parcours:
         duree = self._horloge() - self._debut
         dossier_passe = self.dossier / f"passe-{passe:03d}"
         resume = self._resume(etat, passe, statut, arret)
-        resume["fichiers"] = ecrire_exports(etat, dossier_passe)
+        resume["fichiers"] = ecrire_exports(etat, dossier_passe, passe)
         resume["csv"] = FORMAT_CSV
         self._ecrire_sorties(dossier_passe, resume)
         par_type = ", ".join(f"{n} {t}" for t, n in etat.faites_par_type(passe).items())
@@ -782,6 +805,13 @@ class Parcours:
             self._ecran(
                 f"Reprise conseillée après {ATTENTE_APRES_ALERTE_S // 3600} h : "
                 f"uv run shadowlab recolte reprendre {self.recette.nom}"
+            )
+        incr = resume["incrementale"]
+        if incr["active"]:
+            self._ecran(
+                f"Incrémental : {incr['pages_relues']} page(s) relue(s), {incr['pages_evitees']} évitée(s), "
+                f"{incr['pages_nouvelles']} page(s) neuve(s) · {incr['nouveautes']} nouveauté(s), "
+                f"{incr['modifies']} modifié(s)"
             )
         for ligne in lignes_alertes(resume["alertes_lecture"]):
             self._ecran(ligne)
@@ -815,10 +845,12 @@ class Parcours:
                 "anormales": c["anormales"],
                 "introuvables": c["introuvables"],
                 "liens_exclus": c["liens_exclus"],
+                "evitees": c["evitees"],
                 "a_faire": c["a_faire"],
                 "par_type": etat.faites_par_type(passe),
             },
             "enregistrements": etat.nb_enregistrements(),
+            "incrementale": self._bilan_incremental(etat, passe, c["lues"]),
             "relocalisations": c["relocalisations"],
             "porte_entree": self._porte,
             "alertes_lecture": etat.alertes_lecture(passe),
@@ -827,6 +859,20 @@ class Parcours:
         if len(origines) > 1:
             resume["robots_origines"] = origines
         return resume
+
+    def _bilan_incremental(self, etat: Etat, passe: int, lues: int) -> dict[str, Any]:
+        """Ce que la passe a relu, évité, trouvé de neuf ou de changé (`active` : la passe s'appuie sur les
+        précédentes ; faux à la première passe et avec --tout-refaire)."""
+        relues = etat.pages_relues(passe, self._base)
+        nouveautes = etat.nouveautes(passe)
+        return {
+            "active": self._incrementale,
+            "pages_relues": relues,
+            "pages_evitees": etat.compteurs(passe)["evitees"],
+            "pages_nouvelles": lues - relues,
+            "nouveautes": sum(1 for n in nouveautes if n["_changement"] == "nouveau"),
+            "modifies": sum(1 for n in nouveautes if n["_changement"] == "modifie"),
+        }
 
     def _ecrire_sorties(self, dossier_passe: Path, resume: Mapping[str, Any]) -> None:
         dossier_passe.mkdir(parents=True, exist_ok=True)
