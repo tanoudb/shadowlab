@@ -1,13 +1,20 @@
-"""Notation d'une récolte contre la vérité du site vitrine : complétude et exactitude.
+"""Notation d'une récolte contre la vérité d'un site de test : pages, enregistrements et champs.
 
-- complétude = annonces attendues retrouvées (par référence) / annonces attendues ;
-- exactitude = champs exacts / champs attendus, sur les annonces retrouvées seulement.
+Trois mesures distinctes, chacune à lire séparément :
+- pages (`noter_pages`) : adresses attendues / adresses lues ;
+- enregistrements (`noter_recolte`, « complétude ») : enregistrements attendus retrouvés par leur clé / attendus ;
+- champs (`noter_recolte`, « exactitude ») : champs exacts / champs attendus, sur les enregistrements retrouvés.
+Une page lue dont le tableau n'est lu qu'à moitié se voit donc dans les enregistrements, pas dans les champs.
+
 Comparaison stricte, après suppression des espaces de début et de fin ; les nombres se comparent en nombres.
+Une valeur attendue vide (`None`, chaîne vide ou d'espaces) est exacte quand rien n'est lu (absent, `None`, vide).
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 MAX_MANQUANTES = 20
 
@@ -25,7 +32,13 @@ def _nombre(valeur: Any) -> float | None:
     return None
 
 
+def _vide(valeur: Any) -> bool:
+    return valeur is None or (isinstance(valeur, str) and not valeur.strip())
+
+
 def _egal(attendu: Any, obtenu: Any) -> bool:
+    if _vide(attendu):
+        return _vide(obtenu)  # rien d'attendu : exact si rien n'est lu, faux dès que quelque chose est lu
     if obtenu is None:
         return False
     if isinstance(attendu, int | float) and not isinstance(attendu, bool):
@@ -36,37 +49,109 @@ def _egal(attendu: Any, obtenu: Any) -> bool:
     return obtenu == attendu
 
 
-def noter_recolte(recolte: list[dict], verite: dict) -> dict[str, Any]:
-    """Note une récolte (une annonce par dictionnaire, clé `reference`) contre `vitrine.verite()`."""
-    attendues = {a["reference"]: a for a in verite["annonces"]}
+def _partie_de_cle(valeur: Any) -> str | None:
+    """Une partie de clé sous forme comparable : nombre ou texte numérique -> même écriture ; texte sans espaces."""
+    if _vide(valeur) or isinstance(valeur, bool):
+        return None
+    n = _nombre(valeur)
+    if n is not None:
+        return str(int(n)) if n == int(n) else repr(n)
+    return valeur.strip() if isinstance(valeur, str) else None
+
+
+def _cle_de(enregistrement: dict, champs: tuple[str, ...]) -> str | None:
+    """Clé comparable d'un enregistrement, ou None si une partie manque."""
+    parties = [_partie_de_cle(enregistrement.get(c)) for c in champs]
+    if any(p is None for p in parties):
+        return None
+    return "\x1f".join(parties)  # type: ignore[arg-type]
+
+
+def noter_recolte(
+    recolte: list[dict],
+    verite: dict,
+    liste: str = "annonces",
+    cle: str | Sequence[str] = "reference",
+) -> dict[str, Any]:
+    """Note les enregistrements récoltés contre `verite[liste]`, retrouvés par `cle`.
+
+    `cle` est un nom de champ ou une suite de noms (clé composée, ex. `("rallye", "speciale", "numero")`).
+    Les parties de clé se comparent sans espaces, un nombre et son écriture en texte étant égaux. Un doublon
+    ne compte qu'une fois ; un enregistrement à clé inconnue ou incomplète est « en trop ». Les clés attendues
+    doivent être uniques. Les clés `annonces_*` gardent leur nom d'origine (appel historique de la vitrine) ;
+    `enregistrements_*` en sont les noms généraux.
+    """
+    champs_cle = (cle,) if isinstance(cle, str) else tuple(cle)
+    if not champs_cle:
+        raise ValueError("la clé est vide")
+    if liste not in verite:
+        raise ValueError(f"liste inconnue dans la vérité : {liste!r}")
+    attendues: dict[str, dict] = {}
+    for enregistrement in verite[liste]:
+        k = _cle_de(enregistrement, champs_cle)
+        if k is None:
+            raise ValueError(f"enregistrement attendu sans clé complète {champs_cle} : {enregistrement}")
+        if k in attendues:
+            raise ValueError(f"clé attendue présente plusieurs fois dans {liste!r} : {k!r}")
+        attendues[k] = enregistrement
     retrouvees: dict[str, dict] = {}
     en_trop: set[str] = set()
-    for i, annonce in enumerate(recolte):
-        reference = annonce.get("reference")
-        reference = reference.strip() if isinstance(reference, str) else None
-        if reference in attendues:
-            retrouvees.setdefault(reference, annonce)  # un doublon ne compte qu'une fois
+    for i, enregistrement in enumerate(recolte):
+        k = _cle_de(enregistrement, champs_cle)
+        if k in attendues:
+            retrouvees.setdefault(k, enregistrement)  # un doublon ne compte qu'une fois
         else:
-            en_trop.add(reference if reference else f"#{i}")
+            en_trop.add(k.replace("\x1f", "/") if k else f"#{i}")
     champs_attendus = 0
     champs_exacts = 0
     erreurs: dict[str, int] = {}
-    for reference, annonce in retrouvees.items():
-        for champ, attendu in attendues[reference].items():
+    for k, enregistrement in retrouvees.items():
+        for champ, attendu in attendues[k].items():
             champs_attendus += 1
-            if _egal(attendu, annonce.get(champ)):
+            if _egal(attendu, enregistrement.get(champ)):
                 champs_exacts += 1
             else:
                 erreurs[champ] = erreurs.get(champ, 0) + 1
-    manquantes = [r for r in attendues if r not in retrouvees]
+    manquantes = [
+        attendues[k][champs_cle[0]] if len(champs_cle) == 1 else [attendues[k][c] for c in champs_cle]
+        for k in attendues
+        if k not in retrouvees
+    ]
     return {
         "completude": len(retrouvees) / len(attendues) if attendues else 0.0,
         "exactitude": champs_exacts / champs_attendus if champs_attendus else None,
         "annonces_attendues": len(attendues),
         "annonces_retrouvees": len(retrouvees),
+        "enregistrements_attendus": len(attendues),
+        "enregistrements_retrouves": len(retrouvees),
         "champs_attendus": champs_attendus,
         "champs_exacts": champs_exacts,
         "references_manquantes": manquantes[:MAX_MANQUANTES],
         "annonces_en_trop": len(en_trop),
         "erreurs_par_champ": dict(sorted(erreurs.items())),
+    }
+
+
+def _adresse(adresse: str) -> str:
+    """Chemin et paramètres d'une adresse, sans hôte, sans fragment, sans jeton de session `sl` ni `page=1`."""
+    morceaux = urlsplit(adresse.strip())
+    params = [
+        (n, v) for n, v in parse_qsl(morceaux.query, keep_blank_values=True) if n != "sl" and (n, v) != ("page", "1")
+    ]
+    requete = urlencode(sorted(params))
+    return f"{morceaux.path}?{requete}" if requete else morceaux.path
+
+
+def noter_pages(attendues: Iterable[str], lues: Iterable[str]) -> dict[str, Any]:
+    """Compare les adresses lues aux adresses attendues (hôte, fragment, jeton `sl` et `page=1` ignorés)."""
+    voulues = {_adresse(a): a for a in attendues}
+    vues = {_adresse(a) for a in lues}
+    trouvees = [a for a in voulues if a in vues]
+    manquantes = [voulues[a] for a in voulues if a not in vues]
+    return {
+        "completude_pages": len(trouvees) / len(voulues) if voulues else 0.0,
+        "pages_attendues": len(voulues),
+        "pages_lues": len(trouvees),
+        "pages_manquantes": manquantes[:MAX_MANQUANTES],
+        "pages_en_trop": len([a for a in vues if a not in voulues]),
     }
