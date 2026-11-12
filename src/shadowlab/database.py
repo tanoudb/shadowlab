@@ -186,7 +186,7 @@ MIGRATIONS: list[str] = [
     SELECT experiment_id,
            'orpheline_' || experiment_id,
            'Passages sans campagne retrouvés dans la base. Expérience de remplacement créée par la migration 9 :'
-           || ' aucun passage supprimé, la campagne d origine est perdue.',
+           || ' aucun passage supprimé, la campagne d''origine est perdue.',
            MIN(started_at),
            '{"orpheline": true}',
            CASE WHEN SUM(status = 'en_cours') > 0 THEN 'interrompu' ELSE 'termine_incomplet' END,
