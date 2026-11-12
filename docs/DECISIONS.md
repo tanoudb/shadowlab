@@ -387,3 +387,39 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   n'admettait que 8 Go au plus. Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) et le
   Chromium 156 piloté sans réglage annonce 32 sur ce poste (campagne 94) : tout humain sur une machine de 16
   Go ou plus était classé. Détecteur en 1.1. Décidé par : coordination.
+- **D-64 — 12/11/2026 — `correlation-session` 1.1 : un seul signal par fait, des libellés justes, un débit sur
+  60 minutes (révise le calcul de D-48).** Le détecteur lit toujours les deux comptes de `empreintes_vues`
+  (profil, canvas ; types et historique inchangés). Il n'émet plus qu'un signal de comptage, sur le plus grand
+  des deux, et qu'un signal de débit. Avant, le profil et le canvas d'une même session donnaient chacun leur
+  signal : 5 sessions identiques faisaient 0,7 + 0,7, « automatisé » à elles seules. Les libellés disent ce
+  qui est compté (« profil vu dans N sessions de la base ») ; « rotation de fingerprint massive » désignait
+  une empreinte stable. Le débit compte, pour chaque hash, les sessions commencées dans les 60 dernières
+  minutes, au lieu de diviser le compte par la vie du hash (0 sous une minute, 40 par heure pour deux
+  sessions à 3 minutes). Seuils et poids inchangés. Écarté : une empreinte combinée profil + canvas, proposée
+  par l'analyse puis signalée par la relecture de sécurité (un moteur qui bruite son canvas à chaque session
+  n'aurait plus jamais été revu). Pourquoi : aux campagnes 93 et 94, NOEZIA était classé au niveau 07 dès le
+  3ᵉ passage par un débit faux (`docs/recherche/correlation-entre-sessions-2026-11-12.md`). Effet aux niveaux
+  06 et 07 : de 5 à 9 sessions, le détecteur seul dit « indéterminé » ; la session reste bloquée par le
+  composite (0,7 × 1,5), sous le motif `composite` ; dès 10, rien ne change. Limites : la table ne garde que
+  10 jetons par hash, donc le débit ne décide plus seul. Inchangé, et à reprendre avec la mémoire des
+  visiteurs du palier 2 : un humain qui revient cinq fois reste classé ; le canvas seul, commun aux machines
+  du même modèle, classe encore. Décidé par : coordination (travail d'un sous-agent Opus, repris et relu).
+- **D-65 — 12/11/2026 — Site public, seconde relecture : journal, limites par adresse, `debugger`, nettoyage
+  des messages (complète D-57 et D-62).** Une relecture indépendante du code fusionné le 12/11 a trouvé quatre
+  défauts. (1) Le journal tournant (`logs/shadowlab.jsonl`, horodaté à la milliseconde, hors purge) écrivait
+  `POST /contact 303` et « message de contact reçu » : rapprochées de `observations_http.received_at` d'une
+  session en cours, ces lignes reliaient un message à sa session, contre D-57. Choix : aucune ligne pour
+  `/contact…` ni pour ce que le navigateur charge avec chaque page (`/lab/static/…`, `/favicon.ico`), sans
+  quoi une feuille de style sans page notée trahissait une page de contact ; l'avis au responsable passe par
+  la sortie standard, seulement si c'est un terminal. (2) À 3 messages par heure, une adresse seule épuisait
+  le plafond du jour en 10 heures et remplissait la boîte en 17 jours. Choix : 5 messages par adresse et par
+  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; toutes les limites par adresse comptent un
+  /64 IPv6 pour une adresse ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
+  `sl-sans-tiers`, `observateur.js` n'exécute plus `debugger` (elle arrêtait la page d'un visiteur aux outils
+  de développement ouverts) et ne lit plus first-input : depuis D-62 aucun détecteur ne les lit ; le labo
+  relève comme avant ; texte d'information en version 2026-11-12.5. (4) Nettoyage des messages : la liste
+  blanche est gardée (`str.isprintable()` et deux liants) ; une liste noire essayée puis écartée par la
+  relecture de sécurité laissait passer des caractères invisibles. Prix accepté : un emoji plus récent que
+  la table Unicode de Python disparaît, un drapeau à balises perd ses balises. Limites : six adresses ferment
+  encore le formulaire pour la journée (parade : limitation de débit au mandataire) ; sous systemd, plus
+  d'avis à l'écran. Décidé par : coordination (travail d'un sous-agent Opus, relu).
