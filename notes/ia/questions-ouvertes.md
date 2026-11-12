@@ -26,6 +26,14 @@ Ce qui attend Ethan.
   (`SHADOWLAB_PUBLIC_CONTACT`, sans lui l'application refuse de démarrer) ; (4) la durée de conservation si
   90 jours ne te conviennent pas. Recommandation : un sous-domaine dédié, sur une petite machine séparée
   du labo, 90 jours. La mise en ligne reste à toi.
+  **Mise à jour du 12/11, 8 h 45 — tu m'as demandé de le mettre en ligne pour le partager.** Voie la plus
+  courte, sans machine ni domaine : un tunnel Cloudflare depuis le Mac mini (`cloudflared`, lien
+  `…trycloudflare.com`, aucun port ouvert, adresse de la maison cachée). Il ne me manque que **le texte du
+  contact** (point 3) ; ta réponse vaut accord pour installer `cloudflared` (Homebrew, client officiel de
+  Cloudflare, absent de la machine). Limites de ce lien : il change à chaque relance du tunnel, pas de
+  limitation de débit, le Mac doit rester allumé et éveillé (il s'endort après 1 minute sans activité : à
+  tenir éveillé avec `caffeinate` tant que le site tourne). Pour un lien stable à partager largement, il
+  faut un domaine à toi chez Cloudflare (points 1 et 2).
 - **2026-11-11 — Code mort `engines/noezia/pool.py`** : il appelle une classe et deux méthodes qui
   n'existent pas, rien ne l'importe. Recommandation : le supprimer (le palier 4 le remplace).
 - **2026-11-11 — Pour le palier 3** : un serveur Linux, un proxy résidentiel, et l'environnement de tor-i

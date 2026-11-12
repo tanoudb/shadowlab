@@ -2575,3 +2575,58 @@ la faille volontaire n° 6 couvrent ce point) ; comportement réel derrière Clo
 **Reste :** la boucle s'arrête ici. Les étapes 1.6 (mise en ligne), 1.7 (sessions humaines) et 1.8
 (Cloudflare) attendent Ethan : hébergement, domaine, contact, et 5 sessions humaines locales. L'étape 1.9
 (corriger le moteur) attend 1.7 et 1.8.
+
+## 2026-11-12 (8h55) — Claude (Fable 5.2) — Étape 1.7 préparée : rejeu, campagne 93, trois défauts de l'Arena corrigés
+
+Ethan n'est pas là avant 20 h : tout ce qui ne dépend pas de lui dans le palier 1.
+
+**Fait :**
+- **Rejeu des sessions humaines** (`uv run shadowlab rejeu`, D-56, commit `1f2e3b4`) : écrit par un
+  sous-agent Opus, relu par moi. Il refait la décision de chaque niveau avec le code de l'Arena
+  (`gardien.motifs_suspicion`) aux mêmes instants, écarte les détecteurs sans donnée et les liste, clôt les
+  sessions manuelles inactives depuis 10 minutes. 16 fautes volontaires sur 16 détectées par les tests.
+  Vérifié sur une session faite dans un navigateur piloté par outil (base d'essai, supprimée ensuite).
+- **Défaut 1 de l'Arena** (même commit) : `/lab/collecte` ignorait `exclure` et consultait le JavaScript
+  même en `bloquer: http`. Réglages réunis dans `gardien.parametres`. Aucun effet sur les niveaux 01 à 07.
+- **Ancien tableau de bord** (commit `6bc62f7`) : une apostrophe non échappée empêchait tout
+  `tableau_static/app.js` de s'exécuter. Test `node --check` sur tous les scripts servis.
+- **Historique git** : 161 commits balayés par motifs, aucun secret trouvé (à refaire avant de publier le dépôt).
+- **Campagne 93** (`configs/experiments/ablation-cdp.yaml`, niveaux 04 à 07 sans `cdp`, 180 passages,
+  0 panne, 1 h 21) : **0 réussi sur 180**. NOEZIA, 15 passages par niveau :
+  - 04 : défi JS validé, puis CAPTCHA démo servi 15/15 sur un motif `cdp` (défaut 2 ci-dessous) ;
+  - 05 : défi JS, Turnstile et reCAPTCHA franchis (clés de test, `captcha_test`), puis 15/15 bloqués par le
+    score composite 0,65 = `chrome_sans_alps` + `pas_de_scroll` (seuil 0,6) ;
+  - 06 : 11/15 arrêtés par `correlation-session` (même empreinte d'une session à l'autre), 4/15 par le
+    composite 0,65 ;
+  - 07 : 13/15 par `correlation-session`, 2/15 par le composite 0,3 = `chrome_sans_alps` seul.
+  patchright et playwright : 60/60 arrêtés chacun dès la réception de l'empreinte (`regles-http`, `botd`…).
+- **Défaut 2** (commit `f713b39`) : le CAPTCHA démo calculait la suspicion sans les réglages du profil ; un
+  détecteur exclu le faisait encore servir. Il passe par `gardien.parametres`. Aucun effet sur 01 à 07.
+- **Défaut 3** (commit `c2fbdfc`) : la règle TLS `chrome_sans_alps` ne cherchait que l'ancien numéro
+  d'extension ALPS (17513, `4469`). Chromium 156 envoie 17613 (`44cd`) : 180 ClientHello sur 180 dans la
+  campagne 93. La règle donnait donc 0,3 à tout Chrome récent, humains compris. Détecteur `tls` en 2.1.
+- 605 tests rapides verts, lint propre. Les trois tests ont été vus en échec avant correction.
+
+**Constats :**
+- Retirer `cdp` ne suffit pas à faire passer NOEZIA : derrière lui il y a le score composite (faussé par
+  ALPS jusqu'à ce matin) et la corrélation entre sessions.
+- Le CAPTCHA démo des niveaux 04 à 07 n'est jamais servi en pratique : une session suspecte est bloquée
+  avant, une session propre n'est pas défiée. Dans la base, sa dernière émission à un niveau normal date des
+  campagnes 3 à 5. Le tableau des niveaux l'annonce pourtant au niveau 04. À trancher par Ethan.
+- Les campagnes d'ablation d'avant le 12/11 (dont la 8) et la campagne 93 au niveau 04 sont faussées par
+  les défauts 1 et 2.
+
+**Demande d'Ethan (8 h 40)** : mettre le site public en ligne pour le partager. Pas fait : l'application
+refuse de démarrer sans contact à afficher, et `cloudflared` n'est pas installé. Voie proposée : tunnel
+Cloudflare depuis le Mac mini ; détail et limites dans `notes/ia/questions-ouvertes.md`. Attend son contact.
+
+**Non vérifié :** effet de la correction ALPS sur les passages (campagne 94 en cours) ; si `cdp` et
+`correlation-session` arrêtent de vrais humains (sessions de ce soir) ; aucune mesure derrière Cloudflare.
+
+**Fichiers :** `src/shadowlab/{rejeu,cli,detection}.py`, `src/shadowlab/site/{gardien,app}.py`,
+`src/shadowlab/tableau_static/app.js`, `tests/test_{rejeu,site,detection}.py`,
+`configs/experiments/{ablation-cdp,recolte-500}.yaml`, `configs/arena/profils-sans-cdp.yaml`,
+`docs/{DECISIONS,PLAN}.md`, `AGENTS.md`, `notes/ia/{contexte,questions-ouvertes}.md`.
+
+**Reste :** campagne 94 (même ablation, défauts corrigés), récolte à 500 annonces, campagne de référence ;
+remettre l'Arena sur ses profils normaux après la 94 (`uv run shadowlab arena appliquer`).
