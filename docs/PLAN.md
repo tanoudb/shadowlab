@@ -126,6 +126,27 @@ Ce que la base dit :
   par page (rythme humain). C'est le prix de la discrétion ; le débit entre dans l'endurance du palier 4.
 - **Niveaux 04 à 07** : même refus que dans la campagne 90 (détecteur `cdp`), aucune fiche ouverte.
 
+### Campagne de récolte n° 95 (12/11, site vitrine à 500 annonces, 9 passages, 0 panne, 3 h 08)
+
+Niveau 01, scénario `recolte_vitrine` : la liste paginée puis les 500 fiches, 14 champs par annonce.
+
+| Moteur | Passages réussis | Annonces retrouvées | Champs exacts | Durée d'un passage | dont chargement des pages | Temps processeur |
+|--------|------------------|---------------------|---------------|--------------------|---------------------------|------------------|
+| noezia | 3/3 | 500/500 | 7 000/7 000 | 58 à 65 min | 25 à 30 s | 12 à 14 min |
+| patchright | 3/3 | 500/500 | 7 000/7 000 | 42 à 47 s | 26 à 29 s | 1 min 20 à 1 min 30 |
+| playwright | 3/3 | 500/500 | 7 000/7 000 | 36 à 45 s | 21 à 28 s | 1 min 10 à 1 min 30 |
+
+Ce que la base dit :
+- **Le seuil « Récolte » du § 1 est atteint à la taille visée** : complétude 100 % et exactitude 100 % sur
+  les 9 passages (seuil : 99 % et 99 %).
+- **La lenteur de NOEZIA est entièrement voulue** : charger les quelque 525 pages lui prend 25 à 30 secondes,
+  comme aux témoins. Le reste de l'heure (7 secondes par page) est du comportement simulé et des pauses.
+  Ce rythme n'a jamais été comparé à un rythme plus rapide : c'est l'objet de
+  `configs/experiments/recolte-rythme.yaml`.
+- Mémoire : pic de 0,9 à 1,1 Go pour NOEZIA, 2,5 à 2,7 Go pour les témoins (le navigateur et ses processus).
+- Limite : niveau 01 seulement, sans protection. Sous protection, c'est l'endurance qui dira si un long
+  travail va au bout (palier 2).
+
 ### Ablations n° 93 et 94 (12/11, niveaux 04 à 07 sans `cdp`, 180 passages chacune, 0 panne)
 
 Profils `04scdp` à `07scdp` (`configs/arena/profils-sans-cdp.yaml`) : les niveaux 04 à 07 tels quels, détecteur
@@ -415,7 +436,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.2 Mesure fiable | **fait** | 11/11 | commit `74c301a` ; 416 tests rapides verts ; campagne 86 recalculée : 80 % (4/5) au lieu de 440 % ; hash canvas présent sur des données réelles de la base |
 | 1.3 Campagne de référence | **fait** | 11/11 | campagne 90 : 315 passages, 0 panne (critère < 5 %), 1 h 52. Tableau et lecture au § 2. Base au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
-| 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 |
+| 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 ; campagne 95 (12/11) : seuil « Récolte » confirmé sur le site à 500 annonces, 9 passages sur 9 sans faute |
 | 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`). 12/11 : voie courte par tunnel Cloudflare, `scripts/site-public-tunnel.sh` (`ccf24c9`), jamais lancé avec un vrai tunnel ; le lancement revient à Ethan |
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
