@@ -73,6 +73,11 @@ def test_volumes_dans_les_bornes():
     assert len({x["code"] for x in c["chassis"]}) == len(c["chassis"]) >= 30
 
 
+def test_marques_visiblement_inventees():
+    assert "Kestrel" not in {nom for nom, _ in rallye.MARQUES}
+    assert len({sigle for _, sigle in rallye.MARQUES}) == len(rallye.MARQUES)
+
+
 def test_valeurs_plausibles_et_fictives():
     v = rallye.verite(GRAINE, TAILLE)
     c = v["collections"]
@@ -181,7 +186,11 @@ def test_pages_attendues_de_la_verite():
     for p in pages:
         par_type[p["type"]] += 1
     assert par_type["saisons"] == 1
-    assert par_type["calendrier"] == 2 + 1  # 8 rallyes = 2 pages de 6, puis 4 rallyes = 1 page
+    par_saison = [
+        min(rallye.RALLYES_PAR_SAISON, TAILLE - rallye.RALLYES_PAR_SAISON * k)
+        for k in range(-(-TAILLE // rallye.RALLYES_PAR_SAISON))
+    ]
+    assert par_type["calendrier"] == sum(-(-n // rallye.PAR_PAGE) for n in par_saison)
     assert par_type["rallye"] == par_type["classement"] == par_type["engages"] == TAILLE
     assert par_type["speciale"] == len(c["speciales"])
     assert par_type["chassis"] == len(c["chassis"]) and par_type["pilote"] == len(c["pilotes"])
@@ -227,6 +236,31 @@ def test_pieges_verifies_sans_la_fonction_du_module():
     # Noms à accents et à apostrophes.
     noms = [r["nom"] for r in c["rallyes"]] + [s["nom"] for s in c["speciales"]] + [p["nom"] for p in c["pilotes"]]
     assert any("'" in n for n in noms) and any(re.search(r"[éèêëïôûç]", n, re.I) for n in noms)
+
+
+def test_pieges_a_la_taille_par_defaut():
+    from shadowlab.config import charger
+
+    r = charger()
+    presents = rallye.pieges_presents(rallye.verite(r.rallye_graine, r.rallye_taille))
+    assert r.rallye_taille == 24
+    assert set(presents) == set(rallye.PIEGES)
+    assert [nom for nom, n in presents.items() if n == 0] == []
+
+
+def test_taille_a_partir_de_laquelle_chaque_piege_est_garanti():
+    """`GARANTI_A_PARTIR_DE` dit la vérité : présent à toute taille ≥ au seuil, pour plusieurs graines."""
+    assert set(rallye.GARANTI_A_PARTIR_DE) == set(rallye.PIEGES)
+    for graine in (GRAINE, 1, 2, 3, 42):
+        for taille in range(1, 26):
+            presents = rallye.pieges_presents(rallye.verite(graine, taille))
+            for nom, seuil in rallye.GARANTI_A_PARTIR_DE.items():
+                if taille >= seuil:
+                    assert presents[nom] > 0, (nom, graine, taille)
+    # Le seuil le plus haut est celui du châssis qui change de saison : il faut deux saisons.
+    assert rallye.GARANTI_A_PARTIR_DE["chassis_de_pilote_en_pilote_et_de_saison_en_saison"] == (
+        rallye.RALLYES_PAR_SAISON + 1
+    )
 
 
 def test_colonnes_dans_un_autre_ordre_entre_temps_et_classement():
@@ -600,6 +634,54 @@ def test_echappement_html():
     speciale = replace(u.speciales[0], nom="<svg onload=1>")
     page = rallye.page_speciale("", u, speciale)
     assert "<svg onload" not in page and "&lt;svg onload=1&gt;" in page
+
+
+MAL = '"><script>alert(1)</script>'
+
+
+def _sans_injection(page: str):
+    """Rien de la valeur hostile ne sort brut : ni balise, ni guillemet qui fermerait un attribut."""
+    assert MAL not in page
+    reste = page.replace('<script type="module" src="/lab/static/observateur.js"></script>', "")
+    assert "<script" not in reste and "alert(1)</script>" not in reste
+    assert 'href=""><' not in page and '"><script' not in page
+
+
+def test_echappement_des_attributs_et_des_adresses():
+    u = rallye.construire(GRAINE, 4)
+    ancien = u.chassis[0].code
+    vilain = replace(u.chassis[0], code=MAL)
+    pilote_ancien = u.engages[0].pilote_id
+    univers = rallye.Univers(
+        u.rallyes,
+        [replace(s, depart="2024-05-17T08:" + MAL) if s.id == 1 else s for s in u.speciales],
+        [
+            replace(e, chassis=MAL if e.chassis == ancien else e.chassis, pilote_id=MAL if e.pilote_id == pilote_ancien else e.pilote_id)
+            for e in u.engages
+        ],
+        u.temps,
+        u.classements,
+        [vilain, *u.chassis[1:]],
+        [replace(p, id=MAL) if p.id == pilote_ancien else p for p in u.pilotes],
+        [replace(h, chassis=MAL) if h.chassis == ancien else h for h in u.historique],
+    )
+    rallyes = [r for r in univers.rallyes if any(e.chassis == MAL for e in univers.engages_de(r.id))]
+    assert rallyes
+    pages = [
+        rallye.page_chassis("", univers, vilain),
+        rallye.page_pilote("", univers, univers.trouver_pilote(MAL)),
+        rallye.page_speciale("", univers, univers.trouver_speciale(1)),
+        rallye.page_rallye("", univers, univers.trouver_rallye(1)),
+        rallye.page_engages("", univers, rallyes[0]),
+        rallye.page_classement("", univers, rallyes[0]),
+        rallye.page_saisons('"><script>', univers),
+    ]
+    for page in pages:
+        _sans_injection(page)
+    assert "&quot;&gt;&lt;script&gt;" in pages[0]  # le code du châssis sort échappé
+    assert "08h" in pages[2]
+    # Les fonctions d'adresse elles-mêmes sont sûres : la vérité garde la forme brute, le HTML l'échappe.
+    assert rallye.adresse_chassis("a b") == "/lab/rallye/chassis/a b"
 
 
 def test_reglages_par_defaut(reglages):
