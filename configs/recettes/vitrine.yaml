@@ -1,0 +1,47 @@
+# Recette du site vitrine du labo : liste paginée → fiches → 14 champs et les photos.
+# Format et clés : docs/recherche/recolte-generale-2026-11-12.md § 4.
+recette: 1
+nom: vitrine-annonces
+autorisation: site à nous (labo local)
+moteur: http                 # « navigateur » pour une mesure de discrétion
+hotes: [127.0.0.1]
+depart:
+  - url: http://127.0.0.1:8770/lab/vitrine/annonces
+    type: liste
+parametres_ignores: [sl]     # jeton de session du labo, sans effet sur le contenu
+rythme: libre                # site à nous : aucun délai ajouté
+pages:
+  liste:
+    url: '^/lab/vitrine/annonces(\?page=\d+)?$'
+    requis: 'a.fiche'
+    revisiter: toujours      # de nouvelles annonces peuvent apparaître
+    suivre:                  # dans cet ordre : les fiches de la page, puis la page suivante
+      - liens: 'a.fiche'
+        vers: fiche
+      - liens: 'a[rel="next"]'
+        vers: liste
+  fiche:
+    url: '^/lab/vitrine/annonces/AN-\d{6}$'
+    requis: '[data-champ="reference"]'
+    revisiter: jamais        # « 7j » pour suivre les baisses de prix
+    enregistrements:
+      - collection: annonces
+        cle: reference
+        champs:
+          reference: '[data-champ="reference"]'
+          titre: '[data-champ="titre"]'
+          type_bien: '[data-champ="type_bien"]'
+          ville: '[data-champ="ville"]'
+          code_postal: '[data-champ="code_postal"]'
+          surface: {css: '[data-champ="surface"]', attribut: data-valeur, format: entier}
+          pieces: {css: '[data-champ="pieces"]', attribut: data-valeur, format: entier}
+          prix: {css: '[data-champ="prix"]', attribut: data-valeur, format: entier}
+          # Sans attribut prévu pour les robots, le texte affiché marche aussi :
+          #   prix: {css: '.bien-prix', format: entier}      « 401 500 € » → 401500
+          dpe: '[data-champ="dpe"]'
+          description: {css: '[data-champ="description"]', adaptatif: true}
+          date_publication: {css: '[data-champ="date_publication"]', attribut: data-valeur}
+          nb_photos: {css: '[data-champ="nb_photos"]', attribut: data-valeur, format: entier}
+          agence: '[data-champ="agence"]'
+          telephone: '[data-champ="telephone"]'
+          photos: {css: '.galerie img', attribut: src, tous: true, lien: true}  # adresses, non notées

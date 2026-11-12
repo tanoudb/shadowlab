@@ -15,10 +15,19 @@ from parsel import Selector
 from . import extraction
 
 
+def _texte_de(element: Any) -> str:
+    """Texte d'un élément lxml, selon la règle d'`Element.texte` : chaque morceau nettoyé, joints par une espace."""
+    return " ".join(t.strip() for t in element.xpath("descendant-or-self::text()") if t.strip())
+
+
 def _features(element: Any) -> dict[str, Any]:
-    """Caractéristiques d'un élément lxml, même format que la capture JS du navigateur."""
+    """Caractéristiques d'un élément lxml, même format que la capture JS du navigateur.
+
+    Le texte n'est coupé à 200 caractères que pour la comparaison de ressemblance ; le texte rendu à
+    l'appelant par `extraire_adaptatif` est celui de l'élément entier.
+    """
     classes = (element.get("class") or "").split()
-    texte = " ".join(element.itertext()).strip()
+    texte = _texte_de(element)
     profondeur = sum(1 for _ in element.iterancestors())
     tag = element.tag if isinstance(element.tag, str) else ""
     return {
@@ -147,17 +156,18 @@ class Analyseur:
         domaine = extraction.domaine_de(self._url)
         trouves = self._sel.css(selecteur)
         if trouves:
-            feats = _features(trouves[0].root)
+            noeud = trouves[0].root
             if self._signatures is not None:
-                self._signatures.enregistrer(domaine, cle, feats)
-            return feats["texte"]
+                self._signatures.enregistrer(domaine, cle, _features(noeud))
+            return _texte_de(noeud)
         if self._signatures is None:
             return None
         sig = self._signatures.charger(domaine, cle)
         if not sig:
             return None
-        candidats = [_features(s.root) for s in self._sel.css(sig["tag"])]
+        noeuds = [s.root for s in self._sel.css(sig["tag"])]
+        candidats = [_features(n) for n in noeuds]
         meilleur, score = extraction.meilleur_candidat(sig, candidats)
         if meilleur and score >= extraction.SEUIL_RELOCALISATION:
-            return meilleur["texte"]
+            return _texte_de(next(n for n, c in zip(noeuds, candidats, strict=True) if c is meilleur))
         return None
