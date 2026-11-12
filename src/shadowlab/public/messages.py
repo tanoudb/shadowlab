@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import unicodedata
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -20,9 +19,8 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS messages (
     recu_le TEXT NOT NULL,  -- jour UTC, AAAA-MM-JJ
     texte TEXT NOT NULL
 )"""
-# Marques qui forcent le sens d'écriture du texte qui suit (U+202A à U+202E, U+2066 à U+2069) : elles peuvent
-# faire lire à l'écran autre chose que ce qui est écrit.
-SENS_D_ECRITURE = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+# Caractères invisibles gardés : ils lient les lettres ou les emoji composés et ne changent rien à un terminal.
+LIANTS = "\u200c\u200d"
 
 
 def chemin(base_publique: Path) -> Path:
@@ -52,20 +50,21 @@ def _jour(moment: datetime | None = None) -> str:
 
 
 def nettoyer(texte: str) -> str:
-    """Texte sûr à afficher dans un terminal : fins de ligne unifiées ; saut de ligne et tabulation gardés ; toute
-    autre espace (insécable, tabulation verticale…) changée en espace ordinaire ; caractères de contrôle (Cc, dont
-    ESC qui ouvre les séquences d'échappement), demi-paires de substitution (Cs) et marques de sens d'écriture
-    retirés. Tout le reste est gardé, même un caractère inconnu de la version d'Unicode de Python (emoji récent,
-    lettres à balises d'un drapeau) : `str.isprintable()` les aurait retirés."""
+    """Texte sûr à afficher dans un terminal, par liste blanche : saut de ligne, tabulation, caractères affichables
+    (`str.isprintable()`) et les deux liants ; fins de ligne unifiées, espaces particulières (insécables…) changées
+    en espaces ordinaires ; tout le reste est retiré (contrôle, mise en forme invisible, sens d'écriture forcé,
+    balises, demi-paires, usage privé, non attribué).
+
+    Limite acceptée, prix d'un affichage sûr : un emoji plus récent que la table Unicode de Python (non attribué
+    pour elle) disparaît, et un drapeau à balises (Angleterre, Écosse…) perd ses balises et n'est plus qu'un
+    drapeau noir. Une liste noire laissait passer d'autres caractères invisibles (U+200B, U+200E, U+FEFF…)."""
     texte = texte.replace("\r\n", "\n").replace("\r", "\n")
     propre = []
     for c in texte:
-        if c in "\n\t":
+        if c in "\n\t" or c.isprintable() or c in LIANTS:
             propre.append(c)
         elif c.isspace():
             propre.append(" ")
-        elif c not in SENS_D_ECRITURE and unicodedata.category(c) not in ("Cc", "Cs"):
-            propre.append(c)
     return "".join(propre).strip()
 
 

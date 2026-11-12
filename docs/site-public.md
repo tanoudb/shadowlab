@@ -230,10 +230,13 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   `decisions`, `detections`, `fingerprints` (aucun détecteur ne tourne). La suppression les couvre quand même.
 - `<dossier de la base>/messages.sqlite3` (droits 600, `secure_delete`) : les messages du formulaire de
   contact, **dans un fichier à part** : le texte et le **jour** de réception, rien d'autre. Ni adresse IP, ni
-  session, ni navigateur, ni heure. Du texte sont retirés les caractères de contrôle (dont ESC, qui ouvre les
-  séquences d'échappement d'un terminal), les demi-paires de substitution et les marques de sens d'écriture
-  (U+202A à U+202E, U+2066 à U+2069) ; les espaces particulières (insécables…) deviennent des espaces ;
-  saut de ligne, tabulation et tout le reste sont gardés, emoji récents et drapeaux compris.
+  session, ni navigateur, ni heure. Le texte est nettoyé par **liste blanche**, pour s'afficher sans risque
+  dans un terminal : on garde saut de ligne, tabulation, caractères affichables (`str.isprintable()`) et les
+  deux liants des emoji composés (U+200C, U+200D) ; les espaces particulières (insécables…) deviennent des
+  espaces ; tout le reste est retiré (contrôle dont ESC, mise en forme invisible, sens d'écriture forcé,
+  balises, usage privé, caractères non attribués). **Limite acceptée** : un emoji plus récent que la table
+  Unicode de Python disparaît, et un drapeau à balises (Angleterre, Écosse…) perd ses balises. Une liste
+  noire, essayée le 12/11, laissait passer d'autres invisibles (U+200B, U+200E, U+FEFF, balises…).
   La base des sessions peut ainsi être copiée pour le rejeu sans emporter des messages où un visiteur a
   écrit comment le joindre. Les pages de contact répondent avec `Referrer-Policy: origin` : la page
   ouverte ensuite ne reçoit que l'origine, pas le chemin (jamais `no-referrer` : le navigateur enverrait
@@ -288,7 +291,7 @@ Seconde relecture indépendante (12/11/2026) :
 | F. Le journal ne date plus un message de contact | `test_contact_absent_du_fichier_de_journal` (envoi complet pendant une session : aucune ligne, pas même la feuille de style ou l'icône), `test_contact_avis_a_l_ecran_seulement_sur_un_terminal` |
 | G. Une adresse seule ne ferme plus le formulaire | `test_limiteur_sur_une_journee_glissante`, `test_contact_limite_par_adresse_et_par_jour`, `test_bloc_d_adresse`, `test_limites_par_adresse_comptent_un_bloc_ipv6` (sessions et messages), `test_effacer_tous_les_messages` |
 | H. Ni `debugger` ni first-input sur le site public | `test_debugger_et_first_input_sautes_quand_la_page_le_demande` (avec et sans la balise, exécuté par Node), `test_description_de_cdp_detection_suit_le_releve_public` |
-| I. Le nettoyage des messages garde emoji et drapeaux | `test_contact_garde_les_emoji_recents_et_les_drapeaux`, `test_nettoyer_ne_laisse_aucun_caractere_de_controle`, `test_contact_retire_les_caracteres_de_controle` |
+| I. Nettoyage des messages : liste blanche gardée, limite sur les emoji récents acceptée | `test_nettoyer_ne_garde_que_ce_qui_s_affiche` (invisibles retirés, emoji courants et composés gardés, drapeau à balises réduit), `test_contact_garde_les_emoji_courants`, `test_contact_retire_les_caracteres_de_controle` |
 
 ## Les huit conditions du § 5 du plan
 
