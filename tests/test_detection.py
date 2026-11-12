@@ -1,4 +1,9 @@
+import json
 import random
+import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -339,6 +344,7 @@ def test_audio_context_instable():
 
 
 def _empreinte_polices(**kw):
+    """Relevé de polices fait contre trois familles de référence (observateur du 12/11/2026)."""
     base = {
         "presentes": ["Arial", "Helvetica", "Menlo", "Helvetica Neue", "Georgia"],
         "absentes": ["Segoe UI", "Calibri"],
@@ -346,6 +352,7 @@ def _empreinte_polices(**kw):
         "os_declare": "macOS",
         "os_manquantes": [],
         "os_inattendues": [],
+        "bases": ["monospace", "sans-serif", "serif"],
     }
     base.update(kw)
     return _avec_sonde("font_fingerprint", **base)
@@ -1112,3 +1119,430 @@ def test_device_memory_anciens_paliers_toujours_acceptes():
 def test_device_memory_valeur_inconnue_des_navigateurs_signalee():
     for valeur in (3, 12, 64):
         assert "device_memory_invalide" in _codes_coherence_profonde(deviceMemory=valeur), valeur
+
+
+# --- Vrai Chrome (campagnes 96 et 97, 12/11/2026) : quatre règles qui le classaient par construction ---
+# Valeurs copiées telles quelles de la base du labo :
+# - vrai Chrome : Google Chrome 156 avec son interface, piloté sans aucune réécriture (`noezia-natif`, campagne 97,
+#   niveau 05, passage 33547, observation 72385). Arrêté 15 fois sur 15 au niveau 05 par le score composite 1,03
+#   (`voices_vide`, `runtime_incomplet`, `polices_os_manquantes`) et au niveau 06 par 1,31 (plus `rtt_zero`) ;
+# - témoins sans interface : patchright sans réglage (campagne 97, niveau 05, passage 33352, observation 71997) et
+#   playwright pour `navigator.webdriver` (passage 33472, observation 72257).
+
+UA_TEMOIN = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "HeadlessChrome/156.0.8078.4 Safari/537.36"
+)
+UA_NOEZIA_REECRIT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/129.0.6668.100 Safari/537.36"
+)
+VRAI_CHROME_VOIX = {
+    "devices_count": 2,
+    "devices_kinds": ["audioinput", "audiooutput"],
+    "getVoices_natif": True,
+    "hasFocus": True,
+    "hidden": False,
+    "permissions": {"camera": "prompt", "geolocation": "prompt", "microphone": "prompt"},
+    "requestPermission_natif": True,
+    "visibilityState": "visible",
+    "voices_count": 0,
+    "webdriver": False,
+    "webdriver_getter_natif": True,
+    "webdriver_sur_prototype": True,
+}
+TEMOIN_VOIX = dict(VRAI_CHROME_VOIX)  # relevé identique chez patchright sans interface : rien ne les distinguait
+TEMOIN_PLAYWRIGHT_VOIX = {**VRAI_CHROME_VOIX, "webdriver": True}
+VRAI_CHROME_APIS = {
+    "chrome_app": True,
+    "chrome_app_getDetails": True,
+    "chrome_app_isInstalled": False,
+    "chrome_app_runningState": True,
+    "chrome_csi": True,
+    "chrome_loadTimes": True,
+    "chrome_runtime": False,
+    "csi_keys": ["onloadT", "pageT", "startE", "tran"],
+    "csi_pageT_positif": True,
+    "loadTimes_connectionInfo": "h2",
+    "loadTimes_keys": [
+        "commitLoadTime",
+        "connectionInfo",
+        "finishDocumentLoadTime",
+        "finishLoadTime",
+        "firstPaintAfterLoadTime",
+        "firstPaintTime",
+        "navigationType",
+        "npnNegotiatedProtocol",
+        "requestTime",
+        "startLoadTime",
+        "wasAlternateProtocolAvailable",
+        "wasFetchedViaSpdy",
+        "wasNpnNegotiated",
+    ],
+    "loadTimes_requestTime_positif": True,
+}
+TEMOIN_APIS = {"chrome_app": False, "chrome_csi": False, "chrome_loadTimes": False, "chrome_runtime": False}
+# NOEZIA tel qu'il est, identité réécrite (campagne 97, niveau 02, passage 33367) : chrome.runtime imité en entier.
+NOEZIA_APIS = {
+    **VRAI_CHROME_APIS,
+    "loadTimes_connectionInfo": "http/1.1",
+    "chrome_runtime": True,
+    "runtime_PlatformOs": True,
+    "runtime_connect": True,
+    "runtime_sendMessage": True,
+}
+VRAI_CHROME_POLICES = {
+    "absentes": [
+        "Palatino Linotype",
+        "Lucida Console",
+        "Menlo",
+        "SF Pro",
+        "Segoe UI",
+        "Consolas",
+        "Calibri",
+        "Cambria",
+        "Ubuntu",
+        "DejaVu Sans",
+        "Liberation Mono",
+    ],
+    "count": 14,
+    "os_declare": "macOS",
+    "os_inattendues": [],
+    "os_manquantes": ["Menlo"],
+    "presentes": [
+        "Arial",
+        "Helvetica",
+        "Times New Roman",
+        "Georgia",
+        "Verdana",
+        "Courier New",
+        "Trebuchet MS",
+        "Impact",
+        "Comic Sans MS",
+        "Tahoma",
+        "Helvetica Neue",
+        "Apple Color Emoji",
+        "Wingdings",
+        "Symbol",
+    ],
+}
+TEMOIN_POLICES = {
+    "absentes": [
+        "Courier New",
+        "Palatino Linotype",
+        "Lucida Console",
+        "SF Pro",
+        "Segoe UI",
+        "Consolas",
+        "Calibri",
+        "Cambria",
+        "Ubuntu",
+        "DejaVu Sans",
+        "Liberation Mono",
+    ],
+    "count": 14,
+    "os_declare": "macOS",
+    "os_inattendues": [],
+    "os_manquantes": [],
+    "presentes": [
+        "Arial",
+        "Helvetica",
+        "Times New Roman",
+        "Georgia",
+        "Verdana",
+        "Trebuchet MS",
+        "Impact",
+        "Comic Sans MS",
+        "Tahoma",
+        "Menlo",
+        "Helvetica Neue",
+        "Apple Color Emoji",
+        "Wingdings",
+        "Symbol",
+    ],
+}
+VRAI_CHROME_CONNEXION = {
+    "available": True,
+    "downlink_1": 1.75,
+    "downlink_type": "number",
+    "effectiveType": "4g",
+    "rtt_1": 0,
+    "rtt_type": "number",
+}
+# Le même vrai Chrome au niveau 04 (`patchright-chrome-interface`, passage 33577, observation 72430) : 50 ms.
+VRAI_CHROME_CONNEXION_50 = {**VRAI_CHROME_CONNEXION, "downlink_1": 1.6, "rtt_1": 50}
+TEMOIN_CONNEXION = {**VRAI_CHROME_CONNEXION, "downlink_1": 10}
+VRAI_CHROME = {
+    "headless_signals": VRAI_CHROME_VOIX,
+    "chrome_apis": VRAI_CHROME_APIS,
+    "font_fingerprint": VRAI_CHROME_POLICES,
+    "connection_dynamic": VRAI_CHROME_CONNEXION,
+}
+DETECTEURS_CORRIGES = ("headless", "chrome-apis", "polices", "connection-dynamic")
+
+
+def _releve(ua=UA_CHROME, **blocs):
+    """Session d'une page dont l'empreinte porte les blocs donnés (clé du relevé de l'observateur → valeur)."""
+    e = empreinte(userAgent=ua)
+    e["payload"].update(blocs)
+    return Observations(http=[requete(entetes_navigateur(ua=ua))], js=[e])
+
+
+def _classement(obs, detecteur):
+    return next(c for c in classer(obs) if c.detector_name == detecteur)
+
+
+def _positifs(obs, detecteur):
+    """Signaux qui comptent (poids non nul) d'un détecteur : code → poids."""
+    return {s.code: s.poids for s in _classement(obs, detecteur).signals if s.poids > 0}
+
+
+@pytest.mark.parametrize("detecteur", DETECTEURS_CORRIGES)
+def test_vrai_chrome_n_est_classe_par_aucun_detecteur_corrige(detecteur):
+    """Relevé réel du vrai Chrome : aucun signal, donc plus rien pour le score composite des niveaux 03 à 07."""
+    c = _classement(_releve(**VRAI_CHROME), detecteur)
+    assert [s.code for s in c.signals if s.poids > 0] == []
+    assert c.classification == "humain"
+
+
+def test_versions_des_detecteurs_corriges():
+    from shadowlab.detection import registre
+
+    tous = registre()
+    assert {nom: tous[nom].version for nom in DETECTEURS_CORRIGES} == dict.fromkeys(DETECTEURS_CORRIGES, "1.1")
+
+
+# Voix de synthèse (`headless`, `voices_vide`).
+
+
+def test_voix_lues_avant_leur_chargement_ne_concluent_pas():
+    """Relevé d'avant le 12/11 : la liste est lue une fois, avant que Chrome l'ait chargée. 0 voix chez le vrai
+    Chrome comme chez le témoin sans interface : rien à en tirer."""
+    for voix in (VRAI_CHROME_VOIX, TEMOIN_VOIX):
+        assert "voices_vide" not in _positifs(_releve(headless_signals=voix), "headless")
+
+
+def test_voix_lues_avant_la_fin_de_l_attente_ne_concluent_pas():
+    voix = {**VRAI_CHROME_VOIX, "voices_attente_ms": 120, "voices_evenement": False}
+    assert "voices_vide" not in _positifs(_releve(headless_signals=voix), "headless")
+
+
+@pytest.mark.parametrize(("attente", "evenement"), [(250, False), (412, False), (40, True)])
+def test_voix_vides_apres_l_attente_gardent_leur_poids(attente, evenement):
+    """Nouveau relevé : liste lue après l'annonce du navigateur (`voiceschanged`) ou au bout de 250 ms. Vide alors,
+    le signal garde son poids. Le nombre de voix est celui du témoin ; les deux champs d'attente viennent du nouvel
+    observateur, que rien n'a encore mesuré."""
+    voix = {**TEMOIN_VOIX, "voices_attente_ms": attente, "voices_evenement": evenement}
+    assert _positifs(_releve(UA_TEMOIN, headless_signals=voix), "headless") == {"voices_vide": 0.4}
+
+
+def test_temoin_playwright_reste_classe_par_headless_sans_les_voix():
+    """`navigator.webdriver` vrai (playwright sans réglage) suffit seul."""
+    c = _classement(_releve(UA_TEMOIN, headless_signals=TEMOIN_PLAYWRIGHT_VOIX), "headless")
+    assert c.classification == "automatise"
+    assert {s.code for s in c.signals if s.poids > 0} == {"webdriver_true"}
+
+
+# API propres à Chrome (`chrome-apis`, `runtime_incomplet`).
+
+
+def test_temoin_garde_ses_signaux_chrome_apis():
+    """Le témoin n'a ni chrome.app, ni loadTimes, ni csi : il reste classé, sans `runtime_incomplet`. Le vrai
+    Chrome n'a pas non plus chrome.runtime sur une page ordinaire : ce signal ne distinguait personne."""
+    c = _classement(_releve(UA_TEMOIN, chrome_apis=TEMOIN_APIS), "chrome-apis")
+    assert {s.code: s.poids for s in c.signals} == {
+        "chrome_app_absent": 0.5,
+        "loadTimes_absent": 0.5,
+        "csi_absent": 0.25,
+    }
+    assert c.classification == "automatise"
+
+
+def test_imitation_partielle_de_chrome_runtime_reste_signalee():
+    apis = {
+        **VRAI_CHROME_APIS,
+        "chrome_runtime": True,
+        "runtime_connect": True,
+        "runtime_sendMessage": True,
+        "runtime_PlatformOs": False,
+    }
+    assert _positifs(_releve(chrome_apis=apis), "chrome-apis") == {"runtime_incomplet": 0.5}
+
+
+def test_imitation_complete_de_chrome_runtime_sans_signal():
+    assert _positifs(_releve(UA_NOEZIA_REECRIT, chrome_apis=NOEZIA_APIS), "chrome-apis") == {}
+
+
+# Polices (`polices`, `polices_os_manquantes`).
+
+
+def test_polices_releve_ancien_ne_juge_pas_les_polices_manquantes():
+    """Relevé d'avant le 12/11, comparé au seul `monospace` : la police à chasse fixe par défaut y paraît absente
+    (Menlo pour le vrai Chrome, Courier New pour le Chromium sans interface des témoins)."""
+    assert _positifs(_releve(font_fingerprint=VRAI_CHROME_POLICES), "polices") == {}
+
+
+def test_polices_manquantes_d_un_releve_a_trois_familles_gardent_leur_poids():
+    polices = {**VRAI_CHROME_POLICES, "bases": ["monospace", "sans-serif", "serif"]}
+    assert _positifs(_releve(font_fingerprint=polices), "polices") == {"polices_os_manquantes": 0.5}
+
+
+def test_polices_inattendues_jugees_meme_sur_un_releve_ancien():
+    """Une police vue est là, quelle que soit la référence : `polices_os_inattendues` reste jugé."""
+    polices = {**VRAI_CHROME_POLICES, "os_inattendues": ["Segoe UI"]}
+    assert _positifs(_releve(font_fingerprint=polices), "polices") == {"polices_os_inattendues": 0.5}
+
+
+def test_temoin_sans_signal_de_polices_avant_comme_apres():
+    assert _positifs(_releve(UA_TEMOIN, font_fingerprint=TEMOIN_POLICES), "polices") == {}
+
+
+# Latence estimée (`connection-dynamic`, `rtt_zero`).
+
+
+@pytest.mark.parametrize("connexion", [VRAI_CHROME_CONNEXION, VRAI_CHROME_CONNEXION_50, TEMOIN_CONNEXION])
+def test_latence_estimee_nulle_ou_non_n_est_pas_un_signal(connexion):
+    """Sur l'Arena locale, le vrai Chrome donne 0 ou 50 selon les passages, le témoin 0 comme lui. Perdu contre les
+    témoins : `rtt_zero` (0,4)."""
+    assert _positifs(_releve(UA_TEMOIN, connection_dynamic=connexion), "connection-dynamic") == {}
+
+
+@pytest.mark.parametrize(
+    ("modif", "code", "poids"),
+    [
+        ({"rtt_1": 600}, "rtt_anormal", 0.3),
+        ({"rtt_type": "undefined"}, "rtt_non_number", 0.5),
+        ({"downlink_type": "undefined"}, "downlink_non_number", 0.5),
+    ],
+)
+def test_connexion_signaux_gardes(modif, code, poids):
+    connexion = {**TEMOIN_CONNEXION, **modif}
+    assert _positifs(_releve(UA_TEMOIN, connection_dynamic=connexion), "connection-dynamic") == {code: poids}
+
+
+# Le relevé lui-même (observateur.js), exécuté par node avec un navigateur imité.
+
+OBSERVATEUR = Path(__file__).parents[1] / "src" / "shadowlab" / "site" / "static" / "observateur.js"
+avec_node = pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+
+
+def _fonction_js(nom):
+    """Texte d'une fonction de premier niveau d'observateur.js, de sa déclaration à l'accolade en colonne 0."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    return re.search(rf"^(?:async )?function {nom}\(.*?^\}}$", source, re.S | re.M).group(0)
+
+
+def _node(script):
+    sortie = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True, timeout=30).stdout
+    return json.loads(sortie)
+
+
+def test_observateur_attente_des_voix_bornee():
+    """L'empreinte part environ 0,2 s après le chargement : l'attente des voix ne dépasse pas 300 ms, et l'appel
+    part dès le chargement du script, pendant que les autres sondes tournent."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    delai = int(re.search(r"^const DELAI_VOIX_MS = (\d+);", source, re.M).group(1))
+    assert 0 < delai <= 300
+    assert re.search(r"^const voixPretes = attendreVoix\(DELAI_VOIX_MS\);", source, re.M)
+
+
+_SCRIPT_VOIX = """
+const CAS = __CAS__;
+let ecouteur = null;
+let liste = CAS === 'deja_la' ? ['Thomas', 'Daniel'] : [];
+globalThis.speechSynthesis = {
+  getVoices: () => liste,
+  addEventListener: (type, f) => { if (type === 'voiceschanged') ecouteur = f; },
+};
+if (CAS === 'annoncees') setTimeout(() => { liste = ['Thomas', 'Daniel', 'Samantha']; if (ecouteur) ecouteur(); }, 30);
+__FONCTION__
+const t0 = Date.now();
+attendreVoix(250).then((annonce) => {
+  console.log(JSON.stringify({ annonce, voix: speechSynthesis.getVoices().length, ms: Date.now() - t0 }));
+});
+"""
+
+
+@avec_node
+@pytest.mark.parametrize(
+    ("cas", "annonce", "voix", "ms_min", "ms_max"),
+    [
+        ("deja_la", False, 2, 0, 100),  # liste prête d'emblée : pas d'attente
+        ("annoncees", True, 3, 20, 200),  # Chrome : liste chargée après le premier appel, annoncée par l'événement
+        ("jamais", False, 0, 240, 1000),  # ni voix ni annonce : attente bornée
+    ],
+)
+def test_observateur_attend_l_annonce_des_voix(cas, annonce, voix, ms_min, ms_max):
+    script = _SCRIPT_VOIX.replace("__CAS__", json.dumps(cas)).replace("__FONCTION__", _fonction_js("attendreVoix"))
+    r = _node(script)
+    assert (r["annonce"], r["voix"]) == (annonce, voix)
+    assert ms_min <= r["ms"] <= ms_max
+
+
+_SCRIPT_SIGNAUX = """
+const debut = 0;
+const voixPretes = Promise.resolve(true);
+Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => 180.4 } });
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+globalThis.document = { hasFocus: () => true, visibilityState: 'visible', hidden: false };
+globalThis.speechSynthesis = { getVoices: () => ['Thomas', 'Daniel', 'Samantha'] };
+__FONCTION__
+headlessSignals().then((r) => console.log(JSON.stringify(r)));
+"""
+
+
+@avec_node
+def test_observateur_note_l_attente_des_voix():
+    """`headlessSignals` lit la liste une fois l'attente finie, et dit combien de temps elle a eu pour arriver."""
+    r = _node(_SCRIPT_SIGNAUX.replace("__FONCTION__", _fonction_js("headlessSignals")))
+    assert (r["voices_count"], r["voices_evenement"], r["voices_attente_ms"]) == (3, True, 180)
+
+
+_SCRIPT_POLICES = """
+const MONO = __MONO__;
+const INSTALLEES = __INSTALLEES__;
+const PAR_DEFAUT = { monospace: MONO, 'sans-serif': 'Helvetica', serif: 'Times' };
+// Taille fictive propre à chaque police installée : deux polices ne donnent jamais la même taille de texte.
+const tailleDe = (nom) => { const i = INSTALLEES.indexOf(nom) + 1; return [600 + i, 80 + i]; };
+function mesurer(familles) {
+  for (const brute of familles.split(',')) {
+    const nom = brute.trim().replace(/^'(.*)'$/, '$1');
+    if (nom in PAR_DEFAUT) return tailleDe(PAR_DEFAUT[nom]);
+    if (INSTALLEES.includes(nom)) return tailleDe(nom);
+  }
+  return tailleDe('Times');
+}
+const span = {
+  style: {},
+  textContent: '',
+  remove() {},
+  get offsetWidth() { return mesurer(this.style.fontFamily || 'serif')[0]; },
+  get offsetHeight() { return mesurer(this.style.fontFamily || 'serif')[1]; },
+};
+globalThis.document = { createElement: () => span, body: { appendChild() {} } };
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: __UA__ } });
+__FONCTION__
+const piege = mesurer("'" + MONO + "',monospace")[0] === mesurer('monospace')[0];
+console.log(JSON.stringify({ r: fontFingerprintTest(), piege }));
+"""
+
+
+@avec_node
+@pytest.mark.parametrize("mono", ["Menlo", "Courier New"])  # police `monospace` par défaut : vrai Chrome, témoin
+def test_observateur_voit_la_police_a_chasse_fixe_par_defaut(mono):
+    """Passages 33547 et 33352 : Menlo absent chez le vrai Chrome, Courier New absent chez le témoin, chacune étant
+    la police à chasse fixe par défaut de son navigateur. Comparées à trois familles de référence, toutes les
+    polices du poste sont vues (la réunion des deux relevés)."""
+    installees = sorted(set(VRAI_CHROME_POLICES["presentes"]) | set(TEMOIN_POLICES["presentes"]))
+    script = (
+        _SCRIPT_POLICES.replace("__MONO__", json.dumps(mono))
+        .replace("__INSTALLEES__", json.dumps([*installees, "Times"]))
+        .replace("__UA__", json.dumps(UA_CHROME))
+        .replace("__FONCTION__", _fonction_js("fontFingerprintTest"))
+    )
+    resultat = _node(script)
+    assert resultat["piege"] is True  # contre le seul `monospace`, la police par défaut ne se voit pas
+    r = resultat["r"]
+    assert set(r["presentes"]) == set(installees)
+    assert (r["os_manquantes"], r["os_inattendues"], r["count"]) == ([], [], 15)
+    assert r["bases"] == ["monospace", "sans-serif", "serif"]

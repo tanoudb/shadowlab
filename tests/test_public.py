@@ -28,7 +28,7 @@ from shadowlab.config import ReglagesPublics, charger_public
 from shadowlab.public import Limites, creer_app_publique, purger
 from shadowlab.public import messages as boite
 from shadowlab.public.donnees import ENTETES_GARDES
-from shadowlab.public.pages import DONNEES_COMPORTEMENT, DONNEES_RELEVEES
+from shadowlab.public.pages import DONNEES_COMPORTEMENT, DONNEES_RELEVEES, VERSION_INFORMATION
 
 HOTE = "vitrine.test"  # domaine réservé aux essais (RFC 2606)
 ORIGINE = f"https://{HOTE}"
@@ -701,6 +701,18 @@ def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
     nouveaux = {"page_defilable", "delai_souris_max_ms"}
     assert nouveaux <= comportement
     assert nouveaux <= {cle for cle, _ in DONNEES_COMPORTEMENT}
+
+
+def test_page_d_information_decrit_l_attente_des_voix_et_les_polices_de_reference():
+    """Relevé du 12/11/2026 : la liste des voix est lue après une courte attente, dont la durée est envoyée
+    (`voices_attente_ms`, `voices_evenement`), et les polices sont comparées à trois familles génériques (`bases`).
+    Ces champs sont décrits sur la page ; un consentement donné sous un texte plus ancien ne les couvrait pas."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    assert {"r.voices_attente_ms", "r.voices_evenement", "r.bases"} <= set(re.findall(r"r\.\w+", source))
+    descriptions = dict(DONNEES_RELEVEES)
+    assert "attente" in descriptions["headless_signals"]
+    assert "trois familles" in descriptions["font_fingerprint"]
+    assert VERSION_INFORMATION not in ("2026-11-12.4", "2026-11-12.5")
 
 
 def test_collecte_accepte_le_releve_de_comportement_complet(client, reglages_publics):
