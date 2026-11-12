@@ -34,11 +34,16 @@ const (
 // Règles de l'Arena placées avant le CRS : les échanges internes du système de protection ne sont pas
 // inspectés par le WAF (ils transportent des tokens tiers et des cookies de session dont les valeurs
 // déclenchent des faux positifs CRS aux niveaux de paranoia élevés, par ex. 942120 sur sl_session).
+// La 1014 retire 942432 (trop de caractères spéciaux dans les arguments) sur les deux seules vérifications
+// de CAPTCHA tiers : le nom des champs imposés par les fournisseurs (cf-turnstile-response,
+// g-recaptcha-response) contient deux tirets. Sans cette exclusion, personne ne valide un CAPTCHA au niveau 07
+// (paranoïa 4, seuil 2). Volontairement limitée à ces chemins exacts, pas à /lab/ entier.
 const exclusions = `
 SecRule REQUEST_URI "@beginsWith /lab/collecte" "id:1010,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
 SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier$" "id:1011,phase:1,pass,nolog,ctl:ruleRemoveById=942120"
 SecRule REQUEST_URI "@beginsWith /lab/" "id:1012,phase:1,pass,nolog,ctl:ruleRemoveById=920272"
 SecRule REQUEST_URI "@beginsWith /lab/" "id:1013,phase:2,pass,nolog,ctl:ruleRemoveById=942430,ctl:ruleRemoveById=942431"
+SecRule REQUEST_URI "@rx ^/lab/(turnstile|recaptcha)/verifier$" "id:1014,phase:1,pass,nolog,ctl:ruleRemoveById=942432"
 `
 
 type regle struct {
