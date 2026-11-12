@@ -8,9 +8,10 @@ import pytest
 
 from shadowlab import database as db
 from shadowlab.correlation import correlation_session, enregistrer_hash, hash_session
-from shadowlab.detection import DetecteurCorrelationSession, Observations
+from shadowlab.detection import Classement, DetecteurCorrelationSession, Observations
 
 T0 = datetime(2026, 11, 12, 8, 0, tzinfo=UTC)
+TYPES = ("profil_complet", "canvas")
 
 
 def _empreinte(ua: str = "Chrome/131", hwc: int = 8, canvas: str = "a1b2c3d4e5f60718", largeur: int = 1920) -> dict:
@@ -35,6 +36,14 @@ def _base_memoire() -> sqlite3.Connection:
     return cx
 
 
+def _classer(correlation: dict | None) -> Classement:
+    return DetecteurCorrelationSession().classer(Observations(http=[], js=[], correlation=correlation))
+
+
+def _codes(c: Classement) -> list[str]:
+    return [s.code for s in c.signals]
+
+
 def _horloge(monkeypatch, instant: datetime) -> None:
     """Fixe l'heure de la base : `enregistrer_hash` et `correlation_session` lisent `db.maintenant()`."""
     monkeypatch.setattr(db, "maintenant", lambda: instant.isoformat(timespec="milliseconds"))
@@ -52,20 +61,21 @@ def _sessions(cx, monkeypatch, instants: list[datetime]) -> None:
         enregistrer_hash(cx, f"s{n}", emp)
 
 
-def _lire(cx, monkeypatch, instant: datetime):
-    """Données de l'empreinte de test lues à `instant`, et classement du détecteur sur ces données."""
+def _lire(cx, monkeypatch, instant: datetime) -> tuple[dict, Classement]:
+    """Débit de chaque hash de l'empreinte de test lu à `instant` (compte, exact), et classement du détecteur."""
     _horloge(monkeypatch, instant)
     donnees = correlation_session(cx, _empreinte())
-    return donnees["profil_canvas"], DetecteurCorrelationSession().classer(
-        Observations(http=[], js=[], correlation=donnees)
-    )
+    debit = {t: (d["sessions_derniere_heure"], d["derniere_heure_exacte"]) for t, d in donnees.items()}
+    return debit, _classer(donnees)
 
 
-def _signaux(**donnees) -> dict[str, tuple[str, float]]:
-    """Signaux du détecteur pour des données de corrélation données (empreinte vue une fois par défaut)."""
-    correlation = {"profil_canvas": {"nb_sessions": 1, "sessions_derniere_heure": 1, "derniere_heure_exacte": True}}
-    correlation["profil_canvas"] |= donnees
-    c = DetecteurCorrelationSession().classer(Observations(http=[], js=[], correlation=correlation))
+def _signaux(profil: dict | None = None, canvas: dict | None = None) -> dict[str, tuple[str, float]]:
+    """Signaux du détecteur pour des données de corrélation (chaque hash vu une fois par défaut)."""
+
+    def donnees(champs: dict | None) -> dict:
+        return {"nb_sessions": 1, "sessions_derniere_heure": 1, "derniere_heure_exacte": True} | (champs or {})
+
+    c = _classer({"profil_complet": donnees(profil), "canvas": donnees(canvas)})
     return {s.code: (s.description, s.poids) for s in c.signals}
 
 
@@ -106,21 +116,9 @@ def test_hash_session_change_avec_ua():
     assert h1["profil_complet"] != h2["profil_complet"]
 
 
-def test_empreinte_combinee_profil_et_canvas():
-    """Une session, une empreinte : profil et canvas hachés ensemble (`profil_canvas`).
-
-    Une collision sur un seul des deux ne fait pas la même empreinte : deux profils NOEZIA tirés au hasard
-    (même profil, canvas bruités différents), deux Chromium d'un même Mac (même canvas, profils différents).
-    """
-    base = hash_session(_empreinte())
-    meme_profil = hash_session(_empreinte(canvas="0011223344556677"))
-    meme_canvas = hash_session(_empreinte(largeur=1440))
-    assert hash_session(_empreinte())["profil_canvas"] == base["profil_canvas"]
-    assert meme_profil["profil_complet"] == base["profil_complet"]
-    assert meme_profil["profil_canvas"] != base["profil_canvas"]
-    assert meme_canvas["canvas"] == base["canvas"]
-    assert meme_canvas["profil_canvas"] != base["profil_canvas"]
-    assert "profil_canvas" in hash_session(_empreinte(canvas="erreur: SecurityError"))  # le profil seul
+def test_hash_session_deux_types_seulement():
+    """Les types enregistrés restent ceux d'avant : l'historique de `empreintes_vues` garde son sens."""
+    assert set(hash_session(_empreinte())) == set(TYPES)
 
 
 def test_enregistrer_hash_incremente():
@@ -156,8 +154,9 @@ def test_correlation_session_apres_enregistrement():
     enregistrer_hash(cx, "s2", emp)
     enregistrer_hash(cx, "s3", emp)
     result = correlation_session(cx, emp)
-    assert list(result) == ["profil_canvas"]  # la règle ne lit que l'empreinte combinée
-    assert result["profil_canvas"]["nb_sessions"] == 3
+    assert list(result) == list(TYPES)
+    assert result["profil_complet"]["nb_sessions"] == 3
+    assert result["canvas"]["nb_sessions"] == 3
 
 
 def test_detecteur_correlation_sans_donnees():
@@ -173,7 +172,7 @@ def test_detecteur_correlation_avec_recyclage():
         http=[],
         js=[],
         correlation={
-            "profil_canvas": {
+            "profil_complet": {
                 "nb_sessions": 12,
                 "premiere_vue": "2026-01-01T00:00:00+00:00",
                 "derniere_vue": "2026-01-01T01:00:00+00:00",
@@ -193,7 +192,7 @@ def test_detecteur_correlation_sous_seuil():
         http=[],
         js=[],
         correlation={
-            "profil_canvas": {
+            "profil_complet": {
                 "nb_sessions": 2,
                 "premiere_vue": "2026-01-01T00:00:00+00:00",
                 "derniere_vue": "2026-01-01T01:00:00+00:00",
@@ -206,51 +205,99 @@ def test_detecteur_correlation_sous_seuil():
     assert c.classification != "automatise"
 
 
-# --- Un fait, un signal ----------------------------------------------------------------------------------
+# --- Un fait, un signal : le plus grand des deux comptes --------------------------------------------------
 
 
-@pytest.mark.parametrize(("sessions", "poids", "classement"), [(5, 0.7, "indetermine"), (10, 1.0, "automatise")])
-def test_une_empreinte_revue_un_seul_signal(sessions, poids, classement):
-    """Profil et canvas identiques décrivent la même observation : un signal, pas deux (avant : 0,7 + 0,7)."""
+@pytest.mark.parametrize(
+    ("sessions", "seuil", "poids", "classement"), [(5, 5, 0.7, "indetermine"), (10, 10, 1.0, "automatise")]
+)
+def test_profil_et_canvas_identiques_un_seul_signal(sessions, seuil, poids, classement):
+    """Profil et canvas revus ensemble décrivent la même observation : un signal, pas deux (avant : 0,7 + 0,7)."""
     cx = _base_memoire()
     for n in range(sessions):
         enregistrer_hash(cx, f"s{n}", _empreinte())
-    c = DetecteurCorrelationSession().classer(
-        Observations(http=[], js=[], correlation=correlation_session(cx, _empreinte()))
+    c = _classer(correlation_session(cx, _empreinte()))
+    description = (
+        f"profil vu dans {sessions} sessions et canvas vu dans {sessions} sessions de la base, celle-ci comprise"
+        f" (seuil {seuil})"
     )
-    assert [(s.code, s.poids) for s in c.signals] == [("recycling_profil_canvas", poids)]
+    assert [(s.code, s.description, s.poids) for s in c.signals] == [("recycling_profil_complet", description, poids)]
     assert c.classification == classement
+
+
+def test_profil_stable_canvas_change_a_chaque_session():
+    """Un canvas bruité différemment à chaque session (navigateurs anti-détection) n'efface pas le profil revu."""
+    cx = _base_memoire()
+    for n in range(5):
+        enregistrer_hash(cx, f"s{n}", _empreinte(canvas=f"{n:016x}"))
+    c = _classer(correlation_session(cx, _empreinte(canvas=f"{4:016x}")))
+    assert [(s.code, s.description, s.poids) for s in c.signals] == [
+        ("recycling_profil_complet", "profil vu dans 5 sessions de la base, celle-ci comprise (seuil 5)", 0.7)
+    ]
+
+
+def test_canvas_stable_profil_change_a_chaque_session():
+    """Comportement d'avant, gardé : le canvas revu seul suffit au signal.
+
+    Ce cas classe aussi des humains sur le même matériel : le petit dessin du canvas est le même pour tout Chromium
+    156 de ce Mac (docs/recherche/correlation-entre-sessions-2026-11-12.md, R8). À revoir au palier 2, avec la
+    mémoire des visiteurs.
+    """
+    cx = _base_memoire()
+    for n in range(5):
+        enregistrer_hash(cx, f"s{n}", _empreinte(largeur=1000 + n))
+    c = _classer(correlation_session(cx, _empreinte(largeur=1004)))
+    assert [(s.code, s.description, s.poids) for s in c.signals] == [
+        ("recycling_canvas", "canvas vu dans 5 sessions de la base, celle-ci comprise (seuil 5)", 0.7)
+    ]
 
 
 # --- Libellés : ce que la règle compte ------------------------------------------------------------------
 
 
 def test_libelles_disent_ce_qui_est_compte():
-    """La règle compte les sessions de la base qui portent la même empreinte : rien ne parle de rotation."""
-    revue = "empreinte (profil et canvas) vue dans {} sessions de la base, celle-ci comprise (seuil {})"
-    debit = "sessions de cette empreinte (profil et canvas) commencées dans les 60 dernières minutes (seuil 30)"
-    assert _signaux(nb_sessions=4) == {}
-    assert _signaux(nb_sessions=5) == {"recycling_profil_canvas": (revue.format(5, 5), 0.7)}
-    assert _signaux(nb_sessions=9) == {"recycling_profil_canvas": (revue.format(9, 5), 0.7)}
-    assert _signaux(nb_sessions=12) == {"recycling_profil_canvas": (revue.format(12, 10), 1.0)}
-    assert _signaux(sessions_derniere_heure=29) == {}
-    assert _signaux(sessions_derniere_heure=31) == {"velocity_profil_canvas": (f"31 {debit}", 0.8)}
+    """Un signal de comptage et un de débit au plus ; le libellé dit quel hash a franchi le seuil, et combien."""
+    debit = "commencées dans les 60 dernières minutes (seuil 30)"
+    assert _signaux() == {}
+    assert _signaux(profil={"nb_sessions": 4}, canvas={"nb_sessions": 4}) == {}
+    assert _signaux(profil={"nb_sessions": 5}) == {
+        "recycling_profil_complet": ("profil vu dans 5 sessions de la base, celle-ci comprise (seuil 5)", 0.7)
+    }
+    assert _signaux(profil={"nb_sessions": 6}, canvas={"nb_sessions": 5}) == {
+        "recycling_profil_complet": (
+            "profil vu dans 6 sessions et canvas vu dans 5 sessions de la base, celle-ci comprise (seuil 5)",
+            0.7,
+        )
+    }
+    # Le plus grand compte fixe le seuil, le poids et le suffixe du code ; seul le hash qui franchit ce seuil est cité.
+    assert _signaux(profil={"nb_sessions": 6}, canvas={"nb_sessions": 12}) == {
+        "recycling_canvas": ("canvas vu dans 12 sessions de la base, celle-ci comprise (seuil 10)", 1.0)
+    }
+    assert _signaux(profil={"sessions_derniere_heure": 29}) == {}
+    assert _signaux(profil={"sessions_derniere_heure": 31}) == {
+        "velocity_profil_complet": (f"31 sessions de même profil {debit}", 0.8)
+    }
+    assert _signaux(profil={"sessions_derniere_heure": 30}, canvas={"sessions_derniere_heure": 31}) == {
+        "velocity_canvas": (f"30 sessions de même profil et 31 sessions de même canvas {debit}", 0.8)
+    }
     # Compte incomplet (borne basse) qui atteint quand même le seuil : le libellé le dit.
-    incomplet = _signaux(sessions_derniere_heure=31, derniere_heure_exacte=False)
-    assert incomplet == {"velocity_profil_canvas": (f"au moins 31 {debit}", 0.8)}
-    tous = _signaux(nb_sessions=40, sessions_derniere_heure=40)
+    assert _signaux(profil={"sessions_derniere_heure": 31, "derniere_heure_exacte": False}) == {
+        "velocity_profil_complet": (f"au moins 31 sessions de même profil {debit}", 0.8)
+    }
+    tous = _signaux(*[{"nb_sessions": 40, "sessions_derniere_heure": 40}] * 2)
+    assert sorted(tous) == ["recycling_profil_complet", "velocity_profil_complet"]
     assert "rotation" not in " ".join(description for description, _ in tous.values())
 
 
-# --- Débit : sessions des 60 dernières minutes ----------------------------------------------------------
+# --- Débit : sessions des 60 dernières minutes, pour chaque hash ----------------------------------------
 
 
 def test_deux_sessions_a_trois_minutes_pas_de_debit(monkeypatch):
     """Régression : la moyenne sur la vie de l'empreinte donnait 2 sessions / 3 min = 40 par heure."""
     cx = _base_memoire()
     _sessions(cx, monkeypatch, [T0, T0 + timedelta(minutes=3)])
-    donnees, c = _lire(cx, monkeypatch, T0 + timedelta(minutes=3))
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (2, True)
+    debit, c = _lire(cx, monkeypatch, T0 + timedelta(minutes=3))
+    assert debit == dict.fromkeys(TYPES, (2, True))
     assert c.signals == []
 
 
@@ -259,18 +306,19 @@ def test_trente_sessions_dans_l_heure_declenchent_le_debit(monkeypatch, sessions
     cx = _base_memoire()
     instants = [T0 + timedelta(minutes=2 * n) for n in range(sessions)]  # une toutes les 2 min : 56 ou 58 min
     _sessions(cx, monkeypatch, instants)
-    donnees, c = _lire(cx, monkeypatch, instants[-1])
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (sessions, True)
-    assert ("velocity_profil_canvas" in {s.code for s in c.signals}) is signal
+    debit, c = _lire(cx, monkeypatch, instants[-1])
+    assert debit == dict.fromkeys(TYPES, (sessions, True))
+    vitesse = [code for code in _codes(c) if code.startswith("velocity_")]
+    assert vitesse == (["velocity_profil_complet"] if signal else [])  # un seul signal pour les deux hash
 
 
 def test_trente_sessions_sur_deux_jours_pas_de_debit(monkeypatch):
     cx = _base_memoire()
     instants = [T0 + timedelta(minutes=96 * n) for n in range(30)]  # une toutes les 1 h 36, sur 46 h 24
     _sessions(cx, monkeypatch, instants)
-    donnees, c = _lire(cx, monkeypatch, instants[-1])
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (1, True)
-    assert "velocity_profil_canvas" not in {s.code for s in c.signals}
+    debit, c = _lire(cx, monkeypatch, instants[-1])
+    assert debit == dict.fromkeys(TYPES, (1, True))
+    assert not [code for code in _codes(c) if code.startswith("velocity_")]
 
 
 def test_rafale_sous_la_minute_comptee(monkeypatch):
@@ -278,8 +326,8 @@ def test_rafale_sous_la_minute_comptee(monkeypatch):
     cx = _base_memoire()
     instants = [T0 + timedelta(seconds=5 * n) for n in range(10)]  # 10 sessions en 45 s
     _sessions(cx, monkeypatch, instants)
-    donnees, _ = _lire(cx, monkeypatch, instants[-1])
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (10, True)
+    debit, _ = _lire(cx, monkeypatch, instants[-1])
+    assert debit == dict.fromkeys(TYPES, (10, True))
 
 
 def test_rafale_ancienne_oubliee(monkeypatch):
@@ -288,18 +336,18 @@ def test_rafale_ancienne_oubliee(monkeypatch):
     cx = _base_memoire()
     rafale = [T0 + timedelta(seconds=30 * n) for n in range(100)]
     _sessions(cx, monkeypatch, [*rafale, T0 + timedelta(hours=2, minutes=50)])
-    donnees, c = _lire(cx, monkeypatch, T0 + timedelta(hours=2, minutes=50))
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (1, True)
-    assert "velocity_profil_canvas" not in {s.code for s in c.signals}
+    debit, c = _lire(cx, monkeypatch, T0 + timedelta(hours=2, minutes=50))
+    assert debit == dict.fromkeys(TYPES, (1, True))
+    assert not [code for code in _codes(c) if code.startswith("velocity_")]
 
 
 def test_vieille_empreinte_debit_en_borne_basse(monkeypatch):
-    """Limite : la table ne garde que les 10 derniers jetons d'une empreinte. S'ils tombent tous dans l'heure et
-    que l'empreinte est plus ancienne, le nombre de sessions de l'heure n'est pas connu : au moins 10."""
+    """Limite : la table ne garde que les 10 derniers jetons d'un hash. S'ils tombent tous dans l'heure et que le
+    hash est plus ancien, le nombre de sessions de l'heure n'est pas connu : au moins 10."""
     cx = _base_memoire()
     anciennes = [T0 - timedelta(days=2) + timedelta(minutes=n) for n in range(5)]
     recentes = [T0 + timedelta(minutes=2 * n) for n in range(12)]
     _sessions(cx, monkeypatch, anciennes + recentes)
-    donnees, c = _lire(cx, monkeypatch, recentes[-1])
-    assert (donnees["sessions_derniere_heure"], donnees["derniere_heure_exacte"]) == (10, False)
-    assert [s.code for s in c.signals] == ["recycling_profil_canvas"]  # 17 sessions : le compte classe déjà
+    debit, c = _lire(cx, monkeypatch, recentes[-1])
+    assert debit == dict.fromkeys(TYPES, (10, False))
+    assert _codes(c) == ["recycling_profil_complet"]  # 17 sessions : le compte classe déjà
