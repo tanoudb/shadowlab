@@ -359,6 +359,22 @@ def photo_svg(a: Annonce, n: int) -> str:
 MARQUE = "Habitat Démo"  # nom manifestement fictif : le site sera public
 
 
+@dataclass(frozen=True)
+class Habillage:
+    """Ce qui distingue une page servie par le labo d'une page servie par l'application publique.
+
+    Par défaut : la page du labo, inchangée. `bandeau` est du HTML de confiance, écrit par l'application,
+    jamais construit à partir d'une entrée du visiteur.
+    """
+
+    observateur: bool = True  # jeton de session et script d'observation dans la page
+    sans_tiers: bool = False  # balise qui demande à l'observateur de ne contacter aucun serveur extérieur
+    bandeau: str = ""  # inséré sous l'en-tête
+
+
+HABILLAGE_LABO = Habillage()
+
+
 def _nombre(valeur: int) -> str:
     return f"{valeur:,}".replace(",", " ")
 
@@ -372,16 +388,26 @@ def _date_fr(iso: str) -> str:
     return f"{d.day} {MOIS[d.month - 1]} {d.year}"
 
 
-def _gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = (), honeypot: bool = False) -> str:
+def _gabarit(
+    titre: str,
+    corps: str,
+    jeton: str,
+    scripts: tuple[str, ...] = (),
+    honeypot: bool = False,
+    habillage: Habillage = HABILLAGE_LABO,
+) -> str:
     balises = "".join(f'<script type="module" src="/lab/static/{nom}"></script>' for nom in scripts)
     piege = HONEYPOT_LIEN if honeypot else ""
+    metas = f'<meta name="sl-session" content="{escape(jeton)}">\n' if habillage.observateur else ""
+    metas += '<meta name="sl-sans-tiers" content="1">\n' if habillage.sans_tiers else ""
+    observateur = '<script type="module" src="/lab/static/observateur.js"></script>\n' if habillage.observateur else ""
+    bandeau = f"{habillage.bandeau}\n" if habillage.bandeau else ""
     return f"""<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="sl-session" content="{escape(jeton)}">
-<title>{escape(titre)} — {MARQUE}</title>
+{metas}<title>{escape(titre)} — {MARQUE}</title>
 <link rel="stylesheet" href="/lab/static/vitrine.css">
 </head>
 <body class="vitrine">
@@ -389,13 +415,12 @@ def _gabarit(titre: str, corps: str, jeton: str, scripts: tuple[str, ...] = (), 
 <a class="marque" href="/lab/vitrine">{MARQUE}</a>
 <nav aria-label="Navigation principale"><a href="/lab/vitrine">Accueil</a><a href="/lab/vitrine/annonces">Toutes les annonces</a></nav>
 </div></header>
-<main class="conteneur">
+{bandeau}<main class="conteneur">
 {corps}
 {piege}
 </main>
 <footer class="pied"><div class="conteneur">Site de démonstration — annonces fictives</div></footer>
-<script type="module" src="/lab/static/observateur.js"></script>
-{balises}
+{observateur}{balises}
 </body>
 </html>"""
 
@@ -412,7 +437,9 @@ def _carte(a: Annonce) -> str:
 </article>"""
 
 
-def page_accueil(jeton: str, annonces: list[Annonce], honeypot: bool = False) -> str:
+def page_accueil(
+    jeton: str, annonces: list[Annonce], honeypot: bool = False, habillage: Habillage = HABILLAGE_LABO
+) -> str:
     cartes = "".join(_carte(a) for a in annonces[:NB_A_LA_UNE])
     corps = f"""<section class="bandeau">
 <h1>Trouvez votre prochain chez-vous</h1>
@@ -421,10 +448,12 @@ def page_accueil(jeton: str, annonces: list[Annonce], honeypot: bool = False) ->
 </section>
 <h2 class="titre-section">À la une</h2>
 <div class="grille">{cartes}</div>"""
-    return _gabarit("Accueil", corps, jeton, honeypot=honeypot)
+    return _gabarit("Accueil", corps, jeton, honeypot=honeypot, habillage=habillage)
 
 
-def page_liste(jeton: str, annonces: list[Annonce], page: int, honeypot: bool = False) -> str:
+def page_liste(
+    jeton: str, annonces: list[Annonce], page: int, honeypot: bool = False, habillage: Habillage = HABILLAGE_LABO
+) -> str:
     total = nb_pages(len(annonces))
     cartes = "".join(_carte(a) for a in page_annonces(annonces, page))
     precedent = (
@@ -441,10 +470,10 @@ def page_liste(jeton: str, annonces: list[Annonce], page: int, honeypot: bool = 
 <p class="compteur">{len(annonces)} biens — page {page} sur {total}</p>
 <div class="grille">{cartes}</div>
 <nav class="pagination" aria-label="Pagination">{precedent}{suivant}</nav>"""
-    return _gabarit(f"Annonces — page {page}", corps, jeton, honeypot=honeypot)
+    return _gabarit(f"Annonces — page {page}", corps, jeton, honeypot=honeypot, habillage=habillage)
 
 
-def page_fiche(jeton: str, a: Annonce, honeypot: bool = False) -> str:
+def page_fiche(jeton: str, a: Annonce, honeypot: bool = False, habillage: Habillage = HABILLAGE_LABO) -> str:
     ref = escape(a.reference)
     photos = "".join(
         f'<img src="/lab/vitrine/photos/{ref}/{n}.svg" alt="{escape(legende_photo(n))} — photo {n} sur {a.nb_photos}"'
@@ -484,4 +513,4 @@ def page_fiche(jeton: str, a: Annonce, honeypot: bool = False) -> str:
 <h2>Annonces similaires</h2>
 <div id="similaires" class="grille" data-url="/lab/vitrine/api/annonces/{ref}/similaires" aria-live="polite"></div>
 </section>"""
-    return _gabarit(a.titre, corps, jeton, scripts=("vitrine.js",), honeypot=honeypot)
+    return _gabarit(a.titre, corps, jeton, scripts=("vitrine.js",), honeypot=honeypot, habillage=habillage)

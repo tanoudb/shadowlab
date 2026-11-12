@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import logging.handlers
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,10 +23,16 @@ class FormatJson(logging.Formatter):
         return json.dumps(ligne, ensure_ascii=False)
 
 
-def configurer(sorties: Path, verbeux: bool = False) -> None:
+def configurer(sorties: Path, verbeux: bool = False, rotation: tuple[int, int] | None = None) -> None:
+    """`rotation` = (octets par fichier, fichiers gardés en plus du courant) ; sans elle, un seul fichier."""
     dossier = sorties / "logs"
     dossier.mkdir(parents=True, exist_ok=True)
-    fichier = logging.FileHandler(dossier / "shadowlab.jsonl", encoding="utf-8")
+    chemin = dossier / "shadowlab.jsonl"
+    if rotation:
+        taille, nombre = rotation
+        fichier = logging.handlers.RotatingFileHandler(chemin, maxBytes=taille, backupCount=nombre, encoding="utf-8")
+    else:
+        fichier = logging.FileHandler(chemin, encoding="utf-8")
     fichier.setFormatter(FormatJson())
     fichier.setLevel(logging.DEBUG)
     ecran = logging.StreamHandler()

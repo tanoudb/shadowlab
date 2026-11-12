@@ -67,7 +67,10 @@ recommander des optimisations.
 - **Récolte notée** : scénario `recolte_vitrine` (toute la liste puis chaque fiche) et `notation.noter_recolte`
   (complétude, exactitude). Campagne : `SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne
   configs/experiments/recolte-palier1.yaml` (environ 2 h).
-- **456 tests rapides verts** (hors intégration), lint propre.
+- **Application publique réduite** (`src/shadowlab/public/`, D-55) : la seule partie faite pour être mise en
+  ligne. Site vitrine, consentement, collecte fermée, suppression de sa session ; aucune route du labo.
+  Lancement et conditions : `docs/site-public.md`. Le labo lui-même ne se met jamais en ligne.
+- **570 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 
@@ -95,6 +98,7 @@ uv run shadowlab campagne configs/experiments/connexion-arena.yaml  # le moteur 
 uv run shadowlab campagne configs/experiments/extraction-adaptative.yaml  # relocalisation malgré mutation CSS
 uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
+uv run shadowlab public servir | purger | supprimer <id>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
 uv run pytest -m "not integration"                         # < 3 s, sans navigateur
@@ -125,6 +129,7 @@ src/shadowlab/
 ├── cli.py           # Interface ligne de commande
 ├── reports.py       # Rapports HTML/CSV/JSON
 ├── labo.py          # Sert l'interface construite (frontend/dist) sous /labo
+├── public/          # Application publique réduite (vitrine + sessions humaines), seule à se mettre en ligne
 └── tableau.py       # Ancien tableau de bord (déprécié, remplacé par /labo)
 frontend/            # Interface React + TypeScript (Vite), consomme /api
 │   ├── src/screens/ # Configurer, Experiences, Suivi, Passage, Comparer, Moteurs, Protections

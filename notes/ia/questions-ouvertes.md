@@ -14,9 +14,13 @@ Ce qui attend Ethan.
   arrête NOEZIA aux niveaux 04 à 07, et il arrête tout le monde de la même façon. Ces sessions disent
   s'il arrête aussi les humains. Recommandation : les faire avant tout autre chose ; arrêter le site
   ensuite (une campagne réutiliserait un site resté ouvert avec un ancien code).
-- **2026-11-11 — Mise en ligne du site vitrine** : où l'héberger, sur quel domaine à toi, derrière
-  Cloudflare gratuit (étapes 1.6 et 1.8). Recommandation : un sous-domaine dédié, sur une petite machine
-  séparée du labo. La mise en ligne reste à toi ; les conditions sont dans `docs/PLAN.md` § 5.
+- **2026-11-12 — Mise en ligne de l'application publique (étape 1.6, bloque 1.7 et 1.8)** : le code est
+  prêt (`src/shadowlab/public/`, `docs/site-public.md`). Il faut de toi : (1) une machine qui fait tourner une
+  application Python derrière un mandataire HTTPS ; (2) un domaine ou sous-domaine à toi, derrière Cloudflare
+  gratuit ; (3) ton nom et un moyen de te joindre, affichés sur la page d'information
+  (`SHADOWLAB_PUBLIC_CONTACT`, sans lui l'application refuse de démarrer) ; (4) la durée de conservation si
+  90 jours ne te conviennent pas. Recommandation : un sous-domaine dédié, sur une petite machine séparée
+  du labo, 90 jours. La mise en ligne reste à toi.
 - **2026-11-11 — Code mort `engines/noezia/pool.py`** : il appelle une classe et deux méthodes qui
   n'existent pas, rien ne l'importe. Recommandation : le supprimer (le palier 4 le remplace).
 - **2026-11-11 — Pour le palier 3** : un serveur Linux, un proxy résidentiel, et l'environnement de tor-i

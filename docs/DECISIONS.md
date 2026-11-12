@@ -289,3 +289,14 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   jours et le travail du 11/11 (D-47 à D-53) n'a été mesuré par aucune campagne. Les seuils chiffrés sont
   des choix de Claude, à recaler après les premières mesures. Le périmètre (D-30) est inchangé : l'usage
   sur des sites tiers reste une question ouverte pour Ethan.
+- **D-55 — 12/11/2026 — Application publique réduite, séparée du laboratoire (`src/shadowlab/public/`).**
+  Pour les sessions humaines de référence, on ne met jamais le labo en ligne (son API lance des navigateurs
+  vers n'importe quelle adresse) : une application à part ne sert que le site vitrine, le consentement, la
+  collecte et la suppression. Choix : consentement avant toute collecte ; jeton de session dans un cookie
+  signé, jamais lu dans l'URL ; liste blanche d'en-têtes (ni adresse IP ni cookie stockés) ; aucune requête
+  vers un tiers (sonde WebRTC sautée par `<meta name="sl-sans-tiers">`) ; aucun détecteur en direct, les
+  humains ne sont jamais bloqués ; base et liste d'hôtes distinctes de celles du labo ; contact du
+  responsable obligatoire au démarrage ; suppression par le participant dès le début (page « Ma session »)
+  et purge automatique. Pourquoi : audit de sécurité du 11/11 (`notes/ia/analyse-paliers-2026-11-11.md`
+  § 4) et conditions du § 5 du plan. Relue, éprouvée (12 failles volontaires détectées par les tests) et
+  auditée par un second sous-agent. Mise en ligne : `docs/site-public.md`, à la charge d'Ethan.

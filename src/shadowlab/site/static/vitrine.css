@@ -86,3 +86,42 @@ main.conteneur { padding-top: 28px; padding-bottom: 48px; min-height: 60vh; }
 
 /* Lien et champs pièges (honeypots) : hors écran, jamais visibles d'un humain. Même règle que lab.css. */
 .sl-hp { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+
+/* Application publique (docs/site-public.md) : bandeau de session, page d'information, remerciement. */
+.session-publique { background: #e7f0ef; border-bottom: 1px solid var(--trait); font-size: .95rem; }
+.session-publique.en-cours { background: #fff3d1; border-bottom-color: #ecd9a0; }
+.session-publique .conteneur { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-top: 10px; padding-bottom: 10px; }
+.session-publique p { margin: 0; }
+.session-publique a { font-weight: 600; }
+.session-publique .bouton-plein { padding: 7px 16px; }
+.pastille { display: inline-block; width: .65em; height: .65em; border-radius: 50%; background: #c4302b; margin-right: .5em; vertical-align: .05em; }
+.bouton-plein { display: inline-block; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 11px 22px; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+.bouton-plein:hover, .bouton-plein:focus-visible { background: var(--accent-fonce); color: #fff; }
+.bouton-danger { background: #a3302a; }
+.bouton-danger:hover, .bouton-danger:focus-visible { background: #7f241f; }
+.info { max-width: 760px; }
+.info .chapeau { font-size: 1.1rem; color: var(--discret); margin: 0 0 28px; }
+.info section { margin: 0 0 28px; }
+.info h3 { font-size: 1.05rem; margin: 20px 0 6px; }
+.info ul, .info ol { padding-left: 1.3em; margin: 0 0 12px; }
+.info li { margin-bottom: 6px; }
+.info code { background: #ece8de; border-radius: 4px; padding: 0 .3em; font-size: .88em; }
+.info details { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 18px; }
+.info summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.donnees { display: grid; grid-template-columns: minmax(0, 13em) 1fr; gap: 8px 16px; margin: 8px 0 0; }
+.donnees dt { overflow-wrap: anywhere; }
+.donnees dd { margin: 0; }
+.encadre { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 20px 22px; margin: 0 0 28px; }
+.encadre p:last-child { margin-bottom: 0; }
+.accord label { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 18px; font-weight: 500; cursor: pointer; }
+.accord input[type="checkbox"] { flex: none; width: 1.25em; height: 1.25em; margin: .2em 0 0; accent-color: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin: 0; }
+.en-ligne { display: inline; margin: 0; }
+.erreur { background: #fdecea; border: 1px solid #f0b9b3; color: #7f241f; border-radius: 8px; padding: 10px 14px; margin: 0 0 16px; }
+.identifiant { display: inline-block; margin-top: 4px; overflow-wrap: anywhere; }
+.discret { color: var(--discret); font-size: .92rem; }
+@media (max-width: 600px) {
+  .donnees { grid-template-columns: 1fr; gap: 2px; }
+  .donnees dd { margin-bottom: 10px; }
+  .encadre { padding: 16px; }
+}

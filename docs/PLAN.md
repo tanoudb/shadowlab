@@ -165,6 +165,11 @@ But : on mesure juste, l'Arena est crédible, le moteur récolte tout et passe.
 Limite du calibrage public : le site public n'a ni le frontal TLS ni la chaîne Nginx et Coraza. Les
 détecteurs TLS et HTTP/2 se calibrent en local, avec les navigateurs d'Ethan à travers l'Arena.
 
+Point connu pour 1.7 (mesuré le 12/11 dans un navigateur) : la sonde d'empreinte attend des images
+d'animation sans délai maximum. Fenêtre visible : l'empreinte part en 0,2 seconde. Onglet en arrière-plan
+ou fenêtre masquée : elle ne part qu'au retour au premier plan. Les participants doivent garder l'onglet
+visible ; un délai maximum sur cette sonde est à envisager, suivi d'une campagne.
+
 Point connu pour 1.7 et 2.1 : le détecteur de corrélation, réparé en 1.2, classe « recyclée » toute
 empreinte vue 5 fois. Un humain qui revient, ou une identité persistante (palier 2), a par nature la même
 empreinte : il faudra compter la même empreinte sur des cookies, comptes ou adresses différents, pas ses
@@ -242,7 +247,7 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 | Quoi | Pour |
 |------|------|
 | Accord pour committer et pousser la branche | 1.1 |
-| Hébergement et mise en ligne du site vitrine public : une machine qui fait tourner une application Python, sur un domaine à lui derrière Cloudflare gratuit | 1.6, 1.8 |
+| Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`) | 1.6, 1.8 |
 | **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`. Elles disent si `cdp` classe les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
 | Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
@@ -268,7 +273,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.3 Campagne de référence | **fait** | 11/11 | campagne 90 : 315 passages, 0 panne (critère < 5 %), 1 h 52. Tableau et lecture au § 2. Base au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
 | 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 |
-| 1.6 Application publique réduite | à faire | | |
+| 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`) |
 | 1.7 Sessions humaines et calibrage | à faire (attend la mise en ligne) | | |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | à faire | | |

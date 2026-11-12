@@ -10,9 +10,31 @@
         "SHADOWLAB_PORT=8799",
         "SHADOWLAB_PORT_ARENA=8798",
         "SHADOWLAB_VITRINE_TAILLE=60",
-        "uv", "run", "shadowlab", "site", "--silencieux"
+        "uv",
+        "run",
+        "shadowlab",
+        "site",
+        "--silencieux"
       ],
       "port": 8799
+    },
+    {
+      "name": "apercu-public",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SHADOWLAB_SORTIES=outputs/apercu",
+        "SHADOWLAB_PUBLIC_BASE=outputs/apercu/public.sqlite3",
+        "SHADOWLAB_PUBLIC_CONTACT=Contact de démonstration (aperçu local)",
+        "SHADOWLAB_PUBLIC_HTTPS=0",
+        "SHADOWLAB_PUBLIC_PORT=8772",
+        "SHADOWLAB_VITRINE_TAILLE=60",
+        "uv",
+        "run",
+        "shadowlab",
+        "public",
+        "servir"
+      ],
+      "port": 8772
     }
   ]
 }

@@ -74,7 +74,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--insecure", action="store_true", help="désactiver la vérification TLS (cert auto-signé, ex. Arena locale)"
     )
+    p = sous.add_parser(
+        "public", help="application publique réduite : vitrine et sessions humaines (docs/site-public.md)"
+    )
+    p.add_argument("action", choices=["servir", "purger", "supprimer"])
+    p.add_argument("identifiant", nargs="?", help="identifiant de la session à supprimer (avec `supprimer`)")
     args = parseur.parse_args(argv)
+
+    if args.commande == "public":
+        return _public(args)
 
     reglages = charger()
     configurer(reglages.sorties, args.verbeux)
@@ -350,6 +358,53 @@ def main(argv: list[str] | None = None) -> int:
             duree = f"{d_d['delta']:+.0f}ms" if d_d.get("delta") is not None else "-"
             print(f"{label:<22} {delta:>12} {pv:>10} {pc:>10} {sig:>6} {duree:>12}")
         return 0
+    return 1
+
+
+def _public(args: argparse.Namespace) -> int:
+    """`shadowlab public …` : n'utilise que les réglages `SHADOWLAB_PUBLIC_*`, jamais ceux du laboratoire."""
+    from .config import charger_public
+    from .public import ROTATION_JOURNAL, creer_app_publique, donnees
+
+    reglages = charger_public()
+    configurer(reglages.base_donnees.parent, args.verbeux, rotation=ROTATION_JOURNAL)
+    if args.action == "servir":
+        import uvicorn
+
+        try:
+            app = creer_app_publique(reglages)  # purge au démarrage ; refuse un contact vide ou la base du labo
+        except ValueError as erreur:
+            print(f"Refus : {erreur}", file=sys.stderr)
+            return 2
+        print(f"Application publique : http://127.0.0.1:{reglages.port}/ (derrière un mandataire HTTPS)", flush=True)
+        # Toujours en local : seul le mandataire HTTPS est exposé. Pas de journal d'accès d'uvicorn (il écrirait
+        # l'adresse du visiteur et la chaîne de requête, où passe le jeton) ; l'application tient le sien.
+        uvicorn.run(
+            app,
+            host="127.0.0.1",
+            port=reglages.port,
+            access_log=False,
+            proxy_headers=False,
+            server_header=False,
+            log_level="warning",
+        )
+        return 0
+    try:
+        cx = donnees.ouvrir(reglages.base_donnees)
+    except ValueError as erreur:
+        print(f"Refus : {erreur}", file=sys.stderr)
+        return 2
+    if args.action == "purger":
+        n = donnees.purger(cx, reglages.conservation_jours)
+        print(f"{n} session(s) de plus de {reglages.conservation_jours} jours effacée(s).")
+        return 0
+    if not args.identifiant:
+        print("Erreur : identifiant de session requis.", file=sys.stderr)
+        return 2
+    if donnees.effacer_session(cx, args.identifiant.strip().lower()):
+        print("Session effacée de toutes les tables.")
+        return 0
+    print("Aucune session avec cet identifiant.", file=sys.stderr)
     return 1
 
 

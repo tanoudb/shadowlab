@@ -2486,3 +2486,92 @@ tests, `configs/experiments/recolte-palier1.yaml`, `docs/PLAN.md`, `AGENTS.md`.
 
 **Reste :** étape 1.6 (application publique réduite). Le code peut s'écrire seul ; la mise en ligne
 attend Ethan. Toujours demandé à Ethan : 5 sessions humaines locales.
+
+## 2026-11-12 — Claude (Opus 5.5, sous-agent) — Étape 1.6 : application publique réduite (code, non commité)
+
+**Fait :** application à part, faite pour la mise en ligne, écrite tests d'abord (`tests/test_public.py`,
+98 tests, vus échouer sur un squelette vide avant le code ; les 40 routes interdites vérifiées contre
+l'application du labo, où 34 ne répondent pas 404).
+- `src/shadowlab/public/` : `creer_app_publique` (page d'information et consentement, sessions,
+  vitrine, collecte, 4 fichiers statiques en liste fermée, 404 pour tout le reste) ; `donnees.py`
+  (sessions, liste blanche d'en-têtes, quotas, suppression dans toutes les tables, purge) ; `pages.py`
+  (textes, liste des données tirée d'`observateur.js` clé par clé).
+- `config.py` : `ReglagesPublics`, `charger_public()` (`SHADOWLAB_PUBLIC_*`, contact obligatoire).
+- `cli.py` : `shadowlab public servir|purger|supprimer <id>` (écoute 127.0.0.1, sans journal d'accès).
+- `site/vitrine.py` : `Habillage` optionnel (observateur, balise « sans tiers », bandeau) ; rendu du labo
+  identique octet pour octet (vérifié). `observateur.js` : sonde WebRTC sautée si
+  `<meta name="sl-sans-tiers" content="1">`, inchangée sinon (test exécuté par Node). `vitrine.css` :
+  styles des pages publiques (classes nouvelles seulement).
+- `docs/site-public.md` : lancement derrière mandataire, réglages, purge, preuves des 10 règles et des 8
+  conditions du § 5.
+- 554 tests rapides verts (456 + 98), lint propre. Aucune migration.
+
+**Décisions (à consigner dans DECISIONS.md par le coordinateur) :** liste blanche d'en-têtes plutôt
+qu'une liste noire ; cookie de session signé (HMAC, `__Host-` en HTTPS), 2 h au plus ; CSRF par double
+cookie + contrôle d'origine ; détecteurs ni lancés ni importés (insertion du passage écrite à part de
+`passages.demarrer` pour ne pas importer `detection`) ; limites en constantes (`Limites`) ; plafond de
+taille de base (2 Gio) ; commande `supprimer` en plus pour les demandes écrites ; réglage
+`SHADOWLAB_PUBLIC_ENTETE_IP`.
+
+**Reste :** relecture du diff et commit ; mise en ligne par Ethan (hébergement, en-tête d'adresse, journaux
+du mandataire) ; rendu jamais vu dans un navigateur (consigne : ni navigateur ni serveur) ; au rejeu (1.7),
+neutraliser `cookies_ignores` (colonne `cookies` vide par construction).
+
+## 2026-11-12 — Claude (Opus 5.5, sous-agent) — Étape 1.6 : corrections après relecture et audit (non commité)
+
+**Fait :** chaque correctif précédé d'un test vu en échec (16 tests ajoutés à `tests/test_public.py`).
+- A. Disque : requête notée bornée (40 en-têtes, nom ≤ 64, JSON ≤ 2 048 octets, méthode ≤ 16, chemin
+  ≤ 200) ; plafond de 2 Gio contrôlé à chaque écriture (requêtes notées et collecte → 503). Pire cas
+  **mesuré** sur base temporaire : 16,9 Mo par session, ~680 Mo par jour (le « 280 Mo » était faux).
+- B. Journal public tournant : 5 Mio × (1 + 3) (`ROTATION_JOURNAL`, `journal.configurer(rotation=…)`) ;
+  journal du labo inchangé.
+- C. Page « Ma session » (`GET /session`) dès le début, cookie signé `slp-droits` (durée de conservation),
+  marche après « Terminer », expiration ou relance du navigateur ; phrase fausse retirée.
+- D. « Terminer » en POST + CSRF (bouton dans le bandeau) ; page d'information : cookies et transit,
+  onglet visible ; identifiants d'extension masqués ; `redirect_slashes=False` ; JSON > 32 niveaux ou
+  RecursionError → 400 ; erreur SQLite dans la garde ou une route → 503 avec en-têtes ; `arena/secret.py`
+  refuse un secret vide.
+- `docs/site-public.md` : bornes mesurées, cookies, rotation, limites connues (quotas non atomiques,
+  plafond quotidien épuisable, SQLite bloquant, onglet en arrière-plan).
+
+**Fichiers :** `src/shadowlab/public/{app,donnees,pages,__init__}.py`, `journal.py`, `cli.py`,
+`arena/secret.py`, `site/static/vitrine.css`, `tests/test_public.py`, `docs/site-public.md`.
+
+**Reste :** relecture du diff et commit ; rendu jamais vu dans un navigateur (consigne) ; mise en ligne
+par Ethan, avec limitation de débit au mandataire sur `/session/commencer`.
+
+## 2026-11-12 (3h40) — Claude (Fable 5.2) — Étape 1.6 : application publique relue, auditée, corrigée, poussée
+
+**Fait :** relecture et vérification du travail du sous-agent (Opus) sur `src/shadowlab/public/`, puis
+corrections après audit. Aucun code écrit par moi dans cette étape, hors configuration d'aperçu.
+- Tests et lint relancés par moi : 570 tests rapides verts, lint propre.
+- 12 failles volontaires introduites dans le code (7 avant audit, 5 après corrections) : toutes détectées
+  par les tests (collecte sans accord, hôte quelconque, script servi sans accord, CSRF coupé, adresse IP
+  stockée, suppression incomplète, démarrage sans contact, en-têtes sans borne, écriture base pleine,
+  identifiants d'extension, fin de session sans CSRF, clé de signature vide).
+- Audit indépendant (sous-agent Sonnet, lecture seule) : rien de bloquant ; 3 points importants (disque
+  remplissable par de gros en-têtes, journal sans rotation, effacement impraticable hors « Terminer ») et
+  7 mineurs. Tous corrigés par le sous-agent auteur, test d'abord ; 3 limites documentées seulement
+  (quotas non atomiques, plafond journalier épuisable, SQLite bloquant).
+- Parcours complet rejoué dans le navigateur intégré (aperçu local `apercu-public`, base isolée) : page
+  d'information, accord, bandeau « session en cours », collecte reçue (204), aucune requête vers un tiers,
+  routes du labo en 404, page « Ma session », fin de session, suppression, puis « aucune session ».
+- D-55 enregistrée.
+
+**Constat mesuré :** la sonde d'empreinte attend `requestAnimationFrame` sans délai maximum. Onglet au
+premier plan : collecte en 0,16 s. Onglet en arrière-plan : rien ne part avant le retour au premier plan
+(9,3 s dans mon essai, le temps que l'outil touche l'onglet). C'est la cause de l'essai non concluant de
+0h20, pas l'application publique (serveur : 3 à 5 ms par requête ; politique de sécurité identique à
+celle du labo). Les participants doivent garder l'onglet visible.
+
+**Non vérifié :** la base d'essai n'a pas été relue par requête directe après la suppression (les tests et
+la faille volontaire n° 6 couvrent ce point) ; comportement réel derrière Cloudflare ; historique git
+(condition 8 du § 5 du plan, à faire avant publication du dépôt).
+
+**Fichiers :** `src/shadowlab/public/`, `config.py`, `cli.py`, `journal.py`, `arena/secret.py`,
+`site/vitrine.py`, `site/static/observateur.js`, `site/static/vitrine.css`, `tests/test_public.py`,
+`docs/site-public.md`, `docs/DECISIONS.md`, `docs/PLAN.md`, `AGENTS.md`, `.claude/launch.json`.
+
+**Reste :** la boucle s'arrête ici. Les étapes 1.6 (mise en ligne), 1.7 (sessions humaines) et 1.8
+(Cloudflare) attendent Ethan : hébergement, domaine, contact, et 5 sessions humaines locales. L'étape 1.9
+(corriger le moteur) attend 1.7 et 1.8.

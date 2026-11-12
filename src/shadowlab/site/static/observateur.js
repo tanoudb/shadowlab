@@ -1,5 +1,6 @@
 // Observateur du laboratoire : lit les propriétés exposées par le navigateur, exécute BotD,
-// puis envoie le tout au serveur local (`/lab/collecte`). Rien n'est envoyé ailleurs.
+// puis envoie le tout au serveur local (`/lab/collecte`). Rien n'est envoyé ailleurs, sauf la sonde WebRTC
+// qui interroge un serveur STUN de Google ; une page qui porte `<meta name="sl-sans-tiers" content="1">` la saute.
 import { load } from './vendor/botd-2.0.0.esm.js';
 
 const jeton = document.querySelector('meta[name="sl-session"]')?.content || '';
@@ -392,6 +393,8 @@ function iframeConsistencyTest() {
 
 async function webrtcTest() {
   const r = {};
+  // Page « sans tiers » (application publique) : aucune connexion au serveur STUN extérieur.
+  if (document.querySelector('meta[name="sl-sans-tiers"]')?.content === '1') { r.saute = 'sans-tiers'; return r; }
   try {
     if (typeof RTCPeerConnection === 'undefined') { r.disponible = false; return r; }
     r.disponible = true;
