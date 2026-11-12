@@ -154,7 +154,8 @@ def experience_manuelle(cx: sqlite3.Connection) -> int:
     if ligne:
         return int(ligne["id"])
     curseur = cx.execute(
-        "INSERT INTO experiments (name, description, created_at, configuration, status) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO experiments (id, name, description, created_at, configuration, status)"
+        f" VALUES ({db.PROCHAIN_ID_EXPERIENCE}, ?, ?, ?, ?, ?)",
         (
             EXPERIENCE_MANUELLE,
             "Sessions humaines de référence, pour mesurer les faux positifs",

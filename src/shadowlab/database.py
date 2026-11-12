@@ -180,10 +180,34 @@ MIGRATIONS: list[str] = [
     CREATE INDEX empreintes_vues_hash ON empreintes_vues(type, hash);
     CREATE INDEX empreintes_vues_nb ON empreintes_vues(nb_sessions DESC);
     """,
+    # 9 — passages orphelins : chaque numéro d'expérience porté par des passages reçoit une expérience
+    """
+    INSERT INTO experiments (id, name, description, created_at, configuration, status, schema_version)
+    SELECT experiment_id,
+           'orpheline_' || experiment_id,
+           'Passages sans campagne retrouvés dans la base. Expérience de remplacement créée par la migration 9 :'
+           || ' aucun passage supprimé, la campagne d''origine est perdue.',
+           MIN(started_at),
+           '{"orpheline": true}',
+           CASE WHEN SUM(status = 'en_cours') > 0 THEN 'interrompu' ELSE 'termine_incomplet' END,
+           9
+    FROM runs
+    WHERE experiment_id NOT IN (SELECT id FROM experiments)
+    GROUP BY experiment_id
+    """,
 ]
 
 
 SCHEMA_VERSION = len(MIGRATIONS)
+
+
+# Numéro d'une nouvelle expérience : au-dessus des expériences ET des passages déjà rattachés à un numéro,
+# pour qu'un passage orphelin (campagne supprimée hors du lanceur) ne soit jamais hérité par la suivante.
+# À placer dans le VALUES d'un INSERT INTO experiments (id, ...) : une seule instruction, donc atomique.
+PROCHAIN_ID_EXPERIENCE = (
+    "(SELECT MAX(COALESCE((SELECT MAX(id) FROM experiments), 0),"
+    " COALESCE((SELECT MAX(experiment_id) FROM runs), 0)) + 1)"
+)
 
 
 def maintenant() -> str:
