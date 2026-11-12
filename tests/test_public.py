@@ -1384,29 +1384,38 @@ def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
     assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
 
 
-def test_contact_garde_les_emoji_recents_et_les_drapeaux(client, reglages_publics):
-    """`str.isprintable()` retirait aussi les caractères inconnus de la version d'Unicode de Python : un emoji
-    récent, les lettres à balises d'un drapeau. Ils sont gardés : seuls les caractères de contrôle partent."""
-    recent = "\U0001fae9"  # visage aux yeux cernés, Unicode 16 : inconnu de Python 3.12 (Unicode 15)
-    ecosse = "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"  # drapeau à balises
-    famille = "\U0001f469\u200d\U0001f469\u200d\U0001f467"  # emoji composé, liants U+200D
-    texte = f"Merci {recent} depuis l'{ecosse} {famille}"
+LIANTS = chr(0x200C) + chr(0x200D)  # seuls caractères invisibles gardés : ils lient lettres et emoji composés
+SOURIRE = chr(0x1F600)
+FAMILLE = chr(0x200D).join([chr(0x1F469), chr(0x1F469), chr(0x1F467)])  # emoji composé par des liants U+200D
+# Invisibles, ou qui changent l'affichage dans un terminal : sens d'écriture (U+200E, U+200F, U+061C), espaces
+# sans largeur (U+200B, U+2060, U+FEFF), annotation (U+FFF9), balise qui peut cacher du texte (U+E0041).
+INVISIBLES = [0x200E, 0x200F, 0x061C, 0x200B, 0x2060, 0xFEFF, 0xFFF9, 0xE0041]
+
+
+def test_contact_garde_les_emoji_courants(client, reglages_publics):
+    texte = f"Merci {SOURIRE} de la part de toute la {FAMILLE}"
     assert ecrire(client, texte).status_code == 303
     assert messages_recus(reglages_publics) == [texte]
 
 
-def test_nettoyer_ne_laisse_aucun_caractere_de_controle():
-    """Sûr dans un terminal : ni caractère de contrôle (ESC, C1…), ni demi-paire de substitution, ni marque de sens
-    d'écriture. Saut de ligne et tabulation gardés ; les espaces particulières deviennent des espaces ordinaires."""
-    tous = "".join(map(chr, [*range(0x3100), *range(0xD800, 0xE000), *range(0xE0000, 0xE0080), 0x1FAE9]))
-    sens = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
-    propre = boite.nettoyer(tous)
-    restes = [c for c in propre if c not in "\n\t" and (unicodedata.category(c) in ("Cc", "Cs") or c in sens)]
-    assert restes == []
-    assert "\U0001fae9" in propre and "\U000e0067" in propre and "\u200d" in propre
+def test_nettoyer_ne_garde_que_ce_qui_s_affiche():
+    """Liste blanche : saut de ligne, tabulation, caractères affichables (`str.isprintable()`) et les deux liants ;
+    une espace particulière devient une espace ordinaire ; tout le reste part (Cc, Cf, Cs, Co, Cn). Prix accepté :
+    un emoji plus récent que la table Unicode de Python, ou un drapeau à balises, perd des caractères."""
+    for point in INVISIBLES:
+        assert boite.nettoyer(f"a{chr(point)}b") == "ab", f"U+{point:04X}"
+    assert boite.nettoyer("\x1b[2J\x00fin" + chr(0x202E)) == "[2Jfin", "ESC, NUL, U+202E toujours retirés"
+    assert boite.nettoyer(f"{SOURIRE} {FAMILLE}") == f"{SOURIRE} {FAMILLE}"
+    espaces = "a" + chr(0x00A0) + "b" + chr(0x202F) + "c" + chr(0x3000) + "d"
+    assert boite.nettoyer(espaces) == "a b c d", "les espaces insécables deviennent des espaces"
     assert boite.nettoyer("a\nb\tc\r\nd\re") == "a\nb\tc\nd\ne"
-    assert boite.nettoyer("a\u00a0b\u202fc\u3000d\x0be") == "a b c d e"
-    assert boite.nettoyer("\x1b[2J\x9b2J\x07\x00fin\u202e") == "[2J2Jfin"
+    ecosse = chr(0x1F3F4) + "".join(map(chr, [0xE0067, 0xE0062, 0xE0073, 0xE0063, 0xE0074, 0xE007F]))
+    assert boite.nettoyer(ecosse) == chr(0x1F3F4), "limite acceptée : le drapeau perd ses balises"
+    # Sur U+0000 à U+30FF, les demi-paires et les balises : ni caractère « autre » (C*) hors les liants, ni
+    # séparateur (Z*) autre que l'espace ordinaire.
+    tous = "".join(map(chr, [*range(0x3100), *range(0xD800, 0xE000), *range(0xE0000, 0xE0080), *INVISIBLES]))
+    garde = "\n\t " + LIANTS
+    assert [c for c in boite.nettoyer(tous) if c not in garde and unicodedata.category(c)[0] in "CZ"] == []
 
 
 def test_contact_limite_par_adresse(reglages_publics):
