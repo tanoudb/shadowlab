@@ -2901,3 +2901,28 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   navigateur n'a tourné qu'une fois, 48 pages au niveau 01) ; `attendre` non branché ; champ adaptatif sans
   signature mémorisée encore muet ; rythme « prudent » jamais tourné en temps réel ; aucun vrai site visé ;
   décision à numéroter et mise à jour d'`AGENTS.md` et du README au moment de la fusion.
+
+## 2026-11-12 (20h50) — Claude (Fable 5.2, coordination) — Conception du palier 2 : une identité qui dure
+
+- **Écrit** : `docs/recherche/identite-qui-dure-2026-11-12.md` (conception sur le papier, par un agent Opus ;
+  aucun code, aucun test lancé ; à valider par Ethan avant toute réalisation).
+- **Constat démêlé** (lecture du code et de la base) : le détecteur `correlation-session` compte des sessions,
+  pas des visiteurs, sans limite de temps ; il punit donc aussi un humain qui revient avec le même navigateur
+  (défaut de l'Arena). Et nos campagnes ont la forme d'un robot : 181 sessions en identité native dans l'heure
+  qui précède la campagne 101, sans cookie. Le signal de débit ne compte jamais plus de 10 sessions.
+- **Proposé** : côté Arena, un cookie de visiteur durable et des « mondes » qui bornent l'historique, deux
+  signaux seulement (même empreinte sur au moins 5 sessions sans cookie en 24 h ; au moins 30 sessions d'une
+  même empreinte en une heure) ; côté moteur, un profil Chrome persistant en identité native
+  (`outputs/identites/<nom>/`), une visite par lancement, arrêt seul à la première alerte ; mesure par une
+  soirée de 24 visites puis une course de 7 jours, avec un témoin qui jette ses cookies et des humains qui
+  reviennent. Étapes I1 à I10 ; la migration du palier 2 devient la 10 (la 9 est prise par D-68).
+- **Trois défauts voisins trouvés en lisant le code, à vérifier** : `sans_ressources` bloquerait seul, au
+  niveau 06, un humain qui revient avec les scripts en cache ; les cookies d'accès sont liés au jeton du
+  passage ; le niveau de l'Arena vient du jeton du passage, donc la commande de récolte, qui n'a pas de
+  passage, traverse aujourd'hui l'Arena sans protection (son essai en mode navigateur de 19 h ne prouve rien
+  au-dessus du niveau 01).
+- **Questions pour Ethan** (§ 10 du document, recommandation « oui » aux quatre) : mesurer le niveau 06 de
+  l'objectif comme une première visite ; prouver d'abord une identité sans compte connecté ; faire lui-même des
+  visites qui reviennent pendant 3 jours ; faire tourner la course de 7 jours en fond sur le Mac mini.
+- **État à 20 h 50** : aucune session humaine en base, site du labo non lancé ; `recolte-integration` toujours
+  en attente de son accord.
