@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-import json
-import random
-
 import pytest
-from outils_recolte import GRAINE, RECETTE_VITRINE, TAILLE, Horloge, PiloteFactice, creer_client
-from shadowlab.engines.noezia.parcours import MoteurDriver, Options, Parcours, RefusParcours, Verrou
+from outils_recolte import (
+    GRAINE,
+    QUAND,
+    RECETTE_VITRINE,
+    TAILLE,
+    PiloteFactice,
+    chemin_sans_jeton,
+    creer_client,
+    fabriquer,
+    lu,
+)
 
 from shadowlab import notation
 from shadowlab.engines.noezia.etat import Etat
-from shadowlab.engines.noezia.recettes import lire, lire_texte
+from shadowlab.engines.noezia.parcours import Options, RefusParcours, Verrou
+from shadowlab.engines.noezia.recettes import lire
 from shadowlab.site import vitrine
-
-QUAND = "2026-11-12T10:00:00+00:00"
 
 
 @pytest.fixture
@@ -31,37 +36,6 @@ def pilote(site):
 @pytest.fixture
 def dossier(tmp_path):
     return tmp_path / "recoltes" / "vitrine-annonces"
-
-
-def fabriquer(dossier, pilote, recette=None, texte=None, options=None, horloge=None):
-    horloge = horloge or Horloge()
-    texte = texte if texte is not None else RECETTE_VITRINE.read_text(encoding="utf-8")
-    recette = recette or lire_texte(texte)
-    ecran: list[str] = []
-    p = Parcours(
-        recette,
-        texte,
-        str(RECETTE_VITRINE),
-        MoteurDriver(pilote, "http"),
-        dossier,
-        options or Options(),
-        ecran=ecran.append,
-        horloge=horloge,
-        dormir=horloge.dormir,
-        alea=random.Random(1),
-        horodatage=lambda: QUAND,
-    )
-    p.sortie_ecran = ecran
-    p.horloge_factice = horloge
-    return p
-
-
-def chemin_sans_jeton(chemin: str) -> str:
-    return notation._adresse(chemin)
-
-
-def lu(dossier, passe=1):
-    return json.loads((dossier / f"passe-{passe:03d}" / "resume.json").read_text(encoding="utf-8"))
 
 
 # --- Parcours complet --------------------------------------------------------------------------
@@ -194,7 +168,7 @@ def test_un_statut_d_alerte_arrete_sans_nouvel_essai(dossier, pilote, statut):
     bilan = p.lancer()
     assert bilan.code == 3 and bilan.statut == "arretee"
     assert bilan.arret["signe"] == "statut" and bilan.arret["statut"] == statut
-    assert sum("AN-000005" in d for d in pilote.pages_lues()) == 1
+    assert sum("AN-000005" in d for d in pilote.demandes) == 1  # demandée une seule fois, refusée
     assert not any("AN-000006" in d for d in pilote.pages_lues())
     texte = "\n".join(p.sortie_ecran)
     assert "ARRÊT" in texte and str(statut) in texte and "reprendre vitrine-annonces" in texte
