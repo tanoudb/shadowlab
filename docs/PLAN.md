@@ -178,8 +178,11 @@ En-têtes envoyés par NOEZIA, comptés le 12/11 sur les 1 160 requêtes de ses 
 - **« HeadlessChrome » fuit sur 182 requêtes (16 %).** 144 des 311 envois `POST /lab/collecte` partent avec
   le `User-Agent` d'origine du navigateur (`HeadlessChrome/156.0.8078.4`), sans aucun réglage du moteur ;
   38 navigations vers une page qui a elle-même pour référent (sans doute le retour après un défi) gardent
-  le `User-Agent` réglé (`Chrome/129`) mais retrouvent le `sec-ch-ua` d'origine (« HeadlessChrome » v156). Le réglage du moteur ne couvre donc pas toutes les
-  requêtes. L'Arena ne le voit pas (`regles-http` ne classe jamais NOEZIA) : c'est un manque de l'Arena
+  le `User-Agent` réglé (`Chrome/129`) mais retrouvent le `sec-ch-ua` d'origine (« HeadlessChrome » v156).
+  Le réglage du moteur ne couvre donc pas toutes les requêtes. Mécanisme lu dans le code : le moteur
+  remplace « HeadlessChrome » dans les en-têtes au passage de son filtre réseau (`moteur.py`, `_filtrer`) ;
+  ce filtre ne voit pas les redirections (piège connu, D-07) ni, sans doute, les envois faits au moment où
+  la page se ferme. L'Arena ne le voit pas (`regles-http` ne classe jamais NOEZIA) : c'est un manque de l'Arena
   autant qu'un défaut du moteur. **C'est l'écart le plus grave trouvé à ce jour.**
 - **Le moteur se contredit sur sa version, sans référence extérieure** : `User-Agent` et `sec-ch-ua` réglés
   annoncent Chrome 129 ou 130 (version tirée au sort dans le profil), `navigator.userAgentData` et les
@@ -195,9 +198,10 @@ En-têtes envoyés par NOEZIA, comptés le 12/11 sur les 1 160 requêtes de ses 
 
 Piste pour 1.9, à trancher par une mesure : la documentation de Patchright (la base du moteur) recommande
 un vrai Chrome avec interface, sans `User-Agent` ni en-têtes imposés. Le moteur fait l'inverse (sans
-interface, identité réécrite), et ce sont ses réécritures qui fuient. Première mesure, sans changer de
-code : `configs/experiments/ablation-interface.yaml` (patchright avec un vrai Chrome et son interface,
-rien d'imposé ; noezia avec interface), à comparer à la référence du même jour.
+interface, identité réécrite), et ce sont ses réécritures qui fuient. Mesure prévue le 12/11 après la
+référence : `configs/experiments/ablation-interface.yaml` (patchright avec un vrai Chrome et son interface,
+rien d'imposé ; noezia en « identité native », option préparée sur la branche `moteur-identite-native`,
+D-59, sans effet par défaut).
 
 Empreinte JavaScript : NOEZIA comparé champ par champ au même Chromium piloté sans réglage (patchright,
 campagne 94, niveau 04 sans `cdp` ; 84 champs différents sur 315 comparés). La différence est mesurée ; ce que fait
