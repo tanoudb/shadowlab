@@ -688,3 +688,177 @@ def test_fichier_vide_refuse():
 def test_lire_un_fichier_absent_donne_une_erreur_claire(tmp_path):
     with pytest.raises(recettes.RecetteInvalide, match="introuvable"):
         recettes.lire(tmp_path / "absente.yaml")
+
+
+# --- Relecture : expressions régulières lentes, formats stricts, tableaux piégeux, liens hors site ---
+
+
+def _page_simple(champs: str, html: str, adresse: str = f"{BASE}/p"):
+    """Une page `/p` dont les champs sont `id` (adresse) puis ceux de `champs` (une ligne YAML par champ)."""
+    recette = _recette(
+        "pages:\n  page:\n    url: '^/p$'\n    enregistrements:\n      - collection: essais\n"
+        "        cle: id\n        champs:\n          id: {adresse: '/(p)$'}\n" + textwrap.indent(champs, " " * 10)
+    )
+    return recettes.extraire(recette, html, adresse, "page")
+
+
+@pytest.mark.parametrize("motif", ["(a+)+$", "(a*)*b", "(a+)*", "(\\d+)+x", "(a+){2,}"])
+def test_motif_a_quantificateurs_imbriques_refuse_a_la_lecture(motif):
+    with pytest.raises(recettes.RecetteInvalide) as erreur:
+        _recette(
+            f"""\
+            pages:
+              page:
+                url: '^/p$'
+                enregistrements:
+                  - collection: essais
+                    cle: id
+                    champs:
+                      id: {{css: 'b', motif: '{motif}'}}
+            """
+        )
+    message = str(erreur.value)
+    assert "champs.id.motif" in message and "imbriqués" in message and "ligne" in message
+
+
+def test_motif_d_adresse_de_page_a_quantificateurs_imbriques_refuse():
+    with pytest.raises(recettes.RecetteInvalide, match=r"pages.page.url.*imbriqués"):
+        _recette("pages:\n  page:\n    url: '^/(p+)+$'\n")
+
+
+def test_un_texte_trop_long_est_borne_avant_le_motif_avec_une_alerte():
+    html = f"<html><body><b>{'x' * 20_000}</b></body></html>"
+    resultat = _page_simple("long: {css: 'b', motif: '^(x+)'}\n", html)
+    assert len(resultat.enregistrements[0].donnees["long"]) == recettes.BORNE_TEXTE
+    assert any("coupé" in a for a in resultat.alertes)
+
+
+def test_un_motif_ordinaire_sur_un_texte_hostile_reste_rapide():
+    """Un motif sain (sans quantificateurs imbriqués) ne peut pas être bloqué par un texte long du site."""
+    import time
+
+    html = f"<html><body><b>{'a' * 50_000}!</b></body></html>"
+    debut = time.monotonic()
+    resultat = _page_simple("v: {css: 'b', motif: '(a+)$'}\n", html)
+    assert time.monotonic() - debut < 2
+    assert len(resultat.enregistrements[0].donnees["v"]) == recettes.BORNE_TEXTE
+
+
+@pytest.mark.parametrize(
+    ("texte", "attendu"),
+    [
+        ("401 500 €", 401500),
+        ("401 500 €", 401500),
+        ("12", 12),
+        ("-3", -3),
+        ("+7 pièces", 7),
+        ("3 pièces", 3),
+        ("12,5 km", None),
+        ("3-4", None),
+        ("1e3", None),
+        ("4 500,00", None),
+        ("1 2", None),
+        ("abc", None),
+    ],
+)
+def test_entier_n_accepte_qu_un_entier(texte, attendu):
+    resultat = _page_simple("v: {css: 'b', format: entier}\n", f"<b>{texte}</b>")
+    assert resultat.enregistrements[0].donnees["v"] == attendu
+    assert bool(resultat.alertes) == (attendu is None)
+
+
+@pytest.mark.parametrize(
+    ("texte", "attendu"),
+    [
+        ("142,6 km", 142.6),
+        ("1 234,5 m", 1234.5),
+        ("1.234,5", 1234.5),
+        ("1.234", 1234.0),
+        ("12", 12.0),
+        ("-0,5", -0.5),
+        ("1,234.5", None),
+        ("10.5", None),
+        ("1,2,3", None),
+        ("1e3", None),
+    ],
+)
+def test_nombre_virgule_decimale_et_point_des_milliers(texte, attendu):
+    resultat = _page_simple("v: {css: 'b', format: nombre}\n", f"<b>{texte}</b>")
+    assert resultat.enregistrements[0].donnees["v"] == attendu
+    assert bool(resultat.alertes) == (attendu is None)
+
+
+@pytest.mark.parametrize(
+    ("texte", "attendu"),
+    [("13:54.3", 834300), ("1:49:48.6", 6588600), ("9:58.7", 598700), ("0:75.0", None), ("12:99.9", None),
+     ("1:60:00.0", None), ("75:10.2", 4510200), ("abc", None)],
+)  # fmt: skip
+def test_duree_secondes_et_minutes_sous_60_quand_une_unite_superieure_existe(texte, attendu):
+    resultat = _page_simple("v: {css: 'b', format: duree_ms}\n", f"<b>{texte}</b>")
+    assert resultat.enregistrements[0].donnees["v"] == attendu
+    assert bool(resultat.alertes) == (attendu is None)
+
+
+RECETTE_LIGNES = """\
+    pages:
+      page:
+        url: '^/p$'
+        enregistrements:
+          - collection: lignes
+            lignes: 'table.t tr'
+            cle: numero
+            champs:
+              numero: {colonne: 'N°', format: entier}
+              nom: {colonne: 'Nom'}
+"""
+
+
+def _lignes(html: str):
+    recette = _recette(RECETTE_LIGNES)
+    return recettes.extraire(recette, html, f"{BASE}/p", "page")
+
+
+def test_deux_colonnes_du_meme_nom_donnent_une_alerte():
+    html = (
+        "<table class='t'><tr><th>N°</th><th>Nom</th><th>Nom</th></tr><tr><td>1</td><td>a</td><td>b</td></tr></table>"
+    )
+    resultat = _lignes(html)
+    assert resultat.enregistrements[0].donnees["nom"] is None
+    assert any("ambiguë" in a and "Nom" in a for a in resultat.alertes)
+
+
+def test_ligne_dont_le_nombre_de_cellules_differe_des_en_tetes_n_est_pas_lue():
+    html = (
+        "<table class='t'><tr><th>N°</th><th>Nom</th></tr>"
+        "<tr><td>1</td><td>a</td></tr>"
+        "<tr><td colspan='2'>fusion</td></tr>"
+        "<tr><th>entête de ligne</th><td>2</td><td>b</td></tr></table>"
+    )
+    resultat = _lignes(html)
+    assert [e.donnees for e in resultat.enregistrements] == [{"numero": 1, "nom": "a"}]
+    assert sum("cellules" in a for a in resultat.alertes) >= 1
+
+
+def test_les_lignes_d_un_tableau_imbrique_ne_sont_pas_celles_du_tableau_lu():
+    html = (
+        "<table class='t'><tr><th>N°</th><th>Nom</th></tr>"
+        "<tr><td>1</td><td>a<table class='t'><tr><th>N°</th><th>Nom</th></tr>"
+        "<tr><td>99</td><td>z</td></tr></table></td></tr>"
+        "<tr><td>2</td><td>b</td></tr></table>"
+    )
+    resultat = _lignes(html)
+    assert [e.cle for e in resultat.enregistrements] == [(1,), (2,)]
+    assert resultat.alertes == []
+
+
+def test_les_liens_vers_un_autre_hote_sont_ecartes_et_comptes():
+    recette = recettes.lire_texte(ENTETE_SUIVI)
+    html = (
+        '<ul class="saisons"><li><a href="/s/2025">Saison 2025</a></li>'
+        '<li><a href="http://autre.test/s/2024">Saison 2024</a></li>'
+        '<li><a href="//autre.test/q">Saison 2023</a></li>'
+        '<li><a href="HTTP://127.0.0.1:8770/s/2022">Saison 2022</a></li></ul>'
+    )
+    resultat = recettes.extraire(recette, html, f"{BASE}/p", "page")
+    assert len(resultat.liens) == 2 and resultat.liens[0].adresse == f"{BASE}/s/2025"
+    assert resultat.hors_site == 2
