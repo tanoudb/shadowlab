@@ -64,7 +64,10 @@ recommander des optimisations.
 - **Site vitrine à contenu connu** : `/lab/vitrine` (annonces immobilières fictives générées à partir
   d'une graine, liste paginée, fiches, photos SVG, bloc chargé en JavaScript). `vitrine.verite()` donne
   le contenu exact attendu d'une récolte. Réglages `SHADOWLAB_VITRINE_GRAINE` et `SHADOWLAB_VITRINE_TAILLE`.
-- **440 tests rapides verts** (hors intégration), lint propre.
+- **Récolte notée** : scénario `recolte_vitrine` (toute la liste puis chaque fiche) et `notation.noter_recolte`
+  (complétude, exactitude). Campagne : `SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne
+  configs/experiments/recolte-palier1.yaml` (environ 2 h).
+- **456 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 

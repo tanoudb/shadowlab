@@ -1,7 +1,8 @@
 # Campagne de récolte du palier 1 (docs/PLAN.md, étape 1.5).
-# À lancer avec SHADOWLAB_VITRINE_TAILLE=60 :
-#   SHADOWLAB_VITRINE_TAILLE=60 uv run shadowlab campagne configs/experiments/recolte-palier1.yaml
+# À lancer avec SHADOWLAB_VITRINE_TAILLE=40 :
+#   SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne configs/experiments/recolte-palier1.yaml
 # Par défaut le site vitrine publie 500 annonces : plus de 500 pages par passage, trop long pour 105 passages.
+# Durée mesurée (campagne 91) : 5 min pour un passage noezia de 40 annonces, soit environ 2 h pour la campagne.
 # 3 moteurs × 7 niveaux × 1 scénario × 5 répétitions = 105 passages, un à la fois.
 # Chaque passage est noté contre la vérité du site : complétude (annonces retrouvées) et exactitude (champs exacts).
 #   noezia     : le moteur étudié

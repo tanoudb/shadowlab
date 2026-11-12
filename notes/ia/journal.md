@@ -2460,3 +2460,29 @@ base dans `outputs/apercu`, port 8799), `AGENTS.md`, `docs/PLAN.md`.
   par un défi.
 
 **Reste :** étape 1.5 (scénario de récolte et notation).
+
+## 2026-11-12 (2h45) — Claude (Fable 5.2) — Étape 1.5 faite : scénario de récolte, notation, campagne n° 92
+
+**Fait :** scénario `recolte_vitrine` et notation, écrits par un sous-agent sur Sonnet, relus et éprouvés
+par moi (4 erreurs volontaires détectées par les tests ; test d'intégration playwright relancé : 1 et 1).
+- `notation.py` : `noter_recolte` (complétude = annonces retrouvées / attendues ; exactitude = champs exacts
+  / attendus sur les annonces retrouvées, `None` si aucune).
+- `scenarios.py` : `recolte_vitrine`, par la seule interface `Driver` (`navigate` puis `dom()` analysé avec
+  parsel). Les fiches d'une page s'ouvrent avant de suivre « suivante » : une récolte interrompue reste
+  notée. La note est dans `runs.drapeaux.details_scenario.recolte`.
+- `analytics.py` : clé `recolte` par bloc, hors passages en panne ; `reports.py` : section du rapport HTML.
+- Commit `34fb564`. 456 tests rapides verts (+16), lint propre.
+
+**Mesures :**
+- Campagne 91 (essai de durée) : 1 passage noezia, niveau 01, 40 annonces : complétude 1, exactitude 1,
+  309 s (7,4 s par page).
+- Campagne 92 (`recolte_palier1`, `SHADOWLAB_VITRINE_TAILLE=40`) : 105 passages, 0 panne, 1 h 48.
+  noezia : 100 % et 100 % aux niveaux 01 à 03 (5 passages par niveau, 295 s chacun), 0 % aux niveaux 04 à
+  07 (défi refusé, `cdp`). patchright et playwright : 100 % et 100 % au niveau 01 en 2 s par passage,
+  bloqués dès la première page aux niveaux 02 et 03, défi refusé ensuite.
+
+**Fichiers :** `src/shadowlab/notation.py`, `scenarios.py`, `analytics.py`, `reports.py`, quatre fichiers de
+tests, `configs/experiments/recolte-palier1.yaml`, `docs/PLAN.md`, `AGENTS.md`.
+
+**Reste :** étape 1.6 (application publique réduite). Le code peut s'écrire seul ; la mise en ligne
+attend Ethan. Toujours demandé à Ethan : 5 sessions humaines locales.

@@ -107,6 +107,25 @@ Ce que la base dit :
   fenêtre masquée, la sonde attend une animation). À surveiller pendant les sessions humaines : une page
   ouverte en arrière-plan pourrait ne rien envoyer.
 
+### Campagne de récolte n° 92 (12/11, 105 passages, 0 panne)
+
+Site vitrine réglé sur 40 annonces (42 pages par passage). Par case : 5 passages, complétude puis exactitude
+moyennes.
+
+| Moteur | 01 | 02 | 03 | 04 à 07 |
+|--------|----|----|----|---------|
+| noezia | 100 % / 100 % | 100 % / 100 % | 100 % / 100 % | 0 % (défi refusé) |
+| patchright | 100 % / 100 % | 0 % (bloqué) | 0 % (bloqué) | 0 % (défi refusé) |
+| playwright | 100 % / 100 % | 0 % (bloqué) | 0 % (bloqué) | 0 % (défi refusé) |
+
+Ce que la base dit :
+- **Récolte** : au niveau 01, chaque moteur retrouve les 200 annonces et les 2 800 champs de ses 5 passages.
+  Le seuil « Récolte » du § 1 est atteint sur cet échantillon ; à confirmer sur le site à 500 annonces.
+- **NOEZIA garde 100 % et 100 % aux niveaux 02 et 03**, où les deux témoins sont bloqués dès la première page.
+- **Vitesse** : un passage de 42 pages prend 2 secondes aux témoins et 295 secondes à NOEZIA, soit 7 secondes
+  par page (rythme humain). C'est le prix de la discrétion ; le débit entre dans l'endurance du palier 4.
+- **Niveaux 04 à 07** : même refus que dans la campagne 90 (détecteur `cdp`), aucune fiche ouverte.
+
 Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
 le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
@@ -248,7 +267,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.2 Mesure fiable | **fait** | 11/11 | commit `74c301a` ; 416 tests rapides verts ; campagne 86 recalculée : 80 % (4/5) au lieu de 440 % ; hash canvas présent sur des données réelles de la base |
 | 1.3 Campagne de référence | **fait** | 11/11 | campagne 90 : 315 passages, 0 panne (critère < 5 %), 1 h 52. Tableau et lecture au § 2. Base au schéma 8, sauvegarde `outputs/shadowlab-avant-migration8-2026-11-11.sqlite3` |
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
-| 1.5 Scénario de récolte et notation | à faire | | |
+| 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 |
 | 1.6 Application publique réduite | à faire | | |
 | 1.7 Sessions humaines et calibrage | à faire (attend la mise en ligne) | | |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
