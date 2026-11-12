@@ -36,6 +36,14 @@ _RE_IDENTIFIANT = re.compile(r"^[a-z][a-z0-9_]*$")
 _RE_VARIABLE = re.compile(r"\{(\w+)\}")
 _HOTES_LOCAUX = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
+# Les motifs s'appliquent à du texte venu du site (hostile par hypothèse). Deux garde-fous, qui ne rendent pas
+# impossible un motif catastrophique : le texte est coupé à BORNE_TEXTE avant la recherche (alerte), et la lecture
+# de la recette refuse les quantificateurs imbriqués évidents (`(a+)+`, `(a*)*`, `(a+)*`, `(a+){2,}`), cause usuelle
+# d'un temps de calcul qui double à chaque caractère. Un autre motif mal écrit (alternatives qui se recouvrent,
+# `(a|a)*`…) peut encore être lent, même sur 10 000 caractères : c'est à l'auteur de la recette de l'éviter.
+BORNE_TEXTE = 10_000
+_RE_IMBRIQUE = re.compile(r"[+*]\??\)\s*(?:[+*]|\{)")
+
 
 class RecetteInvalide(ValueError):
     """La recette est illisible ou fautive ; le message dit quoi, où (chemin et ligne)."""
@@ -57,6 +65,8 @@ def _motif_valide(motif: str, nature: str) -> str:
         compile_ = re.compile(motif)
     except re.error as erreur:
         raise ValueError(f"motif {nature} invalide « {motif} » ({erreur})") from erreur
+    if _RE_IMBRIQUE.search(motif):
+        raise ValueError(f"motif {nature} à quantificateurs imbriqués « {motif} » (risque de blocage) : à réécrire")
     if nature != "d'adresse de page" and compile_.groups < 1:
         raise ValueError(f"motif {nature} sans groupe « {motif} » : le groupe 1 donne la valeur gardée")
     return motif
@@ -535,6 +545,7 @@ class Resultat:
     liens: list[Lien] = field(default_factory=list)
     alertes: list[str] = field(default_factory=list)
     conforme: bool = True
+    hors_site: int = 0  # liens vers un hôte absent de `hotes` : écartés, comptés
 
     @property
     def relocalisations(self) -> int:
@@ -553,32 +564,51 @@ def chemin_et_parametres(adresse: str, ignores: Iterable[str] = ()) -> str:
     return (morceaux.path or "/") + (f"?{'&'.join(gardes)}" if gardes else "")
 
 
+_MILLIERS = " \u00a0\u202f"  # espace, espace insécable, espace fine insécable
+_UNITE = r"(?:\s*[^\d\s,.+\-][^\d]*)?"  # une unité ou un symbole après le nombre (« km », « € »), sans chiffre
+_RE_ENTIER = re.compile(rf"([+-]?)(\d+(?:[{_MILLIERS}]\d{{3}})*){_UNITE}")
+_RE_NOMBRE = re.compile(rf"([+-]?)(\d{{1,3}}(?:[{_MILLIERS}.]\d{{3}})+|\d+)(?:,(\d+))?{_UNITE}")
+
+
 def _entier(valeur: str) -> int | None:
-    chiffres = re.sub(r"\D", "", valeur)
-    return int(chiffres) if chiffres else None
+    """« 401 500 € » → 401500. Un entier seulement : signe facultatif, chiffres, milliers par espace, unité après.
+
+    « 12,5 km », « 3-4 », « 1e3 », « 4 500,00 » ne sont pas des entiers : `None` (et une alerte de l'appelant).
+    """
+    trouve = _RE_ENTIER.fullmatch(valeur)
+    if trouve is None:
+        return None
+    signe, chiffres = trouve.groups()
+    return int(signe + re.sub(f"[{_MILLIERS}]", "", chiffres))
 
 
 def _nombre(valeur: str) -> float | None:
-    """« 142,6 km » → 142.6 ; « 1 234,5 » → 1234.5 (le point est un séparateur de milliers s'il y a une virgule)."""
-    texte = re.sub(r"[^\d,.\-]", "", valeur)
-    if "," in texte and "." in texte:
-        texte = texte.replace(".", "")
-    try:
-        return float(texte.replace(",", "."))
-    except ValueError:
+    """« 142,6 km » → 142.6 ; « 1 234,5 » et « 1.234,5 » → 1234.5.
+
+    Convention française : la virgule est le séparateur décimal ; espace ou point séparent des milliers (groupes
+    de 3 chiffres). Le point décimal (« 10.5 »), le mélange « 1,234.5 » et la notation « 1e3 » sont ambigus ou
+    contradictoires : `None` (et une alerte de l'appelant), jamais une valeur devinée.
+    """
+    trouve = _RE_NOMBRE.fullmatch(valeur)
+    if trouve is None:
         return None
+    signe, entiere, decimale = trouve.groups()
+    return float(signe + re.sub(f"[{_MILLIERS}.]", "", entiere) + (f".{decimale}" if decimale else ""))
 
 
 _RE_DUREE = re.compile(r"(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:[.,]\d+)?)")
 
 
 def _duree_ms(valeur: str) -> int | None:
-    """`9:58.7` → 598700 ; `1:02:03.4` → 3723400."""
+    """`9:58.7` → 598700 ; `1:02:03.4` → 3723400. Secondes < 60 ; minutes < 60 si des heures sont présentes."""
     trouve = _RE_DUREE.fullmatch(valeur)
     if trouve is None:
         return None
     heures, minutes, secondes = trouve.groups()
-    total = Decimal(heures or 0) * 3600 + Decimal(minutes) * 60 + Decimal(secondes.replace(",", "."))
+    secondes_dec = Decimal(secondes.replace(",", "."))
+    if secondes_dec >= 60 or (heures is not None and int(minutes) >= 60):
+        return None
+    total = Decimal(heures or 0) * 3600 + Decimal(minutes) * 60 + secondes_dec
     return int((total * 1000).to_integral_value())
 
 
@@ -615,11 +645,19 @@ class _Lecteur:
         self.cible = chemin_et_parametres(adresse, recette.parametres_ignores)
         self.analyseur = analyseur
         self.alertes: list[str] = []
+        self.hors_site = 0
         self._relocalises: list[str] = []
 
     def alerter(self, message: str) -> None:
         if message not in self.alertes:
             self.alertes.append(message)
+
+    def borner(self, texte: str, quoi: str) -> str:
+        """Coupe à BORNE_TEXTE avant une recherche par motif (voir plus haut), avec une alerte."""
+        if len(texte) <= BORNE_TEXTE:
+            return texte
+        self.alerter(f"{quoi} coupé à {BORNE_TEXTE} caractères avant la recherche du motif")
+        return texte[:BORNE_TEXTE]
 
     # ── Enregistrements ─────────────────────────────────────────────────
     def enregistrements(self, regle: RegleEnregistrement) -> list[Enregistrement]:
@@ -646,15 +684,25 @@ class _Lecteur:
         """Les lignes à cellules `td` ; l'en-tête est la première ligne à cellules `th` de la même table."""
         entetes_par_table: dict[Any, list[str] | None] = {}
         portees = []
-        for ligne in self.analyseur.elements(selecteur):
-            noeud = _noeud(ligne)
+        lignes = [(ligne, _noeud(ligne)) for ligne in self.analyseur.elements(selecteur)]
+        choisies = {noeud for _, noeud in lignes}
+        for ligne, noeud in lignes:
+            if any(a in choisies for a in noeud.iterancestors()):
+                continue  # ligne d'un tableau imbriqué dans une ligne choisie : pas une ligne du tableau lu
             cellules = _cellules(noeud)
             if not any(c.tag == "td" for c in cellules):
                 continue
             table = next(noeud.iterancestors("table"), None)
             if table not in entetes_par_table:
                 entetes_par_table[table] = self._entetes(table)
-            portees.append(_Portee(ligne, [_element(c) for c in cellules], entetes_par_table[table]))
+            entetes = entetes_par_table[table]
+            if entetes is not None and len(cellules) != len(entetes):
+                self.alerter(
+                    f"ligne ignorée : {len(cellules)} cellules pour {len(entetes)} en-têtes "
+                    "(colspan, cellule th en tête de ligne ?) : les colonnes se décaleraient"
+                )
+                continue
+            portees.append(_Portee(ligne, [_element(c) for c in cellules], entetes))
         return portees
 
     @staticmethod
@@ -662,6 +710,8 @@ class _Lecteur:
         if table is None:
             return None
         for ligne in table.iter("tr"):
+            if next(ligne.iterancestors("table"), None) is not table:
+                continue  # ligne d'un tableau imbriqué
             cellules = _cellules(ligne)
             if any(c.tag == "th" for c in cellules):
                 return [_nettoyer(_element(c).texte) for c in cellules]
@@ -679,13 +729,16 @@ class _Lecteur:
             if nom not in portee.entetes:
                 self.alerter(f"colonne « {nom} » absente de l'en-tête ({', '.join(portee.entetes)})")
                 return None
+            if portee.entetes.count(nom) > 1:
+                self.alerter(f"colonne « {nom} » ambiguë : {portee.entetes.count(nom)} en-têtes portent ce nom")
+                return None
             rang = portee.entetes.index(nom)
         return cellules[rang] if rang < len(cellules) else None
 
     # ── Champs ──────────────────────────────────────────────────────────
     def _champ(self, champ: Champ, nom: str, regle: RegleEnregistrement, portee: _Portee) -> Any:
         if champ.adresse is not None:
-            trouve = re.search(champ.adresse, self.cible)
+            trouve = re.search(champ.adresse, self.borner(self.cible, "adresse de la page"))
             return self._finir(champ, nom, [trouve.group(1)] if trouve and trouve.group(1) else [])
         if champ.adaptatif:
             return self._finir(champ, nom, self._adaptatif(champ, nom, regle))
@@ -731,7 +784,7 @@ class _Lecteur:
         if champ.lien:
             valeur = urljoin(self.adresse, valeur)
         if champ.motif:
-            trouve = re.search(champ.motif, valeur)
+            trouve = re.search(champ.motif, self.borner(valeur, f"champ « {nom} »"))
             valeur = (trouve.group(1) or "") if trouve else ""
             if not valeur:
                 return None
@@ -761,6 +814,9 @@ class _Lecteur:
                     zone = next((contextes[a] for a in _noeud(element).iterancestors() if a in contextes), None)
                 if zone is None or attendu not in _nettoyer(zone.texte):
                     continue
+            if (urlsplit(adresse).hostname or "").lower() not in self.recette.hotes:
+                self.hors_site += 1
+                continue
             liens.append(Lien(adresse, regle.vers, _nettoyer(element.texte)))
         return liens
 
@@ -802,7 +858,7 @@ def extraire(
     analyseur = Analyseur(html, url=adresse, signatures=signatures)
     lecteur = _Lecteur(recette, type_page, adresse, analyseur)
     resultat = Resultat()
-    if not re.search(page.url, lecteur.cible):
+    if len(lecteur.cible) > BORNE_TEXTE or not re.search(page.url, lecteur.cible):
         resultat.conforme = False
         resultat.alertes.append(f"adresse {lecteur.cible} hors du motif url du type « {type_page} » ({page.url})")
         return resultat
@@ -816,4 +872,5 @@ def extraire(
     for regle in page.suivre:
         resultat.liens += lecteur.liens(regle, valeurs)
     resultat.alertes += lecteur.alertes
+    resultat.hors_site = lecteur.hors_site
     return resultat
