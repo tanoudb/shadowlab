@@ -143,6 +143,37 @@ class TestIdentiteNative:
         reecrits = filtrer()[0]["headers"]
         assert "HeadlessChrome" not in reecrits["user-agent"] + reecrits["sec-ch-ua"], "sans l'option, rien ne change"
 
+    def test_identite_native_garde_le_refus_hors_perimetre(self):
+        """Le refus d'une adresse hors liste passe avant la branche native : abort, jamais continue_."""
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        actions = []
+
+        class Requete:
+            url = "http://ailleurs.test/"
+            resource_type = "document"
+            headers = {"user-agent": "Mozilla/5.0 Chrome/156.0.0.0"}
+
+            def is_navigation_request(self):
+                return False
+
+        class Route:
+            request = Requete()
+
+            def abort(self, *a):
+                actions.append(("abort", a))
+
+            def continue_(self, **k):
+                actions.append(("continue", k))
+
+        moteur = DriverNoezia(("127.0.0.1", "localhost"), {"identite_native": True})
+        moteur.mesures.details["requetes_bloquees"] = 0
+        moteur.mesures.details["ressources_bloquees"] = 0
+        moteur._filtrer(Route())
+        assert actions == [("abort", ("blockedbyclient",))]
+        assert moteur.mesures.details["requetes_bloquees"] == 1
+        assert moteur.mesures.details["ressources_bloquees"] == 0
+
 
 class TestProfilCoherence:
     def test_profil_genere_coherent(self):
