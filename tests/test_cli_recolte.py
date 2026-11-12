@@ -563,3 +563,13 @@ def test_etat_d_une_premiere_passe_ne_parle_pas_d_incrementale(pilote, capsys):
     capsys.readouterr()
     main(["recolte", "etat", "vitrine-annonces"])
     assert "incrémentale" not in capsys.readouterr().out
+
+
+def test_noter_apres_tout_refaire_est_inchange_et_etat_n_est_pas_incremental(pilote, capsys):
+    lancer()
+    lancer("--tout-refaire")
+    capsys.readouterr()
+    assert main(["recolte", "noter", "vitrine-annonces", "--verite", "vitrine"]) == 0
+    assert "pages 48/48" in capsys.readouterr().out
+    main(["recolte", "etat", "vitrine-annonces"])
+    assert "incrémentale" not in capsys.readouterr().out
