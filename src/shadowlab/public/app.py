@@ -101,9 +101,14 @@ class Limiteur:
 
     L'adresse n'est jamais écrite : elle n'existe qu'en mémoire, sous forme d'empreinte salée par un sel tiré
     au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /64 (`bloc_d_adresse`).
+
+    Un balayage, au plus une fois par minute et à l'occasion d'un appel, retire toute empreinte dont la dernière
+    action est sortie de la fenêtre. Table pleine d'empreintes encore valides, rien n'est effacé : une adresse
+    inconnue est refusée, les adresses déjà connues gardent leur compte.
     """
 
     ADRESSES_MAX = 10_000
+    BALAYAGE_S = 60
 
     def __init__(self, maximum: int, fenetre_s: int = 3600, horloge: Callable[[], float] = time.monotonic) -> None:
         self.maximum = maximum
@@ -111,15 +116,23 @@ class Limiteur:
         self._horloge = horloge
         self._sel = secrets.token_bytes(16)
         self._vues: dict[bytes, deque[float]] = {}
+        self._dernier_balayage = horloge()
+
+    def _balayer(self, maintenant: float) -> None:
+        if maintenant - self._dernier_balayage < self.BALAYAGE_S:
+            return
+        self._dernier_balayage = maintenant
+        self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.fenetre_s}
 
     def autoriser(self, adresse: str) -> bool:
         maintenant = self._horloge()
-        if len(self._vues) >= self.ADRESSES_MAX:
-            self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.fenetre_s}
-            if len(self._vues) >= self.ADRESSES_MAX:  # inondation : on repart de zéro, le plafond du jour tient
-                self._vues.clear()
+        self._balayer(maintenant)
         cle = hashlib.blake2b(bloc_d_adresse(adresse).encode(), key=self._sel, digest_size=16).digest()
-        vues = self._vues.setdefault(cle, deque())
+        vues = self._vues.get(cle)
+        if vues is None:
+            if len(self._vues) >= self.ADRESSES_MAX:  # table pleine d'entrées valides : l'inconnue attend le balayage
+                return False
+            vues = self._vues[cle] = deque()
         while vues and maintenant - vues[0] >= self.fenetre_s:
             vues.popleft()
         if len(vues) >= self.maximum:
@@ -242,12 +255,23 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with base() as cx:
             return jeton if donnees.session_en_cours(cx, jeton, limites.duree_session_s) else None
 
+    entete_absent_signale = [False]
+
     def adresse_de(request: Request) -> str:
-        """Adresse du visiteur, pour la limite en mémoire : dernière valeur de l'en-tête du mandataire."""
+        """Adresse du visiteur, pour la limite en mémoire : dernière valeur de l'en-tête du mandataire. En-tête
+        configuré mais absent : repli sur la connexion (celle du mandataire), donc une limite partagée par tous ;
+        un avertissement, une fois par démarrage, sans adresse."""
         if reglages.entete_ip:
             derniere = request.headers.get(reglages.entete_ip, "").split(",")[-1].strip()
             if derniere:
                 return derniere
+            if not entete_absent_signale[0]:
+                entete_absent_signale[0] = True
+                journal.warning(
+                    "En-tête d'adresse « %s » absent d'une requête : les limites par adresse deviennent communes "
+                    "à tous les visiteurs. Vérifier SHADOWLAB_PUBLIC_ENTETE_IP et le mandataire.",
+                    _nettoyer(reglages.entete_ip),
+                )
         return request.client.host if request.client else ""
 
     def meme_origine(request: Request) -> bool:
