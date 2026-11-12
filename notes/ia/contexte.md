@@ -37,6 +37,21 @@ sur nos propres cibles (site vitrine factice, tor-i).
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
   Linux, un test contre Cloudflare.
 
+## Chantiers en parallèle (12/11, 11 h 50) — consigne d'Ethan : la session principale dirige, des sous-agents travaillent
+Un dossier de travail git par chantier de code, à côté du dépôt. Rien n'y est testé tant qu'une campagne tourne.
+
+| Chantier | Branche (dossier) | Qui | État |
+|----------|-------------------|-----|------|
+| Formulaire de contact (D-57) | `formulaire-contact` (`../noezia-shadowlab-formulaire`) | session principale, relu par Opus | écrit ; à tester puis fusionner (accord d'Ethan) |
+| Règle « HeadlessChrome partout » (D-60) | `arena-headless-partout` (`../noezia-shadowlab-arena`) | session principale | écrit ; à tester puis fusionner avant la référence (accord d'Ethan) |
+| NOEZIA en identité native (D-59) | `moteur-identite-native` (`../noezia-shadowlab-moteur`) | session principale, relu par Sonnet | écrit ; à tester puis fusionner (option sans effet par défaut) |
+| Version réelle annoncée (D-58) | `moteur-version-reelle` (sans dossier) | session principale | en attente de la mesure « interface » |
+| Mémoire 16 et 32 Go admise | `arena-memoire-32` (`../noezia-shadowlab-memoire`) | sous-agent Sonnet | en cours ; à fusionner après le rejeu des sessions humaines |
+| `pas_de_scroll` et `pas_de_pause` justes | `arena-comportement-pages` (`../noezia-shadowlab-comportement`) | sous-agent Opus | en cours ; à fusionner après le rejeu des sessions humaines |
+| Origine des 84 écarts d'empreinte | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet, lecture seule | en cours |
+| Chrome avec interface sur serveur Linux | `docs/recherche/chrome-interface-serveur-linux-2026-11-12.md` | sous-agent Sonnet, recherche Web | en cours |
+| WAF du niveau 07 | `tests/test_arena_waf.py` (non suivi), `configs/experiments/controle-waf-07.yaml` | session principale | prêt ; image du WAF à reconstruire hors campagne |
+
 ## Prochaine action (12/11, après la récolte 95 qui finit vers 13 h 10)
 Dans l'ordre, sans campagne en cours pour les étapes 1 à 5 :
 1. Lire la récolte 95 (complétude, exactitude, durée) et l'écrire au § 2 du plan.
