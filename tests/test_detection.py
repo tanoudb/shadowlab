@@ -1,4 +1,5 @@
 import random
+
 import pytest
 
 from shadowlab.detection import Observations, classer
