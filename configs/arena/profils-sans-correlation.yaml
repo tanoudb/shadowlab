@@ -2,9 +2,10 @@
 # Généré à partir de configs/arena/profils.yaml : seule la ligne `exclure: [correlation-session]` diffère.
 # À régénérer si les niveaux 06 et 07 changent. Usage : voir configs/experiments/ablation-interface.yaml.
 # Pourquoi : la corrélation compte les sessions qui ont eu la même empreinte, sur toute la base et depuis
-# toujours. Dans une campagne, la même empreinte revient par construction (15 passages du même moteur), et un
-# vrai Chrome sur ce poste a le même canvas que les témoins, déjà vu 443 fois : aux niveaux 06 et 07 la règle
-# arrête alors un moteur pour l'historique de la base, pas pour ce qu'il fait. Analyse et règle proposée :
+# toujours. Dans une campagne, la même empreinte revient par construction (15 passages du même moteur). Les
+# deux témoins partagent une seule empreinte, vue 443 fois au 12/11, et un Chromium avec interface a déjà
+# donné le même canvas : un vrai Chrome sur ce poste le donnera sans doute aussi (non vérifié). Aux niveaux
+# 06 et 07 la règle arrête alors un moteur pour l'historique de la base, pas pour ce qu'il fait. Analyse :
 # docs/recherche/correlation-entre-sessions-2026-11-12.md (à faire avec la mémoire des visiteurs, étape 2.1).
 06scorr:
   captcha:
