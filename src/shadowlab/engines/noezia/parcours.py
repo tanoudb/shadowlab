@@ -24,12 +24,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import urldefrag, urljoin, urlsplit
 
 from ...perimetre import DestinationRefusee
 from ..base import Driver
 from .etat import Etat, Page, canonique
-from .export import ecrire_exports
+from .export import FORMAT_CSV, ecrire_exports
 from .extraction import Signatures
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
@@ -40,7 +40,17 @@ NOUVEAUX_ESSAIS = 2  # sur panne réseau, 500, 502, 504 (après le premier essai
 STATUTS_A_RETENTER = frozenset({500, 502, 504})
 ATTENTE_APRES_ALERTE_S = 3600  # « reprendre » conseille d'attendre 1 h (choix du document, § 5)
 PAS_AFFICHAGE = 25
+REDIRECTIONS = frozenset({301, 302, 303, 307, 308})
+REDIRECTIONS_MAX = 5  # sauts suivis un à un, chacun contrôlé avant d'être demandé
 PASSES_NON_FINIES = ("en_cours", "arretee", "interrompue", "limitee")
+
+
+class _SautRefuse(Exception):
+    """Une redirection mène à un endroit qu'on ne demandera pas (alerte, ou interdit par robots.txt)."""
+
+    def __init__(self, alerte: Alerte | None) -> None:
+        super().__init__(alerte.detail if alerte else "interdit par robots.txt")
+        self.alerte = alerte
 
 
 class RefusParcours(Exception):
@@ -104,6 +114,7 @@ class Reponse:
     adresse_finale: str
     html: str
     duree_ms: float
+    location: str | None = None  # destination d'une redirection que le moteur n'a pas suivie
 
 
 class Moteur(Protocol):
@@ -142,7 +153,13 @@ class MoteurDriver:
     def lire(self, adresse: str) -> Reponse:
         self.driver.verifier(adresse)
         navigation = self.driver.navigate(adresse)
-        return Reponse(navigation.status, navigation.url, self.driver.dom(), navigation.duration_ms)
+        return Reponse(
+            navigation.status,
+            navigation.url,
+            self.driver.dom(),
+            navigation.duration_ms,
+            getattr(self.driver, "location", None),
+        )
 
     def description(self) -> dict[str, Any]:
         return {
@@ -245,12 +262,7 @@ class Parcours:
         verrou.prendre()
         etat = Etat(self.dossier / "etat.sqlite3")
         try:
-            derniere = etat.derniere_passe()
-            if derniere and derniere["statut"] in PASSES_NON_FINIES and not self.options.tout_refaire:
-                raise RefusParcours(
-                    f"la passe {derniere['numero']} n'est pas finie ({derniere['statut']}) : "
-                    f"`recolte reprendre {self.recette.nom}`, ou `lancer … --tout-refaire` pour tout recommencer"
-                )
+            derniere = self._refus_lancer(etat)
             self.moteur.ouvrir()
             self._verifier_le_depart()
             if self.options.tout_refaire and derniere:
@@ -288,25 +300,7 @@ class Parcours:
         verrou.prendre()
         etat = Etat(self.dossier / "etat.sqlite3")
         try:
-            passe = etat.derniere_passe()
-            if passe is None:
-                raise RefusParcours(f"aucune passe à reprendre pour « {self.recette.nom} »")
-            if passe["statut"] not in PASSES_NON_FINIES:
-                raise RefusParcours(f"la passe {passe['numero']} est {passe['statut']} : rien à reprendre")
-            if passe["empreinte"] != self.empreinte and not recette_modifiee:
-                raise RefusParcours(
-                    f"la recette a changé depuis le début de la passe {passe['numero']} : "
-                    "`reprendre … --recette-modifiee` pour continuer avec la nouvelle"
-                )
-            if passe["statut"] == "arretee" and not maintenant and passe["fin"]:
-                ecoule = (
-                    datetime.fromisoformat(self._horodatage()) - datetime.fromisoformat(passe["fin"])
-                ).total_seconds()
-                if ecoule < ATTENTE_APRES_ALERTE_S:
-                    raise RefusParcours(
-                        f"la passe {passe['numero']} s'est arrêtée sur alerte il y a {int(ecoule // 60)} min : "
-                        f"attendre {ATTENTE_APRES_ALERTE_S // 3600} h, ou `reprendre … --maintenant`"
-                    )
+            passe = self._refus_reprendre(etat, maintenant, recette_modifiee)
             gardees = passe["options"]
             self.options = Options(
                 tranche=dict(gardees.get("tranche", {})),
@@ -333,6 +327,58 @@ class Parcours:
         _JOURNAL.debug(
             "récolte %s passe %s : %s %s", self.recette.nom, passe, genre, json.dumps(detail, ensure_ascii=False)
         )
+
+    # ── Refus qui ne demandent aucune requête ───────────────────────────
+    def _refus_lancer(self, etat: Etat) -> dict[str, Any] | None:
+        derniere = etat.derniere_passe()
+        if derniere and derniere["statut"] in PASSES_NON_FINIES and not self.options.tout_refaire:
+            raise RefusParcours(
+                f"la passe {derniere['numero']} n'est pas finie ({derniere['statut']}) : "
+                f"`recolte reprendre {self.recette.nom}`, ou `lancer … --tout-refaire` pour tout recommencer"
+            )
+        return derniere
+
+    def _refus_reprendre(self, etat: Etat, maintenant: bool, recette_modifiee: bool) -> dict[str, Any]:
+        passe = etat.derniere_passe()
+        if passe is None:
+            raise RefusParcours(f"aucune passe à reprendre pour « {self.recette.nom} »")
+        if passe["statut"] not in PASSES_NON_FINIES:
+            raise RefusParcours(f"la passe {passe['numero']} est {passe['statut']} : rien à reprendre")
+        if passe["empreinte"] != self.empreinte and not recette_modifiee:
+            raise RefusParcours(
+                f"la recette a changé depuis le début de la passe {passe['numero']} : "
+                "`reprendre … --recette-modifiee` pour continuer avec la nouvelle"
+            )
+        if passe["statut"] == "arretee" and not maintenant and passe["fin"]:
+            ecoule = (datetime.fromisoformat(self._horodatage()) - datetime.fromisoformat(passe["fin"])).total_seconds()
+            if ecoule < ATTENTE_APRES_ALERTE_S:
+                raise RefusParcours(
+                    f"la passe {passe['numero']} s'est arrêtée sur alerte il y a {int(ecoule // 60)} min : "
+                    f"attendre {ATTENTE_APRES_ALERTE_S // 3600} h, ou `reprendre … --maintenant`"
+                )
+        return passe
+
+    def _avec_etat(self, controle: Callable[[Etat], object]) -> None:
+        verrou = Verrou(self.dossier / "verrou")
+        verrou.prendre()
+        etat = Etat(self.dossier / "etat.sqlite3")
+        try:
+            controle(etat)
+        finally:
+            etat.fermer()
+            verrou.liberer()
+
+    def verifier_avant_lancer(self) -> None:
+        """Tous les refus de `lancer` qui ne demandent aucune requête (recette, autorisation, tranche, verrou, passe
+        non finie) : à appeler AVANT de démarrer quoi que ce soit (site du labo). Seul robots.txt, qu'il faut lire,
+        est contrôlé plus tard."""
+        self._controles()
+        self._avec_etat(self._refus_lancer)
+
+    def verifier_avant_reprendre(self, *, maintenant: bool = False, recette_modifiee: bool = False) -> None:
+        """Idem pour `reprendre` (rien à reprendre, recette changée, attente après alerte, verrou)."""
+        self._controles(reprise=True)
+        self._avec_etat(lambda etat: self._refus_reprendre(etat, maintenant, recette_modifiee))
 
     # ── Contrôles de départ ─────────────────────────────────────────────
     def _controles(self, reprise: bool = False) -> None:
@@ -412,6 +458,7 @@ class Parcours:
         self._plafonds = recette.bornes.par_type
         self._ignores = recette.parametres_ignores
         self._sans = set(self.options.sans)
+        self._hotes = set(recette.hotes)
         self._annoncer(etat, passe, reprise)
         statut, arret = "terminee", None
         try:
@@ -485,6 +532,9 @@ class Parcours:
         """Lit une page. Rend (alerte éventuelle, 1 si une requête a été faite et la page notée)."""
         etat, recette = self._etat, self.recette
         quand = self._horodatage
+        if _hote(page.adresse) not in self._hotes:  # défense en profondeur : jamais d'hôte hors recette
+            etat.terminer_page(page, etat="interdite", decision="hors_hotes", quand=quand())
+            return None, 0
         if not self.options.ignorer_robots:
             robots = self._robots_de(page.adresse)
             if not robots.permis(_chemin_et_requete(page.adresse)):
@@ -500,6 +550,12 @@ class Parcours:
         except DestinationRefusee as erreur:
             etat.rendre(page)
             return Alerte("hors_site", f"hors périmètre : {erreur}", page.adresse), 0
+        except _SautRefuse as refus:
+            if refus.alerte is not None:
+                etat.rendre(page)  # rien n'a été lu : la page reste à faire
+                return refus.alerte, 0
+            etat.terminer_page(page, etat="interdite", decision="interdite", quand=quand())
+            return None, 0
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             etat.terminer_page(page, etat="echec", decision="echec", quand=quand())
             self._evenement(etat, self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)})
@@ -551,11 +607,10 @@ class Parcours:
                 duree_chargement_ms=reponse.duree_ms, duree_totale_ms=total_ms(),
             )  # fmt: skip
             return "anormale"
-        hotes = set(self.recette.hotes)
         liens: list[tuple[str, str]] = []
-        hors_site = exclus = 0
+        hors_site, exclus = resultat.hors_site, 0  # l'extraction écarte déjà les liens hors de `hotes` et les compte
         for lien in resultat.liens:
-            if _hote(lien.adresse) not in hotes:
+            if _hote(lien.adresse) not in self._hotes:  # défense en profondeur : un lien passé autrement
                 hors_site += 1
             elif lien.type in self._sans:
                 exclus += 1
@@ -579,7 +634,30 @@ class Parcours:
         return "ok"
 
     def _lire(self, adresse: str) -> Reponse:
-        """Une lecture, avec 2 nouveaux essais (attente croissante) sur panne réseau, 500, 502 ou 504."""
+        """Lit une page. Les redirections sont suivies une à une, chacune contrôlée AVANT d'être demandée."""
+        courante = adresse
+        for saut in range(REDIRECTIONS_MAX + 1):
+            reponse = self._lire_une(courante)
+            if reponse.statut not in REDIRECTIONS or not reponse.location:
+                reponse.adresse_finale = courante
+                return reponse
+            if saut == REDIRECTIONS_MAX:
+                raise _SautRefuse(Alerte("hors_motif", f"plus de {REDIRECTIONS_MAX} redirections de suite", adresse))
+            courante = self._autoriser_saut(urldefrag(urljoin(courante, reponse.location))[0], adresse)
+        raise AssertionError("inatteignable")  # pragma: no cover
+
+    def _autoriser_saut(self, cible: str, adresse: str) -> str:
+        """Hôte dans la recette, puis robots.txt de l'origine ; le périmètre est vérifié par le moteur à la demande."""
+        morceaux = urlsplit(cible)
+        if morceaux.scheme not in ("http", "https") or _hote(cible) not in self._hotes:
+            hote = _hote(cible) or cible
+            raise _SautRefuse(Alerte("hors_site", f"redirection vers un autre hôte : {hote}", adresse))
+        if not self.options.ignorer_robots and not self._robots_de(cible).permis(_chemin_et_requete(cible)):
+            raise _SautRefuse(None)
+        return cible
+
+    def _lire_une(self, adresse: str) -> Reponse:
+        """Une requête, avec 2 nouveaux essais (attente croissante) sur panne réseau, 500, 502 ou 504."""
         essai = 0
         while True:
             try:
@@ -608,6 +686,7 @@ class Parcours:
         dossier_passe = self.dossier / f"passe-{passe:03d}"
         resume = self._resume(etat, passe, statut, arret)
         resume["fichiers"] = ecrire_exports(etat, dossier_passe)
+        resume["csv"] = FORMAT_CSV
         self._ecrire_sorties(dossier_passe, resume)
         par_type = ", ".join(f"{n} {t}" for t, n in etat.faites_par_type(passe).items())
         lignes = ", ".join(f"{n} {nom}" for nom, n in enregistrements.items()) or "aucun enregistrement"

@@ -122,6 +122,67 @@ def test_alerte_code_3_puis_reprendre(pilote, capsys):
     assert "Terminée : 48 pages" in capsys.readouterr().out
 
 
+# --- Tous les refus arrivent avant de démarrer le site du labo ---------------------------------
+
+
+@pytest.fixture
+def entrees_du_site(monkeypatch):
+    """Compte les démarrages du site du labo : un refus ne doit en provoquer aucun."""
+    entrees: list[str] = []
+
+    @contextlib.contextmanager
+    def site(recette, reglages):
+        entrees.append(recette.nom)
+        yield
+
+    monkeypatch.setattr(commande_recolte, "site_du_labo", site)
+    return entrees
+
+
+def test_un_refus_de_lancer_ne_demarre_pas_le_site(pilote, entrees_du_site, sortie_vitrine, capsys):
+    from shadowlab.engines.noezia.parcours import Verrou
+
+    # verrou pris
+    verrou = Verrou(sortie_vitrine / "verrou")
+    verrou.prendre()
+    try:
+        assert lancer() == 2
+    finally:
+        verrou.liberer()
+    assert "verrou" in capsys.readouterr().err and entrees_du_site == []
+    # variable inconnue, type inconnu, moteur indisponible
+    assert lancer("--tranche", "saison=2025") == 2
+    assert lancer("--sans", "rallye") == 2
+    assert lancer("--moteur", "navigateur") == 2
+    assert entrees_du_site == []
+    # passe non finie
+    pilote.reponses["AN-000010"] = (429, "non")
+    assert lancer() == 3
+    assert entrees_du_site == ["vitrine-annonces"]  # le seul démarrage : celui de la passe qui a eu lieu
+    assert lancer() == 2
+    assert "reprendre" in capsys.readouterr().err and entrees_du_site == ["vitrine-annonces"]
+
+
+def test_un_refus_de_reprendre_ne_demarre_pas_le_site(pilote, entrees_du_site, tmp_path, capsys):
+    copie = tmp_path / "vitrine.yaml"
+    copie.write_text(RECETTE_VITRINE.read_text(encoding="utf-8"), encoding="utf-8")
+    pilote.reponses["AN-000010"] = (429, "non")
+    assert lancer(recette=copie) == 3
+    assert entrees_du_site == ["vitrine-annonces"]
+    assert main(["recolte", "reprendre", "vitrine-annonces"]) == 2  # trop tôt
+    copie.write_text(copie.read_text(encoding="utf-8") + "# modifiée\n", encoding="utf-8")
+    assert main(["recolte", "reprendre", "vitrine-annonces", "--maintenant"]) == 2  # recette modifiée
+    assert entrees_du_site == ["vitrine-annonces"]
+
+
+def test_le_moteur_ne_suit_aucune_redirection_tout_seul(reglages):
+    from shadowlab.engines.noezia.recettes import lire
+
+    moteur = commande_recolte.construire_moteur("http", lire(RECETTE_VITRINE), reglages)
+    assert moteur.driver.options["suivre_redirections"] is False
+    assert moteur.driver.options["impersonate"] == "chrome"
+
+
 # --- reprendre ---------------------------------------------------------------------------------
 
 

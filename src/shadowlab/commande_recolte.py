@@ -60,7 +60,8 @@ def construire_moteur(nom: str, recette: Recette, reglages: Reglages) -> Moteur:
     _moteur_disponible(nom)
     local = all(_est_local(h) for h in recette.hotes)
     pilote = DriverCurlCffi(
-        reglages.hotes_autorises, {"impersonate": "chrome", "verifier_tls": not local, "timeout": 30}
+        reglages.hotes_autorises,
+        {"impersonate": "chrome", "verifier_tls": not local, "timeout": 30, "suivre_redirections": False},
     )
     return MoteurDriver(pilote, nom)
 
@@ -138,9 +139,11 @@ def _lancer(args: argparse.Namespace, reglages: Reglages) -> int:
         ignorer_robots=args.ignorer_robots,
     )
     dossier = _dossier(args, reglages, recette.nom)
+    moteur = construire_moteur(nom_moteur, recette, reglages)  # ne touche pas au réseau
+    parcours = Parcours(recette, texte, str(chemin.resolve()), moteur, dossier, options)
+    parcours.verifier_avant_lancer()  # tous les refus qui n'ont pas besoin du site, avant de le démarrer
     with site_du_labo(recette, reglages):
-        moteur = construire_moteur(nom_moteur, recette, reglages)
-        return Parcours(recette, texte, str(chemin.resolve()), moteur, dossier, options).lancer().code
+        return parcours.lancer().code
 
 
 def _passe_de(args: argparse.Namespace, reglages: Reglages) -> tuple[Path, dict[str, Any]]:
@@ -167,9 +170,10 @@ def _reprendre(args: argparse.Namespace, reglages: Reglages) -> int:
         print(f"Recette d'origine absente ({chemin}) : copie gardée au début de la passe.", flush=True)
         texte = passe["texte_recette"]
         recette = lire_texte(texte, source="copie de la passe")
+    moteur = construire_moteur(passe["moteur"]["nom"], recette, reglages)
+    parcours = Parcours(recette, texte, passe["chemin_recette"], moteur, dossier)
+    parcours.verifier_avant_reprendre(maintenant=args.maintenant, recette_modifiee=args.recette_modifiee)
     with site_du_labo(recette, reglages):
-        moteur = construire_moteur(passe["moteur"]["nom"], recette, reglages)
-        parcours = Parcours(recette, texte, passe["chemin_recette"], moteur, dossier)
         bilan = parcours.reprendre(
             maintenant=args.maintenant, recette_modifiee=args.recette_modifiee, pages_max=args.pages_max
         )

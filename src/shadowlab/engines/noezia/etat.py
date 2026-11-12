@@ -373,10 +373,10 @@ class Etat:
         return {
             "faites": par_etat.get("faite", 0),
             "echecs": par_etat.get("echec", 0),
-            "interdites_robots": par_etat.get("interdite", 0),
+            "interdites_robots": par_decision.get("interdite", 0),
             "anormales": par_decision.get("anormale", 0),
             "introuvables": par_decision.get("introuvable", 0),
-            "hors_site": somme[0],
+            "hors_site": somme[0] + par_decision.get("hors_hotes", 0),
             "liens_exclus": somme[1],
             "relocalisations": somme[2],
             "a_faire": par_etat.get("a_faire", 0),

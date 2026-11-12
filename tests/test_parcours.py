@@ -179,11 +179,12 @@ def test_un_statut_d_alerte_arrete_sans_nouvel_essai(dossier, pilote, statut):
     assert lu(dossier)["statut"] == "arretee" and lu(dossier)["arret"]["signe"] == "statut"
 
 
-def test_redirection_vers_un_autre_hote_alerte_et_arret(dossier, pilote):
+def test_redirection_vers_un_autre_hote_alerte_sans_toucher_cet_hote(dossier, pilote):
     pilote.redirections["AN-000010"] = "http://autre.example/connexion"
     bilan = fabriquer(dossier, pilote).lancer()
     assert bilan.code == 3 and bilan.arret["signe"] == "hors_site"
     assert "autre.example" in bilan.arret["detail"]
+    assert not any("autre.example" in u for u in pilote.urls), "une requête est partie vers l'hôte étranger"
     assert not any("AN-000011" in d for d in pilote.pages_lues())
 
 
@@ -191,6 +192,69 @@ def test_redirection_dans_le_site_vers_une_page_hors_motif_alerte(dossier, pilot
     pilote.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/connexion"
     bilan = fabriquer(dossier, pilote).lancer()
     assert bilan.code == 3 and bilan.arret["signe"] == "hors_motif"
+    assert any(u.endswith("/lab/connexion") for u in pilote.urls)  # le saut dans le site est demandé, contrôlé après
+
+
+def test_redirection_vers_une_page_que_robots_interdit_n_est_pas_demandee(dossier, pilote):
+    pilote.robots = (200, "User-agent: *\nDisallow: /lab/connexion\n")
+    pilote.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/connexion"
+    bilan = fabriquer(dossier, pilote).lancer()
+    assert not any(u.endswith("/lab/connexion") for u in pilote.urls)
+    assert bilan.resume["pages"]["interdites_robots"] == 1 and bilan.code == 0
+
+
+def test_redirection_vers_une_adresse_hors_perimetre_n_est_pas_demandee(dossier, site):
+    pilote = PiloteFactice(site, hotes=("127.0.0.1",))  # périmètre strict du pilote
+    pilote.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/vitrine/annonces/AN-000011"
+    pilote.redirections["AN-000011"] = "http://127.0.0.2:8770/x"  # hôte absent de la recette ET du périmètre
+    bilan = fabriquer(dossier, pilote).lancer()
+    assert bilan.code == 3 and not any("127.0.0.2" in u for u in pilote.urls)
+
+
+def test_boucle_de_redirections_bornee(dossier, pilote):
+    pilote.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/vitrine/annonces/AN-000010"
+    bilan = fabriquer(dossier, pilote).lancer()
+    assert bilan.code == 3
+    assert sum("AN-000010" in u for u in pilote.urls) <= 6  # le premier essai et 5 sauts au plus
+
+
+def test_les_sauts_dans_le_site_sont_suivis(dossier, pilote):
+    pilote.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/vitrine/annonces/AN-000011"
+    bilan = fabriquer(dossier, pilote).lancer()
+    assert bilan.code == 0 and bilan.resume["pages"]["faites"] == 48
+
+
+def test_un_lien_construit_a_la_main_hors_hotes_n_est_jamais_demande(dossier, pilote, monkeypatch):
+    from shadowlab.engines.noezia import parcours as module
+    from shadowlab.engines.noezia.recettes import Lien
+
+    vrai = module.extraire
+
+    def extraire_pieges(*args, **kwargs):
+        resultat = vrai(*args, **kwargs)
+        if args[3] == "liste":
+            resultat.liens.append(Lien("http://autre.example/piege", "fiche", "piège"))
+        return resultat
+
+    monkeypatch.setattr(module, "extraire", extraire_pieges)
+    bilan = fabriquer(dossier, pilote).lancer()
+    assert bilan.code == 0 and not any("autre.example" in u for u in pilote.urls)
+    assert bilan.resume["pages"]["hors_site"] == 3  # un piège sur chacune des 3 listes
+
+
+def test_une_page_deja_en_file_hors_hotes_n_est_jamais_demandee(dossier, pilote):
+    p = fabriquer(dossier, pilote)
+    etat = Etat(dossier / "etat.sqlite3")
+    passe = etat.ouvrir_passe(
+        "vitrine-annonces", p.empreinte, p.texte_recette, p.chemin_recette, {"nom": "http"}, {}, QUAND
+    )
+    etat.empiler(
+        passe, [("http://autre.example/piege", "fiche"), ("http://127.0.0.1:8770/lab/vitrine/annonces", "liste")]
+    )
+    etat.fermer()
+    bilan = p.reprendre()
+    assert bilan.code == 0 and not any("autre.example" in u for u in pilote.urls)
+    assert bilan.resume["pages"]["hors_site"] == 1 and bilan.resume["pages"]["faites"] == 48
 
 
 def test_les_liens_hors_site_sont_ignores_et_comptes(dossier, pilote):

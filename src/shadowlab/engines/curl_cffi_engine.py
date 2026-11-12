@@ -12,7 +12,12 @@ class DriverCurlCffi(DriverHttp):
     name = "curl-cffi"
     categorie = "anti_detection"
     # verifier_tls : faux par défaut (Arena locale, certificat auto-signé) ; vrai pour un site qui n'est pas à nous
-    options_permises = {"timeout": (int, float), "impersonate": str, "verifier_tls": bool}
+    options_permises = {
+        "timeout": (int, float),
+        "impersonate": str,
+        "verifier_tls": bool,
+        "suivre_redirections": bool,  # faux : la 3xx est rendue et sa destination gardée (`location`)
+    }
 
     def configuration(self) -> dict[str, Any]:
         return {
