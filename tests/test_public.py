@@ -1398,3 +1398,85 @@ def test_commandes_messages(monkeypatch, reglages_publics, capsys):
     assert cli.main(["public", "purger"]) == 0
     assert "1 message" in capsys.readouterr().out
     assert messages_recus(reglages_publics) == ["premier message\nsur deux lignes"]
+
+
+# --- Une seule adresse ne ferme plus le formulaire (seconde relecture du 12/11) --------------------
+
+
+def test_limiteur_sur_une_journee_glissante():
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(2, fenetre_s=24 * 3600, horloge=lambda: instant[0])
+    assert [limiteur.autoriser(IP) for _ in range(3)] == [True, True, False]
+    instant[0] += 23 * 3600
+    assert not limiteur.autoriser(IP), "23 heures plus tard, toujours refusé : la fenêtre dure un jour"
+    assert limiteur.autoriser(AUTRE_IP)
+    instant[0] += 3600
+    assert limiteur.autoriser(IP), "24 heures après les deux premiers, l'adresse peut de nouveau écrire"
+
+
+def test_contact_limite_par_adresse_et_par_jour(reglages_publics):
+    """À 3 par heure, une adresse seule épuisait le plafond du jour (30) en 10 heures et remplissait la boîte (500)
+    en 17 jours. Avec un plafond par adresse et par jour, plus bas que celui du jour et que la boîte divisée par la
+    durée de conservation, elle ne peut faire ni l'un ni l'autre."""
+    limites = Limites()
+    assert limites.messages_par_adresse_jour < limites.messages_par_jour
+    assert limites.messages_par_adresse_jour * reglages_publics.conservation_jours < limites.messages_gardes
+    with fabriquer(reglages_publics, messages_par_adresse=10, messages_par_adresse_jour=2) as c:
+        assert [ecrire(c, "essai", IP).status_code for _ in range(2)] == [303, 303]
+        refus = ecrire(c, "troisième essai", IP)
+        assert refus.status_code == 429 and texte_rendu(refus) == "troisième essai"
+        assert ecrire(c, "essai", AUTRE_IP).status_code == 303
+    assert len(messages_recus(reglages_publics)) == 3
+
+
+def test_bloc_d_adresse():
+    """Une adresse IPv6 compte pour son /64 ; une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
+    from shadowlab.public.app import bloc_d_adresse
+
+    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:B:ffff::9") == "2001:db8:a:b::/64"
+    assert bloc_d_adresse("2001:db8:a:c::1") != bloc_d_adresse("2001:db8:a:b::1")
+    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/64"
+    assert bloc_d_adresse(IP) == IP
+    assert bloc_d_adresse("::ffff:203.0.113.57") == IP, "une IPv4 écrite en IPv6 reste cette IPv4"
+    for valeur in ("", "testclient", "pas une adresse", "[2001:db8::1]:443", "2001:db8::1, 10.0.0.1", "x" * 10_000):
+        assert bloc_d_adresse(valeur) == valeur
+
+
+def test_limites_par_adresse_comptent_un_bloc_ipv6(reglages_publics):
+    """Un abonné IPv6 reçoit au moins un /64 et y change d'adresse à volonté : les limites par adresse (sessions
+    et messages) le comptent comme une seule adresse. Deux /64 différents restent deux adresses ; IPv4 inchangé."""
+    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:b:ffff:ffff:ffff:fffe", "2001:DB8:A:B:0:0:0:9"]
+    autre_bloc = "2001:db8:a:c::1"
+    with fabriquer(reglages_publics, sessions_par_adresse=2) as c:
+        assert [essayer(c, adresse) for adresse in meme_bloc] == [303, 303, 429]
+        assert essayer(c, autre_bloc) == 303
+        assert [essayer(c, adresse) for adresse in ("192.0.2.1", "192.0.2.1", "192.0.2.2")] == [303, 303, 303]
+    with fabriquer(reglages_publics, messages_par_adresse=2) as c:
+        assert [ecrire(c, "essai", adresse).status_code for adresse in meme_bloc] == [303, 303, 429]
+        assert ecrire(c, "essai", autre_bloc).status_code == 303
+
+
+def test_effacer_tous_les_messages(monkeypatch, reglages_publics, capsys):
+    from shadowlab import cli
+
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONSERVATION_JOURS", "90")
+    with fabriquer(reglages_publics) as c:
+        for n in range(3):
+            assert ecrire(c, f"message {n}").status_code == 303
+    capsys.readouterr()
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "3 message(s)" in capsys.readouterr().out
+    assert messages_recus(reglages_publics) == []
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "0 message(s)" in capsys.readouterr().out
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "après l'effacement").status_code == 303
+    cx = boite.connexion(boite.chemin(reglages_publics.base_donnees))
+    numeros = [ligne["id"] for ligne in boite.lister(cx)]
+    cx.close()
+    assert numeros == [4], "un numéro n'est jamais réutilisé"
