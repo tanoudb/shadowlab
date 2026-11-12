@@ -886,7 +886,9 @@ def _lire_essai(champ: str, html: str, signatures=None):
 def test_un_motif_sans_correspondance_alerte():
     resultat = _lire_essai("n: {css: 'p.n', motif: 'REF-(\\d+)'}", '<p class="n">AN-12</p>')
     assert resultat.enregistrements[0].donnees["n"] is None
-    assert len(resultat.alertes) == 1 and "n" in resultat.alertes[0] and "motif ne correspond pas" in resultat.alertes[0]
+    assert (
+        len(resultat.alertes) == 1 and "n" in resultat.alertes[0] and "motif ne correspond pas" in resultat.alertes[0]
+    )
 
 
 def test_un_motif_sans_correspondance_n_alerte_pas_quand_le_vide_est_normal():

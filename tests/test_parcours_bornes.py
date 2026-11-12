@@ -48,15 +48,16 @@ def test_pages_max_arrete_apres_n_pages_lues(dossier, site):
     etat.fermer()
 
 
-def test_reprendre_une_passe_limitee_avec_une_borne_plus_haute(dossier, site):
+def test_reprendre_une_passe_limitee_lit_n_pages_de_plus_ou_va_au_bout(dossier, site):
     premier = PiloteFactice(site)
     fabriquer(dossier, premier, options=Options(pages_max=10)).lancer()
     second = PiloteFactice(site)
-    assert fabriquer(dossier, second).reprendre().statut == "limitee"  # même borne : rien de plus à lire
-    assert second.pages_lues() == []
-    bilan = fabriquer(dossier, second).reprendre(pages_max=1000)
+    assert fabriquer(dossier, second).reprendre(pages_max=5).statut == "limitee"  # 5 pages de plus, pas 5 en tout
+    assert len(second.pages_lues()) == 5
+    dernier = PiloteFactice(site)
+    bilan = fabriquer(dossier, dernier).reprendre()  # la limite du lancement ne vaut plus
     assert bilan.statut == "terminee"
-    lues = [chemin_sans_jeton(d) for d in premier.pages_lues() + second.pages_lues()]
+    lues = [chemin_sans_jeton(d) for d in premier.pages_lues() + second.pages_lues() + dernier.pages_lues()]
     assert lues == vitrine.pages_attendues(GRAINE, TAILLE)
 
 

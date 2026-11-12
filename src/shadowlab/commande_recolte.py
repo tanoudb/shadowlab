@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
+import shlex
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,6 +33,7 @@ from .engines.noezia.parcours import (
     essayer,
     lignes_alertes,
     nettoyer,
+    pages_faites,
 )
 from .engines.noezia.recettes import Recette, RecetteInvalide, _est_local, lire_texte
 from .site import rallye, vitrine
@@ -42,6 +45,17 @@ _LOCAUX = {"127.0.0.1", "localhost", "::1"}
 
 def _err(message: str) -> None:
     print(message, file=sys.stderr)
+
+
+def _lignes_nettoyees(texte: str) -> str:
+    """Une ligne reste une ligne (une faute de recette par ligne) ; ce qui n'est pas imprimable devient « ? »."""
+    return "\n".join(nettoyer(ligne) for ligne in str(texte).split("\n"))
+
+
+def _fermer_la_sortie() -> None:
+    """Le lecteur du tube est parti (`… | head`) : la sortie va dans le vide, pour que l'arrêt de Python se taise."""
+    with contextlib.suppress(AttributeError, OSError, ValueError):
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
 
 def _pourcent(valeur: float | None) -> str:
@@ -98,6 +112,11 @@ def _dossier(args: argparse.Namespace, reglages: Reglages, nom: str) -> Path:
     return Path(args.sortie) if args.sortie else reglages.sorties / "recoltes" / nom
 
 
+def _options_reprise(args: argparse.Namespace) -> str:
+    """Ce qu'il faut rappeler à `reprendre` pour qu'il retrouve la récolte : `--sortie` quand elle a servi."""
+    return f" --sortie {shlex.quote(str(args.sortie))}" if args.sortie else ""
+
+
 def _tranche(valeurs: list[str]) -> dict[str, str]:
     tranche: dict[str, str] = {}
     for valeur in valeurs:
@@ -122,8 +141,12 @@ def executer(args: argparse.Namespace, reglages: Reglages) -> int:
     try:
         return actions[args.action](args, reglages)
     except (RefusParcours, RecetteInvalide) as erreur:
-        _err(nettoyer(str(erreur)) if isinstance(erreur, RecetteInvalide) else f"Refus : {nettoyer(str(erreur))}")
+        texte = _lignes_nettoyees(str(erreur))
+        _err(texte if isinstance(erreur, RecetteInvalide) else f"Refus : {texte}")
         return 2
+    except BrokenPipeError:  # `recolte etat --pages | head` : le lecteur a fermé le tube, ce n'est pas une erreur
+        _fermer_la_sortie()
+        return 0
     except Exception as erreur:  # noqa: BLE001
         _err(f"Erreur : {nettoyer(str(erreur))}")
         return 1
@@ -144,7 +167,9 @@ def _lancer(args: argparse.Namespace, reglages: Reglages) -> int:
     )
     dossier = _dossier(args, reglages, recette.nom)
     moteur = construire_moteur(nom_moteur, recette, reglages)  # ne touche pas au réseau
-    parcours = Parcours(recette, texte, str(chemin.resolve()), moteur, dossier, options)
+    parcours = Parcours(
+        recette, texte, str(chemin.resolve()), moteur, dossier, options, options_reprise=_options_reprise(args)
+    )
     parcours.verifier_avant_lancer()  # tous les refus qui n'ont pas besoin du site, avant de le démarrer
     with site_du_labo(recette, reglages):
         return parcours.lancer().code
@@ -175,7 +200,9 @@ def _reprendre(args: argparse.Namespace, reglages: Reglages) -> int:
         texte = passe["texte_recette"]
         recette = lire_texte(texte, source="copie de la passe")
     moteur = construire_moteur(passe["moteur"]["nom"], recette, reglages)
-    parcours = Parcours(recette, texte, passe["chemin_recette"], moteur, dossier)
+    parcours = Parcours(
+        recette, texte, passe["chemin_recette"], moteur, dossier, options_reprise=_options_reprise(args)
+    )
     parcours.verifier_avant_reprendre(maintenant=args.maintenant, recette_modifiee=args.recette_modifiee)
     with site_du_labo(recette, reglages):
         bilan = parcours.reprendre(
@@ -200,7 +227,7 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
             + (" · une passe tourne en ce moment (verrou pris)" if tourne else "")
         )
         print(
-            f"  {c['faites']} pages faites ({par_type or 'aucune'}), {c['a_faire']} à faire, {c['echecs']} échec(s), "
+            f"  {pages_faites(c['faites'])} ({par_type or 'aucune'}), {c['a_faire']} à faire, {c['echecs']} échec(s), "
             f"{c['interdites_robots']} interdite(s) par robots.txt, {c['anormales']} anormale(s), "
             f"{c['introuvables']} introuvable(s), {c['hors_site']} lien(s) hors site"
         )
@@ -254,12 +281,13 @@ def _essayer(args: argparse.Namespace, reglages: Reglages) -> int:
             )  # fmt: skip
     print(nettoyer(f"Page {essai.adresse_finale} · statut {essai.statut or '(fichier)'} · type {essai.type}"))
     if essai.resultat is None:
-        print("Rien n'a été lu (statut hors 2xx).")
-        return 0
+        raison = "aucune réponse" if essai.statut is None else f"statut {essai.statut} (hors 2xx)"
+        _err(f"Page non lue : {raison}.")
+        return 1
     resultat = essai.resultat
     if not resultat.conforme:
-        print(nettoyer(f"Page non conforme au type « {essai.type} » : {'; '.join(resultat.alertes)}"))
-        return 0
+        _err(nettoyer(f"Page non conforme au type « {essai.type} » : {'; '.join(resultat.alertes)}"))
+        return 1
     print(f"Enregistrements ({len(resultat.enregistrements)}) :")
     for e in resultat.enregistrements:
         print(

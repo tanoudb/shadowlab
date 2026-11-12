@@ -104,6 +104,8 @@ class Analyseur:
         self._sel = Selector(text=html or "")
         self._url = url
         self._signatures = signatures
+        # Meilleur score de la dernière relocalisation tentée et ratée (sous le seuil) ; `None` : pas ratée.
+        self.score_relocalisation_rate: float | None = None
 
     # ── Sélection ergonomique ───────────────────────────────────────────
     def css(self, selecteur: str) -> list[str]:
@@ -152,7 +154,9 @@ class Analyseur:
 
         Mémorise une signature à chaque extraction réussie (si un store est fourni), et s'en sert
         pour retrouver l'élément quand le site a changé. Fonctionne sur le HTML parsé, sans navigateur.
+        Une relocalisation tentée et ratée rend `None` et laisse son meilleur score dans `score_relocalisation_rate`.
         """
+        self.score_relocalisation_rate = None
         domaine = extraction.domaine_de(self._url)
         trouves = self._sel.css(selecteur)
         if trouves:
@@ -170,4 +174,5 @@ class Analyseur:
         meilleur, score = extraction.meilleur_candidat(sig, candidats)
         if meilleur and score >= extraction.SEUIL_RELOCALISATION:
             return _texte_de(next(n for n, c in zip(noeuds, candidats, strict=True) if c is meilleur))
+        self.score_relocalisation_rate = score
         return None

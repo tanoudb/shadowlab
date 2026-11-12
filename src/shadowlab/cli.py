@@ -84,7 +84,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--tranche", action="append", default=[], metavar="NOM=VALEUR", help="valeur d'une variable de la recette"
     )
-    p.add_argument("--pages-max", type=int, help="arrête la passe après N pages lues")
+    p.add_argument(
+        "--pages-max",
+        type=int,
+        help="arrête la passe après N pages lues (échecs compris) ; avec reprendre : N pages de plus, "
+        "sans lui : aucune limite",
+    )
     p.add_argument("--sans", default="", help="types de pages à ne pas visiter, séparés par des virgules")
     p.add_argument("--tout-refaire", action="store_true", help="ignore les passes précédentes")
     p.add_argument("--ignorer-robots", action="store_true", help="ne lit pas robots.txt (écrit dans resume.json)")

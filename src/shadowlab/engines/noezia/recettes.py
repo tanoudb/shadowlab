@@ -28,7 +28,7 @@ from parsel import Selector
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from .analyseur import Analyseur, Element
-from .extraction import Signatures
+from .extraction import SEUIL_RELOCALISATION, Signatures
 
 # ═══ Lecture et contrôle d'une recette ═════════════════════════════════════════════════════════
 
@@ -43,6 +43,9 @@ _HOTES_LOCAUX = {"127.0.0.1", "localhost", "::1", "[::1]"}
 # `(a|a)*`…) peut encore être lent, même sur 10 000 caractères : c'est à l'auteur de la recette de l'éviter.
 BORNE_TEXTE = 10_000
 _RE_IMBRIQUE = re.compile(r"[+*]\??\)\s*(?:[+*]|\{)")
+
+
+CLES_RYTHME = frozenset({"delai_s", "pages_par_heure_max", "pause_longue"})  # le détail d'un `rythme` (rythme.py)
 
 
 class RecetteInvalide(ValueError):
@@ -81,7 +84,12 @@ class _Modele(BaseModel):
 
 
 class Champ(_Modele):
-    """Comment lire une valeur : `'sélecteur'` seul, ou le détail (§ 4, « Désigner un champ »)."""
+    """Comment lire une valeur : `'sélecteur'` seul, ou le détail (§ 4, « Désigner un champ »).
+
+    `lien: true` rend l'adresse lue absolue et en retire le `#fragment`, comme pour un lien à suivre (une même
+    page n'a qu'une adresse). `motif` sans correspondance donne une valeur vide ET une alerte de lecture, sauf
+    si la valeur lue était déjà vide ou couverte par `vide_si`.
+    """
 
     css: str | None = None
     attribut: str | None = None
@@ -360,6 +368,17 @@ class Recette(_Modele):
     def rythme_lisible(cls, valeur: Any) -> Any:
         if isinstance(valeur, str) and valeur not in ("libre", "prudent"):
             raise ValueError("rythme : libre, prudent, ou le détail sous forme de tableau")
+        if isinstance(valeur, dict):
+            if "comportement" in valeur:  # acceptée puis ignorée jusqu'ici : le moteur navigateur n'a pas ce réglage
+                raise ValueError(
+                    "rythme : la clé « comportement » ne règle rien (le moteur navigateur garde toujours les "
+                    "gestes humains) : à retirer"
+                )
+            inconnues = sorted(set(valeur) - CLES_RYTHME)
+            if inconnues:
+                raise ValueError(
+                    f"rythme : clé inconnue « {inconnues[0]} » (admises : {', '.join(sorted(CLES_RYTHME))})"
+                )
         return valeur
 
     @field_validator("pages")
@@ -765,6 +784,10 @@ class _Lecteur:
         existe = bool(self.analyseur.elements(champ.css))
         texte = self.analyseur.extraire_adaptatif(champ.css, f"{self.type}/{regle.collection}/{nom}")
         if texte is None:
+            echec = self.analyseur.score_relocalisation_rate
+            if echec is not None:
+                score, seuil = f"{echec:.2f}".replace(".", ","), f"{SEUIL_RELOCALISATION:.2f}".replace(".", ",")
+                self.alerter(f"champ « {nom} » : relocalisation échouée (meilleur score {score}, seuil {seuil})")
             return []
         if not existe:
             self._relocalises.append(nom)
@@ -782,9 +805,11 @@ class _Lecteur:
         if not valeur or valeur in {_nettoyer(v) for v in champ.vide_si}:
             return None
         if champ.lien:
-            valeur = urljoin(self.adresse, valeur)
+            valeur = urldefrag(urljoin(self.adresse, valeur))[0]
         if champ.motif:
             trouve = re.search(champ.motif, self.borner(valeur, f"champ « {nom} »"))
+            if not trouve:
+                self.alerter(f"champ « {nom} » : le motif ne correspond pas à « {valeur[:60]} »")
             valeur = (trouve.group(1) or "") if trouve else ""
             if not valeur:
                 return None
