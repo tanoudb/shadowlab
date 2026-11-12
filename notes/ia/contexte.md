@@ -77,11 +77,12 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
 1. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours. Ethan fait 5 sessions humaines
    locales (`uv run shadowlab site`, puis `http://127.0.0.1:8770/manuel`), puis `uv run shadowlab rejeu`
    (jalon A sur l'Arena corrigée) ; comparer ses en-têtes et son empreinte à NOEZIA.
-2. **Conception de la récolte générale** : `docs/recherche/recolte-generale-2026-11-12.md`, soumise à Ethan
-   à 16 h 43, réponse attendue. Étapes 1, 3 et 5 faites et vertes dans des branches à part (`recolte-1-recette`,
-   `recolte-3-notation`, `recolte-5-rallye`), assemblées dans `recolte-integration` (dossier
-   `../noezia-shadowlab-recolte`, 820 tests rapides verts) ; étape 2 (parcours, reprise, commande) en
-   préparation à partir de cet assemblage. Rien n'est fusionné dans la branche de travail sans son accord.
+2. **Récolte générale** : conception `docs/recherche/recolte-generale-2026-11-12.md`, soumise à Ethan à
+   16 h 43, réponse attendue. Étapes 1, 2, 3, 5 et la recette du rallye (étape 6) faites, relues et assemblées
+   dans `recolte-integration` (poussée, dossier `../noezia-shadowlab-recolte`) : 1 106 tests rapides verts ;
+   commande réelle à 100 % sur la vitrine (500 annonces, 0,8 s) et sur le site de rallye factice (427 pages).
+   Rien n'est fusionné dans la branche de travail sans son accord. Suite : étape 4 (moteur navigateur),
+   campagne de preuve, étapes 7 et 8 (journal du 12/11, 19 h).
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).

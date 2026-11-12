@@ -2822,3 +2822,40 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `AGENTS.md` (État), `contexte.md`.
 - **Reste** : sessions humaines à 20 h puis `shadowlab rejeu` ; faire de l'identité native le réglage de
   référence du moteur ; corrélation et identité qui dure (palier 2) ; `recolte-rythme.yaml` reporté au 13/11.
+
+## 2026-11-12 (19h) — Claude (Fable 5.2, coordination) — Récolte générale : quatre briques et la recette du rallye, en branche à part
+
+- **Pourquoi** : consigne d'Ethan du jour (« après le scraper j'en aurais besoin pour scraper des sites » ;
+  annonces immobilières et un site de rallye, « avec le suivi des châssis […] tout »). Conception écrite
+  (`docs/recherche/recolte-generale-2026-11-12.md`), soumise à 16 h 43, sans réponse à 19 h : le travail est
+  fait dans des branches à part, rien n'est fusionné dans `niveau-authentifie-perimetre`.
+- **Fait, assemblé dans `recolte-integration`** (poussée sur le dépôt distant, dossier
+  `../noezia-shadowlab-recolte`) : étape 1 (lire une recette, extraire une page), étape 2 (parcours HTTP,
+  état SQLite, reprise, lecteur de robots.txt sans dépendance, commande `shadowlab recolte
+  lancer | reprendre | etat | essayer | noter`, export JSON Lines et CSV), étape 3 (notation générale :
+  pages, enregistrements, champs), étape 5 (site de rallye factice `/lab/rallye` : 427 pages, 2 745 lignes de
+  temps, dix pièges), recette du rallye de l'étape 6 (`configs/recettes/rallye-demo.yaml`).
+- **Mesuré par la coordination** (commande réelle, moteur `http`, site du labo sur un port à part) : vitrine
+  à 500 annonces : 525 pages, 500 annonces, 7 000 champs sur 7 000, 0,8 s ; site de rallye : 427 pages,
+  4 569 enregistrements, 34 410 champs sur 34 410. Suite rapide de la branche : 1 106 tests verts, lint propre ;
+  test d'intégration de reprise après `SIGKILL` : vert (6 s).
+- **Méthode** : briques écrites par des agents pendant les campagnes puis exécutées ; chaque commit de tests vu
+  en échec ; relecture indépendante (verdict « à corriger avant de proposer ») : six défauts corrigés (motif
+  de recette lent, nombres et durées lus faux sans alerte, tableaux mal formés, liens hors site, clé de
+  notation qui confondait « 01000 » et « 1000 », échappement de deux endroits du site de rallye). Relecture de
+  sécurité automatique : lecteur de robots.txt réécrit sans expression régulière (fichier hostile). Une
+  redirection vers un autre hôte n'est plus suivie : zéro requête vers cet hôte.
+- **Recette du rallye écrite par un agent qui n'a lu ni le code du site ni l'exemple du document** : première
+  version en 3 minutes environ, 100 % après correction des noms de champs. Ce qu'il a appris : les noms de
+  collections, de clés et de champs attendus ne se déduisent pas des pages (seule la note les révèle) ; les
+  alertes de lecture ne se voient pas pendant `lancer` ; `champs 0/0` fait paraître bon un résultat vide ; le
+  format ne sait pas lire la classe d'une ligne, ni un booléen depuis un texte, ni convertir une date écrite
+  en français.
+- **Décisions de la coordination** (à confirmer par Ethan avec la conception) : robots.txt respecté par
+  défaut, `--ignorer-robots` explicite et écrit dans le résumé ; pas de nouvelle dépendance ; CSV au format
+  d'Excel en France (point-virgule, BOM, virgule décimale), le JSON Lines restant la donnée exacte ; une
+  recette qui vise un site qui n'est pas à nous exige une ligne `autorisation` (D-30).
+- **Reste** : accord d'Ethan pour fusionner ; étape 4 (moteur navigateur en identité native, sentinelle
+  complète) ; campagne de preuve de l'étape 6 avec les deux moteurs ; étape 7 (récolte incrémentale) ;
+  étape 8 (documentation, décision à numéroter) ; défauts d'usage relevés ci-dessus ; rythme « prudent »
+  jamais tourné en temps réel ; aucun vrai site visé.
