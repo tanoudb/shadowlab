@@ -1,0 +1,154 @@
+# Niveaux 06 et 07 à l'identique, sans le détecteur correlation-session (mesure, pas un changement de l'Arena).
+# Généré à partir de configs/arena/profils.yaml : seule la ligne `exclure: [correlation-session]` diffère.
+# À régénérer si les niveaux 06 et 07 changent. Usage : voir configs/experiments/ablation-interface.yaml.
+# Pourquoi : la corrélation compte les sessions qui ont eu la même empreinte, sur toute la base et depuis
+# toujours. Dans une campagne, la même empreinte revient par construction (15 passages du même moteur), et un
+# vrai Chrome sur ce poste a le même canvas que les témoins, déjà vu 443 fois : aux niveaux 06 et 07 la règle
+# arrête alors un moteur pour l'historique de la base, pas pour ce qu'il fait. Analyse et règle proposée :
+# docs/recherche/correlation-entre-sessions-2026-11-12.md (à faire avec la mémoire des visiteurs, étape 2.1).
+06scorr:
+  captcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 18
+    lier_tls: true
+  description: Niveau 06 à l'identique, détecteur correlation-session écarté (exclure)
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.5
+    exclure:
+    - correlation-session
+  honeypots:
+    actif: true
+  limitation:
+    debit: 2
+    rafale: 4
+  nom: Défense multicouche sans corrélation
+  recaptcha:
+    actif: true
+  turnstile:
+    actif: true
+  waf:
+    mode: blocage
+    paranoia: 3
+    seuil: 3
+07scorr:
+  captcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 2
+  defi_js:
+    actif: true
+    difficulte: 20
+    lier_tls: true
+  description: Niveau 07 à l'identique, détecteur correlation-session écarté (exclure)
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.3
+    exclure:
+    - correlation-session
+  honeypots:
+    actif: true
+  limitation:
+    debit: 1
+    rafale: 2
+  nom: État de l'art sans corrélation
+  recaptcha:
+    actif: true
+  turnstile:
+    actif: true
+  waf:
+    mode: blocage
+    paranoia: 4
+    seuil: 2

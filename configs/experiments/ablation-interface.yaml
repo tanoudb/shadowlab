@@ -13,8 +13,14 @@
 # « HeadlessChrome » dans toute requête, WAF du niveau 07) : c'est aussi la nouvelle référence, à comparer
 # à la campagne n° 90 pour les trois moteurs qu'elles ont en commun. Écart avec la recommandation complète
 # de Patchright : un contexte neuf à chaque passage, pas de profil persistant.
+# Niveaux 06 et 07 sans le détecteur correlation-session (profils `06scorr` et `07scorr`) : il compte les
+# sessions de toute la base qui ont eu la même empreinte, donc il arrêterait chaque configuration pour
+# l'historique de la base et pour la répétition de la campagne, pas pour ce qu'elle fait
+# (docs/recherche/correlation-entre-sessions-2026-11-12.md).
 #
-#   uv run shadowlab campagne configs/experiments/ablation-interface.yaml
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/ablation-interface.yaml
+#   3. uv run shadowlab arena appliquer
 #
 # Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
 # 5 configurations × 7 niveaux × 3 scénarios × 5 répétitions = 525 passages, un à la fois (environ 2 h 30).
@@ -22,7 +28,7 @@ experiment:
   name: ablation_interface
   description: >-
     noezia tel qu'il est, noezia en identité native, patchright dans sa configuration recommandée et les deux
-    témoins, sur les niveaux 01 à 07 de l'Arena corrigée, mêmes scénarios et répétitions que la référence.
+    témoins, sur les niveaux 01 à 05 de l'Arena corrigée et 06 et 07 sans corrélation entre sessions.
   environment: local
   engines:
     - noezia
@@ -34,7 +40,7 @@ experiment:
       options: {headless: false, channel: chrome}
     - patchright
     - playwright
-  protections: ["01", "02", "03", "04", "05", "06", "07"]
+  protections: ["01", "02", "03", "04", "05", "06scorr", "07scorr"]
   scenarios:
     - static_html
     - javascript_content
