@@ -739,11 +739,13 @@ class DetecteurCoherenceProfonde:
     - outerWidth doit être ≥ innerWidth (barre de titre, bordures)
     - devicePixelRatio doit correspondre au type d'écran
     - hardwareConcurrency doit être une puissance de 2 ≤ 128
-    - deviceMemory doit être dans {0.25, 0.5, 1, 2, 4, 8}
+    - deviceMemory doit être dans {0.25, 0.5, 1, 2, 4, 8, 16, 32}
+
+    V1.1 (12/11/2026) : deviceMemory 16 et 32 acceptés ; la V1 signalait tout humain sur une machine de 16 Go ou plus.
     """
 
     name = "coherence-profonde"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -802,9 +804,10 @@ class DetecteurCoherenceProfonde:
             if hwc > 128:
                 signaux.append(Signal("hwc_excessif", f"hardwareConcurrency={hwc} > 128", 0.5))
 
-        # deviceMemory : doit être dans {0.25, 0.5, 1, 2, 4, 8}
+        # deviceMemory : Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) ; le Chromium 156
+        # piloté sans réglage annonce 32 sur une machine de 64 Go (campagne 94).
         dm = nav.get("deviceMemory")
-        if isinstance(dm, (int, float)) and dm not in (0.25, 0.5, 1, 2, 4, 8, "unknown"):
+        if isinstance(dm, (int, float)) and dm not in (0.25, 0.5, 1, 2, 4, 8, 16, 32, "unknown"):
             signaux.append(Signal("device_memory_invalide", f"deviceMemory={dm} invalide", 0.5))
 
         # colorDepth : doit être 24 ou 30 (HDR)
