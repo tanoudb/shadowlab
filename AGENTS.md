@@ -39,7 +39,8 @@ recommander des optimisations.
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
-  cross-contexte, deep Proxy, corrélation cross-session — D-48, **TLS v2 : 17 règles d'analyse
+  cross-contexte, deep Proxy, corrélation cross-session — D-48 puis D-64, en 1.1 ; `headless`, `chrome-apis`,
+  `polices` et `connection-dynamic` en 1.1 — D-66, **TLS v2 : 17 règles d'analyse
   ClientHello** — D-52, **HTTP/2 fingerprinting : 11 règles SETTINGS/WU** — D-53), honeypots (lien piège + champ piège),
   fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
   niveaux 05-07). Score composite pondéré par famille (D-47).
@@ -70,14 +71,28 @@ recommander des optimisations.
   configs/experiments/recolte-palier1.yaml` (environ 2 h).
 - **Application publique réduite** (`src/shadowlab/public/`, D-55) : la seule partie faite pour être mise en
   ligne. Site vitrine, consentement, collecte fermée, suppression de sa session, formulaire de contact
-  (D-57, aucune adresse affichée) ; aucune route du labo.
+  (D-57, aucune adresse affichée) ; aucune route du labo. Trois relectures (D-65, D-67) : le journal de
+  l'application ne garde que les erreurs (code 400 ou plus, ni adresse ni jeton), une page de contact ne laisse
+  aucune trace dans une session, dossier en 700 et bases en 600, `.env` réduit aux variables publiques, journal
+  de `cloudflared` filtré. Parcours vérifié à l'écran le 12/11 (16 h 17), feu vert à la mise en ligne, avec une
+  réserve : `scripts/site-public-tunnel.sh` n'a jamais tourné avec un vrai tunnel. Ethan le lance lui-même.
   Lancement et conditions : `docs/site-public.md`. Le labo lui-même ne se met jamais en ligne.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **645 tests rapides verts** (hors intégration, compte du 12/11 après l'intégration du jour), lint propre.
+- **749 tests verts** (`uv run pytest`, 12/11 à 16 h 16, hors campagne : 727 rapides et 22 d'intégration avec de
+  vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
+  `niveau-authentifie-perimetre` (fusion `759ca18`, assemblage `integration-12-11-b`), rien sur `master`.
+- **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
+  qu'il est fait 15, 10, 10, 10, 0, 0, 0 sur 15 aux niveaux 01 à 07 (06 et 07 sans corrélation), avec une seule
+  cause d'échec, le signal `headless_dans_une_requete`. `noezia` en identité native (`headless: false`,
+  `channel: chrome`, `identite_native: true`) et un vrai Chrome seul font 15 sur 15 aux niveaux 01 à 03, puis
+  0 sur 15 du 04 au 07, à cause de quatre règles corrigées depuis (D-66). Les deux témoins sont arrêtés dès
+  le niveau 02.
+- **Campagne de contrôle en cours** (lancée le 12/11 à 16 h 19, `controle-vrai-chrome.yaml`, 135 passages,
+  niveaux 04 à 06 sans corrélation, après D-66) : résultat pas encore connu.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
-  auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel.
+  auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, commande de récolte générale (liste puis fiches, tableaux, arbre ; conception en cours dans `docs/recherche/recolte-generale-2026-11-12.md`, attend l'accord d'Ethan).
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
@@ -99,6 +114,9 @@ npm --prefix frontend install                              # installer l'interfa
 npm --prefix frontend run build                            # construire l'interface → frontend/dist
 uv run shadowlab site                                      # http://127.0.0.1:8770/labo (interface) + /lab/ (site de test)
 uv run shadowlab arena demarrer                            # docker compose (Coraza + Nginx)
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer   # avant une campagne sans corrélation (niveaux 06 et 07) ; relancer ensuite sans la variable
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/ablation-interface.yaml  # identité réécrite ou native (campagne 97, 525 passages)
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/controle-vrai-chrome.yaml  # contrôle de D-66, niveaux 04 à 06 (135 passages)
 uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 uv run shadowlab campagne configs/experiments/baseline.yaml  # campagne de référence
 uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTCHA v3 réel (clés v3 dans .env)
