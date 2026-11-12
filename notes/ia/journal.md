@@ -2926,3 +2926,24 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   visites qui reviennent pendant 3 jours ; faire tourner la course de 7 jours en fond sur le Mac mini.
 - **État à 20 h 50** : aucune session humaine en base, site du labo non lancé ; `recolte-integration` toujours
   en attente de son accord.
+
+## 2026-11-12 (21h10) — Claude (Fable 5.2, coordination) — Récolte générale : passage par une campagne, essai court, campagne de preuve lancée
+
+- **Fait dans `recolte-integration`** (poussée, 1 205 tests rapides verts) : scénarios `recolte_recette_vitrine`
+  et `recolte_recette_rallye`, qui lancent le parcours de la commande dans un passage de campagne (moteur
+  `curl-cffi` → `http`, `noezia` en identité native → `navigateur`) et le notent ; campagnes
+  `configs/experiments/recolte-generale.yaml` et `recolte-generale-essai.yaml`.
+- **Établi en lisant le code** : le niveau de l'Arena d'une requête vient du jeton `sl` d'un passage
+  (`arena/frontal.py`) ; la commande `shadowlab recolte lancer` vise le site en direct, donc le niveau 01, et
+  n'est jugée par aucun niveau protégé. Pour l'être : entrée par l'Arena, jeton du passage sur chaque requête,
+  `sl` dans `parametres_ignores`. Aucun niveau 02 à 07 n'a encore tourné avec la récolte.
+- **Essai court, lancé par la coordination à 20 h 55** depuis le dossier `../noezia-shadowlab-recolte`, sur un
+  port (8785) et une base à part (`../noezia-shadowlab-recolte/outputs/shadowlab.sqlite3`, campagne n° 1 de
+  cette base) : 4 passages sur 4 réussis, pages, enregistrements et champs à 100 %. `noezia` en identité
+  native : vitrine à 20 annonces, 21 pages en 139 s ; site de rallye à 3 rallyes, 85 pages en 612 s (première
+  récolte du site de rallye par le navigateur). `curl-cffi` : 77 ms et 184 ms.
+- **Campagne de preuve lancée à 21 h 10**, même dossier, même base à part : vitrine à 150 annonces, rallye à
+  24 rallyes, 3 répétitions, environ 3 h 30. Elle n'utilise ni le port 8770 ni la base du dépôt principal.
+  Résultat à lire dans la base à part, puis à refaire dans la base du labo après la fusion.
+- **État** : aucune session humaine en base à 21 h 08 ; `recolte-integration` et la conception du palier 2
+  attendent l'accord d'Ethan.
