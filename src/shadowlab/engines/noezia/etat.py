@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS enregistrements (
     premiere_passe INTEGER NOT NULL, derniere_passe INTEGER NOT NULL, vu_le TEXT NOT NULL,
     UNIQUE (collection, cle)
 );
+CREATE TABLE IF NOT EXISTS changements (
+    passe INTEGER NOT NULL, collection TEXT NOT NULL, cle TEXT NOT NULL,
+    avant TEXT NOT NULL, empreinte_avant TEXT NOT NULL,
+    PRIMARY KEY (passe, collection, cle)
+);
 CREATE TABLE IF NOT EXISTS evenements (
     id INTEGER PRIMARY KEY, passe INTEGER NOT NULL, quand TEXT NOT NULL, genre TEXT NOT NULL, detail TEXT NOT NULL
 );
@@ -337,6 +342,16 @@ class Etat:
     def _ecrire_enregistrement(self, page: Page, e: Enregistrement, quand: str) -> None:
         donnees = _json(e.donnees)
         empreinte = hashlib.sha256(json.dumps(e.donnees, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        cle = _json(list(e.cle))
+        ancien = self._cx.execute(
+            "SELECT donnees, empreinte FROM enregistrements WHERE collection = ? AND cle = ?", (e.collection, cle)
+        ).fetchone()
+        if ancien is not None and ancien["empreinte"] != empreinte:  # le contenu a changé : on garde l'ancien
+            self._cx.execute(
+                "INSERT OR IGNORE INTO changements (passe, collection, cle, avant, empreinte_avant)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (page.passe, e.collection, cle, ancien["donnees"], ancien["empreinte"]),
+            )
         self._cx.execute(
             "INSERT INTO enregistrements (collection, cle, donnees, empreinte, page, relocalises, premiere_passe,"
             " derniere_passe, vu_le) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -345,7 +360,7 @@ class Etat:
             " vu_le = excluded.vu_le",
             (
                 e.collection,
-                _json(list(e.cle)),
+                cle,
                 donnees,
                 empreinte,
                 page.adresse,
@@ -394,10 +409,39 @@ class Etat:
             "hors_site": somme[0] + par_decision.get("hors_hotes", 0),
             "liens_exclus": somme[1],
             "relocalisations": somme[2],
+            "evitees": par_etat.get("evitee", 0),
             "a_faire": par_etat.get("a_faire", 0),
             "en_cours": par_etat.get("en_cours", 0),
             "lues": par_etat.get("faite", 0) + par_etat.get("echec", 0),
         }
+
+    def passe_de_base(self, jusqu_a: int | None = None) -> int:
+        """La plus récente passe (au plus `jusqu_a`) lancée avec `--tout-refaire` (elle a effacé les
+        enregistrements : les pages lues avant elle ne comptent plus), sinon la première."""
+        for ligne in self._cx.execute(
+            "SELECT numero, options FROM passes WHERE numero <= COALESCE(?, numero) ORDER BY numero DESC", (jusqu_a,)
+        ):
+            if json.loads(ligne["options"]).get("tout_refaire"):
+                return ligne["numero"]
+        return 1
+
+    def derniere_lecture(self, canon: str, base: int, avant: int) -> str | None:
+        """Heure de la dernière lecture réussie (page « faite », décision « ok ») de cette adresse dans les passes
+        `base` à `avant - 1`, ou `None` si elle n'a jamais été lue ainsi."""
+        return self._cx.execute(
+            "SELECT MAX(lu_le) FROM pages WHERE canon = ? AND passe >= ? AND passe < ?"
+            " AND etat = 'faite' AND decision = 'ok'",
+            (canon, base, avant),
+        ).fetchone()[0]
+
+    def pages_relues(self, passe: int, base: int) -> int:
+        """Pages lues dans cette passe qui l'avaient déjà été (réussies) dans une passe de `base` à `passe - 1`."""
+        return self._cx.execute(
+            "SELECT COUNT(*) FROM pages p WHERE p.passe = ? AND p.etat IN ('faite', 'echec') AND EXISTS ("
+            " SELECT 1 FROM pages q WHERE q.canon = p.canon AND q.passe >= ? AND q.passe < p.passe"
+            " AND q.etat = 'faite' AND q.decision = 'ok')",
+            (passe, base),
+        ).fetchone()[0]
 
     def faites_par_type(self, passe: int) -> dict[str, int]:
         lignes = self._cx.execute(
@@ -413,6 +457,16 @@ class Etat:
         )
         return [r[0] for r in lignes]
 
+    def adresses_couvertes(self, passe: int) -> list[str]:
+        """Pages qu'on peut dire lues avec succès pour cette passe : celles qu'elle a lues (comme `adresses_lues`)
+        et celles qu'elle a évitées parce qu'une passe précédente (depuis le dernier `--tout-refaire`) les avait
+        déjà lues avec succès. Une page en échec, anormale, introuvable ou interdite n'y est jamais : elle n'est
+        pas évitée, elle est redemandée. C'est ce que la notation compare aux pages attendues."""
+        evitees = self._cx.execute(
+            "SELECT adresse FROM pages WHERE passe = ? AND etat = 'evitee' ORDER BY id", (passe,)
+        )
+        return self.adresses_lues(passe) + [r[0] for r in evitees]
+
     def collections(self) -> list[str]:
         return [r[0] for r in self._cx.execute("SELECT DISTINCT collection FROM enregistrements ORDER BY collection")]
 
@@ -426,17 +480,47 @@ class Etat:
         """Les enregistrements connus, dans l'ordre de première lecture, avec les clés `_page`, `_vu_le`, `_passe`
         (et `_relocalises` s'il y en a eu)."""
         requete = "SELECT * FROM enregistrements" + (" WHERE collection = ?" if collection else "") + " ORDER BY id"
-        rendus = []
-        for ligne in self._cx.execute(requete, (collection,) if collection else ()):
-            donnees = json.loads(ligne["donnees"])
-            donnees["_page"] = ligne["page"]
-            donnees["_vu_le"] = ligne["vu_le"]
-            donnees["_passe"] = ligne["derniere_passe"]
-            relocalises = json.loads(ligne["relocalises"])
-            if relocalises:
-                donnees["_relocalises"] = relocalises
-            rendus.append(donnees)
-        return rendus
+        return [self._forme(ligne) for ligne in self._cx.execute(requete, (collection,) if collection else ())]
+
+    @staticmethod
+    def _forme(ligne: sqlite3.Row) -> dict[str, Any]:
+        donnees = json.loads(ligne["donnees"])
+        donnees["_page"] = ligne["page"]
+        donnees["_vu_le"] = ligne["vu_le"]
+        donnees["_passe"] = ligne["derniere_passe"]
+        relocalises = json.loads(ligne["relocalises"])
+        if relocalises:
+            donnees["_relocalises"] = relocalises
+        return donnees
+
+    def nouveautes(self, passe: int) -> list[dict[str, Any]]:
+        """Les enregistrements apparus dans cette passe (`_changement` = « nouveau ») et ceux dont le contenu a
+        changé depuis qu'on les connaît (« modifie », avec `_champs_modifies` : champ → ancienne valeur), dans
+        l'ordre de première lecture. Chacun porte `_collection`. Un enregistrement n'est vu modifié que si sa page
+        a été relue dans la passe."""
+        lignes = self._cx.execute(
+            "SELECT e.*, c.avant AS avant FROM enregistrements e"
+            " LEFT JOIN changements c ON c.passe = ? AND c.collection = e.collection AND c.cle = e.cle"
+            " WHERE e.premiere_passe = ? OR (e.premiere_passe < ? AND c.empreinte_avant IS NOT NULL"
+            " AND c.empreinte_avant != e.empreinte) ORDER BY e.id",
+            (passe, passe, passe),
+        )
+        rendues = []
+        for ligne in lignes:
+            rendu = {
+                "_collection": ligne["collection"],
+                "_changement": "nouveau" if ligne["premiere_passe"] == passe else "modifie",
+            }
+            donnees = self._forme(ligne)
+            if ligne["avant"] is not None and rendu["_changement"] == "modifie":
+                avant = json.loads(ligne["avant"])
+                rendu["_champs_modifies"] = {
+                    champ: avant.get(champ)
+                    for champ in sorted(set(avant) | set(donnees))
+                    if not champ.startswith("_") and avant.get(champ) != donnees.get(champ)
+                }
+            rendues.append({**rendu, **donnees})
+        return rendues
 
     # ── Événements ──────────────────────────────────────────────────────
     def evenement(self, passe: int, genre: str, detail: Mapping[str, Any], quand: str) -> None:

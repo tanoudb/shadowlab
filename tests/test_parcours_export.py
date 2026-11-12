@@ -181,7 +181,7 @@ def test_une_passe_complete_ecrit_les_donnees_exactes(dossier, site):
         assert all(ligne[champ] == valeur for champ, valeur in attendu.items() if champ != "photos")
         assert ligne["_passe"] == 1 and ligne["_page"].endswith(ligne["reference"])
         assert all(photo.startswith("http://127.0.0.1") and photo.endswith(".svg") for photo in ligne["photos"])
-    assert bilan.resume["fichiers"] == ["annonces.csv", "annonces.jsonl"]
+    assert bilan.resume["fichiers"] == ["annonces.csv", "annonces.jsonl", "nouveautes.csv", "nouveautes.jsonl"]
     assert bilan.resume["csv"] == {"separateur": ";", "encodage": "utf-8-sig", "decimale": ","}
     assert json.loads((bilan.dossier_passe / "resume.json").read_text(encoding="utf-8"))["csv"]["separateur"] == ";"
     assert next(row for row in lignes_csv(csv_) if row["reference"] == ecrites[0]["reference"])["prix"] == str(

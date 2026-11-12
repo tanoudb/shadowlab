@@ -150,13 +150,23 @@ def test_la_reprise_garde_les_options_de_depart(dossier, site):
     assert not any(d.startswith("/robots.txt") for d in second.demandes)
 
 
-def test_nouveau_lancer_apres_une_passe_terminee_relit_tout_sans_doubler(dossier, site):
+def test_nouveau_lancer_apres_une_passe_terminee_ne_relit_que_les_listes_sans_doubler(dossier, site):
     fabriquer(dossier, PiloteFactice(site)).lancer()
     second = PiloteFactice(site)
     bilan = fabriquer(dossier, second).lancer()
     assert bilan.passe == 2 and bilan.code == 0
-    assert len(second.pages_lues()) == 48
+    assert len(second.pages_lues()) == 3  # les fiches sont « jamais » à revisiter (tests/test_parcours_incremental.py)
     assert bilan.resume["enregistrements"] == {"annonces": 45}
+    etat = Etat(dossier / "etat.sqlite3")
+    assert len(etat.enregistrements("annonces")) == 45 and etat.enregistrements("annonces")[0]["_passe"] == 1
+    etat.fermer()
+
+
+def test_tout_refaire_apres_une_passe_terminee_relit_tout_sans_doubler(dossier, site):
+    fabriquer(dossier, PiloteFactice(site)).lancer()
+    second = PiloteFactice(site)
+    bilan = fabriquer(dossier, second, options=Options(tout_refaire=True)).lancer()
+    assert bilan.passe == 2 and len(second.pages_lues()) == 48
     etat = Etat(dossier / "etat.sqlite3")
     assert len(etat.enregistrements("annonces")) == 45 and etat.enregistrements("annonces")[0]["_passe"] == 2
     etat.fermer()
