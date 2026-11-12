@@ -1298,8 +1298,9 @@ def test_contact_absent_du_fichier_de_journal(client, tmp_path):
         configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
         fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
         commencer(client)  # pendant une session : ses requêtes /lab/… sont notées en base, à la milliseconde
+        client.get("/n-existe-pas")
         avant = messages_du_fichier()
-        assert avant, "les autres requêtes restent journalisées"
+        assert avant, "les erreurs du site restent journalisées"
         journal.addHandler(capture)
         # Ce qu'un navigateur demande : la page, sa feuille de style, l'icône ; l'envoi ; la page de confirmation.
         for chemin in ("/contact", "/lab/static/vitrine.css", "/favicon.ico"):
@@ -1312,8 +1313,8 @@ def test_contact_absent_du_fichier_de_journal(client, tmp_path):
         apres = messages_du_fichier()
         assert apres == avant, "aucune ligne, pas même celles de la feuille de style ou de l'icône"
         assert not [ligne for ligne in apres if "/contact" in ligne or "message" in ligne]
-        client.get("/lab/vitrine")
-        assert "GET /lab/vitrine 200" in messages_du_fichier(), "les pages du site restent journalisées"
+        client.get("/n-existe-pas")
+        assert "GET /n-existe-pas 404" in messages_du_fichier(), "les erreurs du site restent journalisées"
     finally:
         journal.removeHandler(capture)
         for gestionnaire in racine.handlers:
@@ -1579,3 +1580,143 @@ def test_effacer_tous_les_messages(monkeypatch, reglages_publics, capsys):
     numeros = [ligne["id"] for ligne in boite.lister(cx)]
     cx.close()
     assert numeros == [4], "un numéro n'est jamais réutilisé"
+
+
+# --- Troisième relecture (12/11) : le journal ne garde que les erreurs, le contact ne laisse aucune trace ---------
+
+
+@pytest.fixture
+def fichier_de_journal(tmp_path):
+    """Branche le journal tournant de l'application dans `tmp_path` ; renvoie une fonction qui lit ses messages."""
+    from shadowlab.journal import configurer
+    from shadowlab.public import ROTATION_JOURNAL
+
+    racine = logging.getLogger("shadowlab")
+    anciens, niveau, propage = list(racine.handlers), racine.level, racine.propagate
+    configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
+    fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
+
+    def lire() -> list[str]:
+        return [json.loads(ligne)["message"] for ligne in fichier.read_text(encoding="utf-8").splitlines()]
+
+    try:
+        yield lire
+    finally:
+        for gestionnaire in racine.handlers:
+            gestionnaire.close()
+        racine.handlers[:] = anciens
+        racine.setLevel(niveau)
+        racine.propagate = propage
+
+
+def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
+    """« Rien n'est enregistré » pour qui visite sans participer, et le journal, qui ne suit pas la purge, ne date
+    plus chaque requête ordinaire : seules les réponses de code 400 ou plus y laissent « méthode chemin statut »."""
+    jeton = commencer(client)  # POST (303), puis GET : redirection et pages réussies
+    for chemin in ("/", "/lab/vitrine", "/session", "/lab/static/vitrine.css", "/contact"):
+        assert client.get(chemin).status_code == 200
+    assert collecter(client, jeton).status_code == 204
+    assert fichier_de_journal() == [], "une requête réussie ou redirigée n'écrit plus rien"
+
+    assert client.get(f"/n-existe-pas?sl={jeton}").status_code == 404
+    assert client.get("/lab/vitrine/annonces?page=999").status_code == 404
+    assert client.post("/session/commencer", data={}, headers={"Origin": ORIGINE}).status_code == 403
+    # Toujours hors du journal : les pages de contact (même en erreur) et les fichiers de la page.
+    assert client.post("/contact", data={}, headers={"Origin": ORIGINE}).status_code == 403
+    assert client.get("/lab/static/inconnu.js").status_code == 404
+    assert fichier_de_journal() == [
+        "GET /n-existe-pas 404",
+        "GET /lab/vitrine/annonces 404",
+        "POST /session/commencer 403",
+    ]
+    assert jeton not in "\n".join(fichier_de_journal())
+
+
+def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
+    assert VERSION_INFORMATION == "2026-11-12.7", "le texte a changé : nouvelle version du texte accepté"
+    texte = client.get("/").text
+    for phrase in (
+        "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
+        "le code de réponse et l'heure, sans adresse IP ni identifiant de session.",
+        "une empreinte non réversible de votre adresse est gardée en mémoire, 24 heures au plus, le temps de "
+        "limiter les abus ; elle n'est jamais écrite sur le disque.",
+        "n'enregistre pas votre adresse IP",
+        "rien n'est relevé",
+        "efface aussitôt toutes les données qui la concernent",
+        "effacée automatiquement 90 jours après",
+        "l'effacement peut avoir lieu un jour plus tard",
+    ):
+        assert phrase in texte, phrase
+    bandeau = client.get("/lab/vitrine").text
+    assert "Vous visitez sans participer : rien n'est enregistré" in bandeau
+    assert "journal technique des erreurs" in bandeau, "la phrase du bandeau reste vraie : une erreur est journalisée"
+
+
+def test_purge_des_messages_au_jour_limite(client, reglages_publics):
+    """Un message n'est daté que du jour : à 90 jours révolus, il est effacé (avec `<`, il restait 91 jours)."""
+    assert ecrire(client, "limite").status_code == 303
+    assert ecrire(client, "veille").status_code == 303
+    vieillir_message(reglages_publics, "limite", 90)
+    vieillir_message(reglages_publics, "veille", 89)
+    creer_app_publique(reglages_publics)
+    assert messages_recus(reglages_publics) == ["veille"]
+
+
+def attributs_de_liens(html: str) -> list[str]:
+    """Toutes les adresses que la page demande ou propose : liens, ressources, actions de formulaire."""
+    page = Selector(html)
+    return (
+        page.css("[href]::attr(href)").getall()
+        + page.css("[src]::attr(src)").getall()
+        + page.css("[action]::attr(action)").getall()
+    )
+
+
+def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, fichier_de_journal):
+    """Pendant une session, `preparer` note en base toute requête sous /lab/ (à la milliseconde). Une page de contact
+    ne charge donc rien sous /lab/, et ne propose aucun lien vers /lab/ : ni sa feuille de style, ni la page suivante
+    ne trahissent l'ouverture du formulaire ou l'envoi."""
+    from shadowlab.public.app import NON_JOURNALISES
+
+    jeton = commencer(client)
+
+    def requetes_notees() -> list[tuple]:
+        cx = ouvrir(reglages_publics)
+        try:
+            return [tuple(r) for r in cx.execute("SELECT * FROM observations_http WHERE session_token = ?", (jeton,))]
+        finally:
+            cx.close()
+
+    client.get("/n-existe-pas")  # prouve que le journal écrit encore (une erreur du site)
+    notees, journalisees = requetes_notees(), fichier_de_journal()
+    assert notees and journalisees == ["GET /n-existe-pas 404"]
+
+    contact = client.get("/contact")
+    feuille = Selector(contact.text).css('link[rel="stylesheet"]::attr(href)').getall()
+    assert feuille == ["/contact/style.css"]
+    assert client.get(feuille[0]).status_code == 200
+    refus = client.post("/contact", data={}, headers={"Origin": "https://ailleurs.test"})
+    assert refus.status_code == 403, "page d'erreur du formulaire"
+    envoi = ecrire(client, "Bonjour, merci d'effacer ma session.")
+    assert envoi.status_code == 303 and envoi.headers["location"] == "/contact/envoye"
+    envoye = client.get("/contact/envoye")
+    assert client.get(feuille[0]).status_code == 200
+
+    assert requetes_notees() == notees, "aucune requête de contact notée dans la session"
+    assert fichier_de_journal() == journalisees, "aucune ligne de journal pour le contact"
+    assert "/contact/style.css".startswith(NON_JOURNALISES) and not "/contact/style.css".startswith("/lab/")
+
+    for page in (contact, refus, envoye):
+        assert page.status_code in (200, 403)
+        assert "/lab/" not in page.text, "aucune adresse sous /lab/ (ressource, lien, pied de page)"
+        assert not Selector(page.text).css("script"), "aucun observateur ni script : rien n'est envoyé à /lab/collecte"
+        for adresse in attributs_de_liens(page.text):
+            assert adresse == "/" or adresse.startswith("/contact"), adresse
+
+    # Même contenu et mêmes en-têtes que la feuille du site, servie sous /contact/.
+    css, ancienne = client.get("/contact/style.css"), client.get("/lab/static/vitrine.css")
+    assert css.text == ancienne.text and css.headers["content-type"] == ancienne.headers["content-type"]
+    assert css.headers["content-type"].startswith("text/css")
+    assert css.headers["cache-control"] == ancienne.headers["cache-control"]
+    assert css.headers["referrer-policy"] == "origin"
+    assert client.get("/contact/autre.css").status_code == 404, "seule la feuille de style est servie"
