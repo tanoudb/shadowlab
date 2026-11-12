@@ -2875,3 +2875,29 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   en JavaScript) non branché ; rien au-dessus du niveau 01 ; aucun vrai site.
 - **Reste** : accord d'Ethan pour fusionner `recolte-integration` ; campagne de preuve de l'étape 6 avec les
   deux moteurs ; défauts d'usage (alertes invisibles pendant `lancer`, diagnostic de `noter`) ; étapes 7 et 8.
+
+## 2026-11-12 (19h40) — Claude (Fable 5.2, coordination) — Récolte générale : étapes 7 et 8, défauts d'usage, état de la branche
+
+- **`recolte-integration` (poussée, non fusionnée dans la branche de travail)** contient maintenant les étapes
+  1 à 5, 7 et 8 du document de conception et la recette du rallye de l'étape 6 : 49 fichiers, environ 11 900
+  lignes ajoutées. Suite rapide : 1 195 tests verts, lint propre ; reprise après `SIGKILL` : verte.
+- **Étape 7, récolte incrémentale** : `revisiter` est lu, une deuxième passe ne relit que les pages à revisiter
+  et les pages jamais lues, `nouveautes.jsonl` et son CSV distinguent `nouveau` et `modifie`. Vérifié par la
+  coordination avec la commande réelle (vitrine à 45 puis 50 annonces) : 8 pages lues, 45 évitées, 5
+  nouveautés ; notation 53 pages sur 53, 50 annonces sur 50, 700 champs sur 700. Défaut trouvé à ce contrôle
+  et corrigé : la notation comptait les pages évitées comme manquantes.
+- **Étape 8, guide** : `docs/recolte.md` (dix sections, exemples exécutés en moteur `http`), mis d'accord avec
+  le code après chaque correction.
+- **Défauts d'usage corrigés** (trouvés par l'agent qui a écrit la recette du rallye, puis par celui du guide) :
+  alertes de lecture visibles pendant `lancer` et gardées dans l'état (200 sortes au plus par passe),
+  diagnostic de `noter` (clé attendue absente, « rien à comparer », option `--attendu`), `reprendre` après une
+  limite de pages, une faute de recette par ligne, commande de reprise complète (`--sortie`), code de sortie
+  de `essayer`, alerte sur un `motif` sans correspondance et sur une relocalisation ratée, `lien: true` sans
+  fragment, clé `comportement` du rythme refusée.
+- **Contrôle de la coordination après ces corrections** (commande réelle, moteur `http`) : vitrine à 500
+  annonces : 525 pages, 7 000 champs sur 7 000 ; site de rallye : 427 pages, 34 410 champs sur 34 410 ; aucune
+  alerte de lecture.
+- **Reste** : accord d'Ethan pour fusionner ; campagne de preuve de l'étape 6 avec les deux moteurs (le mode
+  navigateur n'a tourné qu'une fois, 48 pages au niveau 01) ; `attendre` non branché ; champ adaptatif sans
+  signature mémorisée encore muet ; rythme « prudent » jamais tourné en temps réel ; aucun vrai site visé ;
+  décision à numéroter et mise à jour d'`AGENTS.md` et du README au moment de la fusion.

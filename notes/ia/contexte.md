@@ -81,8 +81,10 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    16 h 43, réponse attendue. Étapes 1, 2, 3, 5 et la recette du rallye (étape 6) faites, relues et assemblées
    dans `recolte-integration` (poussée, dossier `../noezia-shadowlab-recolte`) : 1 106 tests rapides verts ;
    commande réelle à 100 % sur la vitrine (500 annonces, 0,8 s) et sur le site de rallye factice (427 pages).
-   Rien n'est fusionné dans la branche de travail sans son accord. Suite : étape 4 (moteur navigateur),
-   campagne de preuve, étapes 7 et 8 (journal du 12/11, 19 h).
+   Rien n'est fusionné dans la branche de travail sans son accord. Depuis : étapes 4 (moteur navigateur,
+   un essai réel de 48 pages), 7 (incrémental) et 8 (guide `docs/recolte.md`) faites et assemblées ; 1 195
+   tests rapides verts (journal du 12/11, 19 h 10 et 19 h 40). Reste la campagne de preuve avec les deux
+   moteurs, puis la fusion.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
