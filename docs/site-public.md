@@ -297,3 +297,30 @@ Corrections après relecture et audit (12/11/2026) :
 - Sonde WebRTC sautée : le détecteur `webrtc` n'a rien à lire.
 - Le dernier envoi « comportement » (au départ de la dernière page) peut arriver après « terminer » et être
   refusé.
+
+## Message à envoyer avec le lien
+
+Prêt à copier. Les sessions utiles sont celles faites **sur ordinateur** (le plan en demande au moins 10) ;
+le lien d'un tunnel rapide change à chaque relance, donc l'envoyer juste après le lancement.
+
+Version courte :
+
+> Tu peux me rendre un service de 5 minutes ? Depuis un ordinateur (pas le téléphone), ouvre ce lien :
+> LIEN
+> C'est un faux site d'annonces immobilières. Tu cliques sur « Commencer la session », tu te balades comme
+> sur un vrai site (quelques annonces, quelques pages), puis « Terminer ma session » en haut. Ça m'aide à
+> vérifier qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Rien de personnel
+> n'est relevé (ni nom, ni e-mail, ni adresse IP), et tu peux tout effacer d'un clic.
+
+Version détaillée, pour quelqu'un qui veut savoir avant de cliquer :
+
+> Je travaille sur un projet de recherche autour de la détection des robots sur le Web. Pour le calibrer,
+> j'ai besoin de quelques visites de vraies personnes sur un faux site d'annonces immobilières.
+> - Depuis un ordinateur, ouvre LIEN et lis la page d'accueil : elle dit exactement ce qui est relevé.
+> - Coche la case, clique sur « Commencer la session », puis navigue 5 à 10 minutes comme tu le ferais
+>   vraiment : ouvre des annonces, fais défiler, change de page. Garde l'onglet au premier plan.
+> - Clique sur « Terminer ma session » dans le bandeau du haut.
+> Ce qui est relevé : les caractéristiques techniques de ton navigateur et ta façon de naviguer, en
+> chiffres (nombre de clics, délais entre deux gestes). Jamais ce que tu tapes, ni ton nom, ni ton e-mail,
+> ni ton adresse IP. Tout est effacé au bout de 90 jours, et la page « Ma session » permet de tout
+> supprimer tout de suite.
