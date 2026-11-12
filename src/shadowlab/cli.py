@@ -93,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--recette-modifiee", action="store_true", help="reprendre : la recette a changé depuis le début")
     p.add_argument("--pages", action="store_true", help="etat : le journal page par page")
     p.add_argument("--verite", choices=["vitrine", "rallye"], help="noter : la vérité du site du labo")
+    p.add_argument(
+        "--attendu", action="store_true", help="noter : montre la clé et les champs que la vérité attend, sans noter"
+    )
     p.add_argument("--type", help="essayer : type de page imposé (obligatoire pour un fichier .html)")
     p.add_argument("--base", help="essayer : adresse d'où vient le fichier .html")
     p = sous.add_parser(

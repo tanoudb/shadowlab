@@ -236,6 +236,17 @@ def _chemin_et_requete(adresse: str) -> str:
 _JOURNAL = logging.getLogger("shadowlab.recolte")
 
 
+def lignes_alertes(alertes: Mapping[str, Any]) -> list[str]:
+    """Les alertes de lecture d'une passe, prêtes à afficher : le total, puis les plus fréquentes avec un exemple."""
+    total, groupes = alertes["total"], alertes["groupes"]
+    if not total:
+        return ["Alertes de lecture : aucune."]
+    lignes = [f"Alertes de lecture : {total} au total, {len(groupes)} sorte(s) parmi les plus fréquentes :"]
+    for g in groupes:
+        lignes.append(nettoyer(f"  {g['nb']} × {g['type']} · {g['exemple_message']} (ex. {g['exemple_adresse']})"))
+    return lignes
+
+
 def _maintenant() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -665,6 +676,8 @@ class Parcours:
                 duree_chargement_ms=reponse.duree_ms, duree_totale_ms=total_ms(),
             )  # fmt: skip
             return "anormale"
+        if resultat.alertes:  # alertes de lecture d'une page conforme (une page anormale a déjà son compteur)
+            etat.noter_alertes(self._passe, page.type, reponse.adresse_finale, resultat.alertes)
         liens: list[tuple[str, str]] = []
         hors_site, exclus = resultat.hors_site, 0  # l'extraction écarte déjà les liens hors de `hotes` et les compte
         for lien in resultat.liens:
@@ -735,7 +748,11 @@ class Parcours:
     def _progression(self, lues: int) -> None:
         c = self._etat.compteurs(self._passe)
         enregistrements = ", ".join(f"{n} {nom}" for nom, n in self._etat.nb_enregistrements().items()) or "0"
-        self._ecran(f"  pages lues {lues} · {enregistrements} · échecs {c['echecs']} · à faire {c['a_faire']}")
+        alertes = self._etat.alertes_lecture(self._passe, 0)["total"]
+        self._ecran(
+            f"  pages lues {lues} · {enregistrements} · échecs {c['echecs']} · à faire {c['a_faire']}"
+            f" · alertes de lecture {alertes}"
+        )
 
     def _conclure(self, etat: Etat, passe: int, statut: str, arret: dict[str, Any] | None) -> Bilan:
         c = etat.compteurs(passe)
@@ -766,6 +783,8 @@ class Parcours:
                 f"Reprise conseillée après {ATTENTE_APRES_ALERTE_S // 3600} h : "
                 f"uv run shadowlab recolte reprendre {self.recette.nom}"
             )
+        for ligne in lignes_alertes(resume["alertes_lecture"]):
+            self._ecran(ligne)
         self._ecran(f"Données : {dossier_passe}")
         code = {"terminee": 0, "limitee": 0, "arretee": 3}.get(statut, 1)
         return Bilan(code, statut, passe, arret, resume, dossier_passe)
@@ -802,6 +821,7 @@ class Parcours:
             "enregistrements": etat.nb_enregistrements(),
             "relocalisations": c["relocalisations"],
             "porte_entree": self._porte,
+            "alertes_lecture": etat.alertes_lecture(passe),
             "arret": arret,
         }
         if len(origines) > 1:
@@ -889,6 +909,7 @@ __all__ = [
     "Verrou",
     "canonique",
     "essayer",
+    "lignes_alertes",
     "nettoyer",
     "type_de_page",
 ]

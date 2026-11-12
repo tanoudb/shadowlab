@@ -301,3 +301,19 @@ def test_deux_enregistrements_a_zeros_en_tete_restent_distincts():
     assert note["enregistrements_retrouves"] == 2 and note["exactitude"] == 1
     note = noter_recolte(recolte[:1], v, liste="l", cle="cp")
     assert note["enregistrements_retrouves"] == 1 and note["references_manquantes"] == ["1000"]
+
+
+def test_champs_en_plus_et_cle_absente_sont_rendus_pour_le_diagnostic():
+    verite = {"liste": [{"code": "a", "nom": "A"}]}
+    note = noter_recolte([{"id": "a", "nom": "A", "extra": 1}, {"id": "b", "autre": 2}], verite, "liste", "code")
+    assert note["cle_absente"] == ["code"]
+    assert note["champs_recoltes"] == ["id", "nom", "extra", "autre"]  # dans l'ordre où ils apparaissent
+    assert note["champs_en_plus"] == ["id", "extra", "autre"]
+    assert note["enregistrements_retrouves"] == 0 and note["exactitude"] is None
+
+
+def test_champs_en_plus_ne_change_pas_la_note():
+    verite = {"liste": [{"code": "a", "nom": "A"}]}
+    note = noter_recolte([{"code": "a", "nom": "A", "extra": 1}], verite, "liste", "code")
+    assert note["champs_en_plus"] == ["extra"] and note["cle_absente"] == []
+    assert note["completude"] == 1 and note["exactitude"] == 1

@@ -92,6 +92,10 @@ def noter_recolte(
     doivent être uniques. Les clés `annonces_*` gardent leur nom d'origine (appel historique de la vitrine) ;
     `enregistrements_*` en sont les noms généraux.
 
+    `cle_absente` : parties de la clé attendue présentes dans aucun enregistrement récolté ; `champs_recoltes` :
+    champs produits (hors métadonnées `_…` de l'état) ; `champs_en_plus` : ceux que la vérité n'a pas
+    (information seulement, la note n'en dépend pas).
+
     `exactitude` vaut `None` quand aucun champ n'est comparé (rien retrouvé) : l'appelant doit le gérer avant de
     la comparer à un seuil.
     """
@@ -131,7 +135,14 @@ def noter_recolte(
         for k in attendues
         if k not in retrouvees
     ]
+    champs_recoltes: list[str] = []  # dans l'ordre où ils apparaissent
+    for enregistrement in recolte:
+        champs_recoltes += [c for c in enregistrement if c not in champs_recoltes and not c.startswith("_")]
+    champs_verite = {c for e in verite[liste] for c in e}
     return {
+        "cle_absente": [c for c in champs_cle if recolte and not any(c in e for e in recolte)],
+        "champs_recoltes": champs_recoltes,
+        "champs_en_plus": [c for c in champs_recoltes if c not in champs_verite],
         "completude": len(retrouvees) / len(attendues) if attendues else 0.0,
         "exactitude": champs_exacts / champs_attendus if champs_attendus else None,
         "annonces_attendues": len(attendues),

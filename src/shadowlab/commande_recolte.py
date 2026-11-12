@@ -29,6 +29,7 @@ from .engines.noezia.parcours import (
     RefusParcours,
     Verrou,
     essayer,
+    lignes_alertes,
     nettoyer,
 )
 from .engines.noezia.recettes import Recette, RecetteInvalide, _est_local, lire_texte
@@ -204,6 +205,8 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
             f"{c['introuvables']} introuvable(s), {c['hors_site']} lien(s) hors site"
         )
         print(f"  enregistrements : {enregistrements}")
+        for ligne in lignes_alertes(etat.alertes_lecture(numero)):
+            print(f"  {ligne}")
         if passe["arret"]:
             a = passe["arret"]
             print(nettoyer(f"  arrêt : signe d'alerte ({a['detail']}) sur {a['adresse']} à {a['quand']}"))
@@ -270,28 +273,71 @@ def _essayer(args: argparse.Namespace, reglages: Reglages) -> int:
     return 0
 
 
+def _verite_du_labo(args: argparse.Namespace, reglages: Reglages) -> tuple[Any, Any, dict, dict, list[str]]:
+    """Graine, taille, collections {nom: (liste, clé)}, vérité par collection et pages attendues du site factice."""
+    if args.verite == "vitrine":
+        graine, taille = reglages.vitrine_graine, reglages.vitrine_taille
+        verite = vitrine.verite(graine, taille)  # {"annonces": [...]}
+        return graine, taille, {"annonces": ("annonces", "reference")}, verite, vitrine.pages_attendues(graine, taille)
+    graine, taille = reglages.rallye_graine, reglages.rallye_taille
+    complete = rallye.verite(graine, taille)
+    collections = {nom: (nom, cle) for nom, cle in complete["cles"].items()}
+    return graine, taille, collections, complete["collections"], [p["adresse"] for p in complete["pages"]]
+
+
+def _montrer_attendu(args: argparse.Namespace, reglages: Reglages) -> int:
+    """Ce que la vérité attend, par collection : sa clé et ses champs. Ne lit aucune récolte, ne note rien."""
+    graine, taille, collections, verite, _ = _verite_du_labo(args, reglages)
+    print(f"Ce que la vérité {args.verite} attend (graine {graine}, taille {taille}) :")
+    for nom, (liste, cle) in collections.items():
+        champs: list[str] = []
+        for e in verite[liste]:
+            champs += [c for c in e if c not in champs]
+        cles = [cle] if isinstance(cle, str) else list(cle)
+        print(f"  {nom} · clé : {', '.join(cles)} · {len(verite[liste])} enregistrements")
+        print(f"    champs : {', '.join(champs)}")
+    return 0
+
+
+def _diagnostic(
+    nom: str, cle: Any, n: dict[str, Any], recoltes: list[dict], attendus: list[dict], collections: str
+) -> str | None:
+    """Pourquoi aucun enregistrement n'est retrouvé (rien si au moins un l'est)."""
+    cles = (cle,) if isinstance(cle, str) else tuple(cle)
+    if n["enregistrements_retrouves"] or not n["enregistrements_attendus"]:
+        return None
+    if not recoltes:
+        return f"aucun enregistrement « {nom} » récolté ; collections récoltées : {collections}."
+    if n["cle_absente"]:
+        absentes = ", ".join(f"`{c}`" for c in n["cle_absente"])
+        return (
+            f"la clé attendue est `{', '.join(cles)}` ({absentes} absente des enregistrements) ; "
+            f"les enregistrements récoltés ont les champs : {', '.join(n['champs_recoltes'])}."
+        )
+    recolte = [recoltes[0].get(c) for c in cles]
+    attendu = [attendus[0].get(c) for c in cles]
+    return (
+        f"aucune clé récoltée ne correspond à la vérité (clé `{', '.join(cles)}` : récolté {recolte}, "
+        f"attendu par exemple {attendu})."
+    )
+
+
 def _noter(args: argparse.Namespace, reglages: Reglages) -> int:
     if not args.verite:
         raise RefusParcours("noter demande --verite vitrine|rallye")
+    if args.attendu:
+        return _montrer_attendu(args, reglages)
     dossier, passe = _passe_de(args, reglages)
     etat = Etat(dossier / "etat.sqlite3")
     try:
-        if args.verite == "vitrine":
-            graine, taille = reglages.vitrine_graine, reglages.vitrine_taille
-            verite = vitrine.verite(graine, taille)  # {"annonces": [...]}
-            collections = {"annonces": ("annonces", "reference")}
-            attendues = vitrine.pages_attendues(graine, taille)
-        else:
-            graine, taille = reglages.rallye_graine, reglages.rallye_taille
-            complete = rallye.verite(graine, taille)
-            collections = {nom: (nom, cle) for nom, cle in complete["cles"].items()}
-            attendues = [p["adresse"] for p in complete["pages"]]
-            verite = complete["collections"]  # {"rallyes": [...], "temps": [...], …}
+        graine, taille, collections, verite, attendues = _verite_du_labo(args, reglages)
         pages = notation.noter_pages(attendues, etat.adresses_lues(passe["numero"]))
+        brut = {nom: etat.enregistrements(nom) for nom in collections}
         notes = {
-            nom: notation.noter_recolte(etat.enregistrements(nom), verite, liste=liste, cle=cle)
+            nom: notation.noter_recolte(brut[nom], verite, liste=liste, cle=cle)
             for nom, (liste, cle) in collections.items()
         }
+        recoltees = etat.collections()
     finally:
         etat.fermer()
     attendus = sum(n["enregistrements_attendus"] for n in notes.values())
@@ -310,9 +356,22 @@ def _noter(args: argparse.Namespace, reglages: Reglages) -> int:
         print(
             f"    {nom} {n['enregistrements_retrouves']}/{n['enregistrements_attendus']}"
             f" · champs {n['champs_exacts']}/{n['champs_attendus']}"
+            + (" (rien à comparer)" if not n["champs_attendus"] else "")
             + (f" · erreurs {n['erreurs_par_champ']}" if n["erreurs_par_champ"] else "")
         )
-    print(f"  champs {champs_exacts}/{champs_attendus} ({_pourcent(exactitude)})")
+    if exactitude is None:
+        print(f"  champs {champs_exacts}/{champs_attendus} : rien à comparer, ce n'est pas un succès")
+    else:
+        print(f"  champs {champs_exacts}/{champs_attendus} ({_pourcent(exactitude)})")
+    for nom, (_, cle) in collections.items():
+        n = notes[nom]
+        pourquoi = _diagnostic(nom, cle, n, brut[nom], verite[collections[nom][0]], ", ".join(recoltees) or "aucune")
+        if pourquoi:
+            print(nettoyer(f"  ATTENTION {nom} : {pourquoi}"))
+        if n["champs_en_plus"]:
+            print(nettoyer(
+                f"  {nom} : champs produits mais absents de la vérité (non notés) : {', '.join(n['champs_en_plus'])}"
+            ))  # fmt: skip
     if pages["pages_manquantes"]:
         print(nettoyer(f"  pages manquantes (début) : {', '.join(pages['pages_manquantes'][:5])}"))
     mesures = {"pages": pages["completude_pages"], "enregistrements": completude, "champs": exactitude or 0.0}
