@@ -426,8 +426,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-66 — 12/11/2026 — Arena : quatre règles qui classaient tout vrai Chrome ne jugent plus que ce qu'elles
   peuvent voir (`headless`, `chrome-apis`, `polices`, `connection-dynamic` en 1.1).** Mesuré dans l'essai 96
   et la campagne 97 : Google Chrome 156 avec son interface, piloté sans aucune réécriture, passe les niveaux
-  02 et 03 mais est arrêté à chaque passage aux niveaux 04, 05 et 06 (sans corrélation) par le score
-  composite (1,03 puis 1,31). Les quatre signaux en cause, un humain avec le même Chrome les déclencherait :
+  01 à 03 (15 sur 15) mais est arrêté à chaque passage du niveau 04 au niveau 07 (06 et 07 sans corrélation ;
+  120 passages sur 120, campagne 97) par le score composite (1,03 aux niveaux 04 et 05, 1,31 aux 06 et 07).
+  Les quatre signaux en cause, un humain avec le même Chrome les déclencherait :
   `voices_vide` (la liste des voix était lue avant que Chrome l'ait chargée) ; `runtime_incomplet` (l'Arena
   exigeait `chrome.runtime`, absent d'une page ordinaire) ; `polices_os_manquantes` (comparée au seul
   `monospace`, Menlo, la police à chasse fixe par défaut, paraissait absente) ; `rtt_zero` (sur l'Arena
@@ -439,8 +440,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `rtt_zero` est retiré. Un relevé plus ancien ne fait conclure ni `voices_vide` ni `polices_os_manquantes`.
   Seuils et poids inchangés ; texte d'information du site public en version 2026-11-12.6. Pourquoi : plan
   § 1 (« des détecteurs qui attrapent tout le monde ») et étape 1.7. Aucun de ces signaux ne séparait les
-  témoins du vrai Chrome ; `polices_os_manquantes` ne touchait que lui. Prévision rejouée sur la base, à
-  confirmer par une campagne : composite du vrai Chrome à 0 à tous les niveaux ; les témoins restent classés
+  témoins du vrai Chrome ; `polices_os_manquantes` ne touchait que lui. Prévision rejouée sur les passages
+  finis à 15 h (niveaux 03 à 06 ; le 07 est extrapolé), à confirmer par la campagne de contrôle
+  `configs/experiments/controle-vrai-chrome.yaml` : composite du vrai Chrome à 0 ; les témoins restent classés
   par `regles-http` au niveau 02 et par 4 à 6 détecteurs seuls du 03 au 07. Limites : durée de chargement des
   voix non mesurée dans un vrai Chrome ; un Chrome sous Linux sans voix installées reste signalé ; la
   référence est un Chrome piloté, pas encore une session humaine ; `meta-composite` (« session trop

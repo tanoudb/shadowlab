@@ -219,10 +219,10 @@ En-têtes envoyés par NOEZIA, comptés le 12/11 sur les 1 160 requêtes de ses 
 
 Piste pour 1.9, à trancher par une mesure : la documentation de Patchright (la base du moteur) recommande
 un vrai Chrome avec interface, sans `User-Agent` ni en-têtes imposés. Le moteur fait l'inverse (sans
-interface, identité réécrite), et ce sont ses réécritures qui fuient. Mesure prévue le 12/11 après la
-référence : `configs/experiments/ablation-interface.yaml` (patchright avec un vrai Chrome et son interface,
-rien d'imposé ; noezia en « identité native », option préparée sur la branche `moteur-identite-native`,
-D-59, sans effet par défaut).
+interface, identité réécrite), et ce sont ses réécritures qui fuient. Mesure faite le 12/11 (campagne 97,
+voir plus bas) : `configs/experiments/ablation-interface.yaml` (patchright avec un vrai Chrome et son
+interface, rien d'imposé ; noezia en « identité native », option préparée sur la branche
+`moteur-identite-native`, D-59, sans effet par défaut).
 
 Empreinte JavaScript : NOEZIA comparé champ par champ au même Chromium piloté sans réglage (patchright,
 campagne 94, niveau 04 sans `cdp` ; 84 champs différents sur 315 comparés). La différence est mesurée ; ce que fait
@@ -267,6 +267,48 @@ Deux règles les mesureraient dans l'Arena : « HeadlessChrome » dans un en-tê
 d'une session (pas seulement la première), et une version du `User-Agent` différente de celle de
 `userAgentData`. À décider avec Ethan (règle 4 du § 8 : on n'ajoute à l'Arena que ce qu'un palier exige).
 Chiffres de ce paragraphe et des deux précédents recomptés le 12/11 par une vérification indépendante.
+
+### Campagne 97 : identité réécrite ou identité native (12/11, 525 passages, 0 panne, 2 h 33)
+
+Elle mesure, niveau par niveau, ce que change l'interface et l'identité d'origine : noezia tel qu'il est,
+noezia en identité native, un vrai Chrome sans rien de noezia, et les deux témoins (13 h 35 à 16 h 08,
+heure locale).
+Arena du matin du 12/11 ; niveaux 06 et 07 sans `correlation-session` (profils `06scorr` et `07scorr`).
+Passages réussis sur 15 par case (3 scénarios × 5 répétitions).
+
+| Configuration | 01 | 02 | 03 | 04 | 05 | 06 sans corr. | 07 sans corr. |
+|---------------|----|----|----|----|----|---------------|---------------|
+| noezia (identité réécrite, sans interface) | 15 | 10 | 10 | 10 | 0 | 0 | 0 |
+| noezia-natif (vrai Chrome, interface, identité d'origine) | 15 | 15 | 15 | 0 | 0 | 0 | 0 |
+| patchright-chrome-interface (vrai Chrome, rien de noezia) | 15 | 15 | 15 | 0 | 0 | 0 | 0 |
+| patchright (témoin) | 15 | 0 | 0 | 0 | 0 | 0 | 0 |
+| playwright (témoin) | 15 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Issues : 165 `extraction_reussie`, 240 `challenge_non_valide`, 120 `bloque`. Aucun passage sans issue, aucune
+panne. Durée médiane de noezia-natif : 8,0 s pour un passage réussi, 57,4 s pour un passage refusé.
+
+Ce que la base dit :
+- **Le moteur tel qu'il est tient le seuil de discrétion (≥ 90 %) au seul niveau 01.** Une seule cause
+  d'échec, dans les 60 passages refusés : le signal `headless_dans_une_requete` de `regles-http` (une requête
+  sur 11 à 13 porte « HeadlessChrome »), vu par l'Arena depuis D-60. Aux niveaux 02 à 04, seul `pagination`
+  échoue (0 sur 5) ; `static_html` et `javascript_content` passent (5 sur 5). Aux niveaux 05, 06 et 07, les
+  trois scénarios échouent (15 sur 15), après un défi JavaScript validé et, au 05 et au-delà, un Turnstile
+  en clés de test (`captcha_test`). Les trois niveaux 05 à 07 donnent la même séquence de décisions.
+- **L'identité native tient les niveaux 01 à 03 (15 sur 15)**, avec ou sans le reste de noezia
+  (comportement humain, défis) : noezia-natif et patchright-chrome-interface donnent les mêmes chiffres.
+- **Du niveau 04 au 07, un vrai Chrome est arrêté à chaque passage (120 sur 120)** : défi JavaScript émis,
+  puis refusé (`rejete-empreinte`, motif `empreinte_suspecte`) à cause du score composite : 1,03 aux niveaux
+  04 et 05 (`voices_vide`, `runtime_incomplet`, `polices_os_manquantes`), 1,31 aux niveaux 06 et 07 sans
+  corrélation (les trois mêmes plus `rtt_zero`). Aucun autre motif. Un humain avec le même Chrome
+  déclencherait ces quatre signaux : ce sont des défauts de l'Arena, corrigés par D-66. Le chiffre réel
+  de ces niveaux reste à mesurer (campagne de contrôle `configs/experiments/controle-vrai-chrome.yaml`).
+- **Les deux témoins sont arrêtés à tous les niveaux à partir du 02** (0 sur 15, 180 passages sur 180).
+  Aux niveaux 02 et 03, par `regles-http` (`ua_headless`, `langue_absente`). Du 04 au 07, le défi est refusé
+  sur l'empreinte relevée par `regles-http`, `botd`, `regles-js` et `chrome-apis` (plus `headless` pour
+  playwright).
+- **Réserves** : 15 passages par case, alors que l'objectif en demande 30. Intervalle de Wilson à 95 % :
+  15 sur 15 → 80 à 100 %, 10 sur 15 → 42 à 85 %, 0 sur 15 → 0 à 20 %. Niveaux 06 et 07 mesurés sans
+  corrélation. Un seul Chrome, piloté, sur ce poste ; l'Arena n'est pas encore calibrée sur des humains (1.7).
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -463,7 +505,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.4 Site vitrine à contenu connu | **fait** | 12/11 | `/lab/vitrine`, 440 tests rapides verts. Un parcours HTTP complet (toutes les pages, toutes les fiches) reconstruit la vérité à 100 % (`tests/test_vitrine.py`). Le parcours par un vrai moteur est le critère de 1.5. Rendu vérifié à l'écran, ordinateur et téléphone |
 | 1.5 Scénario de récolte et notation | **fait** | 12/11 | commit `34fb564`, 456 tests rapides verts ; test d'intégration : playwright au niveau 01 obtient 1 et 1 ; campagne 91 (essai de durée) ; campagne 92 : tableau moteur × niveau des deux notes au § 2 ; campagne 95 (12/11) : seuil « Récolte » confirmé sur le site à 500 annonces, 9 passages sur 9 sans faute |
 | 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`). 12/11 : voie courte par tunnel Cloudflare, `scripts/site-public-tunnel.sh` (`ccf24c9`), jamais lancé avec un vrai tunnel ; le lancement revient à Ethan |
-| 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques |
+| 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; contrôle à mesurer |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | à faire | | |
 | Palier 2 — Une identité qui dure | à faire | | |
