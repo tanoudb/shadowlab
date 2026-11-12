@@ -244,6 +244,24 @@ Origine de chaque écart dans le code du moteur : `docs/recherche/empreinte-noez
 25 sont des traces laissées par la réécriture elle-même, 18 viennent du profil généré, 10 sont de l'aléa.
 Avec un vrai Chrome, son interface et aucune réécriture, les 74 premiers n'ont plus de raison d'être.
 
+**Comparaison avec un vrai Chrome** (essai n° 96 du 12/11 : Google Chrome 156 avec interface, rien de réécrit ;
+un seul Chrome, sur ce poste, piloté par Patchright : pas encore une session humaine ; détail au § 4 du même
+document). Sur les 84 champs où NOEZIA diffère du témoin :
+- **17 où NOEZIA a raison** (il imite bien le vrai Chrome : `window.chrome`, `chrome.app`, `csi`, `loadTimes`,
+  marques annoncées, carte graphique, autorisation des notifications) ;
+- **35 où NOEZIA se trahit**, dont 28 où le témoin sans réglage donnait la bonne valeur : la réécriture a
+  cassé ce qui était juste. Les plus nets : `navigator.webdriver` supprimé (le vrai Chrome l'a, à `false`) ;
+  `chrome.runtime` présent (absent du vrai Chrome sur cette page) ; aucun candidat WebRTC (4 chez le vrai
+  Chrome) ; 4 plugins et 4 types MIME (5 et 2) ; `Chrome/129.0.6668.100` et `Mac OS X 15_1` dans le User-Agent
+  (`Chrome/156.0.0.0` et `10_15_7`) ; 28 px entre la fenêtre et la page (87) ; canvas, audio et tailles de
+  texte bruités ;
+- 22 qui dépendent de la machine ou du profil (écran, fenêtre, langue, fuseau, mémoire), 10 d'aléa.
+Sept champs de plus diffèrent du vrai Chrome chez NOEZIA comme chez le témoin (`pdfViewerEnabled`, partage,
+polices, taille de la mémoire JavaScript arrondie). En-têtes : le vrai Chrome envoie `Chrome/156.0.0.0`,
+trois indices de marque seulement, `Accept-Language: fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7`, et un ordre
+d'en-têtes qu'aucune requête de NOEZIA ne reproduit. Au niveau de l'empreinte, NOEZIA en identité native
+donne les mêmes valeurs que Patchright avec interface, sauf la taille de fenêtre (vraie contre émulée).
+
 Aucun détecteur de l'Arena ne relève ces écarts aujourd'hui : leur effet se mesurera contre Cloudflare (1.8).
 Deux règles les mesureraient dans l'Arena : « HeadlessChrome » dans un en-tête de n'importe quelle requête
 d'une session (pas seulement la première), et une version du `User-Agent` différente de celle de
