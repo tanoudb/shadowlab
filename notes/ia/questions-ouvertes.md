@@ -8,6 +8,14 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-12 — Site public : à qui donner le lien, et faut-il un lien par canal ?** Quiconque a le lien
+  peut ouvrir une session, y compris par script : rien ne prouve qu'un humain était là (relecture de
+  sécurité du 12/11, 15 h). Or ces sessions servent d'étalon (« un détecteur n'est valide que s'il laisse
+  passer les humains »). Deux choix : (a) tel quel, en donnant d'abord le lien à des gens que tu connais
+  (les 10 premières sessions) ; (b) avant un partage large, un lien d'invitation par canal (`?c=amis`,
+  `?c=forum`…), noté avec la session, pour séparer au rejeu les sessions de confiance des autres.
+  Recommandation : (a) tout de suite, (b) avant le partage large. Dis-moi si tu veux (b) : petit chantier,
+  avec une ligne de plus sur la page d'information.
 - **2026-11-12 — 5 sessions humaines locales, dès que possible (10 minutes)** : lancer
   `uv run shadowlab site`, ouvrir http://127.0.0.1:8770/manuel dans ton navigateur habituel, fenêtre
   visible, laisser « 01 — Baseline », cocher l'accord, puis naviguer une minute : quelques pages du site de
