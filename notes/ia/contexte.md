@@ -48,7 +48,10 @@ Dans l'ordre, sans campagne en cours pour les étapes 1 à 5 :
    demarrer --reconstruire`, test vert, puis `configs/experiments/controle-waf-07.yaml` (profils
    supplémentaires à appliquer avant, à retirer après).
 4. Identité native (`../noezia-shadowlab-moteur`, branche `moteur-identite-native`, D-59) : tests rouges sur
-   `d052c92`, verts sur la tête ; fusionner (option sans effet par défaut).
+   `d052c92`, verts sur la tête ; fusionner (option sans effet par défaut). Règle de l'Arena « HeadlessChrome
+   dans toute requête » (`../noezia-shadowlab-arena`, branche `arena-headless-partout`, D-60, accord
+   d'Ethan) : tests rouges sur `3c2ff71`, verts sur la tête ; fusionner **avant** la référence. Les
+   décisions D-57 à D-60 s'ajoutent toutes en fin de `docs/DECISIONS.md` : garder les quatre à la fusion.
 5. Suite complète (`uv run pytest`), lint.
 6. Campagne de référence (`reference-palier1.yaml`, 1 h 50), puis `ablation-interface.yaml` (210 passages,
    fenêtres à l'écran). Lecture : script `lire_campagne.py` du dossier temporaire de la session, sinon requêtes.

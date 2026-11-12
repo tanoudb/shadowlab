@@ -79,6 +79,9 @@ Ce qui attend Ethan.
 - **2026-11-09 — Clé reCAPTCHA v3** : enregistrer une clé v3 (localhost autorisé) et la mettre dans `.env`.
 
 ## Tranchées
+- **2026-11-12 — Arena : règle « HeadlessChrome dans n'importe quelle requête d'une session »** : accord
+  d'Ethan (« Oui, ajoute-la »), D-60, branche `arena-headless-partout`, à tester et fusionner après la
+  récolte, avant la campagne de référence.
 - **2026-11-12 — Contact du site public** : un formulaire de contact à la place d'une adresse affichée (D-57) ;
   responsable affiché sous le pseudonyme « Labo Vitrine ». Accord d'Ethan (« Oui, fusionne »).
 - **2026-11-11 — Commit et push** : accord d'Ethan, branche poussée le 11/11 (étape 1.1).
