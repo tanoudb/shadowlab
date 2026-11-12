@@ -363,7 +363,7 @@ un fichier qui se partage.
 pages.
 Le temps déjà passé par le moteur est déduit du délai. Le `Crawl-delay` du `robots.txt` s'applique s'il est
 plus
-long. `libre` = aucun délai. La clé `comportement` est acceptée dans le détail mais n'a aucun effet.
+long. `libre` = aucun délai. Une autre clé que ces trois-là (par exemple `comportement`) refuse la recette.
 Exemple lancé : `rythme: {delai_s: [0.2, 0.5, 1], pages_par_heure_max: 5000, pause_longue: {minutes: [0.01,
 0.02],
 toutes_les: [5, 8]}}` a lu 12 pages en 7 s.
@@ -502,7 +502,7 @@ de colonne qui apparaît deux fois est refusé comme ambigu (alerte) : utiliser 
 ### `motif`, `vide_si`, `present`
 
 - `motif: '^ES(\d+) '` garde le groupe 1. Le motif doit avoir un groupe, sinon la recette est refusée.
-  **Si le motif ne correspond pas, la valeur est vide, sans alerte** : à vérifier avec `essayer`.
+  Si le motif ne correspond pas, la valeur est vide **avec une alerte** (`le motif ne correspond pas à « … »`), sauf si la valeur était déjà vide ou couverte par `vide_si`.
   Exemple lu : `numero: {css: 'h1.titre', motif: '^ES(\d+) ', format: entier}` lit « ES3 · Pont de l'Écho »
   comme `3`,
   et `nom: {css: 'h1.titre', motif: '· (.+)$'}` lit `Pont de l'Écho`.
@@ -540,11 +540,17 @@ Terminée : 4 pages (1 liste, 3 page), 3 pages, 0 échec(s), 2 relocalisation(s)
 {"numero": "2", "titre": "Titre de la page 2", "chapeau": "Intro", …, "_relocalises": ["titre"]}
 ```
 
-Limites : `essayer` ne relocalise jamais (il n'a pas de mémoire). Si la classe change **entièrement** et que
-l'élément
-n'a ni id ni autre classe commune, le score n'atteint pas 0,5 : sur un premier essai (classe `titre` devenue
-`x-4b2`,
-sans classe commune) la valeur est restée vide, sans alerte ni relocalisation.
+Limites : `essayer` ne relocalise jamais (il n'a pas de mémoire). Une relocalisation ratée est signalée par une
+alerte de lecture avec le meilleur score. Relevé (classe de la page 3 entièrement changée) :
+
+```text
+Alertes de lecture : 1 au total, 1 sorte(s) parmi les plus fréquentes :
+  1 × page · champ « titre » : relocalisation échouée (meilleur score 0,49, seuil 0,50) (ex. http://127.0.0.1:…/ad/3)
+```
+
+Si la classe change **entièrement** et que l'élément n'a ni id ni classe commune, le score reste sous 0,5.
+**Reste silencieux** : un champ adaptatif dont le sélecteur casse alors qu'aucune signature n'a jamais été
+mémorisée (par exemple dès la première page lue) : il est simplement vide, sans alerte.
 
 ## 6. Lancer, suivre, reprendre
 
@@ -605,7 +611,14 @@ le rallye donne 24 pages, 39 classements, 2 rallyes, 211 temps. Une variable inc
 Refus : variable inconnue : « annee » (déclarées : saison, championnat)
 ```
 
-`--pages-max` à la reprise : voir la section 9 (la limite d'origine est gardée).
+`reprendre` sans `--pages-max` continue jusqu'au bout. `reprendre --pages-max N` lit N pages de plus. Le message
+de limite compte les échecs et donne la commande de suite complète (avec `--sortie` si elle a servi) :
+
+```text
+Limite atteinte (3 pages lues, échecs compris) : 3 pages faites, 2 annonces, 19 à faire. Suite : `uv run shadowlab recolte reprendre vitrine-annonces --sortie outputs/recoltes/v2` (sans limite) ou `uv run shadowlab recolte reprendre vitrine-annonces --sortie outputs/recoltes/v2 --pages-max <N>` (N pages de plus)
+```
+
+Ensuite, `reprendre … --pages-max 5` a donné « Limite atteinte (8 pages lues, échecs compris) » (3 + 5).
 
 ### Codes de sortie
 
@@ -654,17 +667,16 @@ Une passe interrompue ou arrêtée écrit quand même ces fichiers. Exemple d'ar
 test, qui répond 429 une fois) :
 
 ```text
-ARRÊT : signe d'alerte (statut 429) sur http://127.0.0.1:…/fiche/6 à 2026-11-12T19:17:51+01:00.
-Aucun nouvel essai. État gardé : 6 pages faites, 6 à faire.
+ARRÊT : signe d'alerte (statut 429) sur http://127.0.0.1:…/fiche/6 à 2026-11-12T19:35:56+01:00.
+Aucun nouvel essai. État gardé : 6 pages faites, 5 à faire.
 Reprise conseillée après 1 h : uv run shadowlab recolte reprendre mini
 ```
 ```text
 $ uv run shadowlab recolte reprendre mini
-Refus : la passe 1 s'est arrêtée sur alerte il y a 0 min : attendre 1 h, ou `reprendre … --maintenant`
+Refus : la passe 1 s'est arrêtée sur alerte il y a 0 min : attendre 1 h, ou `uv run shadowlab recolte reprendre mini --maintenant`
 $ uv run shadowlab recolte reprendre mini --maintenant
 Reprise de la passe 1 · état : …/outputs/recoltes/mini/etat.sqlite3
-Terminée : 11 pages (10 fiche, 1 liste), 10 fiches, 0 échec(s), 0 relocalisation(s), 1 interdite(s) par
-robots.txt, durée 0.0 s
+Terminée : 11 pages (10 fiche, 1 liste), 10 fiches, 0 échec(s), 0 relocalisation(s), 0 interdite(s) par robots.txt, durée 0.0 s
 ```
 
 ### Récolter seulement le neuf
@@ -816,8 +828,9 @@ Points propres au moteur `navigateur` (d'après le code, non rejoués ici) :
   lecture si un hôte n'est pas local et que la ligne manque :
 
   ```text
-  recette fautive (…/faux1.yaml) :?  - hotes[0] (ligne 3) : autorisation obligatoire : l'hôte « www.site-tiers.example »
-  n'est pas local (D-30)
+  recette fautive (…/faux4.yaml) :
+    - hotes[0] (ligne 3) : autorisation obligatoire : l'hôte « www.site-tiers.example » n'est pas local (D-30)
+    - pages.liste.suivre[0].vers (ligne 13) : type de page « fichee » absent de pages (connus : liste)
   ```
 
   Écrire dans la ligne ce qui donne le droit (accord écrit, périmètre de bug bounty, site que l'on possède)
@@ -873,13 +886,17 @@ Points propres au moteur `navigateur` (d'après le code, non rejoués ici) :
 
 Les messages ci-dessous sont recopiés de vraies exécutions.
 
-**Recette refusée (code 2).** Le message nomme le chemin de la clé fautive et sa ligne. Le `?` entre deux
-fautes remplace un retour à la ligne (voir section 10).
+**Recette refusée (code 2).** Le message nomme le chemin de la clé fautive et sa ligne. Une faute par ligne.
 
 ```text
-recette fautive (…/faux1.yaml) :?  - pages.fiche.enregistrements[0].champs.prix.format (ligne 20) : valeur admise : 'texte', 'entier', 'nombre' or 'duree_ms'?  - pages.fiche.enregistrements[0].champs.ville.couleur (ligne 21) : clé inconnue
-recette fautive (…/faux2.yaml) :?  - pages.liste.enregistrements[0].champs.numero (ligne 14) : adaptatif ne lit que le texte d'un élément : pas attribut
-recette fautive (…/faux2.yaml) :?  - pages.liste.enregistrements[0].champs.sans_groupe.motif (ligne 21) : motif de valeur sans groupe « \d+ » : le groupe 1 donne la valeur gardée
+recette fautive (…/faux1.yaml) :
+  - pages.liste.enregistrements[0].champs.prix.format (ligne 15) : valeur admise : 'texte', 'entier', 'nombre' or 'duree_ms'
+  - pages.liste.enregistrements[0].champs.ville.couleur (ligne 16) : clé inconnue
+recette fautive (…/faux2.yaml) :
+  - pages.liste.enregistrements[0].champs.numero (ligne 14) : adaptatif ne lit que le texte d'un élément : pas attribut
+  - pages.liste.enregistrements[0].champs.x.motif (ligne 15) : motif de valeur sans groupe « \d+ » : le groupe 1 donne la valeur gardée
+recette fautive (…/faux4.yaml) :
+  - rythme (ligne 7) : rythme : la clé « comportement » ne règle rien (le moteur navigateur garde toujours les gestes humains) : à retirer
 recette illisible (…/faux3.yaml) : YAML invalide (ligne 3) : expected ',' or ']', but got '<stream end>'
 recette introuvable ou illisible : …/nexiste.yaml ([Errno 2] No such file or directory: '…/nexiste.yaml')
 ```
@@ -907,10 +924,13 @@ clé « Y » sans valeur` (le champ de clé n'a rien lu). Pour vérifier un cham
 **Page non conforme.** La page reçue n'a pas la forme du type attendu. Avec `essayer` :
 
 ```text
+Page non lue : statut 404 (hors 2xx).
 Page non conforme au type « speciale » : adresse /lab/rallye/rallyes/17 hors du motif url du type « speciale »
 (^/lab/rallye/speciales/\d+$)
 Page non conforme au type « rallye » : sélecteur requis absent de la page « rallye » : dl.fiche
 ```
+
+`essayer` rend le code 1 dans ces cas (page non lue ou non conforme), avec la raison ; 0 sinon.
 
 Dans une passe, ces pages sont notées « anormales », rien n'y est lu, et trois de suite pour un même type
 déclenchent l'arrêt (signe 4). Causes habituelles : `requis` mal choisi, motif `url` trop strict, ou site
@@ -961,12 +981,8 @@ Refus : --tranche attend nom=valeur, reçu « saison »
 Refus : aucune récolte « inconnue » dans …/outputs/recoltes/inconnue
 ```
 
-**La limite `--pages-max` revient à la reprise.** Une passe lancée avec `--pages-max 3` garde cette limite :
-un
-`reprendre` sans option s'arrête aussitôt (« Limite atteinte (3 pages lues) »). Pour continuer, redonner une
-limite plus grande que le nombre de pages déjà lues, par exemple `--pages-max 100000`. La nouvelle limite
-n'est
-pas gardée pour la reprise d'après.
+**Une limite `--pages-max` atteinte n'est pas une panne.** La passe est « limitée », code 0. `reprendre <nom>`
+continue jusqu'au bout ; `reprendre <nom> --pages-max N` lit N pages de plus (section 6).
 
 ## 10. Limites connues
 
@@ -1018,13 +1034,7 @@ Ce qui n'existe pas encore :
   après le nombre (`entier`), et les milliers par point (`nombre`) ;
 - `--tout-refaire` y « ignore l'historique » : il efface en plus les enregistrements gardés dans l'état.
 
-Défauts connus de la commande (non corrigés par ce guide) :
-- un message de recette refusée qui compte plusieurs fautes les écrit sur une ligne, séparées par `?` ;
-- le conseil final de `lancer` (`reprendre <nom>`) ne rappelle pas `--sortie` quand elle a été utilisée : il
-  faut
-  la redonner à la main ;
-- `reprendre` garde la limite d'origine de `--pages-max` (section 9) ;
-- `essayer` sort en code 0 même quand la page est non conforme ou qu'il n'y a rien à lire ;
-- une relocalisation adaptative qui échoue ne dit rien : le champ est simplement vide ;
-- `lien: true` rend l'adresse absolue mais garde le fragment `#…` d'un champ, alors qu'un lien à suivre le
-  perd.
+Défauts connus de la commande :
+- un champ adaptatif dont le sélecteur casse alors qu'aucune signature n'a jamais été mémorisée reste vide sans
+  alerte (section 5) ;
+- `attendre` est accepté sans effet (plus haut).
