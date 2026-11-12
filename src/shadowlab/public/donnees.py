@@ -6,6 +6,7 @@ autre expérience que les sessions publiques est refusée : une purge ne doit ja
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 import sqlite3
@@ -54,8 +55,35 @@ TAILLE_MAX_CHEMIN = 200
 EXTENSION = re.compile(r"\b([a-z][a-z0-9+.-]*-extension)://[^/\s\"'\\)]+", re.I)
 
 
+def _resserrer(chemin: Path, mode: int) -> None:
+    """Droits `mode` sur un chemin à nous ; un chemin d'un autre propriétaire n'est pas touché."""
+    if chemin.stat().st_uid == os.getuid():
+        chemin.chmod(mode)
+
+
+def creer_prive(chemin: Path) -> None:
+    """Prépare un fichier de base : son dossier en 700, le fichier en 600, avant que SQLite ne l'ouvre.
+
+    Le fichier vide est créé avec le bon mode (`O_EXCL`, mode 600), puis seulement ouvert par SQLite : il n'existe
+    jamais avec des droits plus larges. Le journal et les fichiers `-wal` et `-shm` prennent les droits de la base ;
+    ceux d'un lancement plus ancien sont resserrés aussi. Un dossier ou un fichier qui existe déjà est resserré.
+    """
+    dossier = chemin.parent
+    dossier.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _resserrer(dossier, 0o700)
+    try:
+        os.close(os.open(chemin, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+    except FileExistsError:
+        pass
+    for fichier in (chemin, chemin.with_name(chemin.name + "-wal"), chemin.with_name(chemin.name + "-shm")):
+        if fichier.exists():
+            _resserrer(fichier, 0o600)
+
+
 def connexion(chemin: Path) -> sqlite3.Connection:
-    """Connexion à la base publique ; ce qui est effacé est écrasé sur le disque, pas seulement délié."""
+    """Connexion à la base publique (créée au besoin en 600, dans un dossier en 700). `secure_delete` vide les pages
+    d'une ligne effacée dans la base ; il ne garantit pas l'écrasement physique (voir docs/site-public.md)."""
+    creer_prive(chemin)
     cx = db.ouvrir(chemin)
     cx.execute("PRAGMA secure_delete=ON")
     return cx

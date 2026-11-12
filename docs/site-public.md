@@ -181,7 +181,12 @@ reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppressio
   terminal** : jamais dans le journal, ni dans journald sous systemd, où la ligne horodatée daterait le
   message. Rien n'est envoyé ailleurs : il faut regarder l'écran ou lancer la commande de temps en temps
   (une demande d'effacement se traite sous un mois) ; sous systemd, seule la commande les montre.
-- La base est ouverte avec `PRAGMA secure_delete=ON` : ce qui est effacé est écrasé, pas seulement délié.
+- La base et la boîte de messages sont ouvertes avec `PRAGMA secure_delete=ON` : SQLite vide les pages d'une
+  ligne effacée, au lieu de les laisser lisibles dans le fichier. Cela **ne garantit pas l'écrasement physique** :
+  le journal de transaction de SQLite (`-wal`), un disque SSD, un système de fichiers en copie sur écriture
+  (APFS) et les sauvegardes peuvent garder des copies. Ce que la page d'information promet (« efface aussitôt
+  toutes les données qui la concernent ») vaut pour la base, pas pour ces copies : voir « Ce qui reste à la
+  charge de l'hébergement » (FileVault, sauvegardes).
 
 ## Journaux
 
@@ -228,7 +233,7 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   l'écriture : un identifiant d'extension peu répandue peut désigner une personne.
 - Aucune autre table n'est écrite : ni `empreintes_vues` (pas de hash de corrélation entre visites), ni
   `decisions`, `detections`, `fingerprints` (aucun détecteur ne tourne). La suppression les couvre quand même.
-- `<dossier de la base>/messages.sqlite3` (droits 600, `secure_delete`) : les messages du formulaire de
+- `<dossier de la base>/messages.sqlite3` (droits 600 dès la création, `secure_delete`) : les messages du formulaire de
   contact, **dans un fichier à part** : le texte et le **jour** de réception, rien d'autre. Ni adresse IP, ni
   session, ni navigateur, ni heure. Le texte est nettoyé par **liste blanche**, pour s'afficher sans risque
   dans un terminal : on garde saut de ligne, tabulation, caractères affichables (`str.isprintable()`) et les
@@ -319,7 +324,15 @@ Seconde relecture indépendante (12/11/2026) :
 - Sauvegardes : une sauvegarde de la base ou de `messages.sqlite3` garde des sessions et des messages
   supprimés ou purgés. Pas de sauvegarde, ou
   une rétention inférieure à la durée de conservation.
-- Utilisateur sans privilège ; dossier de la base en `700` (la base est créée avec les droits par défaut).
+- Utilisateur sans privilège. Le dossier de la base est mis en `700` et `public.sqlite3`, `messages.sqlite3`
+  (et leurs fichiers `-wal` et `-shm`) en `600` **par l'application elle-même**, dès la création, avec ou sans le
+  script de tunnel : le fichier vide est créé avec ses droits avant d'être ouvert par SQLite. Un dossier ou un
+  fichier d'un autre propriétaire n'est pas touché : si `SHADOWLAB_PUBLIC_BASE` pointe dans un dossier partagé,
+  donner à la base son propre dossier.
+- **À faire par le responsable (pas par le code)** : activer **FileVault** (le disque chiffré protège la base et
+  les copies que `secure_delete` ne peut pas effacer si le Mac est perdu ou volé), et **exclure `outputs/` des
+  sauvegardes** (Time Machine, copie vers un nuage) : une sauvegarde garde les sessions et les messages supprimés
+  ou purgés.
 - Surveillance du disque (le journal de l'application tourne seul, 20 Mio au plus).
 
 ## Limites connues de l'application

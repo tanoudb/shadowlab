@@ -8,10 +8,11 @@ navigateur, ni heure (elle permettrait de le rapprocher des requêtes d'une sess
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from .donnees import creer_prive
 
 FICHIER = "messages.sqlite3"
 SCHEMA = """CREATE TABLE IF NOT EXISTS messages (
@@ -33,15 +34,13 @@ def chemin(base_publique: Path) -> Path:
 
 
 def connexion(fichier: Path) -> sqlite3.Connection:
-    """Ouvre la boîte (créée au besoin, droits 600) ; ce qui est effacé est écrasé sur le disque."""
-    fichier.parent.mkdir(parents=True, exist_ok=True)
-    nouveau = not fichier.exists()
+    """Ouvre la boîte (créée au besoin en 600, dans un dossier en 700, avant l'ouverture par SQLite). `secure_delete`
+    vide les pages d'un message effacé dans la base ; il ne garantit pas l'écrasement physique."""
+    creer_prive(fichier)
     cx = sqlite3.connect(fichier, timeout=30, check_same_thread=False, isolation_level=None)
     cx.row_factory = sqlite3.Row
     cx.execute("PRAGMA secure_delete=ON")
     cx.execute(SCHEMA)
-    if nouveau:
-        os.chmod(fichier, 0o600)
     return cx
 
 

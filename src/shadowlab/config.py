@@ -58,11 +58,14 @@ class ReglagesPublics:
     vitrine_taille: int
 
 
-def _charger_env(chemin: Path | None = None) -> None:
+def _charger_env(chemin: Path | None = None, acceptes: tuple[str, ...] | None = None) -> None:
     """Charge un fichier `.env` (KEY=VALUE) dans l'environnement s'il existe.
 
     Les secrets vivent dans `.env` (ignoré par git), jamais dans le code. Une variable déjà
     définie dans l'environnement a priorité (un `export` explicite l'emporte sur `.env`).
+
+    `acceptes` limite ce qui entre dans l'environnement : un nom exact (`SHADOWLAB_SORTIES`) ou un préfixe suivi
+    de `*` (`SHADOWLAB_PUBLIC_*`). Sans lui, tout le fichier est chargé (comportement du laboratoire).
     """
     fichier = chemin or (RACINE / ".env")
     try:
@@ -76,7 +79,7 @@ def _charger_env(chemin: Path | None = None) -> None:
         cle, _, valeur = ligne.partition("=")
         cle = cle.strip().removeprefix("export ").strip()
         valeur = valeur.strip().strip('"').strip("'")
-        if cle:
+        if cle and (acceptes is None or any(cle.startswith(a[:-1]) if a.endswith("*") else cle == a for a in acceptes)):
             os.environ.setdefault(cle, valeur)
 
 
@@ -104,8 +107,11 @@ def charger() -> Reglages:
 
 
 def charger_public() -> ReglagesPublics:
-    """Réglages de l'application publique. Le contact n'a pas de défaut : sans lui, elle refuse de démarrer."""
-    _charger_env()
+    """Réglages de l'application publique. Le contact n'a pas de défaut : sans lui, elle refuse de démarrer.
+
+    Elle ne charge de `.env` que les variables qu'elle lit elle-même : les clés propres au laboratoire
+    (jeton d'API, clés reCAPTCHA…) n'entrent pas dans son processus, exposé sur Internet."""
+    _charger_env(acceptes=("SHADOWLAB_PUBLIC_*", "SHADOWLAB_VITRINE_*", "SHADOWLAB_SORTIES"))
     sorties = Path(os.environ.get("SHADOWLAB_SORTIES", RACINE / "outputs"))
     hotes = os.environ.get("SHADOWLAB_PUBLIC_HOTES", "localhost,127.0.0.1")
     https = os.environ.get("SHADOWLAB_PUBLIC_HTTPS", "1").strip().lower()
