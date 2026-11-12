@@ -327,6 +327,23 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   un visiteur a écrit comment le joindre. Limite : aucun envoi au responsable ; `shadowlab public servir`
   donne le nombre de messages au démarrage et écrit une ligne à l'écran à chaque arrivée. Écarté : un envoi par e-mail (il faudrait un
   compte d'envoi et son secret sur le poste).
+- **D-58 — 12/11/2026 — (réservé)** : version réelle annoncée par le moteur, branche `moteur-version-reelle`, gardée de côté en attendant la mesure de l'identité native.
+- **D-59 — 12/11/2026 — NOEZIA peut tourner en « identité native » (options `channel` et `identite_native`).**
+  Mesuré dans la campagne 94 : l'identité réécrite par le moteur (User-Agent, `sec-ch-ua`, scripts
+  d'empreinte) ne couvre pas toutes ses requêtes : « HeadlessChrome » apparaît sur 182 requêtes sur 1 160, la
+  version annoncée se contredit, et 84 champs d'empreinte sur 315 diffèrent du même navigateur sans réglage.
+  La documentation de Patchright, la base du moteur, recommande l'inverse : un vrai Chrome
+  (`channel="chrome"`), avec interface, `no_viewport`, sans User-Agent ni en-têtes imposés (« Best Practice -
+  use Chrome without Fingerprint Injection »). Choix : deux options déclarées, sans effet par défaut.
+  `channel` choisit le navigateur installé ; `identite_native` retire le profil, les réglages de lancement,
+  le User-Agent, les en-têtes, la fenêtre imposée et les scripts d'empreinte, et garde le comportement
+  humain, la résolution des défis de l'Arena, la récolte et le verrou de périmètre. Pourquoi une option et
+  pas un remplacement : la règle du projet veut une mesure avant de trancher
+  (`configs/experiments/ablation-interface.yaml`, à comparer à la référence du même jour). Non couvert : le
+  profil persistant recommandé par Patchright (identité qui dure, palier 2) ; le serveur Linux sans écran
+  (palier 3). Reste imposé en identité native : le filtre réseau du périmètre (`route`), qui coupe le cache
+  HTTP du navigateur, et les réglages par défaut d'un contexte Playwright (langue), à lire dans la mesure.
+  Les options `profil` et `locale` sont alors sans effet.
 - **D-60 — 12/11/2026 — Arena : « HeadlessChrome » cherché dans toutes les requêtes d'une session.** La règle
   `ua_headless` de `regles-http` ne lisait que la première page. Mesuré dans la campagne 94 : NOEZIA réécrit
   son identité sur cette page, mais 182 de ses 1 160 requêtes (envois de fin de page, redirections) disent

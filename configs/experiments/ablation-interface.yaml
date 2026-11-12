@@ -1,29 +1,39 @@
-# Vrai Chrome avec interface, sans identité réécrite (docs/PLAN.md § 2, en-têtes de la campagne 94).
-# Constat : le réglage du User-Agent par noezia ne couvre pas toutes ses requêtes, et « HeadlessChrome »
-# fuit sur 16 % d'entre elles. La documentation de Patchright, la base du moteur, recommande l'inverse de
-# ce que fait noezia : un vrai Chrome (channel="chrome"), avec interface (headless=False), sans User-Agent
-# ni en-têtes imposés. Cette campagne mesure cette configuration avec des options déjà permises, sans
-# changer de code. À comparer, niveau par niveau, à la campagne de référence lancée le même jour.
-# Écart avec la recommandation complète : le pilote garde la fenêtre par défaut de Playwright (1280 × 720)
-# et un contexte neuf à chaque passage ; `no_viewport` et le profil persistant ne sont pas des options.
+# Identité réécrite ou identité d'origine ? (docs/PLAN.md § 2, en-têtes de la campagne 94, D-59)
+# Constat : noezia réécrit son identité, la réécriture ne couvre pas toutes ses requêtes, et « HeadlessChrome »
+# fuit sur 16 % d'entre elles. La documentation de Patchright, la base du moteur, recommande l'inverse : un
+# vrai Chrome (channel="chrome"), avec interface (headless=False), sans User-Agent ni en-têtes imposés.
+# Cette campagne compare, niveau par niveau, cinq configurations :
+#   noezia                      : le moteur tel qu'il est (sans interface, identité réécrite)
+#   noezia-natif                : option `identite_native` (ni profil, ni User-Agent, ni script d'empreinte),
+#                                 vrai Chrome avec interface, comportement humain et défis de noezia
+#   patchright-chrome-interface : la base du moteur comme sa documentation la recommande, rien de noezia
+#                                 (le pilote garde la fenêtre par défaut de Playwright, 1280 × 720)
+#   patchright, playwright      : les deux témoins de la référence, sans réglage
+# Niveaux 01 à 07 de l'Arena corrigée le 12/11 (détecteur cdp en V2, règles de comportement, mémoire,
+# « HeadlessChrome » dans toute requête, WAF du niveau 07) : c'est aussi la nouvelle référence, à comparer
+# à la campagne n° 90 pour les trois moteurs qu'elles ont en commun. Écart avec la recommandation complète
+# de Patchright : un contexte neuf à chaque passage, pas de profil persistant.
 #
 #   uv run shadowlab campagne configs/experiments/ablation-interface.yaml
 #
 # Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
-# 2 configurations × 7 niveaux × 3 scénarios × 5 répétitions = 210 passages, un à la fois.
+# 5 configurations × 7 niveaux × 3 scénarios × 5 répétitions = 525 passages, un à la fois (environ 2 h 30).
 experiment:
   name: ablation_interface
   description: >-
-    Patchright dans sa configuration recommandée (vrai Chrome, avec interface, rien d'imposé) et noezia
-    avec interface, sur les niveaux 01 à 07, mêmes scénarios et répétitions que la référence.
+    noezia tel qu'il est, noezia en identité native, patchright dans sa configuration recommandée et les deux
+    témoins, sur les niveaux 01 à 07 de l'Arena corrigée, mêmes scénarios et répétitions que la référence.
   environment: local
   engines:
+    - noezia
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
     - name: patchright
       label: patchright-chrome-interface
       options: {headless: false, channel: chrome}
-    - name: noezia
-      label: noezia-interface
-      options: {headless: false}
+    - patchright
+    - playwright
   protections: ["01", "02", "03", "04", "05", "06", "07"]
   scenarios:
     - static_html
