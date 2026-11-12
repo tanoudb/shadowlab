@@ -47,6 +47,9 @@ Ce qui attend Ethan.
   la remplacer par un **formulaire de contact** sur le site (aucune adresse affichée ; une à deux heures de
   travail, code et tests). Recommandation : le formulaire si le partage est large. Reste dans les deux cas
   (b) : lancer le script toi-même.
+  **10 h 55 — tranché : « Oui, fusionne ».** Le formulaire (D-57, branche `formulaire-contact`) sera testé
+  puis fusionné dès la fin de la récolte en cours. Il ne te restera qu'à lancer, avec le pseudonyme seul :
+  `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh`.
 - **2026-11-12 — CAPTCHA démo jamais servi aux niveaux 04 à 07** : une session suspecte est bloquée avant
   d'y arriver, une session propre n'est pas défiée (dernière émission à un niveau normal : campagnes 3 à 5).
   Le tableau des niveaux l'annonce pourtant au niveau 04. Recommandation : ne rien changer à l'Arena avant
@@ -76,6 +79,8 @@ Ce qui attend Ethan.
 - **2026-11-09 — Clé reCAPTCHA v3** : enregistrer une clé v3 (localhost autorisé) et la mettre dans `.env`.
 
 ## Tranchées
+- **2026-11-12 — Contact du site public** : un formulaire de contact à la place d'une adresse affichée (D-57) ;
+  responsable affiché sous le pseudonyme « Labo Vitrine ». Accord d'Ethan (« Oui, fusionne »).
 - **2026-11-11 — Commit et push** : accord d'Ethan, branche poussée le 11/11 (étape 1.1).
 - **2026-11-11 — Objectif de la v1** : validé par Ethan (D-54). Voir `docs/PLAN.md` § 1.
 - **2026-11-03 — Moteurs anti-détection** : Ethan autorise leur intégration contre nos propres protections (D-15).
