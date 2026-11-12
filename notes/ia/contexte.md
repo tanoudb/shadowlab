@@ -37,47 +37,32 @@ sur nos propres cibles (site vitrine factice, tor-i).
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
   Linux, un test contre Cloudflare.
 
-## Chantiers en parallèle (12/11, 11 h 50) — consigne d'Ethan : la session principale dirige, des sous-agents travaillent
-Un dossier de travail git par chantier de code, à côté du dépôt. Rien n'y est testé tant qu'une campagne tourne.
+## Chantiers (12/11, 13 h 40) — consigne d'Ethan : la session principale dirige, des sous-agents travaillent
+**Intégré dans `niveau-authentifie-perimetre` et poussé** (fusion `13ccfa3`, puis `6cf5686`, `4449757`) : formulaire
+de contact (D-57), identité native de NOEZIA (D-59), règle « HeadlessChrome dans toute requête » (D-60),
+`pas_de_scroll` et `pas_de_pause` (D-61), détecteur `cdp` V2 (D-62), mémoire 16 et 32 Go (D-63), mémoire
+affichée en Mo, WAF du niveau 07 (`2135656`). Chaque test vu en échec sans son code ; suite complète verte
+(665 tests, dont ceux avec de vrais navigateurs) ; formulaire vérifié à l'écran après correction d'un refus
+dans un vrai navigateur (`Referrer-Policy: origin`, pas `no-referrer`). Dossiers de travail retirés.
 
-| Chantier | Branche (dossier) | Qui | État |
-|----------|-------------------|-----|------|
-| Formulaire de contact (D-57) | `formulaire-contact` (`../noezia-shadowlab-formulaire`) | session principale, relu par Opus | écrit ; à tester puis fusionner (accord d'Ethan) |
-| Règle « HeadlessChrome partout » (D-60) | `arena-headless-partout` (`../noezia-shadowlab-arena`) | session principale | écrit ; à tester puis fusionner avant la référence (accord d'Ethan) |
-| NOEZIA en identité native (D-59) | `moteur-identite-native` (`../noezia-shadowlab-moteur`) | session principale, relu par Sonnet | écrit ; à tester puis fusionner (option sans effet par défaut) |
-| Version réelle annoncée (D-58) | `moteur-version-reelle` (sans dossier) | session principale | en attente de la mesure « interface » |
-| Mémoire 16 et 32 Go admise | `arena-memoire-32` (`../noezia-shadowlab-memoire`) | sous-agent Sonnet | écrit et relu ; à tester, puis fusionner avec les autres règles de l'Arena avant la référence |
-| `pas_de_scroll` et `pas_de_pause` justes | `arena-comportement-pages` (`../noezia-shadowlab-comportement`) | sous-agent Opus | écrit et relu ; à tester et fusionner **avant** les sessions humaines (le relevé gagne deux champs, `page_defilable` et `delai_souris_max_ms`). Laisser de côté son commit de journal `4c402f8`. `VERSION_INFORMATION` : garder « 2026-11-12.4 » |
-| Origine des 84 écarts d'empreinte | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet, lecture seule | fait, contrôlé par sondage, poussé |
-| Chrome avec interface sur serveur Linux | `docs/recherche/chrome-interface-serveur-linux-2026-11-12.md` | sous-agent Sonnet, recherche Web | fait, poussé (rien d'installé ni de testé) |
-| Détecteur `cdp` en V2 | `arena-cdp-juste` (`../noezia-shadowlab-cdp`) | sous-agent Opus | écrit et relu : `debugger_instant` et `no_first_input` retirés (0 ms dans 803 relevés sur 835, tous moteurs ; relevé pris avant tout clic). À tester et fusionner **avant** la campagne et les sessions humaines (décidé par la coordination : faux par construction, pas besoin d'attendre). Révise D-45, point 1 |
-| Mémoire affichée « 0.0 Mo » dans la fiche d'un passage | `interface-memoire-mo` (`../noezia-shadowlab-interface`) | sous-agents Sonnet (enquête puis correctif) | écrit et relu ; à tester (`npm --prefix frontend test`) puis fusionner. La mesure en base est juste, en Mo |
-| Écarts entre `AGENTS.md`, `README.md` et le code | `README.md`, `AGENTS.md` | sous-agents Sonnet (audit puis réécriture) | fait, contrôlé, poussé. Reste à vérifier en lançant : nombre de tests rapides, bornes de versions des moteurs isolés |
-| WAF du niveau 07 | `tests/test_arena_waf.py` (non suivi), `configs/experiments/controle-waf-07.yaml` | session principale | prêt ; image du WAF à reconstruire hors campagne |
+| Reste ouvert | Où | État |
+|--------------|----|------|
+| Corrélation : libellés, un signal par fait, débit sur 60 min | `arena-correlation-calcul` (`../noezia-shadowlab-correlation`) | écrit par Opus, repris après une alerte de sécurité, rouge puis vert sur sa branche ; à fusionner hors campagne (décision à numéroter D-64) |
+| Version réelle annoncée (D-58) | branche `moteur-version-reelle` | de côté ; sans objet si l'identité native l'emporte |
+| NOEZIA comparé au vrai Chrome (campagne 96) | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet en cours, lecture seule |
 
-## Prochaine action (12/11, après la récolte 95 qui finit vers 13 h 20)
-Décidé par la coordination à midi : une seule campagne remplace la référence et la mesure « interface » ; le
-détecteur `cdp` corrigé entre dans l'Arena avant elle, donc elle tourne sur les niveaux 01 à 07 normaux.
-Dans l'ordre, sans campagne en cours pour les étapes 1 à 4 :
-1. Lire la récolte 95 (complétude, exactitude, durée ; chargement des pages = 30 s sur 61 min) et l'écrire
-   au § 2 du plan.
-2. Tester chaque branche dans son dossier (tests vus en échec sur le commit de tests, verts sur la tête),
-   puis fusionner dans `niveau-authentifie-perimetre` : `formulaire-contact`, `arena-headless-partout`,
-   `arena-memoire-32`, `arena-comportement-pages`, `arena-cdp-juste`, `moteur-identite-native`, `interface-memoire-mo`
-   (`npm --prefix frontend test`). `docs/DECISIONS.md` : garder toutes les entrées (D-57, D-59, D-60, et
-   numéroter celles des règles de comportement et de la mémoire). Suite complète, lint, pousser, retirer
-   les dossiers fusionnés. Prévenir Ethan pour le formulaire (il lance le tunnel devant le Mac).
-3. WAF du niveau 07 : `uv run pytest tests/test_arena_waf.py` (échec attendu), exclusion de la règle 942432
-   sur `/lab/(turnstile|recaptcha)/verifier` dans `docker/arena/coraza/main.go`, `uv run shadowlab arena
-   demarrer --reconstruire`, test vert.
-4. Vérifier à l'écran la page `/contact` du site public (essai local, sans tunnel).
-5. Campagne unique `configs/experiments/ablation-interface.yaml` (525 passages, environ 2 h 30) : noezia,
-   noezia en identité native, patchright recommandé, deux témoins ; niveaux 01 à 07 de l'Arena corrigée.
-   Puis `recolte-rythme.yaml` (30 min).
-6. Plan (§ 2, § 8), journal, pousser. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours.
-7. Ce soir, après les 5 sessions d'Ethan : `uv run shadowlab rejeu` (jalon A sur l'Arena corrigée),
-   comparaison de ses en-têtes et de son empreinte à ceux de NOEZIA ; vérifier qu'aucune session ne porte de
-   signal `cdp` et que `debugger_delta_ms` vaut 0 chez lui aussi.
+## Prochaine action (12/11)
+1. **Campagne 97 en cours** depuis 13 h 35 (`ablation-interface.yaml`, 525 passages, fin vers 16 h 05, journal
+   `outputs/campagne-ablation-interface.log`) : ni test ni modification de `src/` d'ici là.
+2. À sa fin : `uv run shadowlab arena appliquer` (sans `SHADOWLAB_PROFILS_EXTRA`) pour retirer les profils
+   `06scorr` et `07scorr` ; lire les résultats (script `lire_campagne.py` du dossier temporaire de la
+   session, sinon requêtes) ; les écrire au § 2 du plan.
+3. Fusionner `arena-correlation-calcul`, suite complète, pousser.
+4. `SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne configs/experiments/recolte-rythme.yaml` (30 min).
+5. Plan (§ 2, § 8), `AGENTS.md` (État), journal, pousser. **Site libre à 20 h** : aucune campagne ni
+   `shadowlab site` en cours.
+6. Ce soir : Ethan lance le site public (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh`,
+   devant le Mac) ; vérifier le parcours depuis l'adresse publique. Après ses 5 sessions locales :
+   `uv run shadowlab rejeu` (jalon A sur l'Arena corrigée), comparer ses en-têtes et son empreinte à NOEZIA.
 
-Branche `moteur-version-reelle` (D-58) : gardée de côté, sans doute inutile si l'identité native l'emporte.
 Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.

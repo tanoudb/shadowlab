@@ -47,9 +47,11 @@ Ce qui attend Ethan.
   la remplacer par un **formulaire de contact** sur le site (aucune adresse affichée ; une à deux heures de
   travail, code et tests). Recommandation : le formulaire si le partage est large. Reste dans les deux cas
   (b) : lancer le script toi-même.
-  **10 h 55 — tranché : « Oui, fusionne ».** Le formulaire (D-57, branche `formulaire-contact`) sera testé
-  puis fusionné dès la fin de la récolte en cours. Il ne te restera qu'à lancer, avec le pseudonyme seul :
-  `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh`.
+  **10 h 55 — tranché : « Oui, fusionne ».** **13 h 30 — fait** : formulaire fusionné, testé (dont l'envoi
+  depuis un vrai navigateur) et vérifié à l'écran. **Il ne te reste qu'à lancer, devant le Mac**, avec le
+  pseudonyme seul : `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh`, puis à me
+  donner la main pour vérifier le parcours depuis l'adresse publique. Message à envoyer avec le lien :
+  `docs/site-public.md`, fin du fichier. Lire les messages reçus : `uv run shadowlab public messages`.
 - **2026-11-12 — CAPTCHA démo jamais servi aux niveaux 04 à 07** : une session suspecte est bloquée avant
   d'y arriver, une session propre n'est pas défiée (dernière émission à un niveau normal : campagnes 3 à 5).
   Le tableau des niveaux l'annonce pourtant au niveau 04. Recommandation : ne rien changer à l'Arena avant

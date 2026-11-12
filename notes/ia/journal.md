@@ -2749,3 +2749,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 
 **Non vérifié :** tout le code ci-dessus (tests écrits d'abord, jamais lancés).
 **Reste :** voir `notes/ia/contexte.md`, « Prochaine action ».
+
+## 2026-11-12 (13h40) — Claude (Fable 5.2) — Intégration testée et poussée, campagne 97 lancée
+
+- **Récolte 95 finie** (10 h 09 → 13 h 18) : 9 passages sur 9, 500 annonces et 7 000 champs exacts chacun ; seuil
+  « Récolte » atteint à 500 annonces. NOEZIA : 58 à 65 min par passage, dont 25 à 30 s de chargement.
+- **Tests, par sous-agents puis contrôlés** : rouge puis vert sur les sept branches ; suite rapide verte sur
+  l'assemblage au premier lancement (643) ; fusion `13ccfa3` ; WAF du niveau 07 corrigé (`2135656`, image
+  reconstruite) ; quatre tests d'intégration faux depuis leur écriture remis d'accord (`4449757`).
+- **Bogue trouvé à l'écran, pas par les tests** : le formulaire de contact était refusé (403) dans un vrai
+  navigateur. Cause : `Referrer-Policy: no-referrer` fait envoyer `Origin: null` au POST. Corrigé en `origin`
+  (`6cf5686`), avec un test dans un vrai navigateur. Revérifié à l'écran : envoi, message en boîte, lecture
+  par `public messages`. **Suite complète : 665 tests verts**, lint propre, poussé.
+- **Essai 96** (4 passages) : le vrai Chrome avec interface se lance, tout réussit ; il annonce `Chrome/156.0.0.0`,
+  `Mac OS X 10_15_7`, trois indices de marque, `Accept-Language` complet, 5 plugins, `webdriver` faux.
+- **Campagne 97 lancée à 13 h 35** (`ablation-interface.yaml`, 525 passages, profils `06scorr`/`07scorr` appliqués).
+**Reste :** voir `notes/ia/contexte.md`.
