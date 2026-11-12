@@ -33,6 +33,8 @@ class PiloteFactice(Driver):
         super().__init__(hotes)
         self.client = client
         self.demandes: list[str] = []  # chemins dont une réponse a été rendue, robots.txt compris
+        self.urls: list[str] = []  # toutes les adresses réellement demandées (hôte compris), robots.txt compris
+        self.location: str | None = None  # en-tête Location de la dernière réponse 3xx (le pilote ne suit rien)
         self.statuts: list[int] = []  # statut de chaque réponse de `demandes`
         self.requetes_pages = 0  # demandes de pages (hors robots.txt), échecs compris
         self.robots: tuple[int, str] = (404, "")
@@ -62,15 +64,17 @@ class PiloteFactice(Driver):
         pass
 
     def pages_lues(self) -> list[str]:
-        """Pages dont le contenu a été rendu (statut < 400) ; une page refusée (403, 429…) n'est pas « lue »."""
+        """Pages dont le contenu a été rendu (statut 2xx) ; une page refusée (403, 429…) n'est pas « lue »."""
         return [
             d
             for d, statut in zip(self.demandes, self.statuts, strict=True)
-            if statut < 400 and not d.startswith("/robots.txt")
+            if statut < 300 and not d.startswith("/robots.txt")
         ]
 
     def navigate(self, url):
         self.verifier(url)
+        self.urls.append(url)
+        self.location = None
         morceaux = urlsplit(url)
         chemin = morceaux.path + (f"?{morceaux.query}" if morceaux.query else "")
         if chemin.startswith("/robots.txt"):
@@ -90,11 +94,14 @@ class PiloteFactice(Driver):
             if fragment in chemin and restantes > 0:
                 self.pannes[fragment] = restantes - 1
                 raise ConnectionError("panne simulée")
-        final, statut, texte = url, None, None
+        statut, texte = None, None
         for fragment, cible in self.redirections.items():
-            if fragment in chemin:
-                final, statut, texte = cible, 200, "<html><body>ailleurs</body></html>"
+            if fragment in chemin:  # comme un vrai pilote réglé pour ne rien suivre : 302 et Location
+                self.location = cible
+                statut, texte = 302, ""
         for fragment, (code, corps) in self.reponses.items():
+            if statut == 302:
+                break
             if (chemin == fragment[1:]) if fragment.startswith("=") else (fragment in chemin):
                 statut, texte = code, corps
         if statut is None:
@@ -103,7 +110,7 @@ class PiloteFactice(Driver):
         self.demandes.append(chemin)
         self.statuts.append(statut)
         self._texte = texte
-        return ResultatNavigation(statut, final, 1.0)
+        return ResultatNavigation(statut, url, 1.0)
 
     def content(self):
         return self._texte

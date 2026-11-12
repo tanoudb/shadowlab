@@ -5,9 +5,9 @@ import json
 
 import pytest
 from outils_recolte import GRAINE, QUAND, TAILLE, PiloteFactice, creer_client, fabriquer
-from shadowlab.engines.noezia.export import ecrire_exports
 
 from shadowlab.engines.noezia.etat import Etat
+from shadowlab.engines.noezia.export import ecrire_exports
 from shadowlab.engines.noezia.recettes import Enregistrement
 from shadowlab.site import vitrine
 
@@ -28,8 +28,9 @@ def lignes_jsonl(chemin):
 
 
 def lignes_csv(chemin):
-    with chemin.open(encoding="utf-8", newline="") as f:
-        return list(csv.DictReader(f))
+    """Lit le CSV comme Excel en France : UTF-8 avec BOM, point-virgule."""
+    with chemin.open(encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f, delimiter=";"))
 
 
 @pytest.fixture
@@ -93,6 +94,38 @@ def test_csv_en_tete_valeurs_vides_booleens_et_listes(etat_a_deux_collections, t
     assert rallye["_relocalises"] == '["nom"]'
 
 
+def test_csv_pour_excel_en_france_bom_point_virgule_virgule_decimale(etat_a_deux_collections, tmp_path):
+    etat, _ = etat_a_deux_collections
+    ecrire_exports(etat, tmp_path)
+    brut = (tmp_path / "pilotes.csv").read_bytes()
+    assert brut.startswith(b"\xef\xbb\xbf")  # BOM UTF-8
+    with (tmp_path / "pilotes.csv").open(encoding="utf-8-sig", newline="") as f:
+        lignes = list(csv.reader(f, delimiter=";"))
+    assert lignes[0][:4] == ["id", "nom", "note", "actif"]
+    assert lignes[2][2] == "4,5"  # nombre décimal : virgule
+    assert lignes[2][0] == "2"  # entier : tel quel
+    # le JSON Lines reste la donnée exacte : point décimal
+    assert lignes_jsonl(tmp_path / "pilotes.jsonl")[1]["note"] == 4.5
+
+
+def test_csv_un_point_virgule_dans_une_valeur_est_protege(tmp_path):
+    etat = Etat(tmp_path / "e.sqlite3")
+    passe = etat.ouvrir_passe("essai", "sha256:x", "t", "c", {}, {}, QUAND)
+    etat.empiler(passe, [("http://h/a", "p")])
+    etat.terminer_page(
+        etat.prochaine(passe),
+        etat="faite",
+        statut=200,
+        decision="ok",
+        quand=QUAND,
+        enregistrements=[Enregistrement("c", (1,), {"id": 1, "v": 'a;b"c', "x": -3.25})],
+    )
+    ecrire_exports(etat, tmp_path / "out")
+    ligne = lignes_csv(tmp_path / "out" / "c.csv")[0]
+    assert ligne["v"] == 'a;b"c' and ligne["x"] == "-3,25"
+    etat.fermer()
+
+
 def test_csv_neutralise_les_formules_venues_du_site(etat_a_deux_collections, tmp_path):
     etat, _ = etat_a_deux_collections
     ecrire_exports(etat, tmp_path)
@@ -149,6 +182,11 @@ def test_une_passe_complete_ecrit_les_donnees_exactes(dossier, site):
         assert ligne["_passe"] == 1 and ligne["_page"].endswith(ligne["reference"])
         assert all(photo.startswith("http://127.0.0.1") and photo.endswith(".svg") for photo in ligne["photos"])
     assert bilan.resume["fichiers"] == ["annonces.csv", "annonces.jsonl"]
+    assert bilan.resume["csv"] == {"separateur": ";", "encodage": "utf-8-sig", "decimale": ","}
+    assert json.loads((bilan.dossier_passe / "resume.json").read_text(encoding="utf-8"))["csv"]["separateur"] == ";"
+    assert next(row for row in lignes_csv(csv_) if row["reference"] == ecrites[0]["reference"])["prix"] == str(
+        ecrites[0]["prix"]
+    )  # un entier reste un entier
 
 
 def test_a_l_arret_les_fichiers_contiennent_ce_qui_est_deja_lu(dossier, site):
