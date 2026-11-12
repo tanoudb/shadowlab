@@ -1091,6 +1091,12 @@ def ecrire(client: TestClient, texte: str, adresse: str = IP, **entetes):
     )
 
 
+def texte_rendu(reponse) -> str | None:
+    """Texte remis dans le formulaire de contact par une réponse de refus."""
+    assert champs_du_formulaire(reponse.text, "/contact")["csrf"]
+    return Selector(reponse.text).css('form[action="/contact"] textarea[name="message"]::text').get()
+
+
 def messages_recus(reglages: ReglagesPublics) -> list[str]:
     cx = boite.connexion(boite.chemin(reglages.base_donnees))
     try:
@@ -1118,6 +1124,19 @@ def test_contact_remplace_l_adresse_dans_les_pages(client):
         assert "écrivez à :" not in texte and escape(CONTACT) not in texte
 
 
+def test_contact_textes_exacts(client):
+    information = client.get("/").text
+    assert "ce que vous écrivez vous-même dans le formulaire de contact" in information
+    for texte in (information, client.get("/contact").text):
+        assert "jour de sa réception" in texte and "tel quel" not in texte and "ni lien avec" not in texte
+
+
+def test_base_nommee_comme_la_boite_refusee(reglages_publics):
+    homonyme = reglages_publics.base_donnees.with_name(boite.FICHIER)
+    with pytest.raises(ValueError, match="messages"):
+        creer_app_publique(replace(reglages_publics, base_donnees=homonyme))
+
+
 def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publics):
     journalises: list[str] = []
 
@@ -1138,13 +1157,18 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert r.status_code == 303 and r.headers["location"] == "/contact/envoye"
     assert client.get("/contact/envoye").status_code == 200
     assert messages_recus(reglages_publics) == [texte]
+    for reponse in (r, client.get("/contact"), client.get("/contact/envoye")):
+        assert reponse.headers["referrer-policy"] == "no-referrer", "la page suivante ne dit pas d'où l'on vient"
+    assert client.get("/").headers["referrer-policy"] == "same-origin"
 
     fichier = boite.chemin(reglages_publics.base_donnees)
     assert fichier.parent == reglages_publics.base_donnees.parent and fichier != reglages_publics.base_donnees
     assert fichier.stat().st_mode & 0o777 == 0o600
     cx = sqlite3.connect(fichier)
-    tout = "\n".join(str(ligne) for ligne in cx.execute("SELECT * FROM messages"))
+    lignes = cx.execute("SELECT * FROM messages").fetchall()
     cx.close()
+    assert [ligne[1] for ligne in lignes] == [datetime.now(UTC).date().isoformat()], "le jour, jamais l'heure"
+    tout = "\n".join(str(ligne) for ligne in lignes)
     assert IP not in tout and "testclient" not in tout, "ni adresse, ni client : le texte et sa date seulement"
     assert "moi@exemple.test" not in contenu_de_la_base(reglages_publics), "jamais dans la base des sessions"
     assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
@@ -1154,8 +1178,10 @@ def test_contact_protege(client, reglages_publics):
     champs = champs_du_formulaire(client.get("/contact").text, "/contact")
     donnees = {**champs, "message": "essai"}
     assert client.post("/contact", data=donnees, headers={"Origin": "https://ailleurs.test"}).status_code == 403
-    assert client.post("/contact", data={"message": "essai"}, headers={"Origin": ORIGINE}).status_code == 403
-    assert client.post("/contact", data={**donnees, "csrf": "0" * 32}, headers={"Origin": ORIGINE}).status_code == 403
+    for envoi in ({"message": "essai"}, {**donnees, "csrf": "0" * 32}):
+        r = client.post("/contact", data=envoi, headers={"Origin": ORIGINE})
+        assert r.status_code == 403
+        assert texte_rendu(r) == "essai", "formulaire expiré : le texte tapé est rendu, avec un jeton neuf"
     assert client.get("/contact/envoye").status_code == 200, "page fixe, sans effet"
     assert messages_recus(reglages_publics) == []
 
@@ -1171,16 +1197,23 @@ def test_contact_message_vide_ou_trop_long(client, reglages_publics):
     assert ecrire(client, accents).status_code == 303
     assert messages_recus(reglages_publics) == [accents]
     assert ecrire(client, "x" * 40_000).status_code == 400, "formulaire démesuré : refusé sans être lu en entier"
+    with fabriquer(reglages_publics, taille_message=5000) as c:
+        assert ecrire(c, "é" * 5000, AUTRE_IP).status_code == 303, "la borne du formulaire suit la limite de caractères"
 
 
 def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
-    assert ecrire(client, "ligne 1\n\x1b[31mrouge\x00‮ fin\tici").status_code == 303
-    assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici"]
+    recu = "ligne 1\n\x1b[31mrouge\x00\u202e fin\tici"
+    assert ecrire(client, recu).status_code == 303
+    # Les espaces insécables (posées par macOS et iOS avant « ? » et « ! ») deviennent des espaces ordinaires.
+    assert ecrire(client, "Jean\u00a0Dupont, d'accord\u202f?").status_code == 303
+    assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
 
 
 def test_contact_limite_par_adresse(reglages_publics):
     with fabriquer(reglages_publics, messages_par_adresse=2) as c:
-        assert [ecrire(c, "essai", IP).status_code for _ in range(3)] == [303, 303, 429]
+        assert [ecrire(c, "essai", IP).status_code for _ in range(2)] == [303, 303]
+        refus = ecrire(c, "troisième essai", IP)
+        assert refus.status_code == 429 and texte_rendu(refus) == "troisième essai"
         assert ecrire(c, "essai", AUTRE_IP).status_code == 303
     assert len(messages_recus(reglages_publics)) == 3
 
@@ -1189,12 +1222,13 @@ def test_contact_plafond_par_jour_et_boite_pleine(reglages_publics):
     with fabriquer(reglages_publics, messages_par_jour=2) as c:
         assert [ecrire(c, "essai", f"192.0.2.{n}").status_code for n in range(1, 4)] == [303, 303, 429]
     with fabriquer(reglages_publics, messages_gardes=2) as c:
-        assert ecrire(c, "essai", "192.0.2.9").status_code == 503
+        refus = ecrire(c, "boîte pleine", "192.0.2.9")
+        assert refus.status_code == 503 and texte_rendu(refus) == "boîte pleine"
     assert len(messages_recus(reglages_publics)) == 2
 
 
 def vieillir_message(reglages: ReglagesPublics, texte: str, jours: int) -> None:
-    moment = (datetime.now(UTC) - timedelta(days=jours)).isoformat(timespec="milliseconds")
+    moment = (datetime.now(UTC) - timedelta(days=jours)).date().isoformat()
     cx = boite.connexion(boite.chemin(reglages.base_donnees))
     cx.execute("UPDATE messages SET recu_le = ? WHERE texte = ?", (moment, texte))
     cx.close()
@@ -1215,6 +1249,7 @@ def test_commandes_messages(monkeypatch, reglages_publics, capsys):
     monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
     monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
     monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONSERVATION_JOURS", "90")
     assert cli.main(["public", "messages"]) == 0
     assert "Aucun message" in capsys.readouterr().out
     with fabriquer(reglages_publics) as c:
@@ -1225,6 +1260,13 @@ def test_commandes_messages(monkeypatch, reglages_publics, capsys):
     sortie = capsys.readouterr().out
     assert "3 message(s)" in sortie and "premier message" in sortie and "sur deux lignes" in sortie
     assert "\x1b" not in sortie, "aucune séquence de terminal venue d'un visiteur"
+    cx = boite.connexion(boite.chemin(reglages_publics.base_donnees))
+    brut = boite.ajouter(cx, "écrit sans passer par le formulaire \x1b[2J")
+    cx.close()
+    assert cli.main(["public", "messages"]) == 0
+    assert "\x1b" not in capsys.readouterr().out, "nettoyé à l'affichage aussi"
+    assert cli.main(["public", "effacer-message", str(brut)]) == 0
+    capsys.readouterr()
     numero = re.search(r"n° (\d+) .*\n\s+second", sortie).group(1)
     assert cli.main(["public", "effacer-message", numero]) == 0
     assert cli.main(["public", "effacer-message", numero]) == 1, "déjà effacé"
