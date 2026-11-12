@@ -41,7 +41,7 @@ def test_la_ligne_d_avancement_dit_le_nombre_d_alertes_de_lecture(dossier, site)
 def test_la_fin_de_passe_donne_le_total_et_les_plus_frequentes_avec_un_exemple(dossier, site):
     p, _ = passe_avec_alertes(dossier, site)
     texte = "\n".join(p.sortie_ecran)
-    assert "Alertes de lecture : 45 au total, 1 sorte(s)." in texte
+    assert "Alertes de lecture : 45 au total, 1 sorte(s) parmi les plus fréquentes :" in texte
     assert "45 × fiche · champ « ville »" in texte and "n'est pas lisible en entier" in texte
     assert "ex. http://127.0.0.1" in texte and "/lab/vitrine/annonces/AN-" in texte
 

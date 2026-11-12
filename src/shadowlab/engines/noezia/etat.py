@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -88,9 +89,19 @@ CREATE TABLE IF NOT EXISTS enregistrements (
 CREATE TABLE IF NOT EXISTS evenements (
     id INTEGER PRIMARY KEY, passe INTEGER NOT NULL, quand TEXT NOT NULL, genre TEXT NOT NULL, detail TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS alertes_lecture (
+    passe INTEGER NOT NULL, type_page TEXT NOT NULL, champ TEXT NOT NULL, gabarit TEXT NOT NULL,
+    nb INTEGER NOT NULL, exemple_adresse TEXT NOT NULL, exemple_message TEXT NOT NULL,
+    PRIMARY KEY (passe, type_page, champ, gabarit)
+);
 """
 
 _JSON = ("moteur", "options", "arret", "robots")
+
+
+_RE_CHAMP = re.compile(r"(?:champ|colonne) « ([^»]+) »")
+_RE_VALEUR = re.compile(r"« [^»]* »")
+AUTRES = "(autres)"
 
 
 def _json(valeur: Any) -> str:
@@ -98,6 +109,10 @@ def _json(valeur: Any) -> str:
 
 
 class Etat:
+    # Une passe garde au plus ce nombre de sortes d'alertes de lecture (plus une ligne « autres ») : la base ne
+    # grossit pas avec le nombre de pages, ni avec les valeurs qui changent d'une page à l'autre.
+    MAX_GROUPES_ALERTES = 200
+
     def __init__(self, chemin: Path) -> None:
         chemin.parent.mkdir(parents=True, exist_ok=True)
         self.chemin = chemin
@@ -434,3 +449,50 @@ class Etat:
     def evenements(self, passe: int) -> list[dict[str, Any]]:
         lignes = self._cx.execute("SELECT * FROM evenements WHERE passe = ? ORDER BY id", (passe,))
         return [{"quand": r["quand"], "genre": r["genre"], "detail": json.loads(r["detail"])} for r in lignes]
+
+    # ── Alertes de lecture ──────────────────────────────────────────────
+    def noter_alertes(self, passe: int, type_page: str, adresse: str, alertes: Iterable[str]) -> None:
+        """Compte les alertes de lecture d'une page, regroupées par (type de page, champ, message sans valeurs)."""
+        with self.transaction():
+            for message in alertes:
+                trouve = _RE_CHAMP.search(message)
+                champ = trouve.group(1) if trouve else ""
+                gabarit = _RE_VALEUR.sub("« … »", message)
+                cle = (passe, type_page, champ, gabarit)
+                existe = self._cx.execute(
+                    "SELECT 1 FROM alertes_lecture WHERE passe = ? AND type_page = ? AND champ = ? AND gabarit = ?", cle
+                ).fetchone()
+                if not existe:
+                    nb = self._cx.execute("SELECT COUNT(*) FROM alertes_lecture WHERE passe = ?", (passe,)).fetchone()[0]
+                    if nb >= self.MAX_GROUPES_ALERTES:  # trop de sortes : le reste va dans « autres »
+                        cle = (passe, "", "", AUTRES)
+                    self._cx.execute(
+                        "INSERT OR IGNORE INTO alertes_lecture VALUES (?, ?, ?, ?, 0, ?, ?)", (*cle, adresse, message)
+                    )
+                self._cx.execute(
+                    "UPDATE alertes_lecture SET nb = nb + 1 "
+                    "WHERE passe = ? AND type_page = ? AND champ = ? AND gabarit = ?",
+                    cle,
+                )
+
+    def alertes_lecture(self, passe: int, combien: int = 5) -> dict[str, Any]:
+        """Total des alertes de lecture de la passe et les `combien` sortes les plus fréquentes."""
+        total = self._cx.execute("SELECT COALESCE(SUM(nb), 0) FROM alertes_lecture WHERE passe = ?", (passe,))
+        lignes = self._cx.execute(
+            "SELECT * FROM alertes_lecture WHERE passe = ? AND gabarit != ? ORDER BY nb DESC, type_page, champ LIMIT ?",
+            (passe, AUTRES, combien),
+        )
+        return {
+            "total": total.fetchone()[0],
+            "groupes": [
+                {
+                    "type": r["type_page"],
+                    "champ": r["champ"],
+                    "message": r["gabarit"],
+                    "nb": r["nb"],
+                    "exemple_adresse": r["exemple_adresse"],
+                    "exemple_message": r["exemple_message"],
+                }
+                for r in lignes
+            ],
+        }

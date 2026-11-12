@@ -29,6 +29,7 @@ from .engines.noezia.parcours import (
     RefusParcours,
     Verrou,
     essayer,
+    lignes_alertes,
     nettoyer,
 )
 from .engines.noezia.recettes import Recette, RecetteInvalide, _est_local, lire_texte
@@ -204,6 +205,8 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
             f"{c['introuvables']} introuvable(s), {c['hors_site']} lien(s) hors site"
         )
         print(f"  enregistrements : {enregistrements}")
+        for ligne in lignes_alertes(etat.alertes_lecture(numero)):
+            print(f"  {ligne}")
         if passe["arret"]:
             a = passe["arret"]
             print(nettoyer(f"  arrêt : signe d'alerte ({a['detail']}) sur {a['adresse']} à {a['quand']}"))
