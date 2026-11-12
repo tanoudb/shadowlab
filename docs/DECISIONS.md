@@ -234,9 +234,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   montrait 0/72 détections NOEZIA (score=0, `_verdict()` retourne "humain" par défaut). Cause racine :
   modèle à signaux négatifs uniquement — si aucun signal connu n'est trouvé, humain par défaut. Trois
   ajouts :
-  1) **DetecteurCDP** : exploite les artefacts Chrome DevTools Protocol (debugger timing <0.05ms,
+  ~~1) **DetecteurCDP** : exploite les artefacts Chrome DevTools Protocol (debugger timing <0.05ms,
   absence de first-input, console patchée, scripts vides injectés, ressources CDP). Score 1.0 quand
-  le debugger répond instantanément.
+  le debugger répond instantanément.~~ Point 1 remplacé par D-62
+  (deux de ses signaux se déclenchaient chez tout le monde).
   2) **DetecteurComportement v2** : signaux de naturalité — ratio mousemove/click < 8 (trajectoires
   Bézier directes), absence de scroll, durée des pages trop régulière (CV < 0.2), navigation linéaire.
   3) **DetecteurMetaComposite** : méta-analyse — session avec >80% des détecteurs à 0 signal = suspecte.
@@ -353,3 +354,36 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   vrai navigateur n'envoie ce mot, donc aucun humain ne peut la déclencher, et sans elle l'Arena notait
   15/15 un moteur qu'un anti-bot réel arrêterait. Effet attendu, à mesurer par la campagne de référence
   du 12/11 : NOEZIA arrêté sur les scénarios à plusieurs pages dès qu'un envoi non réécrit est arrivé.
+- **D-61 — 12/11/2026 — `pas_de_scroll` et `pas_de_pause` ne jugent que ce qu'ils peuvent voir.** Le relevé
+  `comportement` d'`observateur.js` porte deux champs de plus : `page_defilable` (la page dépasse sa zone
+  visible, mesuré à la sortie de la page) et `delai_souris_max_ms` (le plus grand délai entre deux mouvements
+  de souris sur toute la page, sans plafond). `pas_de_scroll` ne compte que les pages qui pouvaient défiler ;
+  `pas_de_pause` juge la page entière. Seuils et poids inchangés : on corrige ce que la règle regarde, pas sa
+  sévérité. Un ancien relevé auquel il manque l'information ne fait conclure aucune des deux règles ; sous le
+  plafond de 50 délais, la liste contient toute la page et fait foi. Versions : `comportement` 2.1,
+  `entropie-interaction` 1.1 ; texte d'information du site public en version 2026-11-12.4. Pourquoi :
+  campagne 94. La molette tournée sur `/lab/catalogue`, plus courte que la fenêtre, ne produit aucun `scroll`
+  ; un seul geste continu de 50 événements (environ 1,5 s) suffisait à `pas_de_pause`, alors que les pages
+  duraient 2,7 à 3,4 s. Un humain serait classé de même (règle « un détecteur n'est valide que s'il laisse
+  passer les humains »). Ces deux signaux faisaient le score composite 0,85 qui arrêtait NOEZIA au niveau 05.
+  Limites : un geste unique suivi d'un clic, sans arrêt entre deux mouvements, déclenche encore
+  `pas_de_pause` ; non vérifié dans un vrai navigateur. Décidé par : coordination (travail d'un sous-agent
+  Opus, relu).
+- **D-62 — 12/11/2026 — Détecteur `cdp` V2 : retrait de `debugger_instant` et `no_first_input` (révise D-45,
+  point 1).** Les deux signaux se déclenchent chez tout le monde par construction. `debugger_instant`
+  chronomètre une instruction `debugger`, sans effet quand les outils de développement sont fermés : 0 ms
+  dans 803 relevés sur 835 (campagnes 90, 93, 94, les trois moteurs), les 32 autres valant un tic d'horloge ;
+  seul un humain aux outils ouverts y échappe. `no_first_input` lit l'entrée first-input au moment du relevé,
+  environ 0,2 s après le chargement, avant tout clic possible ; l'absence d'interaction reste jugée par
+  `comportement`, sur le relevé de fin de page. Les cinq autres signaux gardent leur poids ; aucun ne s'est
+  déclenché sur les trois moteurs (0 sur 835). Le relevé d'`observateur.js` est inchangé. Pourquoi : dans la
+  campagne 90, `cdp` arrêtait les trois moteurs à l'identique aux niveaux 04 à 07, et aurait arrêté les
+  humains de même ; étape 1.7 du plan, un détecteur gardé classe au plus 1 humain sur 10. Conséquence : au
+  niveau 04, l'Arena n'a plus de signal contre NOEZIA (campagne 94 : 15/15) ; les témoins restent arrêtés par
+  les détecteurs d'origine. À confirmer par le rejeu des sessions humaines : aucune ne doit porter de signal
+  `cdp`. Fusionné avant ces sessions parce que le défaut tient au fonctionnement du navigateur, pas à une
+  supposition. Décidé par : coordination (analyse d'un sous-agent Opus, relue).
+- **D-63 — 12/11/2026 — `device_memory_invalide` admet 16 et 32 Go.** La règle de `coherence-profonde`
+  n'admettait que 8 Go au plus. Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) et le
+  Chromium 156 piloté sans réglage annonce 32 sur ce poste (campagne 94) : tout humain sur une machine de 16
+  Go ou plus était classé. Détecteur en 1.1. Décidé par : coordination.
