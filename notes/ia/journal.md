@@ -2670,3 +2670,51 @@ soir) ; le correctif du WAF (à écrire, test d'abord, hors campagne).
 
 **Reste :** résultats de la récolte 95 ; correctif du WAF au niveau 07 puis courte campagne de contrôle ;
 campagne de référence ; tout arrêter avant 20 h (sessions humaines d'Ethan, puis `uv run shadowlab rejeu`).
+
+## 2026-11-12 (11h00) — Claude (Fable 5.2) — NOEZIA laisse voir « HeadlessChrome » ; formulaire de contact et correctifs préparés à part pendant la récolte
+
+Pendant la campagne 95 (récolte à 500 annonces, 10 h 09 → environ 13 h 10) : aucun test lancé, aucun fichier
+de `src/` modifié dans le dossier principal. Lecture de la base, documents, et code préparé dans deux
+dossiers de travail git à part (tests écrits d'abord, **jamais lancés à cette heure**).
+
+**Constats tirés de la base (campagne 94), détail dans `docs/PLAN.md` § 2 et § 4 :**
+- **« HeadlessChrome » fuit sur 182 des 1 160 requêtes de NOEZIA (16 %)** : 144 des 311 envois
+  `POST /lab/collecte` partent avec le `User-Agent` d'origine (`HeadlessChrome/156.0.8078.4`), 38 navigations
+  gardent le `User-Agent` réglé mais retrouvent le `sec-ch-ua` d'origine. Le réglage d'identité du moteur ne
+  couvre pas toutes les requêtes ; `regles-http` ne le voit pas.
+- Le moteur se contredit sur sa version (129 ou 130 annoncé, 156 dans `navigator.userAgentData`) ;
+  `Accept-Language` change d'une requête à l'autre ; indices de marque détaillés envoyés sans demande.
+- Empreinte JavaScript : 84 champs sur 315 diffèrent du même Chromium piloté sans réglage (`webdriver`
+  absent, 4 plugins, `performance.memory` en propriété propre, fenêtre plus haute que l'écran utile…).
+- `pas_de_scroll` se déclenche sur une page trop courte pour défiler ; `pas_de_pause` ne lit que les 50
+  premiers délais de souris. Ce sont eux qui arrêtent NOEZIA au niveau 05 sans `cdp`.
+- La documentation installée de Patchright (`METADATA`, « Best Practice ») recommande un vrai Chrome
+  (`channel="chrome"`), avec interface, sans `User-Agent` ni en-têtes imposés : l'inverse du moteur.
+- Mes chiffres du plan ont été recomptés par un sous-agent (Sonnet, lecture seule) : trois erreurs corrigées
+  (durée du geste de souris, pages avec molette, `Accept-Language`), le reste confirmé.
+
+**Préparé, pas lancé :**
+- Branche `formulaire-contact` (dossier `../noezia-shadowlab-formulaire`, 4 commits, D-57) : formulaire
+  `/contact` à la place de l'adresse affichée ; message = texte et jour de réception, fichier
+  `messages.sqlite3` à part ; commandes `public messages` et `effacer-message`. Relecture indépendante
+  (Opus, lecture seule) : rien de bloquant, remarques intégrées. **Ethan a dit « Oui, fusionne » (10 h 53)** :
+  fusion après les tests, dès la fin de la récolte.
+- Branche `moteur-version-reelle` (dossier `../noezia-shadowlab-moteur`, 3 commits, D-58) : profil aligné sur
+  la version réelle du navigateur, version de macOS figée, indices détaillés retirés. **Gardée de côté** :
+  elle ne règle pas la fuite ; à décider après la mesure « interface ».
+- `tests/test_arena_waf.py` (non commité) et `configs/experiments/controle-waf-07.yaml` : correctif du WAF
+  au niveau 07, à faire quand aucune campagne ne tourne (l'image du WAF doit être reconstruite).
+- `configs/experiments/ablation-interface.yaml` : patchright avec un vrai Chrome et son interface, noezia
+  avec interface, niveaux 01 à 07 (210 passages), options déjà permises, aucun code changé.
+
+**Décisions d'Ethan :** formulaire de contact accepté ; il veut que je travaille sans arrêt jusqu'à son
+retour (20 h). Le site doit rester libre à 20 h pour ses sessions.
+
+**Non vérifié :** tout ce qui est « préparé » ci-dessus ; ce que fait un vrai Chrome sur chacun des écarts
+(les sessions humaines de ce soir serviront de référence) ; le tunnel du site public.
+
+**Fichiers (dossier principal) :** `docs/PLAN.md`, `notes/ia/questions-ouvertes.md`,
+`configs/experiments/{controle-waf-07,ablation-interface}.yaml`, `tests/test_arena_waf.py` (non suivi).
+
+**Reste, dans l'ordre :** résultats de la récolte 95 ; tests puis fusion du formulaire ; correctif du WAF et
+contrôle ; campagne de référence ; campagne « interface » ; mise à jour du plan ; site libre à 20 h.
