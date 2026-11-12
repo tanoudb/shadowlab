@@ -37,7 +37,24 @@ sur nos propres cibles (site vitrine factice, tor-i).
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
   Linux, un test contre Cloudflare.
 
-## Prochaine action
-- Étape 1.7 : sessions humaines (5 en local par Ethan, puis au moins 10 sur le site public), rejeu,
-  calibrage des détecteurs (`cdp` en premier), jalon A. Puis 1.8 (Cloudflare) et 1.9 (corriger le moteur).
-  Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.
+## Prochaine action (12/11, après la récolte 95 qui finit vers 13 h 10)
+Dans l'ordre, sans campagne en cours pour les étapes 1 à 5 :
+1. Lire la récolte 95 (complétude, exactitude, durée) et l'écrire au § 2 du plan.
+2. Formulaire de contact : dans `../noezia-shadowlab-formulaire`, voir les tests échouer sur `5a915a1`, passer
+   sur la tête de `formulaire-contact` ; suite rapide et lint ; regarder `/contact` à l'écran ; fusionner dans
+   `niveau-authentifie-perimetre`, pousser, retirer le dossier. Prévenir Ethan (il lance le tunnel).
+3. WAF du niveau 07 : `uv run pytest tests/test_arena_waf.py` (échec attendu), exclusion de la règle 942432
+   sur `/lab/(turnstile|recaptcha)/verifier` dans `docker/arena/coraza/main.go`, `uv run shadowlab arena
+   demarrer --reconstruire`, test vert, puis `configs/experiments/controle-waf-07.yaml` (profils
+   supplémentaires à appliquer avant, à retirer après).
+4. Identité native (`../noezia-shadowlab-moteur`, branche `moteur-identite-native`, D-59) : tests rouges sur
+   `d052c92`, verts sur la tête ; fusionner (option sans effet par défaut).
+5. Suite complète (`uv run pytest`), lint.
+6. Campagne de référence (`reference-palier1.yaml`, 1 h 50), puis `ablation-interface.yaml` (210 passages,
+   fenêtres à l'écran). Lecture : script `lire_campagne.py` du dossier temporaire de la session, sinon requêtes.
+7. Plan (§ 2, § 8), journal, pousser. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours.
+8. Ce soir, après les 5 sessions d'Ethan : `uv run shadowlab rejeu`, puis comparer ses en-têtes et son
+   empreinte à ceux de NOEZIA (candidats listés au § 2 du plan).
+
+Branche `moteur-version-reelle` (D-58) : gardée de côté, à trancher après la campagne « interface ».
+Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.
