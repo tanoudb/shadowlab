@@ -178,6 +178,118 @@ def test_noezia_identite_native_une_seule_identite_celle_du_navigateur(reglages,
     assert navigateur["webdriver"] is False, "propriété d'origine, ni supprimée ni vraie"
 
 
+def _chrome_installe() -> bool:
+    """Google Chrome (pas le Chromium de Playwright) est-il installé ? Même critère que le moteur `channel: chrome`."""
+    import shutil
+    import sys
+    from pathlib import Path
+
+    if sys.platform == "darwin":
+        return Path("/Applications/Google Chrome.app").exists()
+    return any(shutil.which(nom) for nom in ("google-chrome", "google-chrome-stable"))
+
+
+def test_noezia_identite_native_vrai_chrome_avec_interface(reglages, tmp_path):
+    """Configuration réellement mesurée en campagne : vrai Google Chrome, avec fenêtre, identité native.
+
+    Le test sans interface ci-dessus tourne avec le Chromium embarqué et passe avec « HeadlessChrome » partout ;
+    ici aucune requête ne doit porter ce mot, ni dans `user-agent` ni dans `sec-ch-ua`.
+    """
+    import json
+
+    if not _chrome_installe():
+        pytest.skip("Google Chrome n'est pas installé (channel: chrome)")
+    chemin = tmp_path / "native-chrome.yaml"
+    chemin.write_text(
+        "experiment:\n  name: native-chrome\n  engines:\n    - name: noezia\n"
+        "      options: {headless: false, channel: chrome, identite_native: true}\n"
+        "  protections: ['01']\n  scenarios: [pagination]\n  repetitions: 1\n  seed: 20261112\n",
+        encoding="utf-8",
+    )
+    experience = campaigns.lire(chemin, reglages)
+    cx = db.ouvrir(reglages.base_donnees)
+    experiment_id = campaigns.creer(cx, experience)
+    with campaigns.serveur_local(reglages):
+        assert campaigns.executer(reglages, experiment_id) == "termine"
+    passage = cx.execute(
+        "SELECT session_token, status FROM runs WHERE experiment_id = ?",
+        (experiment_id,),
+    ).fetchone()
+    assert passage["status"] == "reussi"
+    jeton = passage["session_token"]
+
+    requetes = [
+        {nom.lower(): valeur for nom, valeur in json.loads(ligne["headers"])}
+        for ligne in cx.execute("SELECT headers FROM observations_http WHERE session_token = ?", (jeton,))
+    ]
+    assert len(requetes) > 5, "plusieurs pages, leurs fichiers et leurs envois"
+    agents = {h.get("user-agent") for h in requetes}
+    assert len(agents) == 1, agents
+    for h in requetes:
+        for entete in ("user-agent", "sec-ch-ua"):
+            assert "HeadlessChrome" not in h.get(entete, ""), (entete, h.get(entete))
+
+    releve = cx.execute(
+        "SELECT payload FROM observations_js WHERE session_token = ? AND kind = 'empreinte' ORDER BY id LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    assert releve is not None, "aucune empreinte relevée pour ce passage"
+    assert json.loads(releve["payload"])["navigateur"]["webdriver"] is False
+
+
+def test_releve_comportement_page_defilable_et_delai_souris_max(reglages, monkeypatch):
+    """D-61 dans un vrai navigateur : `page_defilable` et `delai_souris_max_ms` du relevé de fin de page.
+
+    Page courte (`/lab/catalogue`, dix lignes) : pas défilable. Page longue (liste de la vitrine, 20 fiches) :
+    défilable. La souris bouge plusieurs fois sur chaque page : le plus grand délai est un nombre.
+    Navigateur piloté directement (Playwright), sans moteur de campagne : un scénario ne bougerait pas la souris.
+    """
+    import json
+    import time
+    import uuid
+
+    from playwright.sync_api import sync_playwright
+
+    monkeypatch.setenv("SHADOWLAB_VITRINE_TAILLE", "40")
+    from shadowlab.config import charger
+
+    reglages = charger()
+    jeton = uuid.uuid4().hex
+    pages_visitees = ("/lab/catalogue", "/lab/vitrine/annonces")
+    with campaigns.serveur_local(reglages):
+        with sync_playwright() as p:
+            navigateur = p.chromium.launch(headless=True)
+            try:
+                page = navigateur.new_page(viewport={"width": 1280, "height": 720})
+                for chemin in pages_visitees:
+                    page.goto(f"{reglages.url_site}{chemin}?sl={jeton}", wait_until="load")
+                    page.wait_for_selector("#observation-envoyee", state="attached", timeout=20_000)
+                    for x, y in ((100, 100), (400, 250), (700, 400), (300, 500), (900, 200)):
+                        page.mouse.move(x, y, steps=5)
+                        page.wait_for_timeout(120)
+                    page.goto("about:blank")  # `pagehide` : le relevé `comportement` part (sendBeacon)
+            finally:
+                navigateur.close()
+        cx = db.ouvrir(reglages.base_donnees)
+        releves: dict[str, dict] = {}
+        fin = time.monotonic() + 10
+        while time.monotonic() < fin and len(releves) < len(pages_visitees):
+            for ligne in cx.execute(
+                "SELECT page, payload FROM observations_js WHERE session_token = ? AND kind = 'comportement'",
+                (jeton,),
+            ):
+                releves[ligne["page"]] = json.loads(ligne["payload"])
+            time.sleep(0.2)
+
+    assert set(releves) == set(pages_visitees), f"relevés reçus : {sorted(releves)}"
+    assert releves["/lab/catalogue"]["page_defilable"] is False
+    assert releves["/lab/vitrine/annonces"]["page_defilable"] is True
+    for chemin in pages_visitees:
+        delai = releves[chemin]["delai_souris_max_ms"]
+        assert isinstance(delai, int | float) and not isinstance(delai, bool), (chemin, delai)
+        assert delai > 0
+
+
 def test_contact_s_envoie_depuis_un_vrai_navigateur(tmp_path):
     """Le formulaire de contact de l'application publique, envoyé par Chromium : adresse et message reçu.
 
