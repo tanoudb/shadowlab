@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from .recettes import Recette, RecetteInvalide, _est_local
+from .recettes import CLES_RYTHME, Recette, RecetteInvalide, _est_local
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class Rythme:
 
 
 PRUDENT = Rythme((3, 8, 30), 300, (2, 5), (40, 80))
-_CLES = {"delai_s", "pages_par_heure_max", "pause_longue", "comportement"}
+_CLES = CLES_RYTHME
 
 
 def _faute(message: str) -> RecetteInvalide:

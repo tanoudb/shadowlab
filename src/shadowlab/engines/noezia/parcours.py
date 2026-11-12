@@ -214,6 +214,11 @@ def _empreinte(texte: str) -> str:
     return "sha256:" + hashlib.sha256(texte.encode("utf-8")).hexdigest()
 
 
+def pages_faites(n: int) -> str:
+    """« 0 page faite », « 1 page faite », « 2 pages faites » (le pluriel français commence à 2)."""
+    return f"{n} page faite" if n < 2 else f"{n} pages faites"
+
+
 def nettoyer(texte: str) -> str:
     """Retire les caractères de contrôle (une adresse ou un texte du site ne doit pas piloter le terminal)."""
     return "".join(c if c.isprintable() else "?" for c in str(texte))
@@ -266,7 +271,9 @@ class Parcours:
         dormir: Callable[[float], None] = time.sleep,
         alea: random.Random | None = None,
         horodatage: Callable[[], str] = _maintenant,
+        options_reprise: str = "",
     ) -> None:
+        """`options_reprise` : les options (`--sortie …`) à rappeler dans la commande `reprendre` conseillée."""
         self.recette = recette
         self.texte_recette = texte_recette
         self.chemin_recette = chemin_recette
@@ -282,6 +289,14 @@ class Parcours:
         self._robots: dict[str, Robots] = {}
         self._robots_resume: dict[str, dict[str, Any]] = {}
         self._courante: Page | None = None
+        self._options_reprise = options_reprise
+        self._decalage = 0  # pages déjà lues au début d'une reprise : `--pages-max N` en lit N de plus
+
+    def _commande_reprendre(self, *options: str) -> str:
+        """La commande qui retrouve CETTE récolte (`--sortie` compris s'il a servi), avec les `options` en plus."""
+        return " ".join(
+            ["uv run shadowlab recolte reprendre", self.recette.nom + self._options_reprise, *options]
+        ).strip()
 
     # ── Entrées ─────────────────────────────────────────────────────────
     def lancer(self) -> Bilan:
@@ -323,7 +338,9 @@ class Parcours:
     def reprendre(
         self, *, maintenant: bool = False, recette_modifiee: bool = False, pages_max: int | None = None
     ) -> Bilan:
-        """Continue la dernière passe (coupée, arrêtée ou limitée), avec ses options de départ."""
+        """Continue la dernière passe (coupée, arrêtée ou limitée), avec ses options de départ, sauf la limite de
+        pages : elle valait pour le lancement. Sans `pages_max`, la reprise va jusqu'au bout ; avec, elle lit
+        `pages_max` pages de plus."""
         self._controles(reprise=True)
         verrou = Verrou(self.dossier / "verrou")
         verrou.prendre()
@@ -333,7 +350,7 @@ class Parcours:
             gardees = passe["options"]
             self.options = Options(
                 tranche=dict(gardees.get("tranche", {})),
-                pages_max=pages_max if pages_max is not None else gardees.get("pages_max"),
+                pages_max=pages_max,
                 sans=tuple(gardees.get("sans", ())),
                 ignorer_robots=bool(gardees.get("ignorer_robots", False)),
                 tout_refaire=bool(gardees.get("tout_refaire", False)),  # une passe « tout refaire » reste complète
@@ -364,7 +381,7 @@ class Parcours:
         if derniere and derniere["statut"] in PASSES_NON_FINIES and not self.options.tout_refaire:
             raise RefusParcours(
                 f"la passe {derniere['numero']} n'est pas finie ({derniere['statut']}) : "
-                f"`recolte reprendre {self.recette.nom}`, ou `lancer … --tout-refaire` pour tout recommencer"
+                f"`{self._commande_reprendre()}`, ou `lancer … --tout-refaire` pour tout recommencer"
             )
         return derniere
 
@@ -377,14 +394,14 @@ class Parcours:
         if passe["empreinte"] != self.empreinte and not recette_modifiee:
             raise RefusParcours(
                 f"la recette a changé depuis le début de la passe {passe['numero']} : "
-                "`reprendre … --recette-modifiee` pour continuer avec la nouvelle"
+                f"`{self._commande_reprendre('--recette-modifiee')}` pour continuer avec la nouvelle"
             )
         if passe["statut"] == "arretee" and not maintenant and passe["fin"]:
             ecoule = (datetime.fromisoformat(self._horodatage()) - datetime.fromisoformat(passe["fin"])).total_seconds()
             if ecoule < ATTENTE_APRES_ALERTE_S:
                 raise RefusParcours(
                     f"la passe {passe['numero']} s'est arrêtée sur alerte il y a {int(ecoule // 60)} min : "
-                    f"attendre {ATTENTE_APRES_ALERTE_S // 3600} h, ou `reprendre … --maintenant`"
+                    f"attendre {ATTENTE_APRES_ALERTE_S // 3600} h, ou `{self._commande_reprendre('--maintenant')}`"
                 )
         return passe
 
@@ -441,7 +458,9 @@ class Parcours:
         }
 
     def _pages_max(self) -> int | None:
-        bornes = [b for b in (self.options.pages_max, self.recette.bornes.pages_max) if b is not None]
+        """Le nombre de pages lues (échecs compris) où la passe s'arrête, en comptant depuis le début de la passe."""
+        option = None if self.options.pages_max is None else self._decalage + self.options.pages_max
+        bornes = [b for b in (option, self.recette.bornes.pages_max) if b is not None]
         return min(bornes) if bornes else None
 
     # ── robots.txt ──────────────────────────────────────────────────────
@@ -486,6 +505,7 @@ class Parcours:
         self._sentinelle.rejouer(etat.dernieres_lues(passe, FENETRE))
         self._cadence = Cadence(rythme_de(recette), self._alea, self._horloge, self._dormir)
         self._signatures = Signatures(self.dossier / "signatures.json")
+        self._decalage = etat.compteurs(passe)["lues"] if reprise else 0
         self._plafonds = recette.bornes.par_type
         self._ignores = recette.parametres_ignores
         self._sans = set(self.options.sans)
@@ -790,22 +810,29 @@ class Parcours:
         lignes = ", ".join(f"{n} {nom}" for nom, n in enregistrements.items()) or "aucun enregistrement"
         if statut == "terminee":
             self._ecran(
-                f"Terminée : {c['faites']} pages ({par_type}), {lignes}, {c['echecs']} échec(s), "
+                f"Terminée : {c['faites']} page{'s' if c['faites'] > 1 else ''} ({par_type}), {lignes}, "
+                f"{c['echecs']} échec(s), "
                 f"{c['relocalisations']} relocalisation(s), {c['interdites_robots']} interdite(s) par robots.txt, "
                 f"durée {duree:.1f} s"
             )
         elif statut == "limitee":
+            limite = self._pages_max()
+            if self.recette.bornes.pages_max == limite:  # la limite est celle de la recette : seule elle la lève
+                relancer = self._commande_reprendre("--recette-modifiee")
+                suite = f"relever `bornes.pages_max` dans la recette, puis `{relancer}`"
+            else:
+                suite = (
+                    f"`{self._commande_reprendre()}` (sans limite) "
+                    f"ou `{self._commande_reprendre('--pages-max <N>')}` (N pages de plus)"
+                )
             self._ecran(
-                f"Limite atteinte ({self._pages_max()} pages lues) : {c['faites']} pages faites, {lignes}, "
-                f"{c['a_faire']} à faire. Suite : uv run shadowlab recolte reprendre {self.recette.nom} --pages-max <N>"
+                f"Limite atteinte ({limite} pages lues, échecs compris) : {pages_faites(c['faites'])}, {lignes}, "
+                f"{c['a_faire']} à faire. Suite : {suite}"
             )
         elif statut == "arretee" and arret:
             self._ecran(f"ARRÊT : signe d'alerte ({arret['detail']}) sur {arret['adresse']} à {arret['quand']}.")
-            self._ecran(f"Aucun nouvel essai. État gardé : {c['faites']} pages faites, {c['a_faire']} à faire.")
-            self._ecran(
-                f"Reprise conseillée après {ATTENTE_APRES_ALERTE_S // 3600} h : "
-                f"uv run shadowlab recolte reprendre {self.recette.nom}"
-            )
+            self._ecran(f"Aucun nouvel essai. État gardé : {pages_faites(c['faites'])}, {c['a_faire']} à faire.")
+            self._ecran(f"Reprise conseillée après {ATTENTE_APRES_ALERTE_S // 3600} h : {self._commande_reprendre()}")
         incr = resume["incrementale"]
         if incr["active"]:
             self._ecran(
@@ -957,5 +984,6 @@ __all__ = [
     "essayer",
     "lignes_alertes",
     "nettoyer",
+    "pages_faites",
     "type_de_page",
 ]
