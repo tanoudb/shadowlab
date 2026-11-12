@@ -2791,7 +2791,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   (`recolte-1-recette`, `recolte-3-notation`, `recolte-5-rallye`) : rien n'est fusionné sans son accord.
 - **Écrit** : `docs/PLAN.md` (§ 2 bloc 98, § 8 lignes 1.7 et 1.9), `docs/DECISIONS.md` (D-68), `AGENTS.md`
   (État), `contexte.md`.
-- **En cours** (lancé à 17 h 01) : `discretion-native-30.yaml` (identité native, 30 passages par niveau de 01
+- **En cours** (lancé à 16 h 58) : `discretion-native-30.yaml` (identité native, 30 passages par niveau de 01
   à 06 sans corrélation, 180 passages), puis `discretion-native-correlation.yaml` (niveau 06 complet, 15).
 - **Reste** : écrire ces deux résultats au plan ; sessions humaines à 20 h puis `shadowlab rejeu` ; identité
   native comme réglage de référence ; `recolte-rythme.yaml` reporté au 13/11.

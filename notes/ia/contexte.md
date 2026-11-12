@@ -67,7 +67,7 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
 | `moteur-version-reelle` | version réelle annoncée (D-58) | de côté ; sans objet si l'identité native l'emporte |
 
 ## Prochaine action (12/11)
-1. **Campagnes de discrétion en cours** (lancées à 17 h 01, fin vers 18 h 15) : `discretion-native-30.yaml`
+1. **Campagnes de discrétion en cours** (lancées à 16 h 58, fin vers 18 h 15) : `discretion-native-30.yaml`
    (identité native, 30 passages par niveau de 01 à 06 sans corrélation), puis
    `discretion-native-correlation.yaml` (niveau 06 complet, 15 passages). Ni test ni modification de `src/`
    d'ici là. À leur fin : lire les résultats, les écrire au § 2 du plan, vérifier que l'Arena est revenue
