@@ -13,7 +13,9 @@ réelle), marques et modèles de voiture génériques (« démo »), numéros de
 Aucune marque de site de résultats.
 
 Pièges voulus (ceux d'un vrai site de résultats), listés dans `PIEGES`. Un test vérifie que chacun est
-présent, dès que le site compte deux saisons (9 rallyes) :
+présent, dès que le site compte deux saisons (9 rallyes) ; `GARANTI_A_PARTIR_DE` donne le seuil de chacun
+(1 rallye suffit pour la plupart, 2 pour la spéciale annulée, 3 pour les temps à heures, 9 pour le châssis
+qui change de saison ; une taille de 1 à 8 ne les garantit donc pas tous) :
 temps à minutes et à heures, abandons sans temps, ex aequo, spéciale annulée sans tableau, colonnes dans
 un autre ordre, pilote et copilote dans une même cellule, châssis qui passe de pilote en pilote et de
 saison en saison, noms à accents et à apostrophes.
@@ -101,7 +103,7 @@ NOMS = [
 ]  # fmt: skip
 # (marque, sigle du code de châssis) et modèles génériques
 MARQUES = [
-    ("Arvane", "ARV"), ("Kestrel", "KES"), ("Marmotte", "MAR"), ("Vélocia", "VEL"),
+    ("Arvane", "ARV"), ("Zorbane", "ZOR"), ("Marmotte", "MAR"), ("Vélocia", "VEL"),
     ("Orage", "ORA"), ("Girofle", "GIR"), ("Cormoran", "COR"), ("Balise", "BAL"),
 ]  # fmt: skip
 MODELES = [
@@ -648,6 +650,23 @@ CLES = {
 }
 
 
+# Taille (nombre de rallyes) à partir de laquelle chaque piège est garanti par construction, quelle que soit
+# la graine. En dessous, il peut manquer : à 1 rallye, ni spéciale annulée (rallye n° 2), ni temps à heures
+# (rallye long n° 3), ni châssis qui change de saison (il faut une seconde saison : 9 rallyes).
+GARANTI_A_PARTIR_DE = {
+    "temps_a_minutes": 1,
+    "temps_a_heures": 3,
+    "abandon_sans_temps": 1,
+    "ex_aequo": 1,
+    "speciale_annulee_sans_tableau": 2,
+    "colonnes_dans_un_autre_ordre": 1,
+    "equipage_dans_une_cellule": 1,
+    "chassis_de_pilote_en_pilote_et_de_saison_en_saison": RALLYES_PAR_SAISON + 1,
+    "noms_a_apostrophes": 1,
+    "noms_accentues": 1,
+}
+
+
 def pieges_presents(v: dict) -> dict[str, int]:
     """Combien de fois chaque piège de `PIEGES` apparaît dans la vérité `v` (0 = absent : le site est défaillant)."""
     c = v["collections"]
@@ -677,7 +696,9 @@ def pieges_presents(v: dict) -> dict[str, int]:
         "colonnes_dans_un_autre_ordre": int(
             [COLONNES_TEMPS.index(x) for x in communes] != [COLONNES_CLASSEMENT.index(x) for x in communes]
         ),
-        "equipage_dans_une_cellule": len(c["temps"]),
+        # Propriété de la mise en page (`_equipage`, vérifiée sur le HTML par les tests) ; ici, la donnée
+        # qu'elle suppose : des lignes de temps qui ont à la fois un pilote et un copilote.
+        "equipage_dans_une_cellule": sum(1 for t in c["temps"] if t["pilote"] and t["copilote"]),
         "chassis_de_pilote_en_pilote_et_de_saison_en_saison": sum(
             1 for lot in par_chassis.values() if len({s for s, _ in lot}) >= 2 and len({p for _, p in lot}) >= 2
         ),
@@ -719,7 +740,7 @@ def _date_fr(iso: str) -> str:
 
 
 def _heure_fr(iso: str) -> str:
-    return f"{iso[11:13]}h{iso[14:16]}"
+    return escape(f"{iso[11:13]}h{iso[14:16]}")
 
 
 def _km(valeur: float) -> str:
@@ -743,8 +764,8 @@ def _gabarit(titre: str, corps: str, jeton: str, fil: str = "", honeypot: bool =
 </head>
 <body class="rallye">
 <header class="entete"><div class="conteneur">
-<a class="marque" href="{adresse_saisons()}"><span class="fanion" aria-hidden="true"></span>{MARQUE}</a>
-<nav aria-label="Navigation principale"><a href="{adresse_saisons()}">Saisons</a></nav>
+<a class="marque" href="{escape(adresse_saisons())}"><span class="fanion" aria-hidden="true"></span>{MARQUE}</a>
+<nav aria-label="Navigation principale"><a href="{escape(adresse_saisons())}">Saisons</a></nav>
 </div></header>
 <main class="conteneur">
 {fil}
@@ -764,8 +785,8 @@ def _fil(*elements: tuple[str, str | None, str]) -> str:
         if adresse is None:
             morceaux.append(f'<span aria-current="page">{escape(texte)}</span>')
         else:
-            attribut = f' class="{classe}"' if classe else ""
-            morceaux.append(f'<a{attribut} href="{adresse}">{escape(texte)}</a>')
+            attribut = f' class="{escape(classe)}"' if classe else ""
+            morceaux.append(f'<a{attribut} href="{escape(adresse)}">{escape(texte)}</a>')
     return f'<nav class="fil" aria-label="{ARIANE}">{" › ".join(morceaux)}</nav>'
 
 
@@ -799,7 +820,7 @@ def _surface(nom: str) -> str:
 def _lien_pilote(u: Univers, id_pilote: int, classe: str = "") -> str:
     p = u.trouver_pilote(id_pilote)
     attribut = f' class="{classe}"' if classe else ""
-    return f'<a{attribut} href="{adresse_pilote(id_pilote)}">{escape(p.nom if p else str(id_pilote))}</a>'
+    return f'<a{attribut} href="{escape(adresse_pilote(id_pilote))}">{escape(p.nom if p else str(id_pilote))}</a>'
 
 
 def _equipage(u: Univers, e: Engage) -> str:
@@ -809,12 +830,12 @@ def _equipage(u: Univers, e: Engage) -> str:
 
 def _pagination(saison: int, page: int, total: int) -> str:
     precedent = (
-        f'<a class="precedente" rel="prev" href="{adresse_saison(saison, page - 1)}">← Page précédente</a>'
+        f'<a class="precedente" rel="prev" href="{escape(adresse_saison(saison, page - 1))}">← Page précédente</a>'
         if page > 1
         else '<span class="vide"></span>'
     )
     suivant = (
-        f'<a class="suivante" rel="next" href="{adresse_saison(saison, page + 1)}">Page suivante →</a>'
+        f'<a class="suivante" rel="next" href="{escape(adresse_saison(saison, page + 1))}">Page suivante →</a>'
         if page < total
         else '<span class="vide"></span>'
     )
@@ -826,7 +847,7 @@ def page_saisons(jeton: str, u: Univers, honeypot: bool = False) -> str:
     for saison in reversed(u.saisons):
         rallyes = u.rallyes_de(saison)
         elements += (
-            f'<li><a href="{adresse_saison(saison)}">Saison {saison}</a>'
+            f'<li><a href="{escape(adresse_saison(saison))}">Saison {saison}</a>'
             f'<span class="detail">{_pluriel(len(rallyes), "rallye")} · du {_date_fr(rallyes[0].date_debut)}'
             f" au {_date_fr(rallyes[-1].date_fin)}</span></li>\n"
         )
@@ -843,7 +864,7 @@ def page_calendrier(jeton: str, u: Univers, saison: int, page: int = 1, honeypot
     for r in u.rallyes_de(saison)[(page - 1) * PAR_PAGE : page * PAR_PAGE]:
         lignes.append(
             f'<tr><td class="date"><time datetime="{escape(r.date_debut)}">{_date_fr(r.date_debut)}</time></td>'
-            f'<td class="rallye"><a href="{adresse_rallye(r.id)}">{escape(r.nom)}</a></td>'
+            f'<td class="rallye"><a href="{escape(adresse_rallye(r.id))}">{escape(r.nom)}</a></td>'
             f"<td>{escape(r.championnat)}</td><td>{_surface(r.surface)}</td><td>{escape(r.lieu)}</td></tr>"
         )
     nb = len(u.rallyes_de(saison))
@@ -863,21 +884,21 @@ def page_rallye(jeton: str, u: Univers, r: Rallye, honeypot: bool = False) -> st
         classe = ' class="annulee"' if s.annulee else ""
         lignes.append(
             f'<tr{classe}><td class="es">ES{s.numero}</td>'
-            f'<td class="nom"><a href="{adresse_speciale(s.id)}">{escape(s.nom)}</a></td>'
+            f'<td class="nom"><a href="{escape(adresse_speciale(s.id))}">{escape(s.nom)}</a></td>'
             f'<td class="droite">{_km(s.km)}</td><td>{_date_fr(s.depart)} · {_heure_fr(s.depart)}</td><td>{statut}</td></tr>'
         )
     n_eng = len(u.engages_de(r.id))
     corps = f"""<h1 class="titre">{escape(r.nom)}</h1>
 <p class="infos">Du <time class="debut" datetime="{escape(r.date_debut)}">{_date_fr(r.date_debut)}</time> au <time class="fin" datetime="{escape(r.date_fin)}">{_date_fr(r.date_fin)}</time></p>
 <dl class="fiche">
-<div class="ligne"><dt>Saison</dt><dd class="saison"><a href="{adresse_saison(r.saison)}">{r.saison}</a></dd></div>
+<div class="ligne"><dt>Saison</dt><dd class="saison"><a href="{escape(adresse_saison(r.saison))}">{r.saison}</a></dd></div>
 <div class="ligne"><dt>Championnat</dt><dd class="championnat">{escape(r.championnat)}</dd></div>
 <div class="ligne"><dt>Surface</dt><dd class="surface">{_surface(r.surface)}</dd></div>
 <div class="ligne"><dt>Lieu</dt><dd class="lieu">{escape(r.lieu)}</dd></div>
 <div class="ligne"><dt>Distance chronométrée</dt><dd class="km">{_km(r.km_chrono)}</dd></div>
 <div class="ligne"><dt>Engagés</dt><dd class="nb-engages">{n_eng}</dd></div>
 </dl>
-<p class="actions"><a class="bouton classement" href="{adresse_classement(r.id)}">Classement final</a><a class="bouton engages" href="{adresse_engages(r.id)}">Liste des engagés</a></p>
+<p class="actions"><a class="bouton classement" href="{escape(adresse_classement(r.id))}">Classement final</a><a class="bouton engages" href="{escape(adresse_engages(r.id))}">Liste des engagés</a></p>
 <h2>Spéciales</h2>
 {_tableau("speciales", COLONNES_SPECIALES, lignes, droite=("Longueur",))}"""
     return _gabarit(r.nom, corps, jeton, _fil_rallye(r), honeypot)
@@ -947,7 +968,7 @@ def page_engages(jeton: str, u: Univers, r: Rallye, honeypot: bool = False) -> s
     for e in u.engages_de(r.id):
         lignes.append(
             f'<tr><td class="num">{e.numero}</td><td>{_lien_pilote(u, e.pilote_id)}</td><td>{escape(e.copilote)}</td>'
-            f'<td>{escape(u.voiture(e))}</td><td><a href="{adresse_chassis(e.chassis)}">{escape(e.chassis)}</a></td>'
+            f'<td>{escape(u.voiture(e))}</td><td><a href="{escape(adresse_chassis(e.chassis))}">{escape(e.chassis)}</a></td>'
             f"<td>{escape(e.groupe)}</td></tr>"
         )
     corps = f"""<h1 class="titre">Liste des engagés</h1>
@@ -963,7 +984,7 @@ def page_chassis(jeton: str, u: Univers, c: Chassis, honeypot: bool = False) -> 
         classe = ' class="abandon"' if h.resultat == "Abandon" else ""
         lignes.append(
             f'<tr{classe}><td class="date"><time datetime="{escape(h.date)}">{_date_fr(h.date)}</time></td>'
-            f'<td><a href="{adresse_rallye(h.rallye)}">{escape(r.nom)}</a></td><td>{_lien_pilote(u, h.pilote_id)}</td>'
+            f'<td><a href="{escape(adresse_rallye(h.rallye))}">{escape(r.nom)}</a></td><td>{_lien_pilote(u, h.pilote_id)}</td>'
             f'<td class="resultat">{escape(h.resultat)}</td></tr>'
         )
     corps = f"""<h1 class="titre">Châssis {escape(c.code)}</h1>
@@ -988,8 +1009,8 @@ def page_pilote(jeton: str, u: Univers, p: Pilote, honeypot: bool = False) -> st
         classe = ' class="abandon"' if resultat.rang is None else ""
         lignes.append(
             f'<tr{classe}><td class="date"><time datetime="{escape(r.date_debut)}">{_date_fr(r.date_debut)}</time></td>'
-            f'<td><a href="{adresse_rallye(r.id)}">{escape(r.nom)}</a></td><td class="num">{e.numero}</td>'
-            f'<td><a href="{adresse_chassis(e.chassis)}">{escape(e.chassis)}</a></td><td class="resultat">{texte}</td></tr>'
+            f'<td><a href="{escape(adresse_rallye(r.id))}">{escape(r.nom)}</a></td><td class="num">{e.numero}</td>'
+            f'<td><a href="{escape(adresse_chassis(e.chassis))}">{escape(e.chassis)}</a></td><td class="resultat">{texte}</td></tr>'
         )
     corps = f"""<h1 class="titre">{escape(p.nom)}</h1>
 <dl class="fiche">
