@@ -1639,8 +1639,10 @@ def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
         "le code de réponse et l'heure, sans adresse IP ni identifiant de session.",
-        "une empreinte non réversible de votre adresse est gardée en mémoire, 24 heures au plus, le temps de "
-        "limiter les abus ; elle n'est jamais écrite sur le disque.",
+        "Pour compter les ouvertures de session et les messages d'un même visiteur, une empreinte de votre adresse "
+        "(pas l'adresse elle-même) est gardée en mémoire vive le temps de limiter les abus : une journée, un peu "
+        "plus si personne ne visite le site entre-temps. Elle n'est jamais écrite sur le disque et disparaît à "
+        "l'arrêt du serveur.",
         "n'enregistre pas votre adresse IP",
         "rien n'est relevé",
         "efface aussitôt toutes les données qui la concernent",
@@ -1648,6 +1650,7 @@ def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
         "l'effacement peut avoir lieu un jour plus tard",
     ):
         assert phrase in texte, phrase
+    assert "non réversible" not in texte and "24 heures au plus" not in texte, "promesses trop fortes retirées"
     bandeau = client.get("/lab/vitrine").text
     assert "Vous visitez sans participer : rien n'est enregistré" in bandeau
     assert "journal technique des erreurs" in bandeau, "la phrase du bandeau reste vraie : une erreur est journalisée"
@@ -1965,3 +1968,20 @@ def test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie():
     assert re.search(r"^tunnel=\$!$", script, re.M) and 'kill "$tunnel"' in script
     assert "n'écrit aucune requête" not in script, "cette affirmation n'a jamais été vérifiée"
     assert "Non vérifié" in script or "jamais vérifié" in script
+
+
+def test_une_requete_ordinaire_balaie_les_empreintes_expirees_de_chaque_limiteur(reglages_publics):
+    """Le balayage ne dépend plus d'un appel du limiteur (ouverture de session, message) : la première requête
+    reçue après la fin de la fenêtre retire les empreintes expirées de tous les limiteurs de l'application."""
+    app = creer_app_publique(reglages_publics)
+    limiteurs = app.state.limiteurs
+    assert len(limiteurs) == 3
+    instant = [1000.0]
+    for limiteur in limiteurs:
+        limiteur._horloge = lambda: instant[0]
+        limiteur._dernier_balayage = instant[0]
+        assert limiteur.autoriser(IP) and len(limiteur._vues) == 1
+    instant[0] += 24 * 3600 + 120  # une fenêtre de jour passée, sans aucun appel d'un limiteur
+    with TestClient(app, base_url=ORIGINE) as c:
+        assert c.get("/").status_code == 200
+    assert [len(limiteur._vues) for limiteur in limiteurs] == [0, 0, 0]
