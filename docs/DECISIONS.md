@@ -327,3 +327,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   un visiteur a écrit comment le joindre. Limite : aucun envoi au responsable ; `shadowlab public servir`
   donne le nombre de messages au démarrage et écrit une ligne à l'écran à chaque arrivée. Écarté : un envoi par e-mail (il faudrait un
   compte d'envoi et son secret sur le poste).
+- **D-60 — 12/11/2026 — Arena : « HeadlessChrome » cherché dans toutes les requêtes d'une session.** La règle
+  `ua_headless` de `regles-http` ne lisait que la première page. Mesuré dans la campagne 94 : NOEZIA réécrit
+  son identité sur cette page, mais 182 de ses 1 160 requêtes (envois de fin de page, redirections) disent
+  « HeadlessChrome » dans `User-Agent` ou `sec-ch-ua`, et l'Arena ne le voyait pas. Choix : nouveau signal
+  `headless_dans_une_requete` (poids 1, comme `ua_headless`), détecteur `regles-http` en 2.1. Accord d'Ethan
+  (« Oui, ajoute-la ») : la règle 4 du plan demande son avis pour tout ajout à l'Arena. Pourquoi : aucun
+  vrai navigateur n'envoie ce mot, donc aucun humain ne peut la déclencher, et sans elle l'Arena notait
+  15/15 un moteur qu'un anti-bot réel arrêterait. Effet attendu, à mesurer par la campagne de référence
+  du 12/11 : NOEZIA arrêté sur les scénarios à plusieurs pages dès qu'un envoi non réécrit est arrivé.

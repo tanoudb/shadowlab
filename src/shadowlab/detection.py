@@ -86,6 +86,12 @@ def _entetes(obs_http: dict[str, Any]) -> dict[str, str]:
     return {nom.lower(): valeur for nom, valeur in obs_http["headers"]}
 
 
+def _annonce_headless(obs_http: dict[str, Any]) -> bool:
+    """« HeadlessChrome » dans le User-Agent ou dans les marques annoncées (`sec-ch-ua`) d'une requête."""
+    e = _entetes(obs_http)
+    return any("headlesschrome" in e.get(nom, "").lower() for nom in ("user-agent", "sec-ch-ua"))
+
+
 def _verdict(nom: str, version: str, signaux: list[Signal], appui_humain: float = 0.6) -> Classement:
     # `confidence` ici est un score heuristique non calibré (somme de poids plafonnée,
     # ou `appui_humain` constant). Il sert à trier/afficher, jamais à calculer un taux.
@@ -125,10 +131,15 @@ class DetecteurBotD:
 
 
 class DetecteurReglesHttp:
-    """Règles sur les en-têtes HTTP des requêtes de pages, sans JavaScript."""
+    """Règles sur les en-têtes HTTP des requêtes de pages, sans JavaScript.
+
+    V2.1 (12/11/2026) : « HeadlessChrome » cherché dans toutes les requêtes de la session, pas seulement dans
+    la première page. Un moteur qui réécrit son identité laisse passer des requêtes non réécrites
+    (campagne 94 : 182 requêtes de NOEZIA sur 1 160). Aucun vrai navigateur n'envoie ce mot.
+    """
 
     name = "regles-http"
-    version = "2"
+    version = "2.1"
 
     def classer(self, obs: Observations) -> Classement:
         documents = obs.documents
@@ -143,6 +154,11 @@ class DetecteurReglesHttp:
             signaux.append(Signal("ua_outil", f"User-Agent d'outil : {ua[:80]}", 1.0))
         if "headlesschrome" in ua.lower():
             signaux.append(Signal("ua_headless", "User-Agent HeadlessChrome", 1.0))
+        else:
+            fuites = sum(1 for o in obs.http if _annonce_headless(o))
+            if fuites:
+                description = f"« HeadlessChrome » dans les en-têtes de {fuites} requête(s) sur {len(obs.http)}"
+                signaux.append(Signal("headless_dans_une_requete", description, 1.0))
         if "accept-language" not in e:
             signaux.append(Signal("langue_absente", "en-tête Accept-Language absent", 0.5))
         navigateur_annonce = "mozilla/" in ua.lower()

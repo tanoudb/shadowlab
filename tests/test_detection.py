@@ -50,6 +50,44 @@ def verdicts(obs):
     return {c.detector_name: c.classification for c in classer(obs)}
 
 
+def regles_http(obs):
+    return next(c for c in classer(obs) if c.detector_name == "regles-http")
+
+
+def test_headless_dans_une_requete_tardive_classe_automatise():
+    """Campagne 94 : la première page a une identité réécrite, 16 % des requêtes suivantes disent « HeadlessChrome »."""
+    envoi = [
+        ["host", "127.0.0.1:8770"],
+        ["user-agent", UA_CHROME.replace("Chrome/", "HeadlessChrome/")],
+        ["content-type", "application/json"],
+    ]
+    obs = Observations(http=[requete(entetes_navigateur()), requete(envoi, "/lab/collecte")], js=[empreinte()])
+    verdict = regles_http(obs)
+    assert verdict.classification == "automatise"
+    assert [s.code for s in verdict.signals] == ["headless_dans_une_requete"]
+    assert "1 requête(s) sur 2" in verdict.signals[0].description
+
+    marque = [
+        e if e[0] != "sec-ch-ua" else ["sec-ch-ua", '"Chromium";v="156", "HeadlessChrome";v="156"']
+        for e in entetes_navigateur()
+    ]
+    obs = Observations(http=[requete(entetes_navigateur()), requete(marque, "/lab/catalogue")], js=[empreinte()])
+    assert regles_http(obs).classification == "automatise", "le mot dans sec-ch-ua suffit, User-Agent réécrit ou non"
+
+
+def test_headless_des_la_premiere_page_n_est_pas_compte_deux_fois():
+    entetes = entetes_navigateur(UA_CHROME.replace("Chrome/", "HeadlessChrome/"))
+    obs = Observations(http=[requete(entetes), requete(entetes, "/lab/static/a.js")], js=[])
+    codes = [s.code for s in regles_http(obs).signals]
+    assert "ua_headless" in codes and "headless_dans_une_requete" not in codes
+
+
+def test_navigateur_ordinaire_sur_plusieurs_requetes_reste_humain():
+    entetes = entetes_navigateur()
+    http = [requete(entetes), requete(entetes, "/lab/static/a.js"), requete(entetes, "/lab/collecte")]
+    assert regles_http(Observations(http=http, js=[empreinte()])).classification == "humain"
+
+
 def test_navigateur_ordinaire_classe_humain():
     obs = Observations(http=[requete(entetes_navigateur())], js=[empreinte()])
     v = verdicts(obs)
