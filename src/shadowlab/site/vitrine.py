@@ -368,7 +368,7 @@ class Habillage:
     """
 
     observateur: bool = True  # jeton de session et script d'observation dans la page
-    sans_tiers: bool = False  # balise qui demande à l'observateur de ne contacter aucun serveur extérieur
+    sans_tiers: bool = False  # site public : l'observateur ne contacte aucun tiers, saute `debugger` et first-input
     bandeau: str = ""  # inséré sous l'en-tête
 
 

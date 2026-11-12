@@ -29,8 +29,19 @@ mkdir -p "$dossier"
 chmod 700 "$dossier"
 : > "$journal"
 
-# Niveau « info » : cloudflared n'y écrit aucune requête (ni adresse de visiteur, ni chemin, ni jeton).
-cloudflared tunnel --no-autoupdate --loglevel info --url "http://127.0.0.1:$port" >> "$journal" 2>&1 &
+# Filtre appliqué à chaque ligne de cloudflared AVANT son écriture dans le journal (`sed` de macOS : -E pour les
+# expressions étendues, -l pour une sortie ligne à ligne). En cas d'erreur, cloudflared peut écrire l'adresse
+# complète demandée (chemin et chaîne de requête, où passe le jeton `sl=`), avec l'heure. Le filtre :
+#   1. réduit toute adresse `schéma://hôte/…` à `schéma://hôte` (l'hôte du tunnel reste lisible : le script le lit) ;
+#   2. remplace un chemin suivi d'une chaîne de requête par `/[masque]` ;
+#   3. masque toute chaîne de requête restante, puis tout `sl=…`.
+# Il est lu par tests/test_public.py. Non vérifié avec un vrai tunnel : les lignes d'erreur de cloudflared sont
+# supposées, jamais observées ; un chemin sans chaîne de requête, hors adresse complète, n'est pas masqué.
+FILTRE_JOURNAL='s~([a-z][a-z0-9+.-]*)://([^/ ?",;<>|]+)[^ ",;<>|]*~\1://\2~g; s~/[^ ",;<>|?]*\?[^ ",;<>|]+~/[masque]~g; s~\?[^ ",;<>|]+~?[masque]~g; s~sl=[^& ",;<>|]*~sl=[masque]~g'
+
+# Niveau « info ». `$tunnel` reste le PID de cloudflared (substitution de processus, pas de tube) : le `trap` le tue,
+# et `sed` s'arrête de lui-même quand cloudflared ferme sa sortie.
+cloudflared tunnel --no-autoupdate --loglevel info --url "http://127.0.0.1:$port" > >(sed -l -E "$FILTRE_JOURNAL" >> "$journal") 2>&1 &
 tunnel=$!
 trap 'kill "$tunnel" 2>/dev/null || true' EXIT
 

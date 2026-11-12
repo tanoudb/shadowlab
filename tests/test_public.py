@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
@@ -27,7 +29,7 @@ from shadowlab.config import ReglagesPublics, charger_public
 from shadowlab.public import Limites, creer_app_publique, purger
 from shadowlab.public import messages as boite
 from shadowlab.public.donnees import ENTETES_GARDES
-from shadowlab.public.pages import DONNEES_COMPORTEMENT, DONNEES_RELEVEES
+from shadowlab.public.pages import DONNEES_COMPORTEMENT, DONNEES_RELEVEES, VERSION_INFORMATION
 
 HOTE = "vitrine.test"  # domaine réservé aux essais (RFC 2606)
 ORIGINE = f"https://{HOTE}"
@@ -428,6 +430,58 @@ webrtcTest().then((r) => console.log(JSON.stringify({{ r, configuration }})));
         assert resultat["r"]["disponible"] is True
 
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+@pytest.mark.parametrize("balise", [True, False])
+def test_debugger_et_first_input_sautes_quand_la_page_le_demande(balise):
+    """Avec la balise, ni instruction `debugger` (elle arrête la page d'un visiteur aux outils de développement
+    ouverts) ni lecture de l'entrée first-input : plus aucun détecteur ne les lit (D-62). Sans elle (labo), comme
+    avant. Les autres mesures de `cdp_detection` restent."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    assert len(re.findall(r"\bdebugger\s*;", source)) == 1, "une seule instruction debugger, dans cdpDetectionTest"
+    fonction = re.search(r"^function cdpDetectionTest\(\) \{.*?^\}$", source, re.S | re.M).group(0)
+    # L'instruction est remplacée par une trace : la voir posée, c'est savoir que la ligne a été exécutée.
+    instrumentee, remplacees = re.subn(r"\bdebugger\s*;", "globalThis.debuggerAtteint = true;", fonction)
+    assert remplacees == 1
+    script = f"""
+const META = {json.dumps("1" if balise else None)};
+const BALISE = 'meta[name="sl-sans-tiers"]';
+globalThis.window = globalThis;
+globalThis.document = {{
+  querySelector: (s) => (s === BALISE && META ? {{ content: META }} : null),
+  querySelectorAll: () => [],
+}};
+const types = [];
+Object.defineProperty(globalThis, 'performance', {{
+  configurable: true,
+  value: {{ now: () => 0, getEntriesByType: (t) => {{ types.push(t); return []; }} }},
+}});
+globalThis.debuggerAtteint = false;
+{instrumentee}
+const r = cdpDetectionTest();
+console.log(JSON.stringify({{ r, types, debuggerAtteint: globalThis.debuggerAtteint }}));
+"""
+    sortie = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True, timeout=30).stdout
+    resultat = json.loads(sortie)
+    r = resultat["r"]
+    assert "console_log_natif" in r and r["cdp_resource_entries"] == 0, "les autres mesures restent"
+    if balise:
+        assert resultat["debuggerAtteint"] is False
+        assert "first-input" not in resultat["types"]
+        assert not {"debugger_delta_ms", "debugger_suspect", "has_first_input"} & set(r), r
+        assert r["saute"] == "sans-tiers"
+    else:
+        assert resultat["debuggerAtteint"] is True
+        assert "first-input" in resultat["types"]
+        assert (r["debugger_delta_ms"], r["debugger_suspect"], r["has_first_input"]) == (0, True, False)
+        assert "saute" not in r
+
+
+def test_description_de_cdp_detection_suit_le_releve_public():
+    """La page d'information ne décrit plus ce que le site public ne relève plus (première interaction)."""
+    description = dict(DONNEES_RELEVEES)["cdp_detection"]
+    assert "interaction" not in description and "mémoire" in description
+
+
 # --- R4 : moins de données personnelles ----------------------------------------------------------
 
 ENTETES_IP = {
@@ -648,6 +702,18 @@ def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
     nouveaux = {"page_defilable", "delai_souris_max_ms"}
     assert nouveaux <= comportement
     assert nouveaux <= {cle for cle, _ in DONNEES_COMPORTEMENT}
+
+
+def test_page_d_information_decrit_l_attente_des_voix_et_les_polices_de_reference():
+    """Relevé du 12/11/2026 : la liste des voix est lue après une courte attente, dont la durée est envoyée
+    (`voices_attente_ms`, `voices_evenement`), et les polices sont comparées à trois familles génériques (`bases`).
+    Ces champs sont décrits sur la page ; un consentement donné sous un texte plus ancien ne les couvrait pas."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    assert {"r.voices_attente_ms", "r.voices_evenement", "r.bases"} <= set(re.findall(r"r\.\w+", source))
+    descriptions = dict(DONNEES_RELEVEES)
+    assert "attente" in descriptions["headless_signals"]
+    assert "trois familles" in descriptions["font_fingerprint"]
+    assert VERSION_INFORMATION not in ("2026-11-12.4", "2026-11-12.5")
 
 
 def test_collecte_accepte_le_releve_de_comportement_complet(client, reglages_publics):
@@ -1208,6 +1274,68 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
 
 
+def test_contact_absent_du_fichier_de_journal(client, tmp_path):
+    """D-57 : un message n'est que son texte et son jour. Le journal tournant, horodaté à la milliseconde, ne garde
+    rien des pages de contact ni de ce qu'un navigateur charge avec elles (feuille de style, icône) : rapprochées
+    des requêtes notées d'une session à la même milliseconde, ces lignes dateraient l'envoi ; une feuille de style
+    chargée sans page notée trahirait aussi une page de contact."""
+    from shadowlab.journal import configurer
+    from shadowlab.public import ROTATION_JOURNAL
+
+    racine = logging.getLogger("shadowlab")
+    anciens, niveau, propage = list(racine.handlers), racine.level, racine.propagate
+    enregistrements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            enregistrements.append(record.getMessage())
+
+    def messages_du_fichier() -> list[str]:
+        return [json.loads(ligne)["message"] for ligne in fichier.read_text(encoding="utf-8").splitlines()]
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.DEBUG)
+    try:
+        configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
+        fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
+        commencer(client)  # pendant une session : ses requêtes /lab/… sont notées en base, à la milliseconde
+        client.get("/n-existe-pas")
+        avant = messages_du_fichier()
+        assert avant, "les erreurs du site restent journalisées"
+        journal.addHandler(capture)
+        # Ce qu'un navigateur demande : la page, sa feuille de style, l'icône ; l'envoi ; la page de confirmation.
+        for chemin in ("/contact", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        assert ecrire(client, "Bonjour, merci d'effacer ma session.").status_code == 303
+        for chemin in ("/contact/envoye", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        journal.removeHandler(capture)
+        assert enregistrements == [], "aucun enregistrement, donc rien pour le fichier"
+        apres = messages_du_fichier()
+        assert apres == avant, "aucune ligne, pas même celles de la feuille de style ou de l'icône"
+        assert not [ligne for ligne in apres if "/contact" in ligne or "message" in ligne]
+        client.get("/n-existe-pas")
+        assert "GET /n-existe-pas 404" in messages_du_fichier(), "les erreurs du site restent journalisées"
+    finally:
+        journal.removeHandler(capture)
+        for gestionnaire in racine.handlers:
+            gestionnaire.close()
+        racine.handlers[:] = anciens
+        racine.setLevel(niveau)
+        racine.propagate = propage
+
+
+def test_contact_avis_a_l_ecran_seulement_sur_un_terminal(client, capsys, monkeypatch):
+    """L'avis « message de contact reçu » passe par la sortie standard, jamais par le journal ; et seulement si elle
+    est un terminal : recueillie (journald sous systemd, fichier), sa ligne horodatée daterait l'envoi."""
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert ecrire(client, "premier").status_code == 303
+    assert "message de contact reçu" in capsys.readouterr().out
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    assert ecrire(client, "second").status_code == 303
+    assert "message" not in capsys.readouterr().out
+
+
 def test_contact_origine_null_refusee(client, reglages_publics):
     # Pourquoi `Referrer-Policy: no-referrer` est interdit sur /contact : sous cette politique, un vrai
     # navigateur envoie `Origin: null` au POST du formulaire (norme Fetch), même vers le même site. Le garde
@@ -1268,6 +1396,40 @@ def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
     # Les espaces insécables (posées par macOS et iOS avant « ? » et « ! ») deviennent des espaces ordinaires.
     assert ecrire(client, "Jean\u00a0Dupont, d'accord\u202f?").status_code == 303
     assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
+
+
+LIANTS = chr(0x200C) + chr(0x200D)  # seuls caractères invisibles gardés : ils lient lettres et emoji composés
+SOURIRE = chr(0x1F600)
+FAMILLE = chr(0x200D).join([chr(0x1F469), chr(0x1F469), chr(0x1F467)])  # emoji composé par des liants U+200D
+# Invisibles, ou qui changent l'affichage dans un terminal : sens d'écriture (U+200E, U+200F, U+061C), espaces
+# sans largeur (U+200B, U+2060, U+FEFF), annotation (U+FFF9), balise qui peut cacher du texte (U+E0041).
+INVISIBLES = [0x200E, 0x200F, 0x061C, 0x200B, 0x2060, 0xFEFF, 0xFFF9, 0xE0041]
+
+
+def test_contact_garde_les_emoji_courants(client, reglages_publics):
+    texte = f"Merci {SOURIRE} de la part de toute la {FAMILLE}"
+    assert ecrire(client, texte).status_code == 303
+    assert messages_recus(reglages_publics) == [texte]
+
+
+def test_nettoyer_ne_garde_que_ce_qui_s_affiche():
+    """Liste blanche : saut de ligne, tabulation, caractères affichables (`str.isprintable()`) et les deux liants ;
+    une espace particulière devient une espace ordinaire ; tout le reste part (Cc, Cf, Cs, Co, Cn). Prix accepté :
+    un emoji plus récent que la table Unicode de Python, ou un drapeau à balises, perd des caractères."""
+    for point in INVISIBLES:
+        assert boite.nettoyer(f"a{chr(point)}b") == "ab", f"U+{point:04X}"
+    assert boite.nettoyer("\x1b[2J\x00fin" + chr(0x202E)) == "[2Jfin", "ESC, NUL, U+202E toujours retirés"
+    assert boite.nettoyer(f"{SOURIRE} {FAMILLE}") == f"{SOURIRE} {FAMILLE}"
+    espaces = "a" + chr(0x00A0) + "b" + chr(0x202F) + "c" + chr(0x3000) + "d"
+    assert boite.nettoyer(espaces) == "a b c d", "les espaces insécables deviennent des espaces"
+    assert boite.nettoyer("a\nb\tc\r\nd\re") == "a\nb\tc\nd\ne"
+    ecosse = chr(0x1F3F4) + "".join(map(chr, [0xE0067, 0xE0062, 0xE0073, 0xE0063, 0xE0074, 0xE007F]))
+    assert boite.nettoyer(ecosse) == chr(0x1F3F4), "limite acceptée : le drapeau perd ses balises"
+    # Sur U+0000 à U+30FF, les demi-paires et les balises : ni caractère « autre » (C*) hors les liants, ni
+    # séparateur (Z*) autre que l'espace ordinaire.
+    tous = "".join(map(chr, [*range(0x3100), *range(0xD800, 0xE000), *range(0xE0000, 0xE0080), *INVISIBLES]))
+    garde = "\n\t " + LIANTS
+    assert [c for c in boite.nettoyer(tous) if c not in garde and unicodedata.category(c)[0] in "CZ"] == []
 
 
 def test_contact_limite_par_adresse(reglages_publics):
@@ -1337,3 +1499,494 @@ def test_commandes_messages(monkeypatch, reglages_publics, capsys):
     assert cli.main(["public", "purger"]) == 0
     assert "1 message" in capsys.readouterr().out
     assert messages_recus(reglages_publics) == ["premier message\nsur deux lignes"]
+
+
+# --- Une seule adresse ne ferme plus le formulaire (seconde relecture du 12/11) --------------------
+
+
+def test_limiteur_sur_une_journee_glissante():
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(2, fenetre_s=24 * 3600, horloge=lambda: instant[0])
+    assert [limiteur.autoriser(IP) for _ in range(3)] == [True, True, False]
+    instant[0] += 23 * 3600
+    assert not limiteur.autoriser(IP), "23 heures plus tard, toujours refusé : la fenêtre dure un jour"
+    assert limiteur.autoriser(AUTRE_IP)
+    instant[0] += 3600
+    assert limiteur.autoriser(IP), "24 heures après les deux premiers, l'adresse peut de nouveau écrire"
+
+
+def test_contact_limite_par_adresse_et_par_jour(reglages_publics):
+    """À 3 par heure, une adresse seule épuisait le plafond du jour (30) en 10 heures et remplissait la boîte (500)
+    en 17 jours. Avec un plafond par adresse et par jour, plus bas que celui du jour et que la boîte divisée par la
+    durée de conservation, elle ne peut faire ni l'un ni l'autre."""
+    limites = Limites()
+    assert limites.messages_par_adresse_jour < limites.messages_par_jour
+    assert limites.messages_par_adresse_jour * reglages_publics.conservation_jours < limites.messages_gardes
+    with fabriquer(reglages_publics, messages_par_adresse=10, messages_par_adresse_jour=2) as c:
+        assert [ecrire(c, "essai", IP).status_code for _ in range(2)] == [303, 303]
+        refus = ecrire(c, "troisième essai", IP)
+        assert refus.status_code == 429 and texte_rendu(refus) == "troisième essai"
+        assert ecrire(c, "essai", AUTRE_IP).status_code == 303
+    assert len(messages_recus(reglages_publics)) == 3
+
+
+def test_bloc_d_adresse():
+    """Une adresse IPv6 compte pour son /64 ; une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
+    from shadowlab.public.app import bloc_d_adresse
+
+    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:B:ffff::9") == "2001:db8:a:b::/64"
+    assert bloc_d_adresse("2001:db8:a:c::1") != bloc_d_adresse("2001:db8:a:b::1")
+    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/64"
+    assert bloc_d_adresse(IP) == IP
+    assert bloc_d_adresse("::ffff:203.0.113.57") == IP, "une IPv4 écrite en IPv6 reste cette IPv4"
+    for valeur in ("", "testclient", "pas une adresse", "[2001:db8::1]:443", "2001:db8::1, 10.0.0.1", "x" * 10_000):
+        assert bloc_d_adresse(valeur) == valeur
+
+
+def test_limites_par_adresse_comptent_un_bloc_ipv6(reglages_publics):
+    """Un abonné IPv6 reçoit au moins un /64 et y change d'adresse à volonté : les limites par adresse (sessions
+    et messages) le comptent comme une seule adresse. Deux /64 différents restent deux adresses ; IPv4 inchangé."""
+    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:b:ffff:ffff:ffff:fffe", "2001:DB8:A:B:0:0:0:9"]
+    autre_bloc = "2001:db8:a:c::1"
+    with fabriquer(reglages_publics, sessions_par_adresse=2) as c:
+        assert [essayer(c, adresse) for adresse in meme_bloc] == [303, 303, 429]
+        assert essayer(c, autre_bloc) == 303
+        assert [essayer(c, adresse) for adresse in ("192.0.2.1", "192.0.2.1", "192.0.2.2")] == [303, 303, 303]
+    with fabriquer(reglages_publics, messages_par_adresse=2) as c:
+        assert [ecrire(c, "essai", adresse).status_code for adresse in meme_bloc] == [303, 303, 429]
+        assert ecrire(c, "essai", autre_bloc).status_code == 303
+
+
+def test_effacer_tous_les_messages(monkeypatch, reglages_publics, capsys):
+    from shadowlab import cli
+
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONSERVATION_JOURS", "90")
+    with fabriquer(reglages_publics) as c:
+        for n in range(3):
+            assert ecrire(c, f"message {n}").status_code == 303
+    capsys.readouterr()
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "3 message(s)" in capsys.readouterr().out
+    assert messages_recus(reglages_publics) == []
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "0 message(s)" in capsys.readouterr().out
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "après l'effacement").status_code == 303
+    cx = boite.connexion(boite.chemin(reglages_publics.base_donnees))
+    numeros = [ligne["id"] for ligne in boite.lister(cx)]
+    cx.close()
+    assert numeros == [4], "un numéro n'est jamais réutilisé"
+
+
+# --- Troisième relecture (12/11) : le journal ne garde que les erreurs, le contact ne laisse aucune trace ---------
+
+
+@pytest.fixture
+def fichier_de_journal(tmp_path):
+    """Branche le journal tournant de l'application dans `tmp_path` ; renvoie une fonction qui lit ses messages."""
+    from shadowlab.journal import configurer
+    from shadowlab.public import ROTATION_JOURNAL
+
+    racine = logging.getLogger("shadowlab")
+    anciens, niveau, propage = list(racine.handlers), racine.level, racine.propagate
+    configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
+    fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
+
+    def lire() -> list[str]:
+        return [json.loads(ligne)["message"] for ligne in fichier.read_text(encoding="utf-8").splitlines()]
+
+    try:
+        yield lire
+    finally:
+        for gestionnaire in racine.handlers:
+            gestionnaire.close()
+        racine.handlers[:] = anciens
+        racine.setLevel(niveau)
+        racine.propagate = propage
+
+
+def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
+    """« Rien n'est enregistré » pour qui visite sans participer, et le journal, qui ne suit pas la purge, ne date
+    plus chaque requête ordinaire : seules les réponses de code 400 ou plus y laissent « méthode chemin statut »."""
+    jeton = commencer(client)  # POST (303), puis GET : redirection et pages réussies
+    for chemin in ("/", "/lab/vitrine", "/session", "/lab/static/vitrine.css", "/contact"):
+        assert client.get(chemin).status_code == 200
+    assert collecter(client, jeton).status_code == 204
+    assert fichier_de_journal() == [], "une requête réussie ou redirigée n'écrit plus rien"
+
+    assert client.get(f"/n-existe-pas?sl={jeton}").status_code == 404
+    assert client.get("/lab/vitrine/annonces?page=999").status_code == 404
+    assert client.post("/session/commencer", data={}, headers={"Origin": ORIGINE}).status_code == 403
+    # Toujours hors du journal : les pages de contact (même en erreur) et les fichiers de la page.
+    assert client.post("/contact", data={}, headers={"Origin": ORIGINE}).status_code == 403
+    assert client.get("/lab/static/inconnu.js").status_code == 404
+    assert fichier_de_journal() == [
+        "GET /n-existe-pas 404",
+        "GET /lab/vitrine/annonces 404",
+        "POST /session/commencer 403",
+    ]
+    assert jeton not in "\n".join(fichier_de_journal())
+
+
+def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
+    assert VERSION_INFORMATION == "2026-11-12.7", "le texte a changé : nouvelle version du texte accepté"
+    texte = client.get("/").text
+    for phrase in (
+        "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
+        "le code de réponse et l'heure, sans adresse IP ni identifiant de session.",
+        "Pour compter les ouvertures de session et les messages d'un même visiteur, une empreinte de votre adresse "
+        "(pas l'adresse elle-même) est gardée en mémoire vive le temps de limiter les abus : une journée, un peu "
+        "plus si personne ne visite le site entre-temps. Elle n'est jamais écrite sur le disque et disparaît à "
+        "l'arrêt du serveur.",
+        "n'enregistre pas votre adresse IP",
+        "rien n'est relevé",
+        "efface aussitôt toutes les données qui la concernent",
+        "effacée automatiquement 90 jours après",
+        "l'effacement peut avoir lieu un jour plus tard",
+    ):
+        assert phrase in texte, phrase
+    assert "non réversible" not in texte and "24 heures au plus" not in texte, "promesses trop fortes retirées"
+    bandeau = client.get("/lab/vitrine").text
+    assert "Vous visitez sans participer : rien n'est enregistré" in bandeau
+    assert "journal technique des erreurs" in bandeau, "la phrase du bandeau reste vraie : une erreur est journalisée"
+
+
+def test_purge_des_messages_au_jour_limite(client, reglages_publics):
+    """Un message n'est daté que du jour : à 90 jours révolus, il est effacé (avec `<`, il restait 91 jours)."""
+    assert ecrire(client, "limite").status_code == 303
+    assert ecrire(client, "veille").status_code == 303
+    vieillir_message(reglages_publics, "limite", 90)
+    vieillir_message(reglages_publics, "veille", 89)
+    creer_app_publique(reglages_publics)
+    assert messages_recus(reglages_publics) == ["veille"]
+
+
+def attributs_de_liens(html: str) -> list[str]:
+    """Toutes les adresses que la page demande ou propose : liens, ressources, actions de formulaire."""
+    page = Selector(html)
+    return (
+        page.css("[href]::attr(href)").getall()
+        + page.css("[src]::attr(src)").getall()
+        + page.css("[action]::attr(action)").getall()
+    )
+
+
+def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, fichier_de_journal):
+    """Pendant une session, `preparer` note en base toute requête sous /lab/ (à la milliseconde). Une page de contact
+    ne charge donc rien sous /lab/, et ne propose aucun lien vers /lab/ : ni sa feuille de style, ni la page suivante
+    ne trahissent l'ouverture du formulaire ou l'envoi."""
+    from shadowlab.public.app import NON_JOURNALISES
+
+    jeton = commencer(client)
+
+    def requetes_notees() -> list[tuple]:
+        cx = ouvrir(reglages_publics)
+        try:
+            return [tuple(r) for r in cx.execute("SELECT * FROM observations_http WHERE session_token = ?", (jeton,))]
+        finally:
+            cx.close()
+
+    client.get("/n-existe-pas")  # prouve que le journal écrit encore (une erreur du site)
+    notees, journalisees = requetes_notees(), fichier_de_journal()
+    assert notees and journalisees == ["GET /n-existe-pas 404"]
+
+    contact = client.get("/contact")
+    feuille = Selector(contact.text).css('link[rel="stylesheet"]::attr(href)').getall()
+    assert feuille == ["/contact/style.css"]
+    assert client.get(feuille[0]).status_code == 200
+    refus = client.post("/contact", data={}, headers={"Origin": "https://ailleurs.test"})
+    assert refus.status_code == 403, "page d'erreur du formulaire"
+    envoi = ecrire(client, "Bonjour, merci d'effacer ma session.")
+    assert envoi.status_code == 303 and envoi.headers["location"] == "/contact/envoye"
+    envoye = client.get("/contact/envoye")
+    assert client.get(feuille[0]).status_code == 200
+
+    assert requetes_notees() == notees, "aucune requête de contact notée dans la session"
+    assert fichier_de_journal() == journalisees, "aucune ligne de journal pour le contact"
+    assert "/contact/style.css".startswith(NON_JOURNALISES) and not "/contact/style.css".startswith("/lab/")
+
+    for page in (contact, refus, envoye):
+        assert page.status_code in (200, 403)
+        assert "/lab/" not in page.text, "aucune adresse sous /lab/ (ressource, lien, pied de page)"
+        assert not Selector(page.text).css("script"), "aucun observateur ni script : rien n'est envoyé à /lab/collecte"
+        for adresse in attributs_de_liens(page.text):
+            assert adresse == "/" or adresse.startswith("/contact"), adresse
+
+    # Même contenu et mêmes en-têtes que la feuille du site, servie sous /contact/.
+    css, ancienne = client.get("/contact/style.css"), client.get("/lab/static/vitrine.css")
+    assert css.text == ancienne.text and css.headers["content-type"] == ancienne.headers["content-type"]
+    assert css.headers["content-type"].startswith("text/css")
+    assert css.headers["cache-control"] == ancienne.headers["cache-control"]
+    assert css.headers["referrer-policy"] == "origin"
+    assert client.get("/contact/autre.css").status_code == 404, "seule la feuille de style est servie"
+
+
+# --- Limiteur en mémoire : balayage régulier, table pleine, en-tête d'adresse absent -------------------------
+
+
+def test_limiteur_balaie_les_adresses_expirees_une_fois_par_minute_au_plus():
+    """Avant : les empreintes expirées ne partaient que lorsque la table atteignait 10 000 entrées."""
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(5, fenetre_s=100, horloge=lambda: instant[0])
+    for adresse in ("192.0.2.1", "192.0.2.2", "192.0.2.3"):
+        assert limiteur.autoriser(adresse)
+    instant[0] = 1030.0
+    assert limiteur.autoriser("192.0.2.4")
+    assert len(limiteur._vues) == 4
+    instant[0] = 1105.0  # les trois premières sont sorties de la fenêtre, la quatrième y est encore
+    assert limiteur.autoriser("192.0.2.4")
+    assert len(limiteur._vues) == 1, "le balayage retire toute clé dont la dernière action est hors fenêtre"
+    instant[0] = 1300.0  # une fenêtre sans activité : la table se vide (reste la seule adresse de cet appel)
+    assert limiteur.autoriser("192.0.2.5")
+    assert len(limiteur._vues) == 1
+
+    court = Limiteur(5, fenetre_s=10, horloge=lambda: instant[0])
+    assert court.autoriser("192.0.2.1")
+    instant[0] += 20.0
+    assert court.autoriser("192.0.2.2")
+    assert len(court._vues) == 2, "moins d'une minute depuis le dernier balayage : pas de nouveau balayage"
+    instant[0] += 45.0
+    assert court.autoriser("192.0.2.3")
+    assert len(court._vues) == 1, "plus d'une minute : les deux premières, expirées, sont retirées"
+
+
+def test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero():
+    """Avant : une table pleine d'entrées valides était vidée d'un coup (`clear()`) : en tournant sur beaucoup de
+    blocs d'adresses, on remettait tous les compteurs à zéro."""
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(2, fenetre_s=3600, horloge=lambda: instant[0])
+    limiteur.ADRESSES_MAX = 3
+    assert [limiteur.autoriser("192.0.2.1") for _ in range(3)] == [True, True, False]
+    assert limiteur.autoriser("192.0.2.2") and limiteur.autoriser("192.0.2.3")
+    assert not limiteur.autoriser("192.0.2.4"), "table pleine : une adresse inconnue est refusée"
+    assert not limiteur.autoriser("192.0.2.1"), "une adresse connue garde son compte : rien n'a été remis à zéro"
+    assert limiteur.autoriser("192.0.2.2"), "une adresse connue qui n'a pas atteint son maximum passe encore"
+    instant[0] += 3700.0  # la fenêtre est passée : les entrées sortent au balayage, la table se libère
+    assert limiteur.autoriser("192.0.2.4")
+
+
+def test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse(client):
+    """Entête configuré mais absent : tous les visiteurs partagent la limite de l'adresse de la connexion. Un
+    avertissement au journal, une fois par démarrage, sans aucune adresse."""
+    avertissements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if record.levelno >= logging.WARNING:
+                avertissements.append(record.getMessage())
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.DEBUG)
+    journal.addHandler(capture)
+    try:
+        champs = champs_du_formulaire(client.get("/contact").text, "/contact")
+        for n in range(2):  # sans « X-Forwarded-For » : l'adresse de la connexion sert de repli
+            r = client.post(
+                "/contact",
+                data={**champs, "message": f"essai {n}"},
+                headers={"Origin": ORIGINE},
+                follow_redirects=False,  # sinon le client suit la redirection et rend 200
+            )
+            assert r.status_code == 303
+        assert len(avertissements) == 1, "un avertissement, une seule fois"
+        assert "X-Forwarded-For" in avertissements[0]
+        assert "testclient" not in avertissements[0] and IP not in avertissements[0]
+        ecrire(client, "avec l'en-tête", AUTRE_IP)
+        assert len(avertissements) == 1
+    finally:
+        journal.removeHandler(capture)
+
+
+def test_en_tete_d_adresse_present_n_avertit_pas(client):
+    avertissements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            avertissements.append(record.getMessage())
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.WARNING)
+    journal.addHandler(capture)
+    try:
+        assert ecrire(client, "essai", IP).status_code == 303
+        assert avertissements == []
+    finally:
+        journal.removeHandler(capture)
+
+
+# --- Droits des fichiers dès la création, effacement sans promesse fausse -------------------------------------
+
+
+def test_droits_des_fichiers_des_leur_creation(monkeypatch, reglages_publics):
+    """Le dossier de la base est en 700 et les deux fichiers en 600 AVANT que SQLite les ouvre : aucune fenêtre où un
+    fichier existe avec des droits plus larges, avec ou sans le script de tunnel."""
+    vus: dict[str, tuple[int, int | None]] = {}
+    vrai = sqlite3.connect
+
+    def espion(base, *args, **kwargs):
+        chemin = Path(base)
+        existe = chemin.exists()
+        vus.setdefault(
+            chemin.name, (chemin.parent.stat().st_mode & 0o777, chemin.stat().st_mode & 0o777 if existe else None)
+        )
+        return vrai(base, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", espion)
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "essai").status_code == 303
+    assert vus["public.sqlite3"] == (0o700, 0o600), "créé en 600 avant l'ouverture, dans un dossier en 700"
+    assert vus["messages.sqlite3"] == (0o700, 0o600)
+    dossier = reglages_publics.base_donnees.parent
+    assert dossier.stat().st_mode & 0o777 == 0o700
+    fichiers = sorted(dossier.glob("*.sqlite3*"))
+    assert fichiers and all(f.stat().st_mode & 0o777 == 0o600 for f in fichiers), fichiers
+
+
+def test_droits_resserres_sur_un_dossier_et_des_fichiers_existants(reglages_publics):
+    dossier = reglages_publics.base_donnees.parent
+    dossier.mkdir(parents=True)
+    dossier.chmod(0o755)
+    for nom in ("public.sqlite3", "messages.sqlite3"):
+        (dossier / nom).touch()
+        (dossier / nom).chmod(0o644)
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "essai").status_code == 303
+    assert dossier.stat().st_mode & 0o777 == 0o700
+    assert all(f.stat().st_mode & 0o777 == 0o600 for f in dossier.glob("*.sqlite3*"))
+
+
+def test_documentation_sans_promesse_d_ecrasement_physique():
+    """`secure_delete` vide les pages dans la base ; il ne garantit pas l'écrasement physique (journal de SQLite,
+    SSD, copie sur écriture, sauvegardes). Docstrings et documentation ne le promettent plus."""
+    from shadowlab.public import donnees
+
+    doc = (Path(__file__).parents[1] / "docs" / "site-public.md").read_text(encoding="utf-8")
+    for texte in (doc, donnees.connexion.__doc__, boite.connexion.__doc__):
+        assert not re.search(r"est écrasé", texte), "plus de promesse d'écrasement sur le disque"
+    assert "ne garantit pas" in doc and "FileVault" in doc
+    assert re.search(r"exclure.{0,40}outputs/", doc, re.S), "exclure outputs/ des sauvegardes"
+
+
+# --- L'application publique ne charge que ses propres variables ------------------------------------------------
+
+FICHIER_ENV = """# commentaire
+SHADOWLAB_PUBLIC_CONTACT=Pseudo
+export SHADOWLAB_VITRINE_TAILLE=7
+SHADOWLAB_SORTIES=/tmp/sorties-essai
+SHADOWLAB_JETON=jeton-du-labo
+SHADOWLAB_PUBLICITE=non
+CLE_API_DU_LABO=secret-du-labo
+"""
+
+
+@pytest.fixture
+def environnement_isole(monkeypatch, tmp_path) -> dict[str, str]:
+    """Un `.env` temporaire à la racine, et un environnement de processus que le test peut lire sans fuite."""
+    (tmp_path / ".env").write_text(FICHIER_ENV, encoding="utf-8")
+    monkeypatch.setattr(config, "RACINE", tmp_path)
+    environnement = {k: v for k, v in os.environ.items() if not k.startswith("SHADOWLAB_")}
+    monkeypatch.setattr(os, "environ", environnement)
+    return environnement
+
+
+def test_charger_public_ne_charge_que_ses_variables(environnement_isole):
+    reglages = charger_public()
+    assert reglages.contact == "Pseudo" and reglages.vitrine_taille == 7, "ses propres variables sont lues"
+    assert environnement_isole["SHADOWLAB_PUBLIC_CONTACT"] == "Pseudo"
+    for autre in ("SHADOWLAB_JETON", "SHADOWLAB_PUBLICITE", "CLE_API_DU_LABO"):
+        assert autre not in environnement_isole, f"{autre} appartient au labo : il n'entre pas dans le processus"
+
+
+def test_charger_public_garde_la_priorite_de_l_environnement(environnement_isole):
+    environnement_isole["SHADOWLAB_PUBLIC_CONTACT"] = "Exporté"
+    assert charger_public().contact == "Exporté"
+
+
+def test_le_labo_charge_toujours_tout_le_fichier_env(environnement_isole):
+    reglages = config.charger()
+    assert reglages.jeton_api == "jeton-du-labo"
+    assert environnement_isole["CLE_API_DU_LABO"] == "secret-du-labo"
+
+
+# --- Journal de cloudflared : filtré avant d'être écrit --------------------------------------------------------
+
+SCRIPT_TUNNEL = Path(__file__).parents[1] / "scripts" / "site-public-tunnel.sh"
+HOTE_TUNNEL = "abc-def.trycloudflare.com"
+
+
+def filtre_du_tunnel() -> str:
+    """L'expression `sed` du script (variable `FILTRE_JOURNAL`), lue telle qu'il l'applique."""
+    trouve = re.search(r"^FILTRE_JOURNAL='([^']+)'$", SCRIPT_TUNNEL.read_text(encoding="utf-8"), re.M)
+    assert trouve, "le script doit garder son expression de filtrage dans la variable FILTRE_JOURNAL='…'"
+    return trouve.group(1)
+
+
+def filtrer_comme_le_tunnel(lignes: list[str]) -> list[str]:
+    sortie = subprocess.run(
+        ["sed", "-E", filtre_du_tunnel()], input="\n".join(lignes) + "\n", capture_output=True, text=True, check=True
+    )
+    return sortie.stdout.splitlines()
+
+
+@pytest.mark.skipif(shutil.which("sed") is None, reason="sed absent")
+def test_journal_du_tunnel_filtre_chemins_requetes_et_jetons():
+    jeton = "0123456789abcdef0123456789abcdef"
+    lignes = [
+        f'2026-11-12T10:00:00Z ERR Request failed error="dial tcp 127.0.0.1:8771: refused" connIndex=0 '
+        f"dest=https://{HOTE_TUNNEL}/lab/collecte?sl={jeton} event=1 ip=198.41.200.1 type=http",
+        f"2026-11-12T10:00:01Z INF |  https://{HOTE_TUNNEL}                                        |",
+        "2026-11-12T10:00:02Z INF Settings: map[url:http://127.0.0.1:8771] originService=http://127.0.0.1:8771",
+        f'2026-11-12T10:00:03Z ERR msg="GET https://{HOTE_TUNNEL}/lab/vitrine/annonces/AN-000001?q=prive HTTP/1.1"',
+        f"2026-11-12T10:00:04Z ERR path=/lab/collecte?sl={jeton}&x=1 status=502",
+        f"2026-11-12T10:00:05Z ERR champ sl={jeton} perdu",
+    ]
+    sortie = filtrer_comme_le_tunnel(lignes)
+    assert len(sortie) == len(lignes), "une ligne en entrée, une ligne en sortie"
+    texte = "\n".join(sortie)
+    for interdit in (jeton, "sl=" + jeton[:8], "/lab/", "collecte", "prive", "AN-000001", "q=", "?sl", "&x=1"):
+        assert interdit not in texte, interdit
+    assert f"dest=https://{HOTE_TUNNEL} event=1" in sortie[0], "l'adresse est réduite à schéma://hôte, le reste intact"
+    assert re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", sortie[1]), "le script retrouve toujours l'adresse"
+    assert HOTE_TUNNEL in sortie[1]
+    assert "originService=http://127.0.0.1:8771" in sortie[2], "l'hôte local reste lisible"
+    assert "status=502" in sortie[4] and "perdu" in sortie[5], "seul ce qui doit être masqué l'est"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash absent")
+def test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie():
+    script = SCRIPT_TUNNEL.read_text(encoding="utf-8")
+    assert subprocess.run(["bash", "-n", str(SCRIPT_TUNNEL)], capture_output=True).returncode == 0
+    lancement = re.search(r"^cloudflared tunnel .*$", script, re.M)
+    assert lancement, "cloudflared est lancé en arrière-plan"
+    ligne = lancement.group(0)
+    assert "> >(sed -l -E" in ligne and "FILTRE_JOURNAL" in ligne and ligne.rstrip().endswith("&")
+    assert "|" not in ligne.replace("> >(", ""), "pas de tube : `$!` resterait le PID de cloudflared, pas de sed"
+    assert re.search(r"^tunnel=\$!$", script, re.M) and 'kill "$tunnel"' in script
+    assert "n'écrit aucune requête" not in script, "cette affirmation n'a jamais été vérifiée"
+    assert "Non vérifié" in script or "jamais vérifié" in script
+
+
+def test_une_requete_ordinaire_balaie_les_empreintes_expirees_de_chaque_limiteur(reglages_publics):
+    """Le balayage ne dépend plus d'un appel du limiteur (ouverture de session, message) : la première requête
+    reçue après la fin de la fenêtre retire les empreintes expirées de tous les limiteurs de l'application."""
+    app = creer_app_publique(reglages_publics)
+    limiteurs = app.state.limiteurs
+    assert len(limiteurs) == 3
+    instant = [1000.0]
+    for limiteur in limiteurs:
+        limiteur._horloge = lambda: instant[0]
+        limiteur._dernier_balayage = instant[0]
+        assert limiteur.autoriser(IP) and len(limiteur._vues) == 1
+    instant[0] += 24 * 3600 + 120  # une fenêtre de jour passée, sans aucun appel d'un limiteur
+    with TestClient(app, base_url=ORIGINE) as c:
+        assert c.get("/").status_code == 200
+    assert [len(limiteur._vues) for limiteur in limiteurs] == [0, 0, 0]

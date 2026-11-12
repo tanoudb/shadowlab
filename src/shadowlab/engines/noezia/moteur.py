@@ -162,8 +162,18 @@ class DriverNoezia(Driver):
 
     # ── Cycle de vie ───────────────────────────────────────────────────
 
+    def _avertir_identite_native_sans_interface(self) -> None:
+        """Journalise le piège de l'identité native sans interface (testable sans navigateur)."""
+        if self._config.identite_native and self._config.headless:
+            log.warning(
+                "Identité native sans interface : le navigateur annoncera « HeadlessChrome » sur toutes ses "
+                "requêtes. Configuration recommandée : headless: false avec channel: chrome."
+            )
+
     def open(self) -> None:
         from patchright.sync_api import sync_playwright
+
+        self._avertir_identite_native_sans_interface()
 
         # Charger ou générer un profil
         natif = self._config.identite_native

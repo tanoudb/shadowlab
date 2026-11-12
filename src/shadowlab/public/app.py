@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import re
 import secrets
 import sqlite3
+import sys
 import time
 from collections import deque
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -49,6 +51,11 @@ PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers 
 UNE_JOURNEE_S = 24 * 3600
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
 ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
+# Le journal ne garde que les réponses d'erreur (code 400 ou plus) : une requête réussie ou redirigée n'écrit rien.
+# Même parmi les erreurs, jamais les pages de contact (feuille de style comprise, servie sous /contact/) ni ce que
+# le navigateur charge avec une page (fichiers statiques, icône) : horodatées à la milliseconde, rapprochées des
+# requêtes notées d'une session, ces lignes dateraient un message, que D-57 ne garde qu'au jour.
+NON_JOURNALISES = ("/contact", "/lab/static/", "/favicon.ico")
 journal = logging.getLogger("shadowlab.public")
 
 
@@ -66,36 +73,72 @@ class Limites:
     duree_session_s: int = 2 * 3600  # au-delà, la session n'est plus « en cours »
     taille_max_base: int = 2 * 1024**3  # au-delà, plus aucune session ne s'ouvre et plus rien ne s'écrit
     messages_par_adresse: int = 3  # messages de contact par heure glissante et par adresse (en mémoire seulement)
+    # Par 24 h glissantes et par adresse (en mémoire) : un visiteur écrit une ou deux fois. Une adresse seule
+    # n'épuise plus le plafond du jour (30), ni la boîte avant la purge (5 × 90 jours = 450 < 500).
+    messages_par_adresse_jour: int = 5
     messages_par_jour: int = 30  # messages de contact par jour UTC, toutes adresses confondues
     messages_gardes: int = 500  # au-delà, le formulaire refuse jusqu'à la purge (8 Ko au pire par message)
     taille_message: int = 2000  # caractères d'un message de contact
 
 
+def bloc_d_adresse(adresse: str) -> str:
+    """Ce que comptent les limites par adresse. Une adresse IPv6 compte pour son bloc /64 : un abonné en reçoit au
+    moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6 (`::ffff:a.b.c.d`),
+    reste elle-même ; une valeur qui n'est pas une adresse reste telle quelle."""
+    try:
+        ip = ipaddress.ip_address(adresse)
+    except ValueError:
+        return adresse
+    if isinstance(ip, ipaddress.IPv4Address):
+        return adresse
+    if ip.ipv4_mapped is not None:
+        return str(ip.ipv4_mapped)
+    return f"{ipaddress.IPv6Address(int(ip) >> 64 << 64)}/64"  # par l'entier : sans la zone (%eth0) éventuelle
+
+
 class Limiteur:
-    """Ouvertures de session par adresse sur une heure glissante.
+    """Actions par adresse (ouvertures de session, messages) sur une fenêtre glissante, une heure par défaut.
 
     L'adresse n'est jamais écrite : elle n'existe qu'en mémoire, sous forme d'empreinte salée par un sel tiré
-    au démarrage, et disparaît au redémarrage.
+    au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /64 (`bloc_d_adresse`).
+
+    Un balayage (`balayer`), au plus une fois par minute, retire toute empreinte dont la dernière action est sortie
+    de la fenêtre. Il a lieu à chaque appel et à chaque requête reçue par l'application (`preparer`) : une empreinte
+    quitte la mémoire à la première requête qui suit la fin de sa fenêtre. Elle est salée, mais une adresse IPv4 se
+    retrouve par essais à qui lirait la mémoire du processus : elle n'est pas dite « non réversible ».
+
+    Table pleine d'empreintes encore valides, rien n'est effacé : une adresse inconnue est refusée, les adresses
+    déjà connues gardent leur compte.
     """
 
-    FENETRE_S = 3600
     ADRESSES_MAX = 10_000
+    BALAYAGE_S = 60
 
-    def __init__(self, maximum: int, horloge: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, maximum: int, fenetre_s: int = 3600, horloge: Callable[[], float] = time.monotonic) -> None:
         self.maximum = maximum
+        self.fenetre_s = fenetre_s
         self._horloge = horloge
         self._sel = secrets.token_bytes(16)
         self._vues: dict[bytes, deque[float]] = {}
+        self._dernier_balayage = horloge()
+
+    def balayer(self) -> None:
+        maintenant = self._horloge()
+        if maintenant - self._dernier_balayage < self.BALAYAGE_S:
+            return
+        self._dernier_balayage = maintenant
+        self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.fenetre_s}
 
     def autoriser(self, adresse: str) -> bool:
         maintenant = self._horloge()
-        if len(self._vues) >= self.ADRESSES_MAX:
-            self._vues = {c: v for c, v in self._vues.items() if v and maintenant - v[-1] < self.FENETRE_S}
-            if len(self._vues) >= self.ADRESSES_MAX:  # inondation : on repart de zéro, le plafond du jour tient
-                self._vues.clear()
-        cle = hashlib.blake2b(adresse.encode(), key=self._sel, digest_size=16).digest()
-        vues = self._vues.setdefault(cle, deque())
-        while vues and maintenant - vues[0] >= self.FENETRE_S:
+        self.balayer()
+        cle = hashlib.blake2b(bloc_d_adresse(adresse).encode(), key=self._sel, digest_size=16).digest()
+        vues = self._vues.get(cle)
+        if vues is None:
+            if len(self._vues) >= self.ADRESSES_MAX:  # table pleine d'entrées valides : l'inconnue attend le balayage
+                return False
+            vues = self._vues[cle] = deque()
+        while vues and maintenant - vues[0] >= self.fenetre_s:
             vues.popleft()
         if len(vues) >= self.maximum:
             return False
@@ -117,6 +160,14 @@ def _verifier_reglages(reglages: ReglagesPublics) -> None:
 def _nettoyer(chemin: str) -> str:
     """Chemin lisible et borné pour le journal (jamais la chaîne de requête)."""
     return "".join(c if c.isprintable() and c != " " else "?" for c in chemin[:120])
+
+
+def _avis_au_responsable(texte: str) -> None:
+    """Une ligne à l'écran du responsable, jamais dans le journal. Seulement si la sortie standard est un
+    terminal : recueillie (journald sous systemd, fichier), sa ligne horodatée daterait ce qu'elle annonce."""
+    with suppress(OSError, ValueError):  # sortie absente ou fermée : l'avis n'est qu'une commodité
+        if sys.stdout is not None and sys.stdout.isatty():
+            print(texte, flush=True)
 
 
 def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
@@ -150,6 +201,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     cookie_droits = f"{prefixe}slp-droits"  # retrouver et supprimer sa session, dans ce navigateur
     limiteur = Limiteur(limites.sessions_par_adresse)
     limiteur_messages = Limiteur(limites.messages_par_adresse)
+    limiteur_messages_jour = Limiteur(limites.messages_par_adresse_jour, fenetre_s=UNE_JOURNEE_S)
+    limiteurs = (limiteur, limiteur_messages, limiteur_messages_jour)
     fichier_messages = messages.chemin(reglages.base_donnees)
     taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
@@ -158,6 +211,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     # Sans redirection sur barre oblique finale : elle serait construite en http:// derrière le mandataire.
     app = FastAPI(title="Habitat Démo", docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=False)
     app.state.reglages = reglages
+    app.state.limiteurs = limiteurs
 
     @contextmanager
     def base() -> Iterator[sqlite3.Connection]:
@@ -208,12 +262,23 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with base() as cx:
             return jeton if donnees.session_en_cours(cx, jeton, limites.duree_session_s) else None
 
+    entete_absent_signale = [False]
+
     def adresse_de(request: Request) -> str:
-        """Adresse du visiteur, pour la limite en mémoire : dernière valeur de l'en-tête du mandataire."""
+        """Adresse du visiteur, pour la limite en mémoire : dernière valeur de l'en-tête du mandataire. En-tête
+        configuré mais absent : repli sur la connexion (celle du mandataire), donc une limite partagée par tous ;
+        un avertissement, une fois par démarrage, sans adresse."""
         if reglages.entete_ip:
             derniere = request.headers.get(reglages.entete_ip, "").split(",")[-1].strip()
             if derniere:
                 return derniere
+            if not entete_absent_signale[0]:
+                entete_absent_signale[0] = True
+                journal.warning(
+                    "En-tête d'adresse « %s » absent d'une requête : les limites par adresse deviennent communes "
+                    "à tous les visiteurs. Vérifier SHADOWLAB_PUBLIC_ENTETE_IP et le mandataire.",
+                    _nettoyer(reglages.entete_ip),
+                )
         return request.client.host if request.client else ""
 
     def meme_origine(request: Request) -> bool:
@@ -267,8 +332,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             poser(reponse, cookie_csrf, csrf)
         return reponse
 
-    def refus(status_code: int, titre: str, message: str) -> HTMLResponse:
-        return HTMLResponse(pages.erreur(titre, message), status_code=status_code)
+    def refus(status_code: int, titre: str, message: str, *, contact: bool = False) -> HTMLResponse:
+        return HTMLResponse(pages.erreur(titre, message, contact=contact), status_code=status_code)
 
     def plein() -> bool:
         """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte."""
@@ -277,7 +342,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     # --- Garde : hôte, observation, en-têtes de sécurité, journal ----------------------------------
 
     def preparer(request: Request) -> None:
-        """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée."""
+        """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée. Et le balayage
+        des limiteurs : une empreinte d'adresse expirée sort de la mémoire dès la première requête qui suit."""
+        for limite_en_memoire in limiteurs:
+            limite_en_memoire.balayer()
         if time.monotonic() - derniere_purge[0] > UNE_JOURNEE_S:  # purge quotidienne, même sans tâche planifiée
             derniere_purge[0] = time.monotonic()
             with base() as cx:
@@ -314,18 +382,21 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 reponse = await call_next(request)
         reponse.headers["Content-Security-Policy"] = CSP
         reponse.headers["X-Content-Type-Options"] = "nosniff"
-        # Depuis une page de contact, la page suivante ne reçoit que l'origine (sans chemin, donc « / » une fois
-        # réduite par `donnees._referent`) : une session en cours ne note pas qu'on en vient. Pas `no-referrer` :
-        # le navigateur enverrait `Origin: null` au POST du formulaire, que `meme_origine` refuse (403).
+        # Les pages de contact ne chargent rien sous /lab/ et ne mènent qu'à « / » ou « /contact… » (ni notés en
+        # base pendant une session, ni journalisés). Si un lien en sortait quand même, la page suivante ne
+        # recevrait que l'origine, sans chemin. Pas `no-referrer` : le navigateur enverrait `Origin: null` au POST
+        # du formulaire, que `meme_origine` refuse (403).
         depuis_contact = request.url.path.startswith("/contact")
         reponse.headers["Referrer-Policy"] = "origin" if depuis_contact else "same-origin"
         reponse.headers["X-Frame-Options"] = "DENY"
         reponse.headers.setdefault("Cache-Control", "no-store")
         if reglages.https:
             reponse.headers["Strict-Transport-Security"] = "max-age=31536000"
-        # Ni adresse, ni chaîne de requête (le jeton y passe), ni en-têtes : méthode, chemin, statut. Niveau DEBUG :
-        # le fichier tournant le reçoit, l'écran seulement en mode verbeux.
-        journal.debug("%s %s %s", _nettoyer(request.method), _nettoyer(request.url.path), reponse.status_code)
+        # Erreurs seulement (statut 400 ou plus) : ni adresse, ni chaîne de requête (le jeton y passe), ni en-têtes,
+        # ni identifiant de session : méthode, chemin, statut. Niveau DEBUG : le fichier tournant le reçoit, l'écran
+        # seulement en mode verbeux. Rien pour NON_JOURNALISES.
+        if reponse.status_code >= 400 and not request.url.path.startswith(NON_JOURNALISES):
+            journal.debug("%s %s %s", _nettoyer(request.method), _nettoyer(request.url.path), reponse.status_code)
         return reponse
 
     # --- Information et consentement ---------------------------------------------------------------
@@ -443,13 +514,19 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     def contact_envoye() -> HTMLResponse:
         return HTMLResponse(pages.contact_envoye())
 
+    @app.get("/contact/style.css")
+    def contact_style() -> FileResponse:
+        """La feuille du site, servie sous /contact/ : une page de contact ne charge rien sous /lab/, que la base
+        d'une session en cours noterait (un référent « / », à la milliseconde)."""
+        return FileResponse(STATIQUES / "vitrine.css", media_type="text/css")
+
     @app.post("/contact")
     async def ecrire(request: Request) -> Response:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
+            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.", contact=True)
         champs = await formulaire(request, taille_formulaire_contact)
         if champs is None:
-            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.")
+            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.", contact=True)
         # À partir d'ici, un refus rend le formulaire avec le texte tapé : il n'est jamais perdu.
         texte = messages.nettoyer(champs.get("message", ""))
         if not csrf_valide(request, champs):
@@ -467,10 +544,12 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 pleine = "Le formulaire n'accepte plus de message pour le moment. Réessayez dans quelques jours."
                 return page_contact(request, pleine, texte, status_code=503)
             trop = messages.du_jour(cx) >= limites.messages_par_jour
-            if trop or not limiteur_messages.autoriser(adresse_de(request)):
+            adresse = adresse_de(request)
+            # L'heure d'abord : un envoi qu'elle refuse ne doit pas user le quota du jour.
+            if trop or not limiteur_messages.autoriser(adresse) or not limiteur_messages_jour.autoriser(adresse):
                 return page_contact(request, "Trop de messages ont été envoyés. Réessayez plus tard.", texte, 429)
             messages.ajouter(cx, texte)
-        journal.info("message de contact reçu")  # jamais son texte
+        _avis_au_responsable("message de contact reçu")  # jamais son texte, jamais dans le journal
         return RedirectResponse("/contact/envoye", status_code=303)
 
     # --- Site vitrine : mêmes chemins que dans le labo ---------------------------------------------

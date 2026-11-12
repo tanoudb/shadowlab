@@ -1212,10 +1212,16 @@ class DetecteurCoherenceEnvironnement:
 
 
 class DetecteurChromeApis:
-    """Vérifie la présence et cohérence des API chrome.* que les vrais Chrome exposent."""
+    """Vérifie la présence et cohérence des API chrome.* que les vrais Chrome exposent.
+
+    V1.1 (12/11/2026) : `chrome.runtime` n'est plus exigé. Un vrai Chrome ne l'expose pas sur une page ordinaire
+    (campagnes 96 et 97 : absent dans tous les relevés de Google Chrome 156 avec interface, comme chez les témoins
+    sans interface) ; l'exiger classait tout vrai Chrome et ne laissait passer que l'imitation d'anciens outils.
+    `runtime_incomplet` ne juge plus qu'un chrome.runtime présent sans `PlatformOs` : une imitation partielle.
+    """
 
     name = "chrome-apis"
-    version = "1"
+    version = "1.1"
 
     LOADTIMES_CLES_ATTENDUES = sorted(
         [
@@ -1261,8 +1267,10 @@ class DetecteurChromeApis:
                 )
             if not chrome.get("chrome_csi"):
                 signaux.append(Signal("csi_absent", "Chrome annoncé sans chrome.csi()", 0.25))
-            if not chrome.get("runtime_PlatformOs"):
-                signaux.append(Signal("runtime_incomplet", "chrome.runtime sans PlatformOs (mock partiel)", 0.5))
+            if chrome.get("chrome_runtime") and not chrome.get("runtime_PlatformOs"):
+                signaux.append(
+                    Signal("runtime_incomplet", "chrome.runtime présent sans PlatformOs (imitation partielle)", 0.5)
+                )
 
         return _verdict(self.name, self.version, signaux)
 
@@ -1347,10 +1355,26 @@ class DetecteurLangues:
 
 
 class DetecteurHeadless:
-    """Détecte les signaux spécifiques à un navigateur headless."""
+    """Détecte les signaux spécifiques à un navigateur headless.
+
+    V1.1 (12/11/2026) : `voices_vide` ne juge que des voix qui ont eu le temps d'arriver. Chrome charge la liste
+    après le premier appel de getVoices() et l'annonce par l'événement `voiceschanged` : lue d'emblée, elle était
+    vide chez tout le monde, vrai Chrome 156 avec interface compris (campagnes 96 et 97, tous les relevés).
+    L'observateur l'attend désormais (au plus `DELAI_VOIX_MS`) et dit combien de temps elle a eu ; un relevé plus
+    ancien ne fait pas conclure la règle.
+    """
 
     name = "headless"
-    version = "1"
+    version = "1.1"
+    DELAI_VOIX_MS = 250  # attente maximale de `voiceschanged` dans observateur.js (`DELAI_VOIX_MS`)
+    TOLERANCE_VOIX_MS = 10  # minuteur et horloge du navigateur arrondis : une attente complète peut être relevée à 249
+
+    def _voix_attendues(self, hs: dict[str, Any]) -> bool:
+        """La liste des voix a eu le temps d'arriver : le navigateur l'a annoncée, ou l'attente maximale est passée."""
+        attente = hs.get("voices_attente_ms")
+        return hs.get("voices_evenement") is True or (
+            isinstance(attente, int | float) and attente >= self.DELAI_VOIX_MS - self.TOLERANCE_VOIX_MS
+        )
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1401,11 +1425,11 @@ class DetecteurHeadless:
                     0.4,
                 )
             )
-        if hs.get("voices_count") is not None and hs["voices_count"] == 0:
+        if hs.get("voices_count") is not None and hs["voices_count"] == 0 and self._voix_attendues(hs):
             signaux.append(
                 Signal(
                     "voices_vide",
-                    "speechSynthesis.getVoices() retourne une liste vide",
+                    f"speechSynthesis.getVoices() vide après {hs.get('voices_attente_ms')} ms d'attente",
                     0.4,
                 )
             )
@@ -1952,10 +1976,15 @@ class DetecteurWorkerConsistency:
 
 
 class DetecteurConnectionDynamic:
-    """Vérifie la cohérence de l'API NetworkInformation."""
+    """Vérifie la cohérence de l'API NetworkInformation.
+
+    V1.1 (12/11/2026) : `rtt_zero` retiré. Une latence estimée nulle n'est pas une valeur propre au mode sans
+    interface : Chrome l'estime d'après ses échanges réseau, et sur l'Arena, servie en local, le vrai Chrome 156
+    avec interface donne 0 ou 50 selon les passages (campagnes 96 et 97), les témoins sans interface 0, comme lui.
+    """
 
     name = "connection-dynamic"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1975,11 +2004,8 @@ class DetecteurConnectionDynamic:
             signaux.append(Signal("downlink_non_number", f"downlink type={cd.get('downlink_type')}", 0.5))
 
         rtt = cd.get("rtt_1")
-        if isinstance(rtt, (int, float)):
-            if rtt == 0:
-                signaux.append(Signal("rtt_zero", "rtt=0 (valeur par défaut headless)", 0.4))
-            if rtt > 500:
-                signaux.append(Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3))
+        if isinstance(rtt, (int, float)) and rtt > 500:
+            signaux.append(Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3))
 
         return _verdict(self.name, self.version, signaux)
 
@@ -2102,10 +2128,16 @@ class DetecteurAudioContext:
 
 
 class DetecteurPolices:
-    """Empreinte des polices installées : cohérence avec l'OS déclaré et nombre minimal."""
+    """Empreinte des polices installées : cohérence avec l'OS déclaré et nombre minimal.
+
+    V1.1 (12/11/2026) : `polices_os_manquantes` ne juge qu'un relevé fait contre plusieurs familles de référence
+    (`bases`). Comparée au seul `monospace`, la police à chasse fixe par défaut du navigateur paraît absente : Menlo
+    dans le vrai Chrome 156 sous macOS (campagnes 96 et 97, tous les relevés), Courier New dans le Chromium sans
+    interface des témoins. L'observateur compare désormais à `monospace`, `sans-serif` et `serif`.
+    """
 
     name = "polices"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -2124,7 +2156,9 @@ class DetecteurPolices:
             signaux.append(Signal("tres_peu_polices", f"seulement {count} polices détectées (headless)", 0.5))
 
         manquantes = fp.get("os_manquantes") or []
-        if manquantes:
+        # Un relevé sans `bases` (d'avant le 12/11/2026) ne voit pas la police à chasse fixe par défaut : il ne prouve
+        # aucune absence. Une police vue, elle, est là quelle que soit la référence (`os_inattendues` reste jugé).
+        if manquantes and len(fp.get("bases") or []) >= 2:
             signaux.append(
                 Signal(
                     "polices_os_manquantes",
@@ -2431,43 +2465,53 @@ class DetecteurMetaComposite:
 
 
 class DetecteurCorrelationSession:
-    name = "correlation-session"
-    version = "1"
+    """Même profil ou même canvas vu dans plusieurs sessions de la base (`correlation.py`).
 
+    Compte des sessions (jetons), pas des visiteurs : un humain qui revient avec le même navigateur compte autant
+    de fois qu'il revient.
+    V1.1 (12/11/2026) : un fait, un signal — un seul signal de comptage, sur le plus grand des deux comptes
+    (profil, canvas), au lieu d'un signal chacun pour la même observation ; de même pour le débit. Libellés
+    conformes à ce qui est compté (« rotation de fingerprint massive » désignait une empreinte stable revue).
+    Débit compté sur les 60 dernières minutes au lieu d'une moyenne sur toute la vie du hash, aveugle sous une
+    minute et à 40 par heure pour deux sessions à 3 minutes d'écart. Seuils et poids inchangés.
+    """
+
+    name = "correlation-session"
+    version = "1.1"
+
+    NOMS = {"profil_complet": "profil", "canvas": "canvas"}  # types de `correlation.hash_session`
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
+    SEUIL_DEBIT = 30  # sessions commencées dans les 60 dernières minutes
 
     def classer(self, obs: Observations) -> Classement:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
-        for type_hash, data in obs.correlation.items():
-            nb = data.get("nb_sessions", 1)
-            if nb >= self.SEUIL_RAPIDE:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — rotation de fingerprint massive",
-                        1.0,
-                    )
+        comptes = {t: d.get("nb_sessions", 1) for t, d in obs.correlation.items()}
+        nb = max(comptes.values(), default=0)
+        if nb >= self.SEUIL_SESSIONS:
+            seuil, poids = (self.SEUIL_RAPIDE, 1.0) if nb >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
+            franchis = [(t, n) for t, n in comptes.items() if n >= seuil]
+            vus = " et ".join(f"{self.NOMS.get(t, t)} vu dans {n} sessions" for t, n in franchis)
+            code = max(franchis, key=lambda f: f[1])[0]  # le plus grand compte ; à égalité, le profil
+            signaux.append(Signal(f"recycling_{code}", f"{vus} de la base, celle-ci comprise (seuil {seuil})", poids))
+        debits = {t: d.get("sessions_derniere_heure", 0) for t, d in obs.correlation.items()}
+        if max(debits.values(), default=0) >= self.SEUIL_DEBIT:
+            franchis = [(t, n) for t, n in debits.items() if n >= self.SEUIL_DEBIT]
+            parties = " et ".join(
+                f"{'' if obs.correlation[t].get('derniere_heure_exacte', False) else 'au moins '}{n} sessions de même"
+                f" {self.NOMS.get(t, t)}"
+                for t, n in franchis
+            )
+            code = max(franchis, key=lambda f: f[1])[0]
+            signaux.append(
+                Signal(
+                    f"velocity_{code}",
+                    f"{parties} commencées dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
+                    0.8,
                 )
-            elif nb >= self.SEUIL_SESSIONS:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — fingerprint recyclé",
-                        0.7,
-                    )
-                )
-            sph = data.get("sessions_par_heure", 0)
-            if sph >= 30:
-                signaux.append(
-                    Signal(
-                        f"velocity_{type_hash}",
-                        f"{sph} sessions/h avec le même {type_hash}",
-                        0.8,
-                    )
-                )
+            )
         return _verdict(self.name, self.version, signaux)
 
 

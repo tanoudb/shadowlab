@@ -8,10 +8,11 @@ navigateur, ni heure (elle permettrait de le rapprocher des requêtes d'une sess
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from .donnees import creer_prive
 
 FICHIER = "messages.sqlite3"
 SCHEMA = """CREATE TABLE IF NOT EXISTS messages (
@@ -33,15 +34,13 @@ def chemin(base_publique: Path) -> Path:
 
 
 def connexion(fichier: Path) -> sqlite3.Connection:
-    """Ouvre la boîte (créée au besoin, droits 600) ; ce qui est effacé est écrasé sur le disque."""
-    fichier.parent.mkdir(parents=True, exist_ok=True)
-    nouveau = not fichier.exists()
+    """Ouvre la boîte (créée au besoin en 600, dans un dossier en 700, avant l'ouverture par SQLite). `secure_delete`
+    vide les pages d'un message effacé dans la base ; il ne garantit pas l'écrasement physique."""
+    creer_prive(fichier)
     cx = sqlite3.connect(fichier, timeout=30, check_same_thread=False, isolation_level=None)
     cx.row_factory = sqlite3.Row
     cx.execute("PRAGMA secure_delete=ON")
     cx.execute(SCHEMA)
-    if nouveau:
-        os.chmod(fichier, 0o600)
     return cx
 
 
@@ -50,8 +49,14 @@ def _jour(moment: datetime | None = None) -> str:
 
 
 def nettoyer(texte: str) -> str:
-    """Texte sûr à afficher dans un terminal : fins de ligne unifiées, espaces particulières (insécables…)
-    changées en espaces ordinaires, caractères de contrôle et sens d'écriture forcé retirés."""
+    """Texte sûr à afficher dans un terminal, par liste blanche : saut de ligne, tabulation, caractères affichables
+    (`str.isprintable()`) et les deux liants ; fins de ligne unifiées, espaces particulières (insécables…) changées
+    en espaces ordinaires ; tout le reste est retiré (contrôle, mise en forme invisible, sens d'écriture forcé,
+    balises, demi-paires, usage privé, non attribué).
+
+    Limite acceptée, prix d'un affichage sûr : un emoji plus récent que la table Unicode de Python (non attribué
+    pour elle) disparaît, et un drapeau à balises (Angleterre, Écosse…) perd ses balises et n'est plus qu'un
+    drapeau noir. Une liste noire laissait passer d'autres caractères invisibles (U+200B, U+200E, U+FEFF…)."""
     texte = texte.replace("\r\n", "\n").replace("\r", "\n")
     propre = []
     for c in texte:
@@ -82,7 +87,14 @@ def effacer(cx: sqlite3.Connection, numero: int) -> bool:
     return cx.execute("DELETE FROM messages WHERE id = ?", (numero,)).rowcount > 0
 
 
+def effacer_tout(cx: sqlite3.Connection) -> int:
+    """Vide la boîte (les numéros suivants ne reprennent pas à 1). Renvoie le nombre de messages effacés."""
+    return cx.execute("DELETE FROM messages").rowcount
+
+
 def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = None) -> int:
-    """Efface les messages reçus il y a plus de `jours` jours. Renvoie leur nombre."""
+    """Efface les messages reçus il y a `jours` jours ou plus (le jour limite compris). Renvoie leur nombre."""
+    # Un message n'est daté que du jour : celui d'il y a exactement `jours` jours part aussi (avec `<`, le jour limite
+    # restait et le message vivait `jours` + 1 jours).
     limite = _jour((maintenant or datetime.now(UTC)) - timedelta(days=jours))
-    return cx.execute("DELETE FROM messages WHERE recu_le < ?", (limite,)).rowcount
+    return cx.execute("DELETE FROM messages WHERE recu_le <= ?", (limite,)).rowcount

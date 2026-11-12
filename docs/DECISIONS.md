@@ -387,3 +387,89 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   n'admettait que 8 Go au plus. Chrome a relevé ses paliers en 2026 (2, 4, 8, 16, 32 hors Android) et le
   Chromium 156 piloté sans réglage annonce 32 sur ce poste (campagne 94) : tout humain sur une machine de 16
   Go ou plus était classé. Détecteur en 1.1. Décidé par : coordination.
+- **D-64 — 12/11/2026 — `correlation-session` 1.1 : un seul signal par fait, des libellés justes, un débit sur
+  60 minutes (révise le calcul de D-48).** Le détecteur lit toujours les deux comptes de `empreintes_vues`
+  (profil, canvas ; types et historique inchangés). Il n'émet plus qu'un signal de comptage, sur le plus grand
+  des deux, et qu'un signal de débit. Avant, le profil et le canvas d'une même session donnaient chacun leur
+  signal : 5 sessions identiques faisaient 0,7 + 0,7, « automatisé » à elles seules. Les libellés disent ce
+  qui est compté (« profil vu dans N sessions de la base ») ; « rotation de fingerprint massive » désignait
+  une empreinte stable. Le débit compte, pour chaque hash, les sessions commencées dans les 60 dernières
+  minutes, au lieu de diviser le compte par la vie du hash (0 sous une minute, 40 par heure pour deux
+  sessions à 3 minutes). Seuils et poids inchangés. Écarté : une empreinte combinée profil + canvas, proposée
+  par l'analyse puis signalée par la relecture de sécurité (un moteur qui bruite son canvas à chaque session
+  n'aurait plus jamais été revu). Pourquoi : aux campagnes 93 et 94, NOEZIA était classé au niveau 07 dès le
+  3ᵉ passage par un débit faux (`docs/recherche/correlation-entre-sessions-2026-11-12.md`). Effet aux niveaux
+  06 et 07 : de 5 à 9 sessions, le détecteur seul dit « indéterminé » ; la session reste bloquée par le
+  composite (0,7 × 1,5), sous le motif `composite` ; dès 10, rien ne change. Limites : la table ne garde que
+  10 jetons par hash, donc le débit ne décide plus seul. Inchangé, et à reprendre avec la mémoire des
+  visiteurs du palier 2 : un humain qui revient cinq fois reste classé ; le canvas seul, commun aux machines
+  du même modèle, classe encore. Décidé par : coordination (travail d'un sous-agent Opus, repris et relu).
+- **D-65 — 12/11/2026 — Site public, seconde relecture : journal, limites par adresse, `debugger`, nettoyage
+  des messages (complète D-57 et D-62).** Une relecture indépendante du code fusionné le 12/11 a trouvé quatre
+  défauts. (1) Le journal tournant (`logs/shadowlab.jsonl`, horodaté à la milliseconde, hors purge) écrivait
+  `POST /contact 303` et « message de contact reçu » : rapprochées de `observations_http.received_at` d'une
+  session en cours, ces lignes reliaient un message à sa session, contre D-57. Choix : aucune ligne pour
+  `/contact…` ni pour ce que le navigateur charge avec chaque page (`/lab/static/…`, `/favicon.ico`), sans
+  quoi une feuille de style sans page notée trahissait une page de contact ; l'avis au responsable passe par
+  la sortie standard, seulement si c'est un terminal. (2) À 3 messages par heure, une adresse seule épuisait
+  le plafond du jour en 10 heures et remplissait la boîte en 17 jours. Choix : 5 messages par adresse et par
+  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; toutes les limites par adresse comptent un
+  /64 IPv6 pour une adresse ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
+  `sl-sans-tiers`, `observateur.js` n'exécute plus `debugger` (elle arrêtait la page d'un visiteur aux outils
+  de développement ouverts) et ne lit plus first-input : depuis D-62 aucun détecteur ne les lit ; le labo
+  relève comme avant ; texte d'information en version 2026-11-12.5. (4) Nettoyage des messages : la liste
+  blanche est gardée (`str.isprintable()` et deux liants) ; une liste noire essayée puis écartée par la
+  relecture de sécurité laissait passer des caractères invisibles. Prix accepté : un emoji plus récent que
+  la table Unicode de Python disparaît, un drapeau à balises perd ses balises. Limites : six adresses ferment
+  encore le formulaire pour la journée (parade : limitation de débit au mandataire) ; sous systemd, plus
+  d'avis à l'écran. Décidé par : coordination (travail d'un sous-agent Opus, relu).
+- **D-66 — 12/11/2026 — Arena : quatre règles qui classaient tout vrai Chrome ne jugent plus que ce qu'elles
+  peuvent voir (`headless`, `chrome-apis`, `polices`, `connection-dynamic` en 1.1).** Mesuré dans l'essai 96
+  et la campagne 97 : Google Chrome 156 avec son interface, piloté sans aucune réécriture, passe les niveaux
+  02 et 03 mais est arrêté à chaque passage aux niveaux 04, 05 et 06 (sans corrélation) par le score
+  composite (1,03 puis 1,31). Les quatre signaux en cause, un humain avec le même Chrome les déclencherait :
+  `voices_vide` (la liste des voix était lue avant que Chrome l'ait chargée) ; `runtime_incomplet` (l'Arena
+  exigeait `chrome.runtime`, absent d'une page ordinaire) ; `polices_os_manquantes` (comparée au seul
+  `monospace`, Menlo, la police à chasse fixe par défaut, paraissait absente) ; `rtt_zero` (sur l'Arena
+  locale la latence estimée vaut 0 ou 50 selon les passages, et 0 chez les témoins aussi). Choix : le relevé
+  appelle `getVoices()` dès le chargement, attend `voiceschanged` au plus 250 ms et envoie `voices_evenement`
+  et `voices_attente_ms` ; `voices_vide` ne juge qu'une liste qui a eu le temps d'arriver ;
+  `runtime_incomplet` ne juge qu'un `chrome.runtime` présent sans `PlatformOs` (imitation partielle) ; les
+  polices sont comparées à trois familles génériques, et une absence n'est jugée que sur un tel relevé ;
+  `rtt_zero` est retiré. Un relevé plus ancien ne fait conclure ni `voices_vide` ni `polices_os_manquantes`.
+  Seuils et poids inchangés ; texte d'information du site public en version 2026-11-12.6. Pourquoi : plan
+  § 1 (« des détecteurs qui attrapent tout le monde ») et étape 1.7. Aucun de ces signaux ne séparait les
+  témoins du vrai Chrome ; `polices_os_manquantes` ne touchait que lui. Prévision rejouée sur la base, à
+  confirmer par une campagne : composite du vrai Chrome à 0 à tous les niveaux ; les témoins restent classés
+  par `regles-http` au niveau 02 et par 4 à 6 détecteurs seuls du 03 au 07. Limites : durée de chargement des
+  voix non mesurée dans un vrai Chrome ; un Chrome sous Linux sans voix installées reste signalé ; la
+  référence est un Chrome piloté, pas encore une session humaine ; `meta-composite` (« session trop
+  propre », D-45) se déclenche chez tout le monde sans peser dans aucune décision : à revoir avec Ethan.
+  Décidé par : coordination (travail d'un sous-agent Opus, relu).
+- **D-67 — 12/11/2026 — Site public, troisième relecture : le journal ne garde que les erreurs, une page de
+  contact ne laisse aucune trace dans une session (complète D-57 et D-65).** Une relecture de sécurité
+  indépendante, avant la mise en ligne, a trouvé des écarts entre ce que la page d'information promet et ce que
+  l'application fait. Choix : (1) le journal de l'application ne garde plus que les réponses de code 400 ou
+  plus (méthode, chemin, code ; ni adresse, ni jeton, ni identifiant de session) ; une requête réussie n'écrit
+  rien. Avant, chaque page vue était datée à la milliseconde dans un fichier que ni la suppression d'une
+  session ni la purge ne touchaient, alors que la page dit « rien n'est enregistré ». (2) Les pages de contact
+  ne chargent plus rien sous `/lab/` (feuille de style servie sous `/contact/style.css`) et ne mènent qu'à `/`
+  ou `/contact…` : la base d'une session en cours ne note plus ni l'ouverture du formulaire ni l'envoi (avant,
+  une feuille de style au référent réduit à « / » les datait). (3) Limites par adresse : les empreintes
+  expirées sortent de la mémoire au plus une minute après la première requête qui suit leur délai ; une table
+  pleine n'est plus remise à zéro (l'adresse inconnue est refusée) ; un en-tête d'adresse absent est signalé
+  une fois au journal. (4) Le dossier de la base est en 700 et ses fichiers en 600 dès leur création, par
+  l'application elle-même. (5) L'application publique ne charge du fichier `.env` que ses propres variables
+  (`SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*`, `SHADOWLAB_SORTIES`) : les clés du laboratoire n'entrent pas
+  dans un processus exposé. (6) Le journal de `cloudflared` est filtré avant écriture (adresses réduites à
+  l'hôte, chaînes de requête et jetons masqués). (7) Plus de promesse d'écrasement physique : `secure_delete`
+  vide les pages dans la base, mais ni le journal de SQLite, ni le disque, ni les sauvegardes ne sont
+  garantis ; chiffrement du disque et exclusion de `outputs/` des sauvegardes reviennent au responsable.
+  (8) Les messages de contact sont purgés le jour limite compris (ils vivaient un jour de trop). Texte
+  d'information en version 2026-11-12.7 : journal des erreurs, empreinte d'adresse en mémoire vive, délai réel
+  de l'effacement automatique. Limites acceptées, écrites dans `docs/site-public.md` : le responsable présent
+  devant l'écran voit l'heure d'arrivée d'un message ; quelques adresses suffisent à épuiser le plafond du jour
+  du formulaire ; quiconque a le lien peut ouvrir une session par script, donc une session publique ne prouve
+  pas qu'un humain était là (question ouverte pour Ethan) ; le filtre du journal de `cloudflared` n'a jamais
+  été vérifié avec un vrai tunnel. Décidé par : coordination (relecture d'un sous-agent, corrections d'un
+  autre, relues).
