@@ -1367,12 +1367,13 @@ class DetecteurHeadless:
     name = "headless"
     version = "1.1"
     DELAI_VOIX_MS = 250  # attente maximale de `voiceschanged` dans observateur.js (`DELAI_VOIX_MS`)
+    TOLERANCE_VOIX_MS = 10  # minuteur et horloge du navigateur arrondis : une attente complète peut être relevée à 249
 
     def _voix_attendues(self, hs: dict[str, Any]) -> bool:
         """La liste des voix a eu le temps d'arriver : le navigateur l'a annoncée, ou l'attente maximale est passée."""
         attente = hs.get("voices_attente_ms")
         return hs.get("voices_evenement") is True or (
-            isinstance(attente, int | float) and attente >= self.DELAI_VOIX_MS
+            isinstance(attente, int | float) and attente >= self.DELAI_VOIX_MS - self.TOLERANCE_VOIX_MS
         )
 
     def classer(self, obs: Observations) -> Classement:
