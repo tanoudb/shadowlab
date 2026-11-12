@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 from ...perimetre import DestinationRefusee
 from ..base import Driver
 from .etat import Etat, Page, canonique
+from .export import ecrire_exports
 from .extraction import Signatures
 from .recettes import Recette, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
@@ -592,7 +593,8 @@ class Parcours:
         duree = self._horloge() - self._debut
         dossier_passe = self.dossier / f"passe-{passe:03d}"
         resume = self._resume(etat, passe, statut, arret)
-        self._ecrire_sorties(etat, passe, dossier_passe, resume)
+        resume["fichiers"] = ecrire_exports(etat, dossier_passe)
+        self._ecrire_sorties(dossier_passe, resume)
         par_type = ", ".join(f"{n} {t}" for t, n in etat.faites_par_type(passe).items())
         lignes = ", ".join(f"{n} {nom}" for nom, n in enregistrements.items()) or "aucun enregistrement"
         if statut == "terminee":
@@ -654,7 +656,7 @@ class Parcours:
             resume["robots_origines"] = origines
         return resume
 
-    def _ecrire_sorties(self, etat: Etat, passe: int, dossier_passe: Path, resume: Mapping[str, Any]) -> None:
+    def _ecrire_sorties(self, dossier_passe: Path, resume: Mapping[str, Any]) -> None:
         dossier_passe.mkdir(parents=True, exist_ok=True)
         (dossier_passe / "resume.json").write_text(
             json.dumps(resume, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
