@@ -1720,3 +1720,95 @@ def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, f
     assert css.headers["cache-control"] == ancienne.headers["cache-control"]
     assert css.headers["referrer-policy"] == "origin"
     assert client.get("/contact/autre.css").status_code == 404, "seule la feuille de style est servie"
+
+
+# --- Limiteur en mémoire : balayage régulier, table pleine, en-tête d'adresse absent -------------------------
+
+
+def test_limiteur_balaie_les_adresses_expirees_une_fois_par_minute_au_plus():
+    """Avant : les empreintes expirées ne partaient que lorsque la table atteignait 10 000 entrées."""
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(5, fenetre_s=100, horloge=lambda: instant[0])
+    for adresse in ("192.0.2.1", "192.0.2.2", "192.0.2.3"):
+        assert limiteur.autoriser(adresse)
+    instant[0] = 1030.0
+    assert limiteur.autoriser("192.0.2.4")
+    assert len(limiteur._vues) == 4
+    instant[0] = 1105.0  # les trois premières sont sorties de la fenêtre, la quatrième y est encore
+    assert limiteur.autoriser("192.0.2.4")
+    assert len(limiteur._vues) == 1, "le balayage retire toute clé dont la dernière action est hors fenêtre"
+    instant[0] = 1300.0  # une fenêtre sans activité : la table se vide (reste la seule adresse de cet appel)
+    assert limiteur.autoriser("192.0.2.5")
+    assert len(limiteur._vues) == 1
+
+    court = Limiteur(5, fenetre_s=10, horloge=lambda: instant[0])
+    assert court.autoriser("192.0.2.1")
+    instant[0] += 20.0
+    assert court.autoriser("192.0.2.2")
+    assert len(court._vues) == 2, "moins d'une minute depuis le dernier balayage : pas de nouveau balayage"
+    instant[0] += 45.0
+    assert court.autoriser("192.0.2.3")
+    assert len(court._vues) == 1, "plus d'une minute : les deux premières, expirées, sont retirées"
+
+
+def test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero():
+    """Avant : une table pleine d'entrées valides était vidée d'un coup (`clear()`) : en tournant sur beaucoup de
+    blocs d'adresses, on remettait tous les compteurs à zéro."""
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(2, fenetre_s=3600, horloge=lambda: instant[0])
+    limiteur.ADRESSES_MAX = 3
+    assert [limiteur.autoriser("192.0.2.1") for _ in range(3)] == [True, True, False]
+    assert limiteur.autoriser("192.0.2.2") and limiteur.autoriser("192.0.2.3")
+    assert not limiteur.autoriser("192.0.2.4"), "table pleine : une adresse inconnue est refusée"
+    assert not limiteur.autoriser("192.0.2.1"), "une adresse connue garde son compte : rien n'a été remis à zéro"
+    assert limiteur.autoriser("192.0.2.2"), "une adresse connue qui n'a pas atteint son maximum passe encore"
+    instant[0] += 3700.0  # la fenêtre est passée : les entrées sortent au balayage, la table se libère
+    assert limiteur.autoriser("192.0.2.4")
+
+
+def test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse(client):
+    """Entête configuré mais absent : tous les visiteurs partagent la limite de l'adresse de la connexion. Un
+    avertissement au journal, une fois par démarrage, sans aucune adresse."""
+    avertissements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if record.levelno >= logging.WARNING:
+                avertissements.append(record.getMessage())
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.DEBUG)
+    journal.addHandler(capture)
+    try:
+        champs = champs_du_formulaire(client.get("/contact").text, "/contact")
+        for n in range(2):  # sans « X-Forwarded-For » : l'adresse de la connexion sert de repli
+            r = client.post("/contact", data={**champs, "message": f"essai {n}"}, headers={"Origin": ORIGINE})
+            assert r.status_code == 303
+        assert len(avertissements) == 1, "un avertissement, une seule fois"
+        assert "X-Forwarded-For" in avertissements[0]
+        assert "testclient" not in avertissements[0] and IP not in avertissements[0]
+        ecrire(client, "avec l'en-tête", AUTRE_IP)
+        assert len(avertissements) == 1
+    finally:
+        journal.removeHandler(capture)
+
+
+def test_en_tete_d_adresse_present_n_avertit_pas(client):
+    avertissements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            avertissements.append(record.getMessage())
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.WARNING)
+    journal.addHandler(capture)
+    try:
+        assert ecrire(client, "essai", IP).status_code == 303
+        assert avertissements == []
+    finally:
+        journal.removeHandler(capture)
