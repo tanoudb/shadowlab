@@ -100,3 +100,73 @@ def test_niveau_07_laisse_passer_un_jeton_de_la_forme_d_un_vrai_jeton(chemin, ch
 def test_niveau_07_garde_la_regle_hors_des_captchas_tiers():
     decision = decision_du_waf("07", "/lab/connexion", "a-b-c=1")
     assert REGLE_CARACTERES_SPECIAUX in [regle["id"] for regle in decision["regles"]]
+
+
+# --- Jetons des fournisseurs de CAPTCHA : les règles d'injection SQL ne les inspectent pas -----------------
+#
+# Un jeton est une longue suite aléatoire de lettres, chiffres, « - », « _ » (et « . » pour Turnstile). Sur
+# 1 800 caractères, il contient par hasard « un chiffre, or, des chiffres, puis - » environ une fois sur mille
+# (règle 942210, paranoïa 2), et un Turnstile (avec ses points, donc hors de l'exception « mot simple » de la
+# règle 942440) contient « -- » suivi d'un autre « - » une fois sur six. Mesuré : campagne 100, passage 34119.
+REGLE_SQL_ENCHAINE = 942210  # CRS, paranoïa 2 : « chained SQL injection attempts 1/2 »
+REGLE_COMMENTAIRE_SQL = 942440  # CRS, paranoïa 2 : séquence de commentaire SQL (« -- »), sauf mot simple
+MOTIF_942210 = "5or1-"  # un chiffre, « or », des chiffres, « - » : le motif qu'un jeton aléatoire peut contenir
+JETONS_FABRIQUES = (
+    ("/lab/recaptcha/verifier", "g-recaptcha-response", "recaptcha"),
+    ("/lab/turnstile/verifier", "cf-turnstile-response", "turnstile"),
+)
+
+
+def _segment(hasard: random.Random, longueur: int) -> str:
+    # Lettres et « _ » seulement : le filler ne déclenche rien, seul le motif ajouté peut le faire.
+    return "".join(hasard.choice(string.ascii_letters + "_") for _ in range(longueur))
+
+
+def _jeton_avec(forme: str, motif: str) -> str:
+    """Jeton fabriqué (jamais valide) de la forme d'un vrai jeton, avec le motif glissé au milieu."""
+    hasard = random.Random(f"{forme}-{motif}")
+    if forme == "recaptcha":
+        return "03A" + _segment(hasard, 900) + motif + _segment(hasard, 900)
+    return (
+        f"0.{_segment(hasard, 300)}-{_segment(hasard, 40)}.{_segment(hasard, 300)}{motif}{_segment(hasard, 300)}"
+        f".{_segment(hasard, 120)}"
+    )
+
+
+def _regles_sql(decision: dict) -> list[int]:
+    return [regle["id"] for regle in decision["regles"] if 942000 <= regle["id"] < 943000]
+
+
+@pytest.mark.parametrize("niveau", ["06", "07"])
+@pytest.mark.parametrize(("chemin", "champ", "forme"), JETONS_FABRIQUES)
+@pytest.mark.parametrize(
+    "motif", [MOTIF_942210, "--" + "a" * 5 + "-"], ids=["chiffre-or-chiffre-tiret", "double-tiret"]
+)
+def test_un_jeton_de_captcha_tiers_n_est_pas_inspecte_par_les_regles_sql(niveau, chemin, champ, forme, motif):
+    # Un humain qui valide le CAPTCHA ne doit pas être bloqué parce que son jeton aléatoire ressemble, par
+    # hasard, à de l'injection SQL (règles 942210, 942440…). Le nom du champ est imposé par le fournisseur.
+    jeton = _jeton_avec(forme, motif)
+    retour = gardien.encoder_retour("/lab/vitrine/annonces?page=2")
+    decision = decision_du_waf(niveau, chemin, f"{champ}={jeton}&retour={retour}")
+    assert decision["decision"] != "bloque", decision
+    assert _regles_sql(decision) == [], decision
+
+
+@pytest.mark.parametrize("niveau", ["06", "07"])
+@pytest.mark.parametrize(("chemin", "champ", "forme"), JETONS_FABRIQUES)
+def test_l_exclusion_des_jetons_ne_couvre_pas_les_autres_champs_de_la_meme_adresse(niveau, chemin, champ, forme):
+    # La même chaîne dans un champ qui n'est pas le jeton du fournisseur reste inspectée.
+    jeton_sain = _jeton_avec(forme, "")
+    piege = _jeton_avec(forme, MOTIF_942210)
+    retour = gardien.encoder_retour("/lab/vitrine/annonces?page=2")
+    decision = decision_du_waf(niveau, chemin, f"{champ}={jeton_sain}&commentaire={piege}&retour={retour}")
+    assert REGLE_SQL_ENCHAINE in [regle["id"] for regle in decision["regles"]], decision
+
+
+@pytest.mark.parametrize("niveau", ["06", "07"])
+@pytest.mark.parametrize(("_chemin", "champ", "forme"), JETONS_FABRIQUES)
+def test_l_exclusion_des_jetons_ne_couvre_pas_les_autres_adresses(niveau, _chemin, champ, forme):
+    # Le même nom de champ sur une autre adresse (la connexion) reste inspecté.
+    piege = _jeton_avec(forme, MOTIF_942210)
+    decision = decision_du_waf(niveau, "/lab/connexion", f"{champ}={piege}")
+    assert REGLE_SQL_ENCHAINE in [regle["id"] for regle in decision["regles"]], decision
