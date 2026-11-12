@@ -11,6 +11,8 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
 - les sessions humaines de référence (`POST /session/commencer`, `POST /session/terminer`,
   `POST /session/supprimer`, tous protégés contre le CSRF) et la page « Ma session » (`GET /session`) ;
 - la collecte de l'observateur (`POST /lab/collecte`), seulement pendant une session consentie ;
+- le formulaire de contact (`GET /contact`, `POST /contact`, `GET /contact/envoye`, D-57) : écrire au
+  responsable sans qu'une adresse soit affichée ;
 - quatre fichiers statiques, en liste fermée : `observateur.js`, `vendor/botd-2.0.0.esm.js`, `vitrine.css`, `vitrine.js`.
 
 Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
@@ -25,7 +27,7 @@ navigateurs vers n'importe quelle adresse.
 ### Essai local (sans HTTPS)
 
 ```bash
-SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr" \
+SHADOWLAB_PUBLIC_CONTACT="Prénom Nom" \
 SHADOWLAB_PUBLIC_HTTPS=0 \
 uv run shadowlab public servir
 # → http://127.0.0.1:8771/  (hôtes acceptés par défaut : localhost et 127.0.0.1)
@@ -38,7 +40,7 @@ configuration (`.env` sur le serveur, jamais versionné) :
 
 ```bash
 SHADOWLAB_PUBLIC_HOTES=vitrine.example.org
-SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr"
+SHADOWLAB_PUBLIC_CONTACT="Prénom Nom"
 SHADOWLAB_PUBLIC_CONSERVATION_JOURS=90
 SHADOWLAB_PUBLIC_BASE=/srv/shadowlab-public/public.sqlite3
 SHADOWLAB_PUBLIC_ENTETE_IP=X-Forwarded-For     # voir « Adresse du visiteur » ci-dessous
@@ -86,7 +88,7 @@ Dans tous les cas : rediriger le HTTP vers le HTTPS au niveau du mandataire.
 ### Mise en ligne rapide depuis ce poste (tunnel sans compte ni domaine)
 
 ```bash
-SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme — adresse@exemple.fr" scripts/site-public-tunnel.sh
+SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme" scripts/site-public-tunnel.sh
 ```
 
 Le script ouvre un tunnel Cloudflare « rapide » (`cloudflared`, installé par Homebrew), affiche l'adresse
@@ -115,7 +117,7 @@ lecture de l'adresse vérifiés à vide).
 | Variable | Défaut | Rôle |
 |----------|--------|------|
 | `SHADOWLAB_PUBLIC_HOTES` | `localhost,127.0.0.1` | Noms acceptés dans `Host` (liste exacte, `*` refusé). **Indépendant** de `SHADOWLAB_HOTES_AUTORISES`, le périmètre des moteurs |
-| `SHADOWLAB_PUBLIC_CONTACT` | *(aucun)* | Responsable et moyen de le joindre, affichés sur la page d'information. **Vide = refus de démarrer** |
+| `SHADOWLAB_PUBLIC_CONTACT` | *(aucun)* | Responsable (nom ou pseudonyme), affiché sur la page d'information. Une adresse y est facultative : les visiteurs écrivent par le formulaire de contact. **Vide = refus de démarrer** |
 | `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` | `90` | Durée de conservation d'une session (≥ 1) |
 | `SHADOWLAB_PUBLIC_HTTPS` | `1` | Cookies `Secure` et préfixe `__Host-`, en-tête HSTS. `0` seulement pour l'essai local |
 | `SHADOWLAB_PUBLIC_PORT` | `8771` | Port d'écoute sur `127.0.0.1` |
@@ -144,6 +146,7 @@ monde.
 | Une requête notée | en-têtes : 40 au plus, nom ≤ 64 car., valeur ≤ 512 car., JSON ≤ 2 048 octets ; méthode ≤ 16, chemin ≤ 200 | Disque |
 | Corps d'un envoi | 64 Kio, annoncé ou réel | Mémoire, disque |
 | Durée d'une session | 2 heures (cookie et contrôle serveur) | Un cookie volé ne sert pas longtemps |
+| Messages de contact | 2 000 caractères ; 3 par heure glissante et par adresse (en mémoire), 30 par jour, 500 gardés (au-delà, 503 jusqu'à la purge) ; formulaire de 32 Kio au plus | Disque : 4 Mo au pire |
 
 **Pire cas, mesuré** (12/11/2026, base temporaire, ces bornes atteintes) : une session occupe 16,9 Mo —
 12,6 Mo pour 3 000 requêtes aux en-têtes de 2 Ko (une ligne de ~2,3 Ko prend une page SQLite de 4 Kio) et
@@ -164,8 +167,13 @@ reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppressio
   session » (formulaire signé, protégé contre le CSRF) ; effet immédiat, dans toutes les tables. Elle marche
   aussi après « Terminer », après l'expiration des 2 heures ou un redémarrage du navigateur, grâce au cookie
   `slp-droits` (voir « Cookies ») ; la page de fin y renvoie.
-- **Sur demande écrite** (autre appareil, cookies effacés ; le visiteur donne l'identifiant affiché) :
-  `uv run shadowlab public supprimer <identifiant>`.
+- **Sur demande écrite** (autre appareil, cookies effacés ; le visiteur donne l'identifiant affiché dans le
+  formulaire de contact) : `uv run shadowlab public supprimer <identifiant>`.
+- **Messages de contact** : `uv run shadowlab public messages` les affiche (numéro, date, texte) ;
+  `uv run shadowlab public effacer-message <n°>` en efface un. Ils suivent la même purge que les sessions
+  (démarrage, une fois par 24 h, commande `purger`). `servir` annonce leur nombre au démarrage : rien d'autre
+  ne prévient d'un nouveau message, il faut regarder de temps en temps (une demande d'effacement se traite
+  sous un mois).
 - La base est ouverte avec `PRAGMA secure_delete=ON` : ce qui est effacé est écrasé, pas seulement délié.
 
 ## Journaux
@@ -206,6 +214,10 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   l'écriture : un identifiant d'extension peu répandue peut désigner une personne.
 - Aucune autre table n'est écrite : ni `empreintes_vues` (pas de hash de corrélation entre visites), ni
   `decisions`, `detections`, `fingerprints` (aucun détecteur ne tourne). La suppression les couvre quand même.
+- `<dossier de la base>/messages.sqlite3` (droits 600, `secure_delete`) : les messages du formulaire de
+  contact, **dans un fichier à part** : le texte (caractères de contrôle retirés) et sa date, rien d'autre.
+  Ni adresse IP, ni session, ni navigateur. La base des sessions peut ainsi être copiée pour le rejeu sans
+  emporter des messages où un visiteur a écrit comment le joindre.
 - `<dossier de la base>/secret` (droits 600) : clé de signature des cookies. Le dossier `outputs/` est
   ignoré par git. Un fichier `secret` vide est refusé (erreur claire au démarrage, labo compris) : sinon
   n'importe qui pourrait forger les cookies signés. Le supprimer pour qu'il soit recréé.
@@ -243,6 +255,7 @@ Corrections après relecture et audit (12/11/2026) :
 | D. JSON trop imbriqué | `test_json_trop_imbrique_refuse` |
 | D. Panne de base → 503 avec les en-têtes | `test_erreur_de_base_donne_503_avec_les_entetes` |
 | D. Secret vide | `test_secret_vide_refuse`, `test_secret_valide_inchange_et_cree_s_il_manque` |
+| E. Formulaire de contact (D-57) | `test_contact_remplace_l_adresse_dans_les_pages`, `test_contact_enregistre_le_message_a_part_sans_adresse`, `test_contact_protege` (origine, CSRF), `test_contact_message_vide_ou_trop_long`, `test_contact_retire_les_caracteres_de_controle`, `test_contact_limite_par_adresse`, `test_contact_plafond_par_jour_et_boite_pleine`, `test_purge_des_messages`, `test_commandes_messages` |
 
 ## Les huit conditions du § 5 du plan
 

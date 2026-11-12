@@ -119,6 +119,9 @@ main.conteneur { padding-top: 28px; padding-bottom: 48px; min-height: 60vh; }
 .en-ligne { display: inline; margin: 0; }
 .erreur { background: #fdecea; border: 1px solid #f0b9b3; color: #7f241f; border-radius: 8px; padding: 10px 14px; margin: 0 0 16px; }
 .identifiant { display: inline-block; margin-top: 4px; overflow-wrap: anywhere; }
+.contact label { display: block; font-weight: 600; margin-bottom: 8px; }
+.contact textarea { display: block; width: 100%; min-height: 9em; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--trait); border-radius: 8px; background: #fff; color: var(--encre); font: inherit; resize: vertical; }
+.contact textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 .discret { color: var(--discret); font-size: .92rem; }
 @media (max-width: 600px) {
   .donnees { grid-template-columns: 1fr; gap: 2px; }

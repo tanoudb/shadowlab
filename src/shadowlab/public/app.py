@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
-from . import donnees, pages
+from . import donnees, messages, pages
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
 # Liste fermée : rien d'autre du dossier statique du laboratoire n'est servi.
@@ -44,6 +44,8 @@ CSP = (
 SIGNATURE = re.compile(r"[0-9a-f]{64}")
 HOTE = re.compile(r"(?P<nom>[a-z0-9.-]+|\[[0-9a-f:.]+\])(?::[0-9]{1,5})?")  # nom[:port], rien d'autre
 TAILLE_FORMULAIRE = 4096
+# Formulaire de contact : 2 000 caractères, jusqu'à 12 octets chacun une fois encodés par le navigateur.
+TAILLE_FORMULAIRE_CONTACT = 32 * 1024
 PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers envois du labo (12/11/2026)
 UNE_JOURNEE_S = 24 * 3600
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
@@ -64,6 +66,10 @@ class Limites:
     taille_corps: int = 64 * 1024  # un message de l'observateur
     duree_session_s: int = 2 * 3600  # au-delà, la session n'est plus « en cours »
     taille_max_base: int = 2 * 1024**3  # au-delà, plus aucune session ne s'ouvre et plus rien ne s'écrit
+    messages_par_adresse: int = 3  # messages de contact par heure glissante et par adresse (en mémoire seulement)
+    messages_par_jour: int = 30  # messages de contact par jour UTC, toutes adresses confondues
+    messages_gardes: int = 500  # au-delà, le formulaire refuse jusqu'à la purge (8 Ko au pire par message)
+    taille_message: int = 2000  # caractères d'un message de contact
 
 
 class Limiteur:
@@ -143,6 +149,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     cookie_session, cookie_csrf = f"{prefixe}slp-session", f"{prefixe}slp-csrf"
     cookie_droits = f"{prefixe}slp-droits"  # retrouver et supprimer sa session, dans ce navigateur
     limiteur = Limiteur(limites.sessions_par_adresse)
+    limiteur_messages = Limiteur(limites.messages_par_adresse)
+    fichier_messages = messages.chemin(reglages.base_donnees)
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
     derniere_purge = [time.monotonic()]
 
@@ -157,6 +165,18 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             yield cx
         finally:
             cx.close()
+
+    @contextmanager
+    def boite() -> Iterator[sqlite3.Connection]:
+        """Messages du formulaire de contact : un fichier à part de la base des sessions."""
+        cx = messages.connexion(fichier_messages)
+        try:
+            yield cx
+        finally:
+            cx.close()
+
+    with boite() as cx:
+        messages.purger(cx, reglages.conservation_jours)
 
     # --- Outils ------------------------------------------------------------------------------------
 
@@ -219,8 +239,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 return None
         return bytes(corps)
 
-    async def formulaire(request: Request) -> dict[str, str] | None:
-        corps = await lire_corps(request, TAILLE_FORMULAIRE)
+    async def formulaire(request: Request, maximum: int = TAILLE_FORMULAIRE) -> dict[str, str] | None:
+        corps = await lire_corps(request, maximum)
         if corps is None:
             return None
         try:
@@ -261,6 +281,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             derniere_purge[0] = time.monotonic()
             with base() as cx:
                 donnees.purger(cx, reglages.conservation_jours)
+            with boite() as cx:
+                messages.purger(cx, reglages.conservation_jours)
         jeton = session_de(request)
         request.state.session = jeton
         if jeton and request.url.path.startswith("/lab/") and not plein():
@@ -358,7 +380,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         suppression = signer("supprimer", jeton)
         reponse = avec_csrf(
             request,
-            lambda csrf: pages.merci(jeton, suppression, csrf, reglages.conservation_jours, reglages.contact),
+            lambda csrf: pages.merci(jeton, suppression, csrf, reglages.conservation_jours),
         )
         effacer(reponse, cookie_session)  # le cookie de droits reste : « Ma session » sert encore à supprimer
         return reponse
@@ -371,16 +393,14 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 if not donnees.session_existe(cx, jeton):
                     jeton = None
         if jeton is None:
-            reponse = HTMLResponse(pages.aucune_session(reglages.contact))
+            reponse = HTMLResponse(pages.aucune_session())
             if cookie_droits in request.cookies:
                 effacer(reponse, cookie_droits)
             return reponse
         suppression, en_cours = signer("supprimer", jeton), request.state.session == jeton
         return avec_csrf(
             request,
-            lambda csrf: pages.ma_session(
-                jeton, suppression, csrf, reglages.conservation_jours, reglages.contact, en_cours
-            ),
+            lambda csrf: pages.ma_session(jeton, suppression, csrf, reglages.conservation_jours, en_cours),
         )
 
     @app.post("/session/supprimer", response_class=HTMLResponse)
@@ -390,7 +410,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         champs = await formulaire(request)
         if champs is None or not csrf_valide(request, champs):
             return refus(
-                403, "Requête refusée", "Le formulaire a expiré. Écrivez au responsable pour supprimer la session."
+                403, "Requête refusée", "Le formulaire a expiré. Rechargez la page « Ma session » puis réessayez."
             )
         jeton = lire_signe("supprimer", champs.get("session", ""))
         if jeton is None:
@@ -401,6 +421,47 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         effacer(reponse, cookie_session)
         effacer(reponse, cookie_droits)
         return reponse
+
+    # --- Contact : écrire au responsable sans qu'une adresse soit affichée (D-57) -------------------
+
+    def page_contact(request: Request, erreur: str = "", texte: str = "", status_code: int = 200) -> HTMLResponse:
+        jours, taille = reglages.conservation_jours, limites.taille_message
+        return avec_csrf(
+            request, lambda csrf: pages.contact(csrf, jours, taille, erreur=erreur, texte=texte), status_code
+        )
+
+    @app.get("/contact", response_class=HTMLResponse)
+    def contact(request: Request) -> HTMLResponse:
+        return page_contact(request)
+
+    @app.get("/contact/envoye", response_class=HTMLResponse)
+    def contact_envoye() -> HTMLResponse:
+        return HTMLResponse(pages.contact_envoye())
+
+    @app.post("/contact")
+    async def ecrire(request: Request) -> Response:
+        if not meme_origine(request):
+            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
+        champs = await formulaire(request, TAILLE_FORMULAIRE_CONTACT)
+        if champs is None:
+            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.")
+        if not csrf_valide(request, champs):
+            return refus(403, "Requête refusée", "Le formulaire a expiré : rechargez la page de contact.")
+        texte = messages.nettoyer(champs.get("message", ""))
+        if not texte:
+            return page_contact(request, "Écrivez votre message.", status_code=422)
+        if len(texte) > limites.taille_message:
+            trop_long = f"Message trop long : {limites.taille_message} caractères au plus."
+            return page_contact(request, trop_long, texte, status_code=422)
+        with boite() as cx:
+            if messages.nombre(cx) >= limites.messages_gardes:
+                return refus(503, "Boîte pleine", "Le formulaire n'accepte plus de message pour le moment.")
+            trop = messages.du_jour(cx) >= limites.messages_par_jour
+            if trop or not limiteur_messages.autoriser(adresse_de(request)):
+                return refus(429, "Trop de messages", "Trop de messages ont été envoyés. Réessayez plus tard.")
+            messages.ajouter(cx, texte)
+        journal.info("message de contact reçu")  # jamais son texte
+        return RedirectResponse("/contact/envoye", status_code=303)
 
     # --- Site vitrine : mêmes chemins que dans le labo ---------------------------------------------
 
