@@ -428,6 +428,58 @@ webrtcTest().then((r) => console.log(JSON.stringify({{ r, configuration }})));
         assert resultat["r"]["disponible"] is True
 
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+@pytest.mark.parametrize("balise", [True, False])
+def test_debugger_et_first_input_sautes_quand_la_page_le_demande(balise):
+    """Avec la balise, ni instruction `debugger` (elle arrête la page d'un visiteur aux outils de développement
+    ouverts) ni lecture de l'entrée first-input : plus aucun détecteur ne les lit (D-62). Sans elle (labo), comme
+    avant. Les autres mesures de `cdp_detection` restent."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    assert len(re.findall(r"\bdebugger\s*;", source)) == 1, "une seule instruction debugger, dans cdpDetectionTest"
+    fonction = re.search(r"^function cdpDetectionTest\(\) \{.*?^\}$", source, re.S | re.M).group(0)
+    # L'instruction est remplacée par une trace : la voir posée, c'est savoir que la ligne a été exécutée.
+    instrumentee, remplacees = re.subn(r"\bdebugger\s*;", "globalThis.debuggerAtteint = true;", fonction)
+    assert remplacees == 1
+    script = f"""
+const META = {json.dumps("1" if balise else None)};
+const BALISE = 'meta[name="sl-sans-tiers"]';
+globalThis.window = globalThis;
+globalThis.document = {{
+  querySelector: (s) => (s === BALISE && META ? {{ content: META }} : null),
+  querySelectorAll: () => [],
+}};
+const types = [];
+Object.defineProperty(globalThis, 'performance', {{
+  configurable: true,
+  value: {{ now: () => 0, getEntriesByType: (t) => {{ types.push(t); return []; }} }},
+}});
+globalThis.debuggerAtteint = false;
+{instrumentee}
+const r = cdpDetectionTest();
+console.log(JSON.stringify({{ r, types, debuggerAtteint: globalThis.debuggerAtteint }}));
+"""
+    sortie = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True, timeout=30).stdout
+    resultat = json.loads(sortie)
+    r = resultat["r"]
+    assert "console_log_natif" in r and r["cdp_resource_entries"] == 0, "les autres mesures restent"
+    if balise:
+        assert resultat["debuggerAtteint"] is False
+        assert "first-input" not in resultat["types"]
+        assert not {"debugger_delta_ms", "debugger_suspect", "has_first_input"} & set(r), r
+        assert r["saute"] == "sans-tiers"
+    else:
+        assert resultat["debuggerAtteint"] is True
+        assert "first-input" in resultat["types"]
+        assert (r["debugger_delta_ms"], r["debugger_suspect"], r["has_first_input"]) == (0, True, False)
+        assert "saute" not in r
+
+
+def test_description_de_cdp_detection_suit_le_releve_public():
+    """La page d'information ne décrit plus ce que le site public ne relève plus (première interaction)."""
+    description = dict(DONNEES_RELEVEES)["cdp_detection"]
+    assert "interaction" not in description and "mémoire" in description
+
+
 # --- R4 : moins de données personnelles ----------------------------------------------------------
 
 ENTETES_IP = {
