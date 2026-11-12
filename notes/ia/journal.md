@@ -2859,3 +2859,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   complète) ; campagne de preuve de l'étape 6 avec les deux moteurs ; étape 7 (récolte incrémentale) ;
   étape 8 (documentation, décision à numéroter) ; défauts d'usage relevés ci-dessus ; rythme « prudent »
   jamais tourné en temps réel ; aucun vrai site visé.
+
+## 2026-11-12 (19h10) — Claude (Fable 5.2, coordination) — Récolte générale : mode navigateur, premier essai réel
+
+- **Étape 4 faite dans `recolte-4-navigateur`, assemblée dans `recolte-integration`** (poussée) : moteur
+  `navigateur` de la commande (`DriverNoezia` en identité native : `headless: false`, `channel: chrome`,
+  `identite_native: true`), sentinelle complète (page de défi de l'Arena ou d'un fournisseur, porte d'entrée
+  sans action, `requis` absent trois fois), option `verifier_tls`. Suite rapide de la branche : 1 145 tests
+  verts, lint propre.
+- **Premier essai réel, lancé par la coordination à 19 h 00** (`tests/test_recolte_navigateur.py`, vrai Chrome
+  avec interface, niveau 01, vitrine à 45 annonces) : 48 pages sur 48, 45 annonces sur 45, 630 champs sur 630,
+  en 5 min 50 s, soit environ 7 s par page. Aucun processus de navigateur resté ouvert.
+- **Non vérifié** : coupure d'une redirection vers un autre hôte en mode navigateur (la garde repose sur
+  `route`, voir D-07) ; sous-ressources d'autres hôtes, que Chrome charge de lui-même ; `attendre` (bloc chargé
+  en JavaScript) non branché ; rien au-dessus du niveau 01 ; aucun vrai site.
+- **Reste** : accord d'Ethan pour fusionner `recolte-integration` ; campagne de preuve de l'étape 6 avec les
+  deux moteurs ; défauts d'usage (alertes invisibles pendant `lancer`, diagnostic de `noter`) ; étapes 7 et 8.
