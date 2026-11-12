@@ -75,7 +75,7 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **605 tests rapides verts** (hors intégration), lint propre.
+- **645 tests rapides verts** (hors intégration, compte du 12/11 après l'intégration du jour), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel.
 
