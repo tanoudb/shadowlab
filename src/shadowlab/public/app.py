@@ -102,9 +102,13 @@ class Limiteur:
     L'adresse n'est jamais écrite : elle n'existe qu'en mémoire, sous forme d'empreinte salée par un sel tiré
     au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /64 (`bloc_d_adresse`).
 
-    Un balayage, au plus une fois par minute et à l'occasion d'un appel, retire toute empreinte dont la dernière
-    action est sortie de la fenêtre. Table pleine d'empreintes encore valides, rien n'est effacé : une adresse
-    inconnue est refusée, les adresses déjà connues gardent leur compte.
+    Un balayage (`balayer`), au plus une fois par minute, retire toute empreinte dont la dernière action est sortie
+    de la fenêtre. Il a lieu à chaque appel et à chaque requête reçue par l'application (`preparer`) : une empreinte
+    quitte la mémoire à la première requête qui suit la fin de sa fenêtre. Elle est salée, mais une adresse IPv4 se
+    retrouve par essais à qui lirait la mémoire du processus : elle n'est pas dite « non réversible ».
+
+    Table pleine d'empreintes encore valides, rien n'est effacé : une adresse inconnue est refusée, les adresses
+    déjà connues gardent leur compte.
     """
 
     ADRESSES_MAX = 10_000
@@ -118,7 +122,8 @@ class Limiteur:
         self._vues: dict[bytes, deque[float]] = {}
         self._dernier_balayage = horloge()
 
-    def _balayer(self, maintenant: float) -> None:
+    def balayer(self) -> None:
+        maintenant = self._horloge()
         if maintenant - self._dernier_balayage < self.BALAYAGE_S:
             return
         self._dernier_balayage = maintenant
@@ -126,7 +131,7 @@ class Limiteur:
 
     def autoriser(self, adresse: str) -> bool:
         maintenant = self._horloge()
-        self._balayer(maintenant)
+        self.balayer()
         cle = hashlib.blake2b(bloc_d_adresse(adresse).encode(), key=self._sel, digest_size=16).digest()
         vues = self._vues.get(cle)
         if vues is None:
@@ -197,6 +202,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     limiteur = Limiteur(limites.sessions_par_adresse)
     limiteur_messages = Limiteur(limites.messages_par_adresse)
     limiteur_messages_jour = Limiteur(limites.messages_par_adresse_jour, fenetre_s=UNE_JOURNEE_S)
+    limiteurs = (limiteur, limiteur_messages, limiteur_messages_jour)
     fichier_messages = messages.chemin(reglages.base_donnees)
     taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
@@ -205,6 +211,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     # Sans redirection sur barre oblique finale : elle serait construite en http:// derrière le mandataire.
     app = FastAPI(title="Habitat Démo", docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=False)
     app.state.reglages = reglages
+    app.state.limiteurs = limiteurs
 
     @contextmanager
     def base() -> Iterator[sqlite3.Connection]:
@@ -335,7 +342,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     # --- Garde : hôte, observation, en-têtes de sécurité, journal ----------------------------------
 
     def preparer(request: Request) -> None:
-        """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée."""
+        """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée. Et le balayage
+        des limiteurs : une empreinte d'adresse expirée sort de la mémoire dès la première requête qui suit."""
+        for limite_en_memoire in limiteurs:
+            limite_en_memoire.balayer()
         if time.monotonic() - derniere_purge[0] > UNE_JOURNEE_S:  # purge quotidienne, même sans tâche planifiée
             derniere_purge[0] = time.monotonic()
             with base() as cx:

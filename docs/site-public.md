@@ -138,12 +138,15 @@ Une variable déjà exportée garde la priorité (`test_charger_public_ne_charge
 ### Adresse du visiteur
 
 Elle ne sert qu'aux limites par adresse (ouverture de sessions, messages de contact), **en mémoire**,
-sous forme d'empreinte salée, jamais écrite sur le disque. Un balayage, au plus une fois par minute et à
-l'occasion d'un appel, retire toute empreinte dont la dernière action est sortie de la fenêtre (1 heure ou
-24 heures) ; une table pleine (10 000 empreintes) d'entrées encore valides n'est **plus vidée** : une adresse
-inconnue est refusée jusqu'au prochain balayage, les adresses déjà connues gardent leur compte
-(`test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`). Une empreinte reste en mémoire jusqu'au balayage
-suivant, donc jusqu'au prochain appel du limiteur : sur un site sans visite, elle attend l'arrêt du processus. Une adresse IPv6 y compte pour son bloc /64 : un abonné en
+sous forme d'empreinte salée, jamais écrite sur le disque. Un balayage, au plus une fois par minute par limiteur, retire toute empreinte dont
+la dernière action est sortie de la fenêtre (1 heure ou 24 heures) ; il a lieu à chaque appel d'un limiteur **et** à chaque
+requête reçue par l'application (`test_une_requete_ordinaire_balaie_les_empreintes_expirees_de_chaque_limiteur`).
+Une empreinte quitte donc la mémoire à la première requête qui suit la fin de sa fenêtre : une journée au plus
+pour la plus longue, un peu plus si personne ne visite le site entre-temps ; elle disparaît aussi à l'arrêt du
+processus. Elle est salée, mais un attaquant qui lirait la mémoire du processus retrouverait une adresse IPv4 par
+essais : on ne la dit pas « non réversible ». Une table pleine (10 000 empreintes) d'entrées encore valides n'est
+**plus vidée** : une adresse inconnue est refusée jusqu'au prochain balayage, les adresses déjà connues gardent
+leur compte (`test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`). Une adresse IPv6 y compte pour son bloc /64 : un abonné en
 reçoit au moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6
 (`::ffff:a.b.c.d`), reste elle-même ; une valeur qui n'est pas une adresse est comptée telle quelle. Si
 l'en-tête est mal réglé, tous les visiteurs partagent la même adresse (celle du mandataire ou de
