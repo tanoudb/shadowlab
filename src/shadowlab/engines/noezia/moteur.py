@@ -132,8 +132,8 @@ class DriverNoezia(Driver):
             "channel": self._config.channel,
             "identite_native": self._config.identite_native,
             "headless": self._config.headless,
-            "locale": self._config.locale,
-            "viewport": f"{self._config.viewport_width}x{self._config.viewport_height}",
+            "locale": self._config.locale if reecrite else None,
+            "viewport": f"{self._config.viewport_width}x{self._config.viewport_height}" if reecrite else None,
             "simuler_souris": self._config.souris.actif,
             "simuler_frappe": self._config.clavier.actif,
             "simuler_defilement": self._config.defilement.actif,
@@ -353,6 +353,9 @@ class DriverNoezia(Driver):
             if self._bloquer_ressources and route.request.resource_type in self.RESSOURCES_LOURDES:
                 self.mesures.details["ressources_bloquees"] += 1
                 route.abort()
+                return
+            if self._config.identite_native:
+                route.continue_()  # la requête repart telle que le navigateur l'a faite
                 return
             # Nettoyer les en-têtes qui trahissent Headless
             headers = {**route.request.headers}

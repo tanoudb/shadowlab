@@ -327,4 +327,6 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   pas un remplacement : la règle du projet veut une mesure avant de trancher
   (`configs/experiments/ablation-interface.yaml`, à comparer à la référence du même jour). Non couvert : le
   profil persistant recommandé par Patchright (identité qui dure, palier 2) ; le serveur Linux sans écran
-  (palier 3).
+  (palier 3). Reste imposé en identité native : le filtre réseau du périmètre (`route`), qui coupe le cache
+  HTTP du navigateur, et les réglages par défaut d'un contexte Playwright (langue), à lire dans la mesure.
+  Les options `profil` et `locale` sont alors sans effet.
