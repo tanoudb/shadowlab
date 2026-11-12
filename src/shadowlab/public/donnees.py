@@ -124,7 +124,8 @@ def _experience(cx: sqlite3.Connection) -> int:
     configuration = db.j({"environment": "public", "truth": "humain"})
     return int(
         cx.execute(
-            "INSERT INTO experiments (name, description, created_at, configuration, status) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO experiments (id, name, description, created_at, configuration, status)"
+            f" VALUES ({db.PROCHAIN_ID_EXPERIENCE}, ?, ?, ?, ?, ?)",
             (
                 EXPERIENCE,
                 "Sessions humaines consenties sur le site public",

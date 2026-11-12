@@ -297,9 +297,9 @@ def fichier_arret(reglages: Reglages) -> Path:
 
 def creer(cx, experience: Experience, reglages: Reglages | None = None) -> int:
     curseur = cx.execute(
-        "INSERT INTO experiments (name, description, created_at, configuration,"
+        "INSERT INTO experiments (id, name, description, created_at, configuration,"
         " status, seed, environment, schema_version)"
-        " VALUES (?, ?, ?, ?, 'creee', ?, ?, ?)",
+        f" VALUES ({db.PROCHAIN_ID_EXPERIENCE}, ?, ?, ?, ?, 'creee', ?, ?, ?)",
         (
             experience.name,
             experience.description,
