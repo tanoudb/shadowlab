@@ -38,12 +38,20 @@ const (
 // de CAPTCHA tiers : le nom des champs imposés par les fournisseurs (cf-turnstile-response,
 // g-recaptcha-response) contient deux tirets. Sans cette exclusion, personne ne valide un CAPTCHA au niveau 07
 // (paranoïa 4, seuil 2). Volontairement limitée à ces chemins exacts, pas à /lab/ entier.
+// La 1015 est la même idée pour la valeur : le jeton est une longue suite aléatoire (A-Z a-z 0-9 - _ et, pour
+// Turnstile, des points) dont le nom de champ est imposé. Par hasard il contient parfois ce que le CRS prend
+// pour de l'injection SQL (942210 : chiffre, or, chiffres, « - » ; 942440 : « -- » dans un jeton à points),
+// donc un humain serait bloqué comme un robot (campagne 100, passage 34119). On retire donc toutes les règles
+// de l'étiquette attack-sqli, mais seulement pour ces deux variables ARGS et ces deux adresses : tout autre
+// champ, et le même champ sur une autre adresse (/lab/connexion), restent inspectés. ARGS_NAMES n'est pas
+// touché : le nom du champ est fixe et connu, c'est le rôle de la 1014.
 const exclusions = `
 SecRule REQUEST_URI "@beginsWith /lab/collecte" "id:1010,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
 SecRule REQUEST_URI "@rx ^/lab/(defi|turnstile|recaptcha|captcha)/verifier$" "id:1011,phase:1,pass,nolog,ctl:ruleRemoveById=942120"
 SecRule REQUEST_URI "@beginsWith /lab/" "id:1012,phase:1,pass,nolog,ctl:ruleRemoveById=920272"
 SecRule REQUEST_URI "@beginsWith /lab/" "id:1013,phase:2,pass,nolog,ctl:ruleRemoveById=942430,ctl:ruleRemoveById=942431"
 SecRule REQUEST_URI "@rx ^/lab/(turnstile|recaptcha)/verifier$" "id:1014,phase:1,pass,nolog,ctl:ruleRemoveById=942432"
+SecRule REQUEST_URI "@rx ^/lab/(turnstile|recaptcha)/verifier$" "id:1015,phase:1,pass,nolog,ctl:ruleRemoveTargetByTag=attack-sqli;ARGS:g-recaptcha-response,ctl:ruleRemoveTargetByTag=attack-sqli;ARGS:cf-turnstile-response"
 `
 
 type regle struct {
