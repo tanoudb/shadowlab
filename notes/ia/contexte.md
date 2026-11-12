@@ -49,7 +49,9 @@ dans un vrai navigateur (`Referrer-Policy: origin`, pas `no-referrer`). Dossiers
 |--------------|----|------|
 | Corrélation : libellés, un signal par fait, débit sur 60 min | `arena-correlation-calcul` (`../noezia-shadowlab-correlation`) | écrit par Opus, repris après une alerte de sécurité, rouge puis vert sur sa branche ; à fusionner hors campagne (décision à numéroter D-64) |
 | Version réelle annoncée (D-58) | branche `moteur-version-reelle` | de côté ; sans objet si l'identité native l'emporte |
-| NOEZIA comparé au vrai Chrome (campagne 96) | `docs/recherche/empreinte-noezia-2026-11-12.md` | sous-agent Sonnet en cours, lecture seule |
+| NOEZIA comparé au vrai Chrome (essai 96) | `docs/recherche/empreinte-noezia-2026-11-12.md` § 4 | fait, poussé : 35 champs où la réécriture le trahit, 17 où il a raison |
+| Site public, après relecture du code fusionné | `public-relecture` (`../noezia-shadowlab-public`) | sous-agent Opus en cours : le journal ne doit plus dater l'envoi d'un message ; plafond par adresse et par jour, /64 en IPv6, effacement groupé ; `debugger;` et first-input sautés sur le site public ; nettoyage Unicode. **À fusionner avant la mise en ligne** |
+| Tests manquants, après relecture | `tests-relecture` (`../noezia-shadowlab-tests`) | sous-agent Sonnet en cours : identité native avec vrai Chrome, périmètre en identité native, relevé `page_defilable` dans un vrai navigateur, jetons réalistes au WAF |
 
 ## Prochaine action (12/11)
 1. **Campagne 97 en cours** depuis 13 h 35 (`ablation-interface.yaml`, 525 passages, fin vers 16 h 05, journal

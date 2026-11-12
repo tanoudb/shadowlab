@@ -349,6 +349,13 @@ Points connus pour 1.7 et 1.9, lus le 12/11 dans les relevés de comportement de
 - **`Accept-Language`** : Chrome prévoit de réduire l'en-tête à la première langue et sa langue de base
   (`fr-FR,fr;q=0.9`, [annonce Blink](https://groups.google.com/a/chromium.org/g/blink-dev/c/NBEBB81RjaI)),
   ni la liste complète ni la langue seule que NOEZIA envoie selon la requête. À lire sur le Chrome d'Ethan.
+- **Relevés par la relecture du code du 12/11, à lire dans le rejeu avant de corriger :**
+  `pas_de_scroll` (D-61) se fie à ce que dit la page : une fenêtre plus haute que toutes les pages la fait
+  taire, et rien ne compare la hauteur de la fenêtre à celle de l'écran (une telle règle classerait peut-être
+  un humain qui dézoome : à mesurer d'abord). Un seul signal faible suffit aux niveaux 06 et 07 (seuils
+  composites 0,5 et 0,3) : un humain qui lit le haut de deux longues pages sans défiler y serait arrêté.
+  Le détecteur `scroll` classe sans doute une molette de souris sous Windows (crans tous égaux à 100) : onze
+  crans donnent `deltas_uniformes` et `scroll_regulier`, soit 1,3. Aucune session Windows n'existe encore.
 - Conséquence : `pas_de_scroll` et `pas_de_pause` font le score composite 0,85 qui arrête NOEZIA au niveau 05. Ne pas
   « corriger le moteur » sur eux avant d'avoir le taux humain ; si les humains les déclenchent, c'est le
   détecteur qu'on corrige (hauteur de page dans le relevé, pauses cherchées sur toute la page).
