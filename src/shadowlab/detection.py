@@ -2431,43 +2431,46 @@ class DetecteurMetaComposite:
 
 
 class DetecteurCorrelationSession:
-    name = "correlation-session"
-    version = "1"
+    """Même empreinte (profil et canvas ensemble) vue dans plusieurs sessions de la base (`correlation.py`).
 
+    Compte des sessions (jetons), pas des visiteurs : un humain qui revient avec le même navigateur compte autant
+    de fois qu'il revient, et une empreinte qui change à chaque session n'est jamais revue.
+    V1.1 (12/11/2026) : un fait, un signal — profil et canvas comptés ensemble (`profil_canvas`) au lieu d'un
+    signal chacun pour la même observation ; libellés conformes à ce qui est compté (« rotation de fingerprint
+    massive » désignait une empreinte stable revue) ; débit compté sur les 60 dernières minutes au lieu d'une
+    moyenne sur toute la vie de l'empreinte, aveugle sous une minute et à 40 par heure pour deux sessions à
+    3 minutes d'écart. Seuils et poids inchangés.
+    """
+
+    name = "correlation-session"
+    version = "1.1"
+
+    EMPREINTE = "profil_canvas"  # `correlation.TYPE_REGLE`
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
+    SEUIL_DEBIT = 30  # sessions commencées dans les 60 dernières minutes
 
     def classer(self, obs: Observations) -> Classement:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
-        for type_hash, data in obs.correlation.items():
-            nb = data.get("nb_sessions", 1)
-            if nb >= self.SEUIL_RAPIDE:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — rotation de fingerprint massive",
-                        1.0,
-                    )
+        data = obs.correlation.get(self.EMPREINTE) or {}
+        nb = data.get("nb_sessions", 1)
+        if nb >= self.SEUIL_SESSIONS:
+            seuil, poids = (self.SEUIL_RAPIDE, 1.0) if nb >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
+            description = f"empreinte (profil et canvas) vue dans {nb} sessions de la base, celle-ci comprise"
+            signaux.append(Signal(f"recycling_{self.EMPREINTE}", f"{description} (seuil {seuil})", poids))
+        debit = data.get("sessions_derniere_heure", 0)
+        if debit >= self.SEUIL_DEBIT:
+            borne = "" if data.get("derniere_heure_exacte", False) else "au moins "
+            description = f"{borne}{debit} sessions de cette empreinte (profil et canvas) commencées"
+            signaux.append(
+                Signal(
+                    f"velocity_{self.EMPREINTE}",
+                    f"{description} dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
+                    0.8,
                 )
-            elif nb >= self.SEUIL_SESSIONS:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — fingerprint recyclé",
-                        0.7,
-                    )
-                )
-            sph = data.get("sessions_par_heure", 0)
-            if sph >= 30:
-                signaux.append(
-                    Signal(
-                        f"velocity_{type_hash}",
-                        f"{sph} sessions/h avec le même {type_hash}",
-                        0.8,
-                    )
-                )
+            )
         return _verdict(self.name, self.version, signaux)
 
 
