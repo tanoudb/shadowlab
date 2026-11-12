@@ -10,10 +10,15 @@ Ce qui attend Ethan.
 ## Ouvertes
 - **2026-11-12 — 5 sessions humaines locales, dès que possible (10 minutes)** : lancer
   `uv run shadowlab site`, ouvrir http://127.0.0.1:8770/manuel dans ton navigateur habituel, fenêtre
-  visible, une minute par session, puis « Terminer ». La campagne 90 montre que seul le détecteur `cdp`
-  arrête NOEZIA aux niveaux 04 à 07, et il arrête tout le monde de la même façon. Ces sessions disent
-  s'il arrête aussi les humains. Recommandation : les faire avant tout autre chose ; arrêter le site
-  ensuite (une campagne réutiliserait un site resté ouvert avec un ancien code).
+  visible, laisser « 01 — Baseline », cocher l'accord, puis naviguer une minute : quelques pages du site de
+  test **et le site vitrine** (http://127.0.0.1:8770/lab/vitrine : la liste, une fiche). Finir par
+  « Terminer une session manuelle » en bas de page (un oubli n'est pas grave : la session est fermée seule
+  après 10 minutes). Si possible, une ou deux sessions dans un autre navigateur (Safari, Firefox).
+  Arrêter le site, puis `uv run shadowlab rejeu` : il dit, niveau par niveau, combien de tes sessions
+  l'Arena aurait arrêtées et quel détecteur est en cause. La campagne 90 montre que seul `cdp` arrête
+  NOEZIA aux niveaux 04 à 07, et il arrête tout le monde de la même façon : ces sessions disent s'il
+  arrête aussi les humains. Recommandation : les faire avant tout autre chose ; arrêter le site ensuite
+  (une campagne réutiliserait un site resté ouvert avec un ancien code).
 - **2026-11-12 — Mise en ligne de l'application publique (étape 1.6, bloque 1.7 et 1.8)** : le code est
   prêt (`src/shadowlab/public/`, `docs/site-public.md`). Il faut de toi : (1) une machine qui fait tourner une
   application Python derrière un mandataire HTTPS ; (2) un domaine ou sous-domaine à toi, derrière Cloudflare

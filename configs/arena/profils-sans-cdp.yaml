@@ -1,0 +1,274 @@
+# Niveaux 04 à 07 à l'identique, sans le détecteur cdp (ablation, docs/PLAN.md étape 1.7).
+# Généré à partir de configs/arena/profils.yaml : seule la ligne `exclure: [cdp]` diffère.
+# À régénérer si les niveaux 04 à 07 changent. Usage : voir configs/experiments/ablation-cdp.yaml.
+04scdp:
+  nom: Challenges sans cdp
+  description: Niveau 04 à l'identique, détecteur cdp écarté (exclure)
+  limitation:
+    debit: 5
+    rafale: 15
+  waf:
+    mode: blocage
+    paranoia: 1
+    seuil: 5
+  defi_js:
+    actif: true
+    difficulte: 12
+    lier_tls: false
+  captcha:
+    actif: true
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - cdp
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - deep-proxy
+    - cdp
+    seuil_composite: 0.8
+  honeypots:
+    actif: false
+  turnstile:
+    actif: false
+  recaptcha:
+    actif: false
+  connexion:
+    actif: false
+    tentatives_max: 5
+05scdp:
+  nom: Protection avancée sans cdp
+  description: Niveau 05 à l'identique, détecteur cdp écarté (exclure)
+  limitation:
+    debit: 3
+    rafale: 8
+  waf:
+    mode: blocage
+    paranoia: 2
+    seuil: 5
+  defi_js:
+    actif: true
+    difficulte: 15
+    lier_tls: true
+  captcha:
+    actif: true
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - cdp
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    seuil_composite: 0.6
+  honeypots:
+    actif: false
+  turnstile:
+    actif: true
+  recaptcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 5
+06scdp:
+  nom: Défense multicouche sans cdp
+  description: Niveau 06 à l'identique, détecteur cdp écarté (exclure)
+  limitation:
+    debit: 2
+    rafale: 4
+  waf:
+    mode: blocage
+    paranoia: 3
+    seuil: 3
+  defi_js:
+    actif: true
+    difficulte: 18
+    lier_tls: true
+  captcha:
+    actif: true
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - cdp
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.5
+  honeypots:
+    actif: true
+  turnstile:
+    actif: true
+  recaptcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 5
+07scdp:
+  nom: État de l'art sans cdp
+  description: Niveau 07 à l'identique, détecteur cdp écarté (exclure)
+  limitation:
+    debit: 1
+    rafale: 2
+  waf:
+    mode: blocage
+    paranoia: 4
+    seuil: 2
+  defi_js:
+    actif: true
+    difficulte: 20
+    lier_tls: true
+  captcha:
+    actif: true
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    exclure:
+    - cdp
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.3
+  honeypots:
+    actif: true
+  turnstile:
+    actif: true
+  recaptcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 2

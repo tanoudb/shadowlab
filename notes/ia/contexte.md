@@ -16,18 +16,21 @@ Un moteur de récolte généraliste qui, lancé depuis un serveur Linux, mène u
 protégé sans se faire bannir, et rapporte des données complètes et exactes. Il se prouve par des mesures
 sur nos propres cibles (site vitrine factice, tor-i).
 
-## État au 2026-11-11
-- **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, quatre paliers, règles). Le lire d'abord.
-  Constats détaillés avec fichiers et lignes : `notes/ia/analyse-paliers-2026-11-11.md`.
-- Le socle est sain : 405 tests rapides verts, lint propre.
-- Les chiffres de l'Arena durcie ne sont pas fiables : aucune session humaine (0 sur 25 623 passages), le
-  moteur est classé « automatisé » sans jamais être bloqué, le taux de détection est mal calculé quand il
-  y a des pannes, et le travail du 11/11 (D-47 à D-53) n'a été mesuré par aucune campagne.
-- Manquent pour l'objectif : un site vitrine à contenu connu, le bannissement dans l'Arena, une identité
-  persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur Linux, un test contre
-  Cloudflare.
-- Branche `niveau-authentifie-perimetre` : 33 commits non poussés, pas de PR, rien sur `master`.
+## État au 2026-11-12
+- **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, quatre paliers, règles, suivi au § 8).
+  Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
+- Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique, mise en ligne à faire par Ethan).
+  602 tests rapides verts, lint propre, branche `niveau-authentifie-perimetre` poussée, rien sur `master`.
+- Mesuré (campagnes 90 et 92) : NOEZIA passe et récolte 100 % aux niveaux 01 à 03 ; aux niveaux 04 à 07
+  le seul détecteur `cdp` refuse tous les moteurs de la même façon. Il est soupçonné d'arrêter aussi les
+  humains : aucune session humaine en base pour le dire.
+- Outil prêt pour le dire : `uv run shadowlab rejeu` (D-56) rejoue les sessions humaines contre chaque
+  niveau et donne les humains arrêtés et le détecteur responsable.
+- Manquent pour l'objectif : les sessions humaines et le calibrage de l'Arena, le bannissement dans
+  l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
+  Linux, un test contre Cloudflare.
 
 ## Prochaine action
-- Palier 1, étape 1.1 (commit et push, sur accord d'Ethan), puis 1.2 (mesure fiable) et 1.3 (campagne de
-  référence). Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7.
+- Étape 1.7 : sessions humaines (5 en local par Ethan, puis au moins 10 sur le site public), rejeu,
+  calibrage des détecteurs (`cdp` en premier), jalon A. Puis 1.8 (Cloudflare) et 1.9 (corriger le moteur).
+  Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.

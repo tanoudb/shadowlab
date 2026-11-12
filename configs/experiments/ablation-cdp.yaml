@@ -1,0 +1,32 @@
+# Ablation du détecteur cdp aux niveaux 04 à 07 (docs/PLAN.md, étape 1.7).
+# La campagne de référence n° 90 montre que cdp arrête tous les moteurs à ces niveaux, de la même façon,
+# et il est soupçonné d'arrêter aussi les humains. Cette campagne mesure ce que valent les mêmes niveaux
+# sans lui : mêmes moteurs, mêmes scénarios, mêmes répétitions que la référence.
+# Une mesure pour décider, pas un changement de l'Arena : les niveaux 04 à 07 restent tels quels.
+#
+#   1. Appliquer les profils supplémentaires à l'Arena :
+#      SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab arena appliquer
+#   2. Lancer la campagne :
+#      SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab campagne configs/experiments/ablation-cdp.yaml
+#   3. Remettre l'Arena dans son état normal :
+#      uv run shadowlab arena appliquer
+#
+# 3 moteurs × 4 niveaux × 3 scénarios × 5 répétitions = 180 passages, un à la fois.
+experiment:
+  name: ablation_cdp_04_07
+  description: >-
+    Niveaux 04 à 07 sans le détecteur cdp : noezia, patchright et playwright, mêmes scénarios et mêmes
+    répétitions que la référence n° 90, pour comparer niveau par niveau.
+  environment: local
+  engines:
+    - noezia
+    - patchright
+    - playwright
+  protections: ["04scdp", "05scdp", "06scdp", "07scdp"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261111
+  output: [json, html]

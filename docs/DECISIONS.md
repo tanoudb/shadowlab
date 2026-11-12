@@ -300,3 +300,17 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   et purge automatique. Pourquoi : audit de sécurité du 11/11 (`notes/ia/analyse-paliers-2026-11-11.md`
   § 4) et conditions du § 5 du plan. Relue, éprouvée (12 failles volontaires détectées par les tests) et
   auditée par un second sous-agent. Mise en ligne : `docs/site-public.md`, à la charge d'Ethan.
+- **D-56 — 12/11/2026 — Les humains arrêtés par niveau se mesurent par rejeu, avec le code de décision de
+  l'Arena (`shadowlab rejeu`).** On ne fait pas passer chaque humain par chaque niveau : on rejoue les
+  observations de sa session contre les détecteurs de chaque niveau. Choix : le rejeu appelle la même
+  fonction que l'Arena (`gardien.motifs_suspicion`, réglages `gardien.parametres`) et décide aux mêmes
+  moments (empreinte reçue, page contrôlée, fin de session) ; un détecteur qui n'a pas ses données (TLS et
+  HTTP/2 hors frontal, corrélation, sonde WebRTC sautée, pièges non servis) est écarté et signalé, jamais
+  compté ; sur le site public, les règles `cookies_ignores` et `host_tardif` sont écartées (donnée non
+  gardée) ; la corrélation, qui dépend de l'historique de la base, reste hors du taux ; une session sans
+  empreinte est comptée à part. Au passage, correction de l'Arena : `/lab/collecte` ignorait `exclure` et
+  consultait le JavaScript même en `bloquer: http` ; les réglages sont maintenant les mêmes à la collecte
+  et aux pages. Aucun effet sur les niveaux 01 à 07 (mêmes listes de détecteurs avant et après) ; les
+  ablations faites avant le 12/11 (campagne 8) sont fausses pour tout détecteur qui tranche à la collecte.
+  Pourquoi : jalon A du plan (étape 1.7) et règle « un détecteur n'est valide que s'il laisse passer les
+  humains ». Limites : le rejeu ne rejoue ni le WAF, ni la limite de débit de Nginx, ni les défis et CAPTCHA.

@@ -175,6 +175,24 @@ empreinte vue 5 fois. Un humain qui revient, ou une identité persistante (palie
 empreinte : il faudra compter la même empreinte sur des cookies, comptes ou adresses différents, pas ses
 simples retours. La table est globale : les résultats des niveaux 06 et 07 dépendent de l'historique.
 
+Outil prêt pour 1.7 (12/11, D-56) : `uv run shadowlab rejeu` (base du labo) ou
+`uv run shadowlab rejeu --base <fichier>` (base du site public, lue sans écrire) donne par niveau les
+humains arrêtés, avec le détecteur et les signaux responsables. Il clôt d'abord les sessions manuelles
+restées ouvertes sans activité depuis 10 minutes. Il ne dit rien du TLS et du HTTP/2 pour une session faite
+hors du frontal, ni de la corrélation, ni des pièges : la sortie les liste comme « non évalués ».
+
+Points connus pour 1.7, relevés le 12/11 dans la configuration et sur une session d'essai faite dans un
+navigateur piloté par outil (ce n'est pas une session humaine) :
+- Les photos de la vitrine et l'appel « similaires » comptent comme des pages pour les détecteurs
+  (`Observations.documents`) : 26 des 31 « pages » de la session d'essai étaient des photos. L'effet sur
+  `comportement` et sur le score composite se lira dans le rejeu des vraies sessions.
+- Un visiteur qui revient a les scripts en cache et ne les redemande pas : le signal `sans_ressources`
+  se déclenche. À lire dans le rejeu dès la 2ᵉ session d'un même navigateur.
+- Les photos passent par la limite de débit de Nginx (seuls `/lab/static`, `/lab/collecte`, `/lab/verdict`,
+  `/lab/defi` et `/lab/captcha` y échappent). Une page de liste demande 20 photos d'un coup ; la rafale
+  permise est de 15 au niveau 04, 8 au 05, 4 au 06 et 2 au 07. À ces niveaux, une partie des photos reçoit
+  donc un 429, pour un humain comme pour un moteur. Effet sur le verdict d'un passage : non mesuré.
+
 En parallèle possible : 1.2 et 1.4 (fichiers distincts). 1.9 est la seule étape dont la taille est
 inconnue : elle sera chiffrée après 1.3, 1.7 et 1.8, pas avant.
 
@@ -233,6 +251,10 @@ Le labo ne se met jamais en ligne tel quel : son API lance des navigateurs vers 
 7. HTTPS, cookies sécurisés, journaux sans adresse complète ni jeton.
 8. Aucun secret dans le dépôt (contrôle de l'historique avant publication).
 
+Point 8 contrôlé le 12/11 sur les 161 commits de toutes les branches (recherche par motifs dans les lignes
+ajoutées, fichiers sensibles ajoutés un jour) : aucun secret, seulement des clés de test publiques de Google
+et de Cloudflare et des adresses d'exemple. À refaire juste avant de publier le dépôt.
+
 ## 6. Gelé (rien de tout cela avant la fin du palier 4)
 
 Niveau 07 comme cible (il est mesuré, pas visé), couche IA, plugins (`plugins/` est vide : à laisser),
@@ -248,7 +270,7 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 |------|------|
 | Accord pour committer et pousser la branche | 1.1 |
 | Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`) | 1.6, 1.8 |
-| **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`. Elles disent si `cdp` classe les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
+| **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`, en visitant aussi `/lab/vitrine` (la liste, une fiche). Arrêter le site, puis `uv run shadowlab rejeu` : il dit, niveau par niveau, si `cdp` et les autres détecteurs arrêtent les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
 | Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
 | Un serveur Linux x86_64 avec Docker, et un proxy résidentiel | 3.2, 3.3, 3.4 |

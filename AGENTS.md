@@ -70,7 +70,10 @@ recommander des optimisations.
 - **Application publique réduite** (`src/shadowlab/public/`, D-55) : la seule partie faite pour être mise en
   ligne. Site vitrine, consentement, collecte fermée, suppression de sa session ; aucune route du labo.
   Lancement et conditions : `docs/site-public.md`. Le labo lui-même ne se met jamais en ligne.
-- **570 tests rapides verts** (hors intégration), lint propre.
+- **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
+  sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
+  les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
+- **602 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
 
@@ -99,6 +102,7 @@ uv run shadowlab campagne configs/experiments/extraction-adaptative.yaml  # relo
 uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
+uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
 uv run pytest -m "not integration"                         # < 3 s, sans navigateur
@@ -128,6 +132,7 @@ src/shadowlab/
 ├── api.py           # API REST (parcours : /protections, /experiences/.../progression|flux|matrice, /artefacts)
 ├── cli.py           # Interface ligne de commande
 ├── reports.py       # Rapports HTML/CSV/JSON
+├── rejeu.py         # Rejeu des sessions humaines contre chaque niveau (jalon A)
 ├── labo.py          # Sert l'interface construite (frontend/dist) sous /labo
 ├── public/          # Application publique réduite (vitrine + sessions humaines), seule à se mettre en ligne
 └── tableau.py       # Ancien tableau de bord (déprécié, remplacé par /labo)
@@ -165,6 +170,11 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Le site lancé par une campagne garde le code chargé au démarrage : relancer la campagne (ou le site) après
   une modification de l'API.
 - Camoufox exige playwright<1.63, SeleniumBase épingle pytest==9.1.1 : d'où les environnements isolés (D-17).
+- Une ablation passe par des profils supplémentaires (`SHADOWLAB_PROFILS_EXTRA`, exemple
+  `configs/experiments/ablation-cdp.yaml`) : `shadowlab arena appliquer` avec la variable avant la campagne,
+  puis `shadowlab arena appliquer` sans elle après, sinon Nginx garde les profils supplémentaires.
+- Le navigateur garde les scripts de `/lab/static` en cache une heure : après une modification, vérifier avec
+  une adresse neuve (`?v=2`). La racine `/` redirige vers l'ancien tableau de bord `/tableau`.
 
 ## Mémoire vivante — à tenir à jour (obligatoire)
 Toute IA qui travaille ici met la mémoire à jour au fil de l'eau :
