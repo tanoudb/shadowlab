@@ -175,10 +175,12 @@ le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 En-têtes envoyés par NOEZIA, lus le 12/11 dans la base (campagne 94, `observations_http`) : quatre écarts
 probables avec un vrai Chrome, **à confirmer en les comparant aux en-têtes des sessions humaines** (elles
 donneront la référence) avant de corriger en 1.9 :
-- `User-Agent` avec la version complète (`Chrome/129.0.6668.100`) et la vraie version de macOS
-  (`Mac OS X 15_1`) ; un Chrome récent réduit les deux (`Chrome/129.0.0.0`, `Mac OS X 10_15_7`) ;
-- `sec-ch-ua-arch`, `-bitness`, `-full-version-list` et `-model` envoyés à chaque requête, alors qu'un vrai
-  Chrome ne les envoie que si le site les demande ;
+- `User-Agent` avec la vraie version de macOS (`Mac OS X 15_1`) : le même Chromium, piloté par les témoins
+  sans réglage, envoie la version figée `Mac OS X 10_15_7` (mesuré, campagne 94). La version complète
+  (`Chrome/129.0.6668.100`) est aussi suspecte : un Chrome grand public la réduit (`Chrome/129.0.0.0`),
+  à vérifier sur le Chrome d'Ethan (le Chromium d'essai, lui, garde la version complète) ;
+- `sec-ch-ua-arch`, `-bitness`, `-full-version-list` et `-model` envoyés à chaque requête : le même
+  Chromium piloté par les témoins n'envoie que `sec-ch-ua`, `-mobile` et `-platform` (mesuré, campagne 94) ;
 - `Accept-Language: de-DE` seul, alors que le profil prévoit `de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7` : le
   réglage de langue du navigateur écrase l'en-tête du profil ;
 - la version annoncée (129 à 132) ne correspond pas au navigateur réel (156), donc pas non plus à son TLS.
