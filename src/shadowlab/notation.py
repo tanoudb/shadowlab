@@ -12,6 +12,7 @@ Une valeur attendue vide (`None`, chaîne vide ou d'espaces) est exacte quand ri
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
@@ -50,21 +51,30 @@ def _egal(attendu: Any, obtenu: Any) -> bool:
 
 
 def _partie_de_cle(valeur: Any) -> str | None:
-    """Une partie de clé sous forme comparable : nombre ou texte numérique -> même écriture ; texte sans espaces."""
+    """Une partie de clé sous forme comparable, sans jamais passer par un flottant.
+
+    Un entier et son écriture exacte en texte (`7`, `"7"`, `" 7 "`) sont la même clé ; un `float` entier (`7.0`)
+    aussi. Un texte à zéros en tête (`"007"`) reste un texte distinct de `7`. `"1e3"`, `"nan"` ou un grand entier
+    ne sont que des textes ou des entiers exacts : aucune erreur, aucune fusion.
+    """
     if _vide(valeur) or isinstance(valeur, bool):
         return None
-    n = _nombre(valeur)
-    if n is not None:
-        return str(int(n)) if n == int(n) else repr(n)
+    if isinstance(valeur, int):
+        return str(valeur)
+    if isinstance(valeur, float):
+        return str(int(valeur)) if math.isfinite(valeur) and valeur == int(valeur) else repr(valeur)
     return valeur.strip() if isinstance(valeur, str) else None
 
 
 def _cle_de(enregistrement: dict, champs: tuple[str, ...]) -> str | None:
     """Clé comparable d'un enregistrement, ou None si une partie manque."""
-    parties = [_partie_de_cle(enregistrement.get(c)) for c in champs]
-    if any(p is None for p in parties):
-        return None
-    return "\x1f".join(parties)  # type: ignore[arg-type]
+    parties: list[str] = []
+    for champ in champs:
+        partie = _partie_de_cle(enregistrement.get(champ))
+        if partie is None:
+            return None
+        parties.append(partie)
+    return "\x1f".join(parties)
 
 
 def noter_recolte(
@@ -76,10 +86,14 @@ def noter_recolte(
     """Note les enregistrements récoltés contre `verite[liste]`, retrouvés par `cle`.
 
     `cle` est un nom de champ ou une suite de noms (clé composée, ex. `("rallye", "speciale", "numero")`).
-    Les parties de clé se comparent sans espaces, un nombre et son écriture en texte étant égaux. Un doublon
+    Les parties de clé se comparent sans espaces ; un entier et son écriture exacte en texte sont égaux, mais
+    `"007"` reste distinct de `7` (voir `_partie_de_cle`). Un doublon
     ne compte qu'une fois ; un enregistrement à clé inconnue ou incomplète est « en trop ». Les clés attendues
     doivent être uniques. Les clés `annonces_*` gardent leur nom d'origine (appel historique de la vitrine) ;
     `enregistrements_*` en sont les noms généraux.
+
+    `exactitude` vaut `None` quand aucun champ n'est comparé (rien retrouvé) : l'appelant doit le gérer avant de
+    la comparer à un seuil.
     """
     champs_cle = (cle,) if isinstance(cle, str) else tuple(cle)
     if not champs_cle:
@@ -143,7 +157,12 @@ def _adresse(adresse: str) -> str:
 
 
 def noter_pages(attendues: Iterable[str], lues: Iterable[str]) -> dict[str, Any]:
-    """Compare les adresses lues aux adresses attendues (hôte, fragment, jeton `sl` et `page=1` ignorés)."""
+    """Compare les adresses lues aux adresses attendues (hôte, fragment, jeton `sl` et `page=1` ignorés).
+
+    Elle compare des adresses, pas des réponses : l'appelant ne doit lui passer que les pages réellement lues
+    et conformes (pas une page de blocage, d'erreur ou de défi). Comme l'hôte est ignoré, une page lue sur un
+    autre site de même chemin compte comme lue.
+    """
     voulues = {_adresse(a): a for a in attendues}
     vues = {_adresse(a) for a in lues}
     trouvees = [a for a in voulues if a in vues]
