@@ -1,6 +1,7 @@
 // Observateur du laboratoire : lit les propriétés exposées par le navigateur, exécute BotD,
 // puis envoie le tout au serveur local (`/lab/collecte`). Rien n'est envoyé ailleurs, sauf la sonde WebRTC
-// qui interroge un serveur STUN de Google ; une page qui porte `<meta name="sl-sans-tiers" content="1">` la saute.
+// qui interroge un serveur STUN de Google ; une page qui porte `<meta name="sl-sans-tiers" content="1">` la saute,
+// ainsi que l'instruction `debugger` et l'entrée first-input de cdpDetectionTest (site public).
 import { load } from './vendor/botd-2.0.0.esm.js';
 
 const jeton = document.querySelector('meta[name="sl-session"]')?.content || '';
@@ -902,6 +903,10 @@ function mathConstantsTest() {
 
 function cdpDetectionTest() {
   const r = {};
+  // Page « sans tiers » (application publique) : ni instruction `debugger` (elle arrête la page d'un visiteur aux
+  // outils de développement ouverts), ni entrée first-input. Plus aucun détecteur ne les lit (D-62).
+  const sansTiers = document.querySelector('meta[name="sl-sans-tiers"]')?.content === '1';
+  if (sansTiers) r.saute = 'sans-tiers';
   try {
     // 1. Runtime.evaluate laisse un artefact : Error.stack contient "Runtime.evaluate"
     // quand le code est injecté via CDP (Playwright, Puppeteer, etc.)
@@ -915,14 +920,16 @@ function cdpDetectionTest() {
     // 2. debugger statement timing : en mode CDP, un breakpoint "debugger" est résolu quasi-instantanément
     // car le debugger n'est pas actif visuellement. Sur un vrai navigateur avec DevTools ouvert,
     // le délai est > 0 ; sans DevTools, le statement est ignoré. Le side-effect est mesurable.
-    try {
-      const t0 = performance.now();
-      // eslint-disable-next-line no-debugger
-      debugger;
-      const dt = performance.now() - t0;
-      r.debugger_delta_ms = Math.round(dt * 100) / 100;
-      r.debugger_suspect = dt < 0.01;
-    } catch (_) { /* ignore */ }
+    if (!sansTiers) {
+      try {
+        const t0 = performance.now();
+        // eslint-disable-next-line no-debugger
+        debugger;
+        const dt = performance.now() - t0;
+        r.debugger_delta_ms = Math.round(dt * 100) / 100;
+        r.debugger_suspect = dt < 0.01;
+      } catch (_) { /* ignore */ }
+    }
 
     // 3. Performance.getMetrics n'existe pas dans l'API Web standard —
     // mais certains outils CDP exposent des side-effects dans performance.timing
@@ -979,10 +986,12 @@ function cdpDetectionTest() {
 
     // 8. Absence de certains événements d'utilisateur dans PerformanceObserver
     // Un navigateur normal génère des "first-input" entries, pas un bot
-    try {
-      const fid = performance.getEntriesByType('first-input');
-      r.has_first_input = fid.length > 0;
-    } catch (_) { /* ignore */ }
+    if (!sansTiers) {
+      try {
+        const fid = performance.getEntriesByType('first-input');
+        r.has_first_input = fid.length > 0;
+      } catch (_) { /* ignore */ }
+    }
 
   } catch (e) { r.error = String(e).slice(0, 100); }
   return r;

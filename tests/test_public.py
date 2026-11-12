@@ -12,6 +12,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
@@ -426,6 +427,58 @@ webrtcTest().then((r) => console.log(JSON.stringify({{ r, configuration }})));
     else:
         assert "stun.l.google.com" in json.dumps(resultat["configuration"])
         assert resultat["r"]["disponible"] is True
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+@pytest.mark.parametrize("balise", [True, False])
+def test_debugger_et_first_input_sautes_quand_la_page_le_demande(balise):
+    """Avec la balise, ni instruction `debugger` (elle arrête la page d'un visiteur aux outils de développement
+    ouverts) ni lecture de l'entrée first-input : plus aucun détecteur ne les lit (D-62). Sans elle (labo), comme
+    avant. Les autres mesures de `cdp_detection` restent."""
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    assert len(re.findall(r"\bdebugger\s*;", source)) == 1, "une seule instruction debugger, dans cdpDetectionTest"
+    fonction = re.search(r"^function cdpDetectionTest\(\) \{.*?^\}$", source, re.S | re.M).group(0)
+    # L'instruction est remplacée par une trace : la voir posée, c'est savoir que la ligne a été exécutée.
+    instrumentee, remplacees = re.subn(r"\bdebugger\s*;", "globalThis.debuggerAtteint = true;", fonction)
+    assert remplacees == 1
+    script = f"""
+const META = {json.dumps("1" if balise else None)};
+const BALISE = 'meta[name="sl-sans-tiers"]';
+globalThis.window = globalThis;
+globalThis.document = {{
+  querySelector: (s) => (s === BALISE && META ? {{ content: META }} : null),
+  querySelectorAll: () => [],
+}};
+const types = [];
+Object.defineProperty(globalThis, 'performance', {{
+  configurable: true,
+  value: {{ now: () => 0, getEntriesByType: (t) => {{ types.push(t); return []; }} }},
+}});
+globalThis.debuggerAtteint = false;
+{instrumentee}
+const r = cdpDetectionTest();
+console.log(JSON.stringify({{ r, types, debuggerAtteint: globalThis.debuggerAtteint }}));
+"""
+    sortie = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True, timeout=30).stdout
+    resultat = json.loads(sortie)
+    r = resultat["r"]
+    assert "console_log_natif" in r and r["cdp_resource_entries"] == 0, "les autres mesures restent"
+    if balise:
+        assert resultat["debuggerAtteint"] is False
+        assert "first-input" not in resultat["types"]
+        assert not {"debugger_delta_ms", "debugger_suspect", "has_first_input"} & set(r), r
+        assert r["saute"] == "sans-tiers"
+    else:
+        assert resultat["debuggerAtteint"] is True
+        assert "first-input" in resultat["types"]
+        assert (r["debugger_delta_ms"], r["debugger_suspect"], r["has_first_input"]) == (0, True, False)
+        assert "saute" not in r
+
+
+def test_description_de_cdp_detection_suit_le_releve_public():
+    """La page d'information ne décrit plus ce que le site public ne relève plus (première interaction)."""
+    description = dict(DONNEES_RELEVEES)["cdp_detection"]
+    assert "interaction" not in description and "mémoire" in description
 
 
 # --- R4 : moins de données personnelles ----------------------------------------------------------
@@ -1208,6 +1261,67 @@ def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publ
     assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
 
 
+def test_contact_absent_du_fichier_de_journal(client, tmp_path):
+    """D-57 : un message n'est que son texte et son jour. Le journal tournant, horodaté à la milliseconde, ne garde
+    rien des pages de contact ni de ce qu'un navigateur charge avec elles (feuille de style, icône) : rapprochées
+    des requêtes notées d'une session à la même milliseconde, ces lignes dateraient l'envoi ; une feuille de style
+    chargée sans page notée trahirait aussi une page de contact."""
+    from shadowlab.journal import configurer
+    from shadowlab.public import ROTATION_JOURNAL
+
+    racine = logging.getLogger("shadowlab")
+    anciens, niveau, propage = list(racine.handlers), racine.level, racine.propagate
+    enregistrements: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            enregistrements.append(record.getMessage())
+
+    def messages_du_fichier() -> list[str]:
+        return [json.loads(ligne)["message"] for ligne in fichier.read_text(encoding="utf-8").splitlines()]
+
+    journal = logging.getLogger("shadowlab.public")
+    capture = Capture(level=logging.DEBUG)
+    try:
+        configurer(tmp_path / "journal", rotation=ROTATION_JOURNAL)
+        fichier = tmp_path / "journal" / "logs" / "shadowlab.jsonl"
+        commencer(client)  # pendant une session : ses requêtes /lab/… sont notées en base, à la milliseconde
+        avant = messages_du_fichier()
+        assert avant, "les autres requêtes restent journalisées"
+        journal.addHandler(capture)
+        # Ce qu'un navigateur demande : la page, sa feuille de style, l'icône ; l'envoi ; la page de confirmation.
+        for chemin in ("/contact", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        assert ecrire(client, "Bonjour, merci d'effacer ma session.").status_code == 303
+        for chemin in ("/contact/envoye", "/lab/static/vitrine.css", "/favicon.ico"):
+            client.get(chemin)
+        journal.removeHandler(capture)
+        assert enregistrements == [], "aucun enregistrement, donc rien pour le fichier"
+        apres = messages_du_fichier()
+        assert apres == avant, "aucune ligne, pas même celles de la feuille de style ou de l'icône"
+        assert not [ligne for ligne in apres if "/contact" in ligne or "message" in ligne]
+        client.get("/lab/vitrine")
+        assert "GET /lab/vitrine 200" in messages_du_fichier(), "les pages du site restent journalisées"
+    finally:
+        journal.removeHandler(capture)
+        for gestionnaire in racine.handlers:
+            gestionnaire.close()
+        racine.handlers[:] = anciens
+        racine.setLevel(niveau)
+        racine.propagate = propage
+
+
+def test_contact_avis_a_l_ecran_seulement_sur_un_terminal(client, capsys, monkeypatch):
+    """L'avis « message de contact reçu » passe par la sortie standard, jamais par le journal ; et seulement si elle
+    est un terminal : recueillie (journald sous systemd, fichier), sa ligne horodatée daterait l'envoi."""
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert ecrire(client, "premier").status_code == 303
+    assert "message de contact reçu" in capsys.readouterr().out
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    assert ecrire(client, "second").status_code == 303
+    assert "message" not in capsys.readouterr().out
+
+
 def test_contact_origine_null_refusee(client, reglages_publics):
     # Pourquoi `Referrer-Policy: no-referrer` est interdit sur /contact : sous cette politique, un vrai
     # navigateur envoie `Origin: null` au POST du formulaire (norme Fetch), même vers le même site. Le garde
@@ -1268,6 +1382,40 @@ def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
     # Les espaces insécables (posées par macOS et iOS avant « ? » et « ! ») deviennent des espaces ordinaires.
     assert ecrire(client, "Jean\u00a0Dupont, d'accord\u202f?").status_code == 303
     assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
+
+
+LIANTS = chr(0x200C) + chr(0x200D)  # seuls caractères invisibles gardés : ils lient lettres et emoji composés
+SOURIRE = chr(0x1F600)
+FAMILLE = chr(0x200D).join([chr(0x1F469), chr(0x1F469), chr(0x1F467)])  # emoji composé par des liants U+200D
+# Invisibles, ou qui changent l'affichage dans un terminal : sens d'écriture (U+200E, U+200F, U+061C), espaces
+# sans largeur (U+200B, U+2060, U+FEFF), annotation (U+FFF9), balise qui peut cacher du texte (U+E0041).
+INVISIBLES = [0x200E, 0x200F, 0x061C, 0x200B, 0x2060, 0xFEFF, 0xFFF9, 0xE0041]
+
+
+def test_contact_garde_les_emoji_courants(client, reglages_publics):
+    texte = f"Merci {SOURIRE} de la part de toute la {FAMILLE}"
+    assert ecrire(client, texte).status_code == 303
+    assert messages_recus(reglages_publics) == [texte]
+
+
+def test_nettoyer_ne_garde_que_ce_qui_s_affiche():
+    """Liste blanche : saut de ligne, tabulation, caractères affichables (`str.isprintable()`) et les deux liants ;
+    une espace particulière devient une espace ordinaire ; tout le reste part (Cc, Cf, Cs, Co, Cn). Prix accepté :
+    un emoji plus récent que la table Unicode de Python, ou un drapeau à balises, perd des caractères."""
+    for point in INVISIBLES:
+        assert boite.nettoyer(f"a{chr(point)}b") == "ab", f"U+{point:04X}"
+    assert boite.nettoyer("\x1b[2J\x00fin" + chr(0x202E)) == "[2Jfin", "ESC, NUL, U+202E toujours retirés"
+    assert boite.nettoyer(f"{SOURIRE} {FAMILLE}") == f"{SOURIRE} {FAMILLE}"
+    espaces = "a" + chr(0x00A0) + "b" + chr(0x202F) + "c" + chr(0x3000) + "d"
+    assert boite.nettoyer(espaces) == "a b c d", "les espaces insécables deviennent des espaces"
+    assert boite.nettoyer("a\nb\tc\r\nd\re") == "a\nb\tc\nd\ne"
+    ecosse = chr(0x1F3F4) + "".join(map(chr, [0xE0067, 0xE0062, 0xE0073, 0xE0063, 0xE0074, 0xE007F]))
+    assert boite.nettoyer(ecosse) == chr(0x1F3F4), "limite acceptée : le drapeau perd ses balises"
+    # Sur U+0000 à U+30FF, les demi-paires et les balises : ni caractère « autre » (C*) hors les liants, ni
+    # séparateur (Z*) autre que l'espace ordinaire.
+    tous = "".join(map(chr, [*range(0x3100), *range(0xD800, 0xE000), *range(0xE0000, 0xE0080), *INVISIBLES]))
+    garde = "\n\t " + LIANTS
+    assert [c for c in boite.nettoyer(tous) if c not in garde and unicodedata.category(c)[0] in "CZ"] == []
 
 
 def test_contact_limite_par_adresse(reglages_publics):
@@ -1337,3 +1485,85 @@ def test_commandes_messages(monkeypatch, reglages_publics, capsys):
     assert cli.main(["public", "purger"]) == 0
     assert "1 message" in capsys.readouterr().out
     assert messages_recus(reglages_publics) == ["premier message\nsur deux lignes"]
+
+
+# --- Une seule adresse ne ferme plus le formulaire (seconde relecture du 12/11) --------------------
+
+
+def test_limiteur_sur_une_journee_glissante():
+    from shadowlab.public.app import Limiteur
+
+    instant = [1000.0]
+    limiteur = Limiteur(2, fenetre_s=24 * 3600, horloge=lambda: instant[0])
+    assert [limiteur.autoriser(IP) for _ in range(3)] == [True, True, False]
+    instant[0] += 23 * 3600
+    assert not limiteur.autoriser(IP), "23 heures plus tard, toujours refusé : la fenêtre dure un jour"
+    assert limiteur.autoriser(AUTRE_IP)
+    instant[0] += 3600
+    assert limiteur.autoriser(IP), "24 heures après les deux premiers, l'adresse peut de nouveau écrire"
+
+
+def test_contact_limite_par_adresse_et_par_jour(reglages_publics):
+    """À 3 par heure, une adresse seule épuisait le plafond du jour (30) en 10 heures et remplissait la boîte (500)
+    en 17 jours. Avec un plafond par adresse et par jour, plus bas que celui du jour et que la boîte divisée par la
+    durée de conservation, elle ne peut faire ni l'un ni l'autre."""
+    limites = Limites()
+    assert limites.messages_par_adresse_jour < limites.messages_par_jour
+    assert limites.messages_par_adresse_jour * reglages_publics.conservation_jours < limites.messages_gardes
+    with fabriquer(reglages_publics, messages_par_adresse=10, messages_par_adresse_jour=2) as c:
+        assert [ecrire(c, "essai", IP).status_code for _ in range(2)] == [303, 303]
+        refus = ecrire(c, "troisième essai", IP)
+        assert refus.status_code == 429 and texte_rendu(refus) == "troisième essai"
+        assert ecrire(c, "essai", AUTRE_IP).status_code == 303
+    assert len(messages_recus(reglages_publics)) == 3
+
+
+def test_bloc_d_adresse():
+    """Une adresse IPv6 compte pour son /64 ; une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
+    from shadowlab.public.app import bloc_d_adresse
+
+    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:B:ffff::9") == "2001:db8:a:b::/64"
+    assert bloc_d_adresse("2001:db8:a:c::1") != bloc_d_adresse("2001:db8:a:b::1")
+    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/64"
+    assert bloc_d_adresse(IP) == IP
+    assert bloc_d_adresse("::ffff:203.0.113.57") == IP, "une IPv4 écrite en IPv6 reste cette IPv4"
+    for valeur in ("", "testclient", "pas une adresse", "[2001:db8::1]:443", "2001:db8::1, 10.0.0.1", "x" * 10_000):
+        assert bloc_d_adresse(valeur) == valeur
+
+
+def test_limites_par_adresse_comptent_un_bloc_ipv6(reglages_publics):
+    """Un abonné IPv6 reçoit au moins un /64 et y change d'adresse à volonté : les limites par adresse (sessions
+    et messages) le comptent comme une seule adresse. Deux /64 différents restent deux adresses ; IPv4 inchangé."""
+    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:b:ffff:ffff:ffff:fffe", "2001:DB8:A:B:0:0:0:9"]
+    autre_bloc = "2001:db8:a:c::1"
+    with fabriquer(reglages_publics, sessions_par_adresse=2) as c:
+        assert [essayer(c, adresse) for adresse in meme_bloc] == [303, 303, 429]
+        assert essayer(c, autre_bloc) == 303
+        assert [essayer(c, adresse) for adresse in ("192.0.2.1", "192.0.2.1", "192.0.2.2")] == [303, 303, 303]
+    with fabriquer(reglages_publics, messages_par_adresse=2) as c:
+        assert [ecrire(c, "essai", adresse).status_code for adresse in meme_bloc] == [303, 303, 429]
+        assert ecrire(c, "essai", autre_bloc).status_code == 303
+
+
+def test_effacer_tous_les_messages(monkeypatch, reglages_publics, capsys):
+    from shadowlab import cli
+
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONSERVATION_JOURS", "90")
+    with fabriquer(reglages_publics) as c:
+        for n in range(3):
+            assert ecrire(c, f"message {n}").status_code == 303
+    capsys.readouterr()
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "3 message(s)" in capsys.readouterr().out
+    assert messages_recus(reglages_publics) == []
+    assert cli.main(["public", "effacer-message", "tous"]) == 0
+    assert "0 message(s)" in capsys.readouterr().out
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "après l'effacement").status_code == 303
+    cx = boite.connexion(boite.chemin(reglages_publics.base_donnees))
+    numeros = [ligne["id"] for ligne in boite.lister(cx)]
+    cx.close()
+    assert numeros == [4], "un numéro n'est jamais réutilisé"

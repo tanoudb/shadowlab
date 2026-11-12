@@ -14,7 +14,7 @@ from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-12.4"
+VERSION_INFORMATION = "2026-11-12.5"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -76,7 +76,7 @@ DONNEES_RELEVEES: list[tuple[str, str]] = [
     ("deep_proxy", "Contrôles techniques : fonctions du navigateur imitées ou d'origine."),
     (
         "cdp_detection",
-        "Traces d'un pilotage du navigateur par un programme, mémoire de la page, présence d'une première interaction.",
+        "Traces d'un pilotage du navigateur par un programme : marques d'un tel outil dans une trace d'erreur, fichiers chargés à son nom, balises de script vides, fonctions de la console d'origine ou modifiées, règle de sécurité des scripts (Trusted Types) ; part de la mémoire utilisée par la page.",
     ),
     ("worker_consistency", "Cohérence entre la page et un script d'arrière-plan : cœurs, mémoire, système."),
     ("connection_dynamic", "Type de connexion annoncé par le navigateur (4g…), latence et débit qu'il estime."),

@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "identifiant",
         nargs="?",
-        help="identifiant de la session (avec `supprimer`) ou numéro du message (avec `effacer-message`)",
+        help="identifiant de la session (avec `supprimer`), numéro du message ou `tous` (avec `effacer-message`)",
     )
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
@@ -497,17 +497,21 @@ def _public(args: argparse.Namespace) -> int:
         if not recus:
             print("Aucun message de contact.")
             return 0
-        print(f"{len(recus)} message(s) de contact (effacer : uv run shadowlab public effacer-message <n°>)")
+        print(f"{len(recus)} message(s) de contact (effacer : uv run shadowlab public effacer-message <n°> | tous)")
         for message in recus:
             print(f"\nn° {message['id']} — reçu le {message['recu_le']}")
             for ligne in messages.nettoyer(message["texte"]).splitlines():
                 print(f"    {ligne}")
         return 0
     if args.action == "effacer-message":
-        if not (args.identifiant or "").strip().isdecimal():
-            print("Erreur : numéro du message requis.", file=sys.stderr)
+        numero = (args.identifiant or "").strip()
+        if numero.lower() == "tous":
+            print(f"{messages.effacer_tout(boite)} message(s) de contact effacé(s).")
+            return 0
+        if not numero.isdecimal():
+            print("Erreur : numéro du message, ou « tous », requis.", file=sys.stderr)
             return 2
-        if messages.effacer(boite, int(args.identifiant)):
+        if messages.effacer(boite, int(numero)):
             print("Message effacé.")
             return 0
         print("Aucun message avec ce numéro.", file=sys.stderr)

@@ -50,8 +50,14 @@ def _jour(moment: datetime | None = None) -> str:
 
 
 def nettoyer(texte: str) -> str:
-    """Texte sûr à afficher dans un terminal : fins de ligne unifiées, espaces particulières (insécables…)
-    changées en espaces ordinaires, caractères de contrôle et sens d'écriture forcé retirés."""
+    """Texte sûr à afficher dans un terminal, par liste blanche : saut de ligne, tabulation, caractères affichables
+    (`str.isprintable()`) et les deux liants ; fins de ligne unifiées, espaces particulières (insécables…) changées
+    en espaces ordinaires ; tout le reste est retiré (contrôle, mise en forme invisible, sens d'écriture forcé,
+    balises, demi-paires, usage privé, non attribué).
+
+    Limite acceptée, prix d'un affichage sûr : un emoji plus récent que la table Unicode de Python (non attribué
+    pour elle) disparaît, et un drapeau à balises (Angleterre, Écosse…) perd ses balises et n'est plus qu'un
+    drapeau noir. Une liste noire laissait passer d'autres caractères invisibles (U+200B, U+200E, U+FEFF…)."""
     texte = texte.replace("\r\n", "\n").replace("\r", "\n")
     propre = []
     for c in texte:
@@ -80,6 +86,11 @@ def du_jour(cx: sqlite3.Connection) -> int:
 
 def effacer(cx: sqlite3.Connection, numero: int) -> bool:
     return cx.execute("DELETE FROM messages WHERE id = ?", (numero,)).rowcount > 0
+
+
+def effacer_tout(cx: sqlite3.Connection) -> int:
+    """Vide la boîte (les numéros suivants ne reprennent pas à 1). Renvoie le nombre de messages effacés."""
+    return cx.execute("DELETE FROM messages").rowcount
 
 
 def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = None) -> int:
