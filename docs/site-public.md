@@ -12,7 +12,7 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
   `POST /session/supprimer`, tous protégés contre le CSRF) et la page « Ma session » (`GET /session`) ;
 - la collecte de l'observateur (`POST /lab/collecte`), seulement pendant une session consentie ;
 - le formulaire de contact (`GET /contact`, `POST /contact`, `GET /contact/envoye`, D-57) : écrire au
-  responsable sans qu'une adresse soit affichée ;
+  responsable sans qu'une adresse soit affichée ; sa feuille de style est servie sous `/contact/style.css` ;
 - quatre fichiers statiques, en liste fermée : `observateur.js`, `vendor/botd-2.0.0.esm.js`, `vitrine.css`, `vitrine.js`.
 
 Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
@@ -105,12 +105,18 @@ Limites de cette voie, à connaître avant de partager le lien :
   de 40 sessions par jour peut être vidé par un script (voir « Limites connues »).
 - **Le site tourne sur le poste de travail**, qui porte d'autres projets. L'application n'écoute que sur
   `127.0.0.1` et le tunnel ne relaie que son port.
-- Le journal du tunnel (`outputs/public/tunnel.log`, niveau `info`) ne contient aucune requête.
+- Le journal du tunnel (`outputs/public/tunnel.log`, niveau `info`) est **filtré avant d'être écrit** : toute
+  adresse y est réduite à `schéma://hôte` (plus de chemin ni de chaîne de requête), tout chemin suivi d'une
+  chaîne de requête, toute chaîne de requête restante et tout `sl=…` sont masqués (expression `sed`
+  `FILTRE_JOURNAL` du script, essayée par `test_journal_du_tunnel_filtre_chemins_requetes_et_jetons`). **Jamais
+  vérifié avec un vrai tunnel** : les lignes d'erreur de `cloudflared` sont supposées, pas observées ; un chemin
+  sans chaîne de requête, hors adresse complète, n'est pas masqué. Relire `tunnel.log` après le premier
+  lancement, et le supprimer avec la fin de la mise en ligne.
 
 Pour un lien stable : un domaine chez Cloudflare (option A) ou une petite machine à part (options B et C).
 Vercel et Netlify ne conviennent pas : pas de processus continu ni de disque durable pour la base SQLite.
-Non vérifié au 12/11 : le script n'a jamais tourné avec un vrai tunnel (syntaxe, refus sans contact et
-lecture de l'adresse vérifiés à vide).
+Non vérifié au 12/11 : le script n'a jamais tourné avec un vrai tunnel (syntaxe, refus sans contact, lecture de
+l'adresse et filtre `sed` vérifiés à vide).
 
 ## Réglages
 
@@ -125,15 +131,25 @@ lecture de l'adresse vérifiés à vide).
 | `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (dernière valeur lue). Vide = adresse de la connexion |
 | `SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` | `20261111`, `500` | Contenu du site vitrine, comme dans le labo |
 
+L'application publique ne charge du fichier `.env` que `SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*` et
+`SHADOWLAB_SORTIES` : les clés propres au labo (jeton d'API, clés reCAPTCHA…) n'entrent pas dans son processus.
+Une variable déjà exportée garde la priorité (`test_charger_public_ne_charge_que_ses_variables`).
+
 ### Adresse du visiteur
 
 Elle ne sert qu'aux limites par adresse (ouverture de sessions, messages de contact), **en mémoire**,
-sous forme d'empreinte salée, jamais écrite. Une adresse IPv6 y compte pour son bloc /64 : un abonné en
+sous forme d'empreinte salée, jamais écrite sur le disque. Un balayage, au plus une fois par minute et à
+l'occasion d'un appel, retire toute empreinte dont la dernière action est sortie de la fenêtre (1 heure ou
+24 heures) ; une table pleine (10 000 empreintes) d'entrées encore valides n'est **plus vidée** : une adresse
+inconnue est refusée jusqu'au prochain balayage, les adresses déjà connues gardent leur compte
+(`test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`). Une empreinte reste en mémoire jusqu'au balayage
+suivant, donc jusqu'au prochain appel du limiteur : sur un site sans visite, elle attend l'arrêt du processus. Une adresse IPv6 y compte pour son bloc /64 : un abonné en
 reçoit au moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6
 (`::ffff:a.b.c.d`), reste elle-même ; une valeur qui n'est pas une adresse est comptée telle quelle. Si
 l'en-tête est mal réglé, tous les visiteurs partagent la même adresse (celle du mandataire ou de
 Cloudflare) et ces limites deviennent globales : 6 sessions et 3 messages par heure, 5 messages par jour,
-pour tout le monde.
+pour tout le monde. Si l'en-tête configuré manque à une requête, l'application écrit **un avertissement au
+journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse`).
 
 ### Limites (constantes, `public/app.py`, classe `Limites`)
 
@@ -162,7 +178,10 @@ reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppressio
 ## Purge et suppression
 
 - **Automatique** : au démarrage, puis au plus une fois par 24 h à la première requête reçue. Une session
-  est effacée de toutes les tables `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` jours après son début.
+  est effacée de toutes les tables `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` jours après son début (à la vérification
+  qui suit : un jour de plus au plus, davantage si l'application est arrêtée). Un message, daté du seul jour,
+  part quand ce jour a `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` jours révolus, jour limite compris
+  (`test_purge_des_messages_au_jour_limite` : avant, il restait un jour de trop).
 - **Commande** : `uv run shadowlab public purger` (même règle). Une tâche planifiée quotidienne reste
   conseillée si l'application peut rester sans trafic ni redémarrage.
 - **Par le visiteur, dès le début** : la page « Ma session » (`/session`, liée depuis le bandeau de chaque
@@ -190,15 +209,20 @@ reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppressio
 
 ## Journaux
 
-L'application écrit une ligne par requête (`méthode chemin statut`, niveau DEBUG) dans
-`<dossier de la base>/logs/shadowlab.jsonl` (à l'écran seulement avec `--verbeux`) : ni adresse, ni chaîne
-de requête, ni en-tête, ni jeton. **Aucune ligne** pour les pages de contact (`/contact…`) ni pour ce qu'un
-navigateur charge avec chaque page (fichiers `/lab/static/…`, `/favicon.ico`) : ce journal est horodaté à la
-milliseconde et ne suit pas la purge à 90 jours (il tourne par taille). Rapprochée des requêtes notées d'une
-session à la même milliseconde, une ligne `POST /contact` daterait un message, que D-57 ne garde qu'au jour ;
-une feuille de style chargée sans page notée trahirait aussi une page de contact. Il reste une ligne par page,
-aucune pour une page de contact (`test_contact_absent_du_fichier_de_journal`). L'avis « message de contact
-reçu » ne passe pas par ce journal (voir « Purge et suppression »).
+L'application n'écrit une ligne que pour une **réponse d'erreur** (statut 400 ou plus : `méthode chemin statut`,
+niveau DEBUG) dans `<dossier de la base>/logs/shadowlab.jsonl` (à l'écran seulement avec `--verbeux`) : ni
+adresse, ni chaîne de requête, ni en-tête, ni jeton, ni identifiant de session. Une requête réussie ou redirigée
+n'écrit **rien** (`test_journal_ne_garde_que_les_erreurs`) : ce journal est horodaté à la milliseconde et ne suit
+pas la purge à 90 jours (il tourne par taille), il ne doit pas dater chaque visite, ce qui contredirait « rien
+n'est enregistré » pour qui visite sans participer. La page d'information le dit (« Un journal technique ne garde
+que les erreurs… »).
+
+**Aucune ligne**, même en erreur, pour les pages de contact (`/contact…`, feuille de style `/contact/style.css`
+comprise) ni pour ce qu'un navigateur charge avec chaque page (fichiers `/lab/static/…`, `/favicon.ico`) :
+rapprochée des requêtes notées d'une session à la même milliseconde, une ligne `POST /contact` daterait un
+message, que D-57 ne garde qu'au jour (`test_contact_absent_du_fichier_de_journal`). L'avis « message de contact
+reçu » ne passe pas par ce journal (voir « Purge et suppression »). L'application écrit aussi un avertissement,
+une fois par démarrage, si l'en-tête d'adresse configuré manque (voir « Adresse du visiteur »).
 
 Le journal d'accès d'uvicorn est coupé (`access_log=False`) et l'en-tête `Server` aussi. **Rotation**
 (`public.ROTATION_JOURNAL`) : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus
@@ -243,13 +267,16 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   Unicode de Python disparaît, et un drapeau à balises (Angleterre, Écosse…) perd ses balises. Une liste
   noire, essayée le 12/11, laissait passer d'autres invisibles (U+200B, U+200E, U+FEFF, balises…).
   La base des sessions peut ainsi être copiée pour le rejeu sans emporter des messages où un visiteur a
-  écrit comment le joindre. Les pages de contact répondent avec `Referrer-Policy: origin` : la page
-  ouverte ensuite ne reçoit que l'origine, pas le chemin (jamais `no-referrer` : le navigateur enverrait
-  `Origin: null` au POST du formulaire, refusé en 403, et l'envoi serait cassé).
-  Reste une trace indirecte : pendant une session en cours, la
-  feuille de style que ces pages chargent (`/lab/static/vitrine.css`) est notée comme toute requête
-  `/lab/…`, avec le seul référent « / » ; avec le seul jour du message, elle ne suffit pas à désigner son auteur dès que
-  plusieurs sessions ont lieu ce jour-là. Une base nommée `messages.sqlite3` est refusée au démarrage.
+  écrit comment le joindre.
+  **Les pages de contact ne laissent aucune trace dans une session en cours** : la base ne note que les
+  requêtes `/lab/…`, et ces pages (formulaire, confirmation, page d'erreur du formulaire) ne chargent plus rien
+  sous `/lab/` (leur feuille de style est servie sous `/contact/style.css`, même contenu et mêmes en-têtes que
+  `/lab/static/vitrine.css`), ne chargent aucun script (donc aucun envoi à `/lab/collecte`, observateur
+  absent) et ne mènent qu'à `/` ou `/contact…`, jamais à une page `/lab/…` : la navigation suivante n'est pas
+  notée avec un référent réduit à l'origine. Elles répondent avec `Referrer-Policy: origin` (jamais
+  `no-referrer` : le navigateur enverrait `Origin: null` au POST du formulaire, refusé en 403, et l'envoi serait
+  cassé). Preuve : `test_pages_de_contact_sans_trace_dans_la_session`. Une base nommée `messages.sqlite3` est
+  refusée au démarrage.
 - `<dossier de la base>/secret` (droits 600) : clé de signature des cookies. Le dossier `outputs/` est
   ignoré par git. Un fichier `secret` vide est refusé (erreur claire au démarrage, labo compris) : sinon
   n'importe qui pourrait forger les cookies signés. Le supprimer pour qu'il soit recréé.
@@ -297,6 +324,18 @@ Seconde relecture indépendante (12/11/2026) :
 | G. Une adresse seule ne ferme plus le formulaire | `test_limiteur_sur_une_journee_glissante`, `test_contact_limite_par_adresse_et_par_jour`, `test_bloc_d_adresse`, `test_limites_par_adresse_comptent_un_bloc_ipv6` (sessions et messages), `test_effacer_tous_les_messages` |
 | H. Ni `debugger` ni first-input sur le site public | `test_debugger_et_first_input_sautes_quand_la_page_le_demande` (avec et sans la balise, exécuté par Node), `test_description_de_cdp_detection_suit_le_releve_public` |
 | I. Nettoyage des messages : liste blanche gardée, limite sur les emoji récents acceptée | `test_nettoyer_ne_garde_que_ce_qui_s_affiche` (invisibles retirés, emoji courants et composés gardés, drapeau à balises réduit), `test_contact_garde_les_emoji_courants`, `test_contact_retire_les_caracteres_de_controle` |
+
+Troisième relecture indépendante (12/11/2026) :
+
+| Point | Tests |
+|-------|-------|
+| J. Le journal ne garde que les erreurs ; textes de la page d'information (journal, empreinte d'adresse, purge) | `test_journal_ne_garde_que_les_erreurs`, `test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse` |
+| K. Pages de contact sans trace dans une session en cours | `test_pages_de_contact_sans_trace_dans_la_session` |
+| L. Limiteur : balayage, table pleine, en-tête absent | `test_limiteur_balaie_les_adresses_expirees_une_fois_par_minute_au_plus`, `test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`, `test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse` |
+| M. Droits 700/600 dès la création ; pas de promesse d'écrasement | `test_droits_des_fichiers_des_leur_creation`, `test_droits_resserres_sur_un_dossier_et_des_fichiers_existants`, `test_documentation_sans_promesse_d_ecrasement_physique` |
+| N. `.env` réduit aux variables du site public | `test_charger_public_ne_charge_que_ses_variables`, `test_le_labo_charge_toujours_tout_le_fichier_env` |
+| O. Journal de cloudflared filtré | `test_journal_du_tunnel_filtre_chemins_requetes_et_jetons`, `test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie` |
+| P. Purge des messages au jour limite | `test_purge_des_messages_au_jour_limite` |
 
 ## Les huit conditions du § 5 du plan
 
@@ -357,6 +396,17 @@ Seconde relecture indépendante (12/11/2026) :
   dans un onglet caché, l'empreinte ne part qu'au retour de l'onglet au premier plan (et jamais si l'onglet
   est fermé avant). La sonde n'est pas modifiée ; la page d'information et le bandeau demandent de garder
   l'onglet visible.
+
+## Limites acceptées
+
+- Le responsable présent devant l'écran voit l'heure d'arrivée d'un message (l'avis « message de contact reçu »).
+- Le regroupement IPv6 par /64 se contourne avec un préfixe plus large, et quelques adresses suffisent à épuiser
+  le plafond du jour du formulaire (la suppression de sa session, elle, ne passe pas par le formulaire).
+- N'importe qui peut ouvrir une session par script : les sessions du site public ne prouvent pas qu'un humain
+  était là.
+- Les caractères invisibles ou empilés gardés dans un message (liants, accents multiples) donnent un affichage
+  laid, sans effet sur le terminal.
+- La purge ne tourne que si l'application tourne ou si `shadowlab public purger` est lancé.
 
 ## Limites connues, pour le rejeu de l'étape 1.7
 
