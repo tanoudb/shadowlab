@@ -1,150 +1,150 @@
 # NOEZIA ShadowLab
 
-Laboratoire **local** qui compare des moteurs de navigation automatisée et de collecte (Playwright, Selenium,
-Scrapling, httpx) face à des détecteurs anti-bot, sur un site de test qui tourne sur la même machine.
+Plateforme de **recherche et développement** sur le scraping, l'automatisation web, le fingerprinting et les
+systèmes anti-bot. Le produit visé est le moteur de récolte NOEZIA ; ShadowLab est le laboratoire qui le mesure.
 
-Il répond à des questions mesurées : que voit un site quand un navigateur le visite, en quoi un navigateur
-piloté diffère d'un navigateur manuel, quels signaux trahissent l'automatisation, comment plusieurs détecteurs
-classent les mêmes sessions, et ce que coûte chaque moteur en temps, CPU et mémoire.
+- **Arena** : une reproduction locale des protections du Web (frontal TLS, Nginx, WAF Coraza, détecteurs,
+  CAPTCHA), en 7 niveaux de difficulté.
+- **Moteurs** : 15 moteurs de navigation et de collecte (9 intégrés, 6 isolés), dont le moteur NOEZIA.
+- **Mesure** : des campagnes reproductibles (moteur × protection × scénario × répétitions), avec intervalles de
+  confiance, rapports et interface `/labo`.
 
-**Périmètre.** Tout se passe en local : les destinations externes sont refusées par défaut, redirections
-comprises. Le laboratoire n'intègre ni résolution de CAPTCHA, ni rotation d'identité, ni modification
-d'empreinte. Un score obtenu ici ne prédit pas le comportement d'un service de détection externe.
+**Périmètre (phase interne, décision D-30).** Les outils anti-détection sont permis. Par défaut le périmètre est
+illimité (`SHADOWLAB_HOTES_AUTORISES=*`) : en interne, on ne pointe que nos propres cibles. Il peut être
+restreint à une liste d'hôtes ; le durcissement final est décrit dans
+[`docs/securite-a-finaliser.md`](docs/securite-a-finaliser.md). Contourner un détecteur commercial n'est
+autorisé que sur une cible autorisée, avec divulgation coordonnée. Aucun solveur de CAPTCHA réel n'est
+intégré. Un score obtenu sur l'Arena ne prédit pas le comportement d'un service externe.
+
+## Prérequis
+
+- Python 3.12 et [uv](https://docs.astral.sh/uv/)
+- Node 22 (via `mise`) pour l'interface
+- Google Chrome (Selenium) et le Chromium de Playwright
+- OrbStack ou Docker, seulement pour l'Arena
 
 ## Installer
 
-Prérequis : macOS ou Linux, Python 3.12, [uv](https://docs.astral.sh/uv/), Google Chrome (pour Selenium).
-
 ```bash
-uv sync                              # dépendances (versions figées dans uv.lock)
-uv run playwright install chromium   # navigateur de Playwright (déjà présent sur le Mac d'Ethan)
+uv sync                                   # backend (versions figées dans uv.lock)
+uv run playwright install chromium        # navigateur de Playwright
+npm --prefix frontend install             # interface (une fois)
+npm --prefix frontend run build           # construit frontend/dist
+uv run shadowlab moteurs etat             # moteurs disponibles ; `moteurs installer` prépare les isolés
 ```
-
-Selenium Manager télécharge tout seul le `chromedriver` qui correspond au Chrome installé.
 
 ## Lancer
 
 ```bash
-uv run shadowlab site                                   # site de test, API et tableau de bord
-uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte (48 passages, ~30 s)
-uv run shadowlab campagne configs/experiments/baseline.yaml  # référence : 3 200 passages
+uv run shadowlab site                     # laboratoire : interface, API et site de test
+uv run shadowlab arena demarrer           # Arena (Docker Compose : Coraza + Nginx)
+uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 ```
 
-- Tableau de bord : <http://127.0.0.1:8770/tableau>
+- Interface du laboratoire : <http://127.0.0.1:8770/labo> (sans `npm run build`, mode développement :
+  `npm --prefix frontend run dev`, <http://localhost:5173/labo>).
 - Site de test : <http://127.0.0.1:8770/lab/>
-- Session humaine de référence (pour mesurer les faux positifs) : <http://127.0.0.1:8770/manuel>
+- Session humaine de référence : <http://127.0.0.1:8770/manuel>
 - Documentation de l'API : <http://127.0.0.1:8770/api/docs>
+- `/tableau` est l'ancien tableau de bord, déprécié.
 
-Une campagne démarre elle-même le site dans un processus à part s'il ne tourne pas déjà. Les rapports
-(HTML, CSV, JSON) sont écrits dans `outputs/rapports/<n°>/`.
-
-### Autres commandes
-
-| Commande | Effet |
-|---|---|
-| `uv run shadowlab valider <fichier.yaml>` | Vérifie une campagne sans la lancer |
-| `uv run shadowlab arreter` | Arrêt d'urgence : la campagne s'arrête après le passage en cours |
-| `uv run shadowlab reprendre <n°>` | Reprend une campagne interrompue (les passages faits sont gardés) |
-| `uv run shadowlab rapport <n°>` | Régénère les exports d'une expérience |
-| `uv run shadowlab liste` | Liste les expériences |
-| `uv run shadowlab supprimer <n°>` | Supprime une expérience, ses observations et ses captures |
-| `uv run pytest` | Tous les tests (54, dont 5 réels avec navigateurs, ~15 s) |
-| `uv run pytest -m "not integration"` | Tests rapides seulement (< 1 s) |
-| `uv run ruff check src tests` | Lint |
+Une campagne démarre elle-même le site s'il ne tourne pas. Les rapports (HTML, CSV, JSON) sont écrits dans
+`outputs/rapports/<n°>/`. Autres commandes : `shadowlab valider <fichier.yaml>`, `arreter`, `reprendre <n°>`,
+`rapport <n°>`, `liste`, `supprimer <n°>`, `arena appliquer|arreter|etat`, `recolter <url>`, `rejeu`. La liste
+complète et les commandes de campagnes de référence sont dans la section « Commandes vérifiées » d'`AGENTS.md`.
 
 ## Écrire une campagne
 
+Une campagne est un fichier YAML de `configs/experiments/` : moteurs × niveaux de l'Arena × scénarios ×
+répétitions, exécutés un passage à la fois et notés dans la base.
+
 ```yaml
 experiment:
-  name: browser_baseline            # minuscules, chiffres, - et _
-  description: Référence
+  name: mon_essai                   # minuscules, chiffres, - et _
+  description: Ce que la campagne mesure
   environment: local                # seule valeur acceptée
   engines:
-    - playwright
-    - {name: playwright, label: playwright-visible, options: {headless: false}}
-    - scrapling
-  scenarios: [static_html, javascript_content, pagination, form_interaction,
-              session_cookies, fingerprint_observation, detection_page, api_json]
-  repetitions: 100
-  seed: 20261103                    # facultatif : tirée au hasard et enregistrée sinon
-  detectors: [botd, regles-http]    # facultatif : tous par défaut
-  output: [json, csv, html]
+    - noezia                        # un moteur dans sa configuration par défaut
+    - name: patchright              # le même moteur avec des options : un libellé distinct est exigé
+      label: patchright-chrome-interface
+      options: {headless: false, channel: chrome}
+  protections: ["01", "03"]         # niveaux de l'Arena (configs/arena/profils.yaml) ; "01" par défaut
+  scenarios: [static_html, pagination]
+  repetitions: 5
+  seed: 20261112                    # facultatif : tirée au hasard et enregistrée sinon
+  output: [json, html]
 ```
 
-Le fichier est validé strictement : moteur, scénario, détecteur ou métrique inconnus, champ en trop, URL hors
-périmètre, option de moteur non prévue et alias YAML (`*nom`) sont refusés avant tout lancement.
+Le fichier est validé avant tout lancement (`uv run shadowlab valider <fichier.yaml>`) : moteur, niveau,
+scénario ou champ inconnu, et option de moteur non déclarée sont refusés. Les options permises d'un moteur
+sont sa liste `options_permises` (`src/shadowlab/engines/`). Les scénarios sont ceux de `SCENARIOS` dans
+`src/shadowlab/scenarios.py`. Exemples commentés : `configs/experiments/`.
 
-| Moteur | Options permises |
-|---|---|
-| `playwright` | `headless`, `trace` (booléens), `channel` (texte) |
-| `selenium` | `headless` |
-| `scrapling`, `httpx` | `timeout` (secondes) |
+## Tester
 
-## Ce qui est mesuré
-
-| Élément | Contenu |
-|---|---|
-| **Moteurs** | `playwright` (Chromium sans tête), `selenium` (Chrome installé, sans tête), `scrapling` (client HTTP `FetcherSession`, curl_cffi), `httpx` (client HTTP brut, témoin) |
-| **Scénarios** | HTML statique, contenu JavaScript, pagination sur 5 pages, formulaire, cookie de session, relevé d'empreinte, page de verdict, API JSON — chacun avec un résultat attendu vérifié |
-| **Détecteurs** | `botd` (BotD 2.0.0 de FingerprintJS, MIT), `regles-http` (en-têtes), `regles-js` (propriétés du navigateur), `coherence` (HTTP contre JavaScript). Chaque verdict garde ses raisons. |
-| **Observations** | En-têtes HTTP dans l'ordre reçu, version HTTP, cookies renvoyés, propriétés JavaScript (navigateur, écran, fuseau, WebGL, canvas, permissions, API), comportement (évènements, temps sur la page). TLS : `not_collected` (site servi en HTTP). |
-| **Statistiques** | Taux de réussite, de détection, de faux négatifs et d'abstention avec intervalles de confiance de Wilson à 95 % ; faux positifs, précision, rappel et F1 dès qu'il existe des sessions humaines ; médiane, p95, p99 des durées ; temps CPU, mémoire, requêtes |
-
-## Architecture
-
-```
-src/shadowlab/
-├── cli.py            ligne de commande
-├── config.py         réglages (variables SHADOWLAB_*)
-├── perimetre.py      liste des destinations autorisées, rejet par défaut
-├── database.py       SQLite, schéma versionné et migrations
-├── engines/          pilotes : interface commune (base.py), un fichier par moteur, registre extensible
-├── scenarios.py      scénarios et résultats attendus
-├── site/             site de test, serveur de détection, sessions manuelles (FastAPI)
-├── detection.py      détecteurs et empreinte normalisée
-├── passages.py       cycle de vie d'un passage (session d'un moteur sur un scénario)
-├── campaigns.py      campagnes YAML : validation, exécution, reprise, arrêt d'urgence
-├── mesures.py        CPU et mémoire de l'arbre de processus du lanceur
-├── analytics.py      statistiques
-├── reports.py        exports JSON, CSV, rapport HTML ; suppression
-├── api.py            API de consultation et de lancement (/api)
-├── tableau.py        tableau de bord (/tableau, fichiers dans tableau_static/)
-└── journal.py        journaux JSON (outputs/logs/shadowlab.jsonl)
+```bash
+uv run pytest                                              # tout (navigateurs réels et e2e)
+uv run pytest -m "not integration"                         # rapide, sans navigateur
+uv run ruff check src tests && uv run ruff format --check src tests
+npm --prefix frontend test                                 # interface (vitest)
 ```
 
-Détail des choix : [`docs/architecture.md`](docs/architecture.md) et [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Ne pas lancer de tests ni de travaux lourds pendant une campagne de mesure : ils faussent CPU et durées.
 
-**Ajouter un moteur ou un détecteur** sans toucher au cœur : un paquet qui déclare le point d'entrée
-`shadowlab.engines` (une classe héritant de `engines.base.Driver`, options déclarées dans `options_permises`) ou `shadowlab.detectors` (une classe avec
-`name`, `version` et `classer(observations)`).
+## Déployer
 
-## Sécurité
+Une seule partie du dépôt se met en ligne : l'**application publique réduite** (`src/shadowlab/public/`). Elle
+sert un site vitrine, un consentement et la collecte de sessions humaines ; elle n'expose aucune route du
+laboratoire.
 
-- Écoute sur `127.0.0.1` par défaut. Sur une autre adresse, le démarrage est refusé sans `SHADOWLAB_JETON`,
-  et chaque appel exige `Authorization: Bearer <jeton>`.
-- Les appels qui écrivent exigent l'en-tête `X-ShadowLab: 1` (protection contre une page tierce).
-- En écoute locale, l'en-tête `Host` doit être un nom local ou un hôte autorisé : une page tierce dont le nom
-  pointerait vers `127.0.0.1` (« DNS rebinding ») reçoit une erreur 400.
-- Périmètre : `SHADOWLAB_HOTES_AUTORISES` (défaut `127.0.0.1,localhost`). Un nom d'hôte autorisé qui résout
-  vers un réseau interne non déclaré est refusé. Navigateurs : verrou réseau (tout le reste part vers une
-  adresse locale fermée) ; clients HTTP : chaque redirection est contrôlée.
-- Le site de test envoie une politique de sécurité de contenu stricte (`connect-src 'self'`) : rien n'en sort.
+```bash
+SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr" uv run shadowlab public servir
+SHADOWLAB_PUBLIC_CONTACT="Prénom Nom — adresse@exemple.fr" scripts/site-public-tunnel.sh   # en ligne par tunnel Cloudflare
+```
+
+`SHADOWLAB_PUBLIC_CONTACT` est obligatoire : sans lui, l'application refuse de démarrer. Conditions,
+réglages et mode d'emploi : [`docs/site-public.md`](docs/site-public.md).
+
+**Le laboratoire lui-même (`shadowlab site`) ne se met JAMAIS en ligne** : son API lance des navigateurs vers
+n'importe quelle adresse. La mise en ligne de l'application publique est faite par le propriétaire du projet.
 
 ## Réglages
+
+Variables d'environnement, lues aussi dans un fichier `.env` (ignoré par git). Source : `src/shadowlab/config.py`.
+
+Laboratoire :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `SHADOWLAB_HOTE` | `127.0.0.1` | Adresse d'écoute |
 | `SHADOWLAB_PORT` | `8770` | Port |
-| `SHADOWLAB_HOTES_AUTORISES` | `127.0.0.1,localhost` | Destinations autorisées |
+| `SHADOWLAB_HOTES_AUTORISES` | `*` | Destinations autorisées (liste d'hôtes séparés par des virgules, ou `*`) |
 | `SHADOWLAB_JETON` | — | Jeton exigé hors écoute locale |
 | `SHADOWLAB_SORTIES` | `outputs/` | Base, rapports, captures, journaux |
-| `SHADOWLAB_BASE` | `outputs/shadowlab.sqlite3` | Fichier SQLite |
+| `SHADOWLAB_BASE` | `<sorties>/shadowlab.sqlite3` | Fichier SQLite |
 | `SHADOWLAB_MEMOIRE_MAX_MO` | `4096` | Plafond mémoire : au-delà, la campagne s'arrête |
-| `SHADOWLAB_CONCURRENCE_MAX` | `1` | Plafond de concurrence (seule la valeur 1 est disponible) |
+| `SHADOWLAB_CONCURRENCE_MAX` | `4` | Plafond de passages en parallèle |
+| `SHADOWLAB_PORT_ARENA` | `8743` | Port du frontal TLS de l'Arena |
+| `SHADOWLAB_PORT_AVAL` | `8781` | Port de Nginx dans la pile Docker de l'Arena |
+| `SHADOWLAB_VITRINE_GRAINE` | `20261111` | Graine du site vitrine (contenu connu) |
+| `SHADOWLAB_VITRINE_TAILLE` | `500` | Nombre d'annonces du site vitrine |
 
-## Limites connues
+Application publique (`SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` et `SHADOWLAB_SORTIES` s'appliquent aussi) :
 
-Voir [`docs/architecture.md`](docs/architecture.md#limites). En bref : pas de TLS observé, pas d'exécution
-concurrente, pas encore de Docker Compose, CPU et mémoire mesurés sur l'arbre de processus du lanceur, et
-faux positifs non mesurables tant qu'aucune session humaine n'a été faite.
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `SHADOWLAB_PUBLIC_CONTACT` | — (obligatoire) | Responsable et moyen de le joindre, affiché sur la page d'information |
+| `SHADOWLAB_PUBLIC_HOTES` | `localhost,127.0.0.1` | Noms acceptés dans l'en-tête `Host` |
+| `SHADOWLAB_PUBLIC_PORT` | `8771` | Port d'écoute (sur `127.0.0.1`, derrière un mandataire HTTPS) |
+| `SHADOWLAB_PUBLIC_HTTPS` | `1` | Cookies `Secure` et HSTS ; `0` pour un essai local |
+| `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` | `90` | Durée de conservation d'une session |
+| `SHADOWLAB_PUBLIC_BASE` | `<sorties>/public/public.sqlite3` | Base de l'application publique |
+| `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (vide : adresse de la connexion) |
+
+## Pour la suite
+
+- [`AGENTS.md`](AGENTS.md) : source de vérité du projet (état, commandes vérifiées, carte du code, règles, pièges)
+- [`docs/PLAN.md`](docs/PLAN.md) : plan de travail unique (objectif, état mesuré, étapes)
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) : décisions et leurs raisons
+- [`docs/architecture.md`](docs/architecture.md) : architecture et limites
+- [`docs/site-public.md`](docs/site-public.md) : application publique

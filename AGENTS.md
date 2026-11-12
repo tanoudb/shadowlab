@@ -35,7 +35,7 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (11/11/2026)
+## État (12/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
@@ -56,6 +56,7 @@ recommander des optimisations.
   undetected-chromedriver, crawlee, zendriver).
 - **Campagnes matricielles** : moteur × protection × scénario × répétitions, exécution parallèle (spawn),
   classification en 6 issues, intervalles de Wilson, mesures CPU/mémoire.
+- **Chiffres de détection** : voir `docs/PLAN.md` § 2 ; ils ne sont pas validés sur des humains (aucune session humaine en base au 12/11).
 - **Catalogue recherche** : 52 projets open source analysés (`docs/recherche/catalogue.yaml`).
 - **Périmètre** : illimité par défaut en phase interne (D-30, débrayable — `docs/securite-a-finaliser.md`).
 - **Extraction adaptative** : `Analyseur` fetcher-agnostique avec `Element` (navigation DOM complète),
@@ -75,17 +76,20 @@ recommander des optimisations.
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
 - **605 tests rapides verts** (hors intégration), lint propre.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
-  auto-résolution (test keys flaky), moteur expérimental propre, couche IA, test sur serveur Linux réel.
+  auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel.
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
 |--------|-----|------------|
 | 01 | Baseline | Site nu, aucune protection |
-| 02 | Détection simple | User-Agent, cookies, rate limit léger |
-| 03 | Fingerprinting | FingerprintJS, BotD, détecteur comportemental, signaux JS |
-| 04 | Challenges | JS proof-of-work, CAPTCHA demo, WAF en mode blocage |
-| 05 | Protection avancée | Turnstile + reCAPTCHA (test keys), WAF paranoia élevée, TLS binding, login anti-bot |
-| 06 | Défense multicouche | Tout combiné, honeypots, corrélation de signaux, adaptation, login anti-bot |
+| 02 | Détection simple | Blocage sur signaux HTTP (détecteurs `regles-http`, `tls`), limite de fréquence (20 requêtes/s) |
+| 03 | Fingerprinting | 12 détecteurs (BotD, signaux JS, comportement, prototypes, headless, APIs Chrome…), seuil composite 1,5, WAF en détection |
+| 04 | Challenges | 26 détecteurs, JS proof-of-work (difficulté 12), CAPTCHA démo, WAF en blocage |
+| 05 | Protection avancée | 35 détecteurs, PoW lié au TLS (difficulté 15), Turnstile + reCAPTCHA v2 (test keys), WAF paranoia 2, login anti-bot |
+| 06 | Défense multicouche | 41 détecteurs dont corrélation cross-session, honeypots, WAF paranoia 3, PoW difficulté 18, login anti-bot |
+| 07 | État de l'art | Mêmes détecteurs que 06, seuil composite minimal (0,3), WAF paranoia 4, PoW difficulté 20, limite 1 requête/s, login limité à 2 tentatives |
+
+Source exacte : `configs/arena/profils.yaml` (`shadowlab arena appliquer` régénère Nginx et Coraza à partir de lui).
 
 ## Commandes vérifiées
 ```bash
@@ -120,12 +124,20 @@ Prérequis : Python 3.12, `uv`, Node 22 (`mise`), Google Chrome (Selenium), Chro
 src/shadowlab/
 ├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker)
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
-│   └── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc)
+│   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
+│   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte
 ├── site/            # Site de test FastAPI (app, pages, vitrine, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
-├── scenarios.py     # 15 scénarios de test
-├── detection.py     # 39 détecteurs
+├── scenarios.py     # 17 scénarios de test
+├── detection.py     # 42 détecteurs
 ├── issues.py        # Classification en 6 issues
+├── correlation.py   # Corrélation cross-session : recyclage d'empreintes entre sessions
+├── scoring.py       # Score composite pondéré par famille de détecteur
+├── notation.py      # Notation d'une récolte (complétude, exactitude) contre la vérité de la vitrine
+├── diagnostic.py    # Diagnostic par signal, ablation, comparaison des configurations moteurs
+├── perimetre.py     # Destinations joignables par les moteurs (mode strict ou illimité)
+├── mesures.py       # CPU et mémoire de l'arbre de processus du lanceur
+├── journal.py       # Journaux JSON (outputs/logs/shadowlab.jsonl)
 ├── passages.py      # Cycle de vie d'un passage
 ├── database.py      # SQLite + migrations
 ├── analytics.py     # Statistiques (Wilson, p95/p99)
@@ -144,6 +156,8 @@ configs/             # Profils Arena + campagnes YAML
 docker/              # Coraza WAF + Nginx (Docker Compose)
 docs/                # Architecture, décisions, recherche
 moteurs_isoles/      # pyproject.toml par environnement isolé
+scripts/             # site-public-tunnel.sh (site public en ligne par tunnel Cloudflare)
+tests/               # tests Python (pytest)
 ```
 **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, étapes, règles) — à lire avant de coder.
 Décisions : `docs/DECISIONS.md`. Architecture : `docs/architecture.md`.
