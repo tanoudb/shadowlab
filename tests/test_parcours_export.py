@@ -87,7 +87,7 @@ def test_csv_en_tete_valeurs_vides_booleens_et_listes(etat_a_deux_collections, t
     lignes = lignes_csv(tmp_path / "pilotes.csv")
     assert list(lignes[0]) == ["id", "nom", "note", "actif", "_page", "_vu_le", "_passe"]
     assert lignes[0]["note"] == "" and lignes[0]["actif"] == "true" and lignes[1]["actif"] == "false"
-    assert lignes[1]["note"] == "4.5"
+    assert lignes[1]["note"] == "4,5"
     assert lignes[0]["nom"] == "Zoë d'Arc"
     rallye = lignes_csv(tmp_path / "rallyes.csv")[0]
     assert json.loads(rallye["tags"]) == ["a", "b"]  # une liste : son écriture JSON

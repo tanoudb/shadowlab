@@ -4,8 +4,9 @@ L'état (`etat.sqlite3`) fait foi ; ces fichiers sont réécrits en entier à ch
 Ctrl-C, limite). Ils contiennent tout ce qui est connu (toutes les passes). Écriture atomique (fichier temporaire
 puis renommage) : une coupure ne laisse jamais un fichier à moitié écrit.
 
-CSV (RFC 4180, UTF-8, virgule) : une liste ou un objet est écrit en JSON, un booléen en `true`/`false`, une valeur
-absente en cellule vide. Le contenu vient du site visé : une cellule de texte qu'un tableur lirait comme une
+CSV pour Excel en France : UTF-8 avec BOM, séparateur point-virgule, virgule décimale (le format est écrit dans
+`resume.json`). Une liste ou un objet est écrit en JSON, un booléen en `true`/`false`, une valeur absente en
+cellule vide. Le contenu vient du site visé : une cellule de texte qu'un tableur lirait comme une
 formule est neutralisée (apostrophe devant). Le JSON Lines garde la valeur exacte.
 """
 
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from .etat import Etat
+
+FORMAT_CSV = {"separateur": ";", "encodage": "utf-8-sig", "decimale": ","}
 
 # `+` ou `-` suivi seulement de chiffres, espaces et ponctuation de nombre ou de téléphone : pas une formule.
 _RE_NOMBRE_OU_TELEPHONE = re.compile(r"[+-][\d\s().,-]+")
@@ -41,14 +44,16 @@ def _cellule(valeur: Any) -> str:
         return "true" if valeur else "false"
     if isinstance(valeur, str):
         return neutraliser(valeur)
-    if isinstance(valeur, int | float):
+    if isinstance(valeur, float):
+        return str(valeur).replace(".", FORMAT_CSV["decimale"])
+    if isinstance(valeur, int):
         return str(valeur)
     return json.dumps(valeur, ensure_ascii=False)
 
 
-def _ecrire_atomique(chemin: Path, ecrire: Any) -> None:
+def _ecrire_atomique(chemin: Path, ecrire: Any, encodage: str = "utf-8") -> None:
     temporaire = chemin.with_name(chemin.name + ".tmp")
-    with temporaire.open("w", encoding="utf-8", newline="") as flux:
+    with temporaire.open("w", encoding=encodage, newline="") as flux:
         ecrire(flux)
     os.replace(temporaire, chemin)
 
@@ -69,12 +74,12 @@ def ecrire_exports(etat: Etat, dossier: Path) -> list[str]:
             colonnes += [c for c in ligne if c not in colonnes]
 
         def tableau(flux: Any, lignes: list[dict[str, Any]] = enregistrements, cols: list[str] = colonnes) -> None:
-            ecrivain = csv.writer(flux, lineterminator="\r\n")
+            ecrivain = csv.writer(flux, delimiter=FORMAT_CSV["separateur"], lineterminator="\r\n")
             ecrivain.writerow(cols)
             for ligne in lignes:
                 ecrivain.writerow([_cellule(ligne.get(c)) for c in cols])
 
         _ecrire_atomique(dossier / f"{collection}.jsonl", jsonl)
-        _ecrire_atomique(dossier / f"{collection}.csv", tableau)
+        _ecrire_atomique(dossier / f"{collection}.csv", tableau, FORMAT_CSV["encodage"])
         fichiers += [f"{collection}.jsonl", f"{collection}.csv"]
     return sorted(fichiers)
