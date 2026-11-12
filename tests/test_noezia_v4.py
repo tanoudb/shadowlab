@@ -82,6 +82,36 @@ class TestProfilGenerateur:
         assert p.chrome_major in p.sec_ch_ua
 
 
+class TestIdentiteNative:
+    """Option `identite_native` : le navigateur tel qu'il est, rien de réécrit.
+
+    Campagne 94 : l'identité réécrite par le moteur ne couvrait pas toutes ses requêtes (« HeadlessChrome »
+    sur 16 % d'entre elles). Patchright recommande un vrai Chrome sans User-Agent ni en-têtes imposés.
+    """
+
+    def test_options_declarees_et_enregistrees(self):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        DriverNoezia.controler_options({"channel": "chrome", "identite_native": True, "headless": False})
+        with pytest.raises(ValueError):
+            DriverNoezia.controler_options({"identite_native": "oui"})
+        with pytest.raises(ValueError):
+            DriverNoezia.controler_options({"channel": True})
+        conf = DriverNoezia(("127.0.0.1",), {"channel": "chrome", "identite_native": True}).configuration()
+        assert conf["channel"] == "chrome" and conf["identite_native"] is True
+        defaut = DriverNoezia(("127.0.0.1",)).configuration()
+        assert defaut["channel"] is None and defaut["identite_native"] is False
+
+    def test_identite_native_declare_les_reglages_d_empreinte_coupes(self):
+        from shadowlab.engines.noezia.moteur import DriverNoezia
+
+        conf = DriverNoezia(("127.0.0.1",), {"identite_native": True}).configuration()
+        for cle in ("furtivite_canvas", "furtivite_webgl", "furtivite_audio", "furtivite_navigateur"):
+            assert conf[cle] is False, cle
+        defaut = DriverNoezia(("127.0.0.1",)).configuration()
+        assert defaut["furtivite_navigateur"] is True, "sans l'option, rien ne change"
+
+
 class TestProfilCoherence:
     def test_profil_genere_coherent(self):
         from shadowlab.engines.noezia.profils.coherence import valider

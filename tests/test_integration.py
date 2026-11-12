@@ -128,3 +128,49 @@ def test_recolte_vitrine_playwright_niveau_01(reglages, tmp_path, monkeypatch):
     assert note["annonces_attendues"] == 45
     assert note["completude"] == 1 and note["exactitude"] == 1
     assert ligne["status"] == "reussi"
+
+
+def test_noezia_identite_native_une_seule_identite_celle_du_navigateur(reglages, tmp_path):
+    """Campagne 94 : deux identités dans la même session. En identité native, une seule, sur toutes les requêtes."""
+    import json
+
+    chemin = tmp_path / "native.yaml"
+    chemin.write_text(
+        "experiment:\n  name: native\n  engines:\n    - name: noezia\n      options: {identite_native: true}\n"
+        "  protections: ['01']\n  scenarios: [pagination]\n  repetitions: 1\n  seed: 20261112\n",
+        encoding="utf-8",
+    )
+    experience = campaigns.lire(chemin, reglages)
+    cx = db.ouvrir(reglages.base_donnees)
+    experiment_id = campaigns.creer(cx, experience)
+    with campaigns.serveur_local(reglages):
+        assert campaigns.executer(reglages, experiment_id) == "termine"
+    passage = cx.execute(
+        "SELECT r.session_token, r.status, e.version FROM runs r JOIN engines e ON e.id = r.engine_id"
+        " WHERE r.experiment_id = ?",
+        (experiment_id,),
+    ).fetchone()
+    assert passage["status"] == "reussi"
+    jeton, reelle = passage["session_token"], json.loads(passage["version"])["chromium"].split(".")[0]
+
+    requetes = [
+        {nom.lower(): valeur for nom, valeur in json.loads(ligne["headers"])}
+        for ligne in cx.execute("SELECT headers FROM observations_http WHERE session_token = ?", (jeton,))
+    ]
+    assert len(requetes) > 5, "plusieurs pages, leurs fichiers et leurs envois"
+    agents = {h.get("user-agent") for h in requetes}
+    assert len(agents) == 1, agents
+    assert len({h.get("sec-ch-ua") for h in requetes}) == 1
+    agent = agents.pop()
+    assert f"/{reelle}." in agent, "la version annoncée est celle du navigateur"
+    detailles = {"sec-ch-ua-arch", "sec-ch-ua-bitness", "sec-ch-ua-full-version-list", "sec-ch-ua-model"}
+    assert not detailles & set().union(*requetes)
+
+    releve = cx.execute(
+        "SELECT payload FROM observations_js WHERE session_token = ? AND kind = 'empreinte' ORDER BY id LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    assert releve is not None, "aucune empreinte relevée pour ce passage"
+    navigateur = json.loads(releve["payload"])["navigateur"]
+    assert navigateur["userAgent"] == agent
+    assert navigateur["webdriver"] is False, "propriété d'origine, ni supprimée ni vraie"
