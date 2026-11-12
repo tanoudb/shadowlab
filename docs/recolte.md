@@ -377,7 +377,7 @@ toutes_les: [5, 8]}}` a lu 12 pages en 7 s.
 | `enregistrements` | ce qu'on lit (4.4) | liste | aucun |
 | `suivre` | les liens à suivre (4.6) | liste | aucun |
 | `attendre` | prévu pour le moteur `navigateur` (sélecteur à attendre) | sélecteur | accepté, **sans effet** pour l'instant |
-| `revisiter` | prévu pour la récolte incrémentale | `toujours`, `jamais`, `7j`… | accepté, **sans effet** pour l'instant |
+| `revisiter` | quand une page déjà lue est relue dans une passe suivante (section « Récolter seulement le neuf ») | `toujours`, `jamais`, `<n>j` (`7j`) | `toujours` si le type a des `suivre`, sinon `jamais` |
 
 ### 4.4 Un enregistrement (`pages.<nom>.enregistrements[]`)
 
@@ -561,8 +561,8 @@ uv run shadowlab recolte noter     <nom>           --verite vitrine|rallye  [--a
 ### Les actions
 
 - **`lancer`** : nouvelle passe. Refus si la dernière passe n'est pas finie (voir `reprendre`), sauf avec
-  `--tout-refaire`. Une passe terminée n'empêche pas d'en lancer une autre : elle relit **tout** (la lecture
-  seulement des pages nouvelles n'est pas encore faite, section 10).
+  `--tout-refaire`. Une passe terminée n'empêche pas d'en lancer une autre : elle est **incrémentale** (elle ne relit
+  que ce que `revisiter` demande, plus les pages jamais lues ; voir « Récolter seulement le neuf »).
 - **`reprendre`** : continue la dernière passe coupée (arrêt sur alerte, limite, Ctrl-C, coupure) avec ses
   options d'origine. Les pages qui étaient en cours sont remises en file. Si la recette a changé depuis le
   début :
@@ -572,7 +572,7 @@ uv run shadowlab recolte noter     <nom>           --verite vitrine|rallye  [--a
 - **`etat`** : où en est la dernière passe : pages faites par type, à faire, échecs, pages interdites par
   `robots.txt`, anormales, introuvables, liens hors site, enregistrements, alertes de lecture, arrêt
   éventuel, et
-  « une passe tourne en ce moment » si le verrou est pris. `--pages` ajoute le journal page par page.
+  « une passe tourne en ce moment » si le verrou est pris, et, pour une passe incrémentale, une ligne « incrémentale ». `--pages` ajoute le journal page par page.
 - **`essayer`** : une page, rien d'écrit (section 3, étape 6). Il lit `robots.txt` comme le ferait une
   passe, sauf
   avec `--ignorer-robots`.
@@ -626,6 +626,7 @@ Dossier `outputs/recoltes/<nom>/` :
 | `verrou` | une seule passe à la fois par recette (`verrou pris : une passe tourne déjà…`) |
 | `signatures.json` | mémoire de l'extraction adaptative |
 | `passe-NNN/<collection>.jsonl` | une collection, un enregistrement par ligne, valeurs exactes |
+| `passe-NNN/nouveautes.jsonl` et `.csv` | seulement ce que cette passe a fait apparaître ou changer (vides s'il n'y a rien) |
 | `passe-NNN/<collection>.csv` | la même, pour Excel en France : UTF-8 avec BOM, séparateur `;`, virgule décimale |
 | `passe-NNN/resume.json` | le bilan de la passe |
 
@@ -644,7 +645,7 @@ exacte.
 `resume.json` contient : recette et son empreinte, passe, statut, moteur et sa configuration, autorisation,
 état
 de `robots.txt` (`respecte`, groupe lu, `Crawl-delay`, ou `ignore_par`), tranche, bornes, `sans`, compteurs de
-pages (faites, échecs, interdites, hors site, anormales, introuvables, à faire, par type), nombre
+pages (faites, échecs, interdites, hors site, anormales, introuvables, évitées, à faire, par type), nombre
 d'enregistrements
 par collection, relocalisations, porte d'entrée, alertes de lecture, arrêt, liste des fichiers et format du
 CSV.
@@ -665,6 +666,104 @@ Reprise de la passe 1 · état : …/outputs/recoltes/mini/etat.sqlite3
 Terminée : 11 pages (10 fiche, 1 liste), 10 fiches, 0 échec(s), 0 relocalisation(s), 1 interdite(s) par
 robots.txt, durée 0.0 s
 ```
+
+### Récolter seulement le neuf
+
+Une deuxième passe sur la même récolte (même `nom`, même dossier) ne relit pas tout : elle s'appuie sur les
+précédentes. Règles (relevées dans le code) :
+- une page **jamais lue avec succès** est lue ;
+- une page déjà lue suit la clé `revisiter` de son type : `toujours` (relue), `jamais` (évitée), `<n>j` (relue si
+  sa dernière lecture date d'au moins n jours, sinon évitée) ;
+- une page évitée est notée « évitée car déjà lue » ; elle n'est pas redemandée, ses liens ne sont pas remis en
+  file (ils l'ont été à la passe où elle a été lue) ;
+- une page qui avait échoué, était anormale, introuvable ou interdite n'est pas « déjà lue » : elle est redemandée ;
+- `--tout-refaire` relit tout et efface les enregistrements gardés ; la passe d'après repart de celle-ci.
+
+Dans `vitrine.yaml`, les listes sont `revisiter: toujours` (de nouvelles annonces peuvent y apparaître) et les
+fiches `jamais`. Exemple : le site à 45 annonces, puis à 50 (`SHADOWLAB_VITRINE_TAILLE`, à donner aussi à `noter`),
+dans un dossier à part.
+
+```bash
+SHADOWLAB_VITRINE_TAILLE=45 uv run shadowlab recolte lancer configs/recettes/vitrine.yaml --sortie outputs/recoltes/neuf
+SHADOWLAB_VITRINE_TAILLE=50 uv run shadowlab recolte lancer configs/recettes/vitrine.yaml --sortie outputs/recoltes/neuf
+```
+
+```text
+Passe 1 · état : outputs/recoltes/neuf/etat.sqlite3
+Terminée : 48 pages (45 fiche, 3 liste), 45 annonces, 0 échec(s), 0 relocalisation(s), 0 interdite(s) par robots.txt, durée 0.1 s
+Alertes de lecture : aucune.
+Données : outputs/recoltes/neuf/passe-001
+```
+
+```text
+Passe 2 · état : outputs/recoltes/neuf/etat.sqlite3
+Terminée : 8 pages (5 fiche, 3 liste), 50 annonces, 0 échec(s), 0 relocalisation(s), 0 interdite(s) par robots.txt, durée 0.0 s
+Incrémental : 3 page(s) relue(s), 45 évitée(s), 5 page(s) neuve(s) · 5 nouveauté(s), 0 modifié(s)
+Alertes de lecture : aucune.
+Données : outputs/recoltes/neuf/passe-002
+```
+
+La passe 2 a relu les 3 listes, trouvé 5 fiches neuves, et évité les 45 déjà lues. La notation compte les pages
+évitées comme lues :
+
+```bash
+SHADOWLAB_VITRINE_TAILLE=50 uv run shadowlab recolte noter vitrine-annonces --sortie outputs/recoltes/neuf --verite vitrine
+```
+
+```text
+Notation de vitrine-annonces (passe 2) contre la vérité vitrine : graine 20261111, taille 50
+  pages 53/53 (100,0 %)
+  enregistrements 50/50 (100,0 %)
+    annonces 50/50 · champs 700/700
+  champs 700/700 (100,0 %)
+Seuil de 99 % atteint sur les pages, les enregistrements et les champs.
+```
+
+```bash
+uv run shadowlab recolte etat vitrine-annonces --sortie outputs/recoltes/neuf
+```
+
+```text
+passe 2 · terminee · début … · fin …
+  8 pages faites (5 fiche, 3 liste), 0 à faire, 0 échec(s), … 0 lien(s) hors site
+  incrémentale : 8 lue(s) (3 relue(s), 5 neuve(s)), 45 évitée(s) car déjà lues
+  enregistrements : 50 annonces
+```
+
+Ce que la passe écrit en plus, dans `passe-002/` : `nouveautes.jsonl` et `nouveautes.csv` (même format Excel),
+avec les 5 annonces neuves. Chaque ligne a `_collection` et `_changement` (`nouveau` ou `modifie`) en tête ;
+une ligne `modifie` a aussi `_champs_modifies` : champ et **ancienne valeur**. `resume.json` porte un bloc
+`incrementale` :
+
+```json
+{"active": true, "pages_relues": 3, "pages_evitees": 45, "pages_nouvelles": 5, "nouveautes": 5, "modifies": 0}
+```
+
+Les fichiers `annonces.*` gardent tout ce qui est connu (50 annonces) ; `nouveautes.*` seulement le neuf de la passe.
+
+**Voir un changement.** Un prix modifié n'apparaît que si la fiche est relue. Essai sur un petit site local à
+moi (2 biens, prix changé entre deux passes), recette avec `fiche: revisiter: toujours` :
+
+```text
+Incrémental : 3 page(s) relue(s), 0 évitée(s), 0 page(s) neuve(s) · 0 nouveauté(s), 2 modifié(s)
+```
+```json
+{"_collection": "biens", "_changement": "modifie", "_champs_modifies": {"prix": 201000}, "numero": "1", "titre": "Bien 1", "prix": 211000, …}
+```
+
+Avec `fiche: revisiter: jamais` (ou `7j` moins d'une semaine après), la même passe ne relit que la liste, évite les
+2 fiches et ne voit **aucun** changement : `1 page(s) relue(s), 2 évitée(s), 0 nouveauté(s), 0 modifié(s)`.
+
+Limites, sans les adoucir :
+- **Un prix qui change sur une fiche déjà lue ne se voit que si la recette fait relire les fiches** (`revisiter: 7j`
+  ou `toujours`), ce qui coûte **une requête par fiche** relue. Avec `jamais`, le changement est invisible ;
+- **une annonce retirée du site n'est pas signalée** : elle reste dans les fichiers de collection, avec l'ancienne
+  date `_vu_le` ; rien n'indique qu'elle a disparu ;
+- **une recette modifiée entre deux passes ne force pas la relecture** : les pages déjà lues restent évitées avec
+  l'ancienne recette. Pour appliquer la nouvelle à tout le site : `--tout-refaire` ;
+- un enregistrement n'est vu « modifié » que si sa page est relue dans la passe ;
+  l'état gardé juste avant ;
+- seul le moteur `http` a été rejoué.
 
 ## 7. Les deux moteurs
 
@@ -908,16 +1007,13 @@ Ce qui n'a pas été mesuré ni rejoué :
   rejoués.
 
 Ce qui n'existe pas encore :
-- la **récolte incrémentale** (lire seulement les pages nouvelles ou changées, `revisiter`,
-  `nouveautes.jsonl`) est
-  en cours d'écriture dans une autre branche, **elle n'est pas faite**. Aujourd'hui `revisiter` est accepté
-  mais
-  sans effet, et une nouvelle passe relit tout ;
-- `attendre` (attente d'un bloc chargé par JavaScript) est accepté mais sans effet.
+- `attendre` (attente d'un bloc chargé par JavaScript) est accepté par la lecture de la recette mais sans
+  effet ;
+- la récolte incrémentale a ses propres limites, dites dans « Récolter seulement le neuf » : retrait d'une
+  annonce non signalé, prix changé non vu sans relecture des fiches, recette modifiée sans relecture forcée.
 
 Écarts entre le document de conception et le code (le code fait foi) :
-- `attendre` et `revisiter` y sont décrits comme actifs ; ils sont seulement acceptés par la lecture de la
-  recette ;
+- `attendre` y est décrit comme actif ; il est seulement accepté par la lecture de la recette ;
 - `entier` et `nombre` y sont décrits plus simplement : le code accepte aussi les milliers par espace et une
   unité
   après le nombre (`entier`), et les milliers par point (`nombre`) ;
