@@ -2431,43 +2431,53 @@ class DetecteurMetaComposite:
 
 
 class DetecteurCorrelationSession:
-    name = "correlation-session"
-    version = "1"
+    """Même profil ou même canvas vu dans plusieurs sessions de la base (`correlation.py`).
 
+    Compte des sessions (jetons), pas des visiteurs : un humain qui revient avec le même navigateur compte autant
+    de fois qu'il revient.
+    V1.1 (12/11/2026) : un fait, un signal — un seul signal de comptage, sur le plus grand des deux comptes
+    (profil, canvas), au lieu d'un signal chacun pour la même observation ; de même pour le débit. Libellés
+    conformes à ce qui est compté (« rotation de fingerprint massive » désignait une empreinte stable revue).
+    Débit compté sur les 60 dernières minutes au lieu d'une moyenne sur toute la vie du hash, aveugle sous une
+    minute et à 40 par heure pour deux sessions à 3 minutes d'écart. Seuils et poids inchangés.
+    """
+
+    name = "correlation-session"
+    version = "1.1"
+
+    NOMS = {"profil_complet": "profil", "canvas": "canvas"}  # types de `correlation.hash_session`
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
+    SEUIL_DEBIT = 30  # sessions commencées dans les 60 dernières minutes
 
     def classer(self, obs: Observations) -> Classement:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
-        for type_hash, data in obs.correlation.items():
-            nb = data.get("nb_sessions", 1)
-            if nb >= self.SEUIL_RAPIDE:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — rotation de fingerprint massive",
-                        1.0,
-                    )
+        comptes = {t: d.get("nb_sessions", 1) for t, d in obs.correlation.items()}
+        nb = max(comptes.values(), default=0)
+        if nb >= self.SEUIL_SESSIONS:
+            seuil, poids = (self.SEUIL_RAPIDE, 1.0) if nb >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
+            franchis = [(t, n) for t, n in comptes.items() if n >= seuil]
+            vus = " et ".join(f"{self.NOMS.get(t, t)} vu dans {n} sessions" for t, n in franchis)
+            code = max(franchis, key=lambda f: f[1])[0]  # le plus grand compte ; à égalité, le profil
+            signaux.append(Signal(f"recycling_{code}", f"{vus} de la base, celle-ci comprise (seuil {seuil})", poids))
+        debits = {t: d.get("sessions_derniere_heure", 0) for t, d in obs.correlation.items()}
+        if max(debits.values(), default=0) >= self.SEUIL_DEBIT:
+            franchis = [(t, n) for t, n in debits.items() if n >= self.SEUIL_DEBIT]
+            parties = " et ".join(
+                f"{'' if obs.correlation[t].get('derniere_heure_exacte', False) else 'au moins '}{n} sessions de même"
+                f" {self.NOMS.get(t, t)}"
+                for t, n in franchis
+            )
+            code = max(franchis, key=lambda f: f[1])[0]
+            signaux.append(
+                Signal(
+                    f"velocity_{code}",
+                    f"{parties} commencées dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
+                    0.8,
                 )
-            elif nb >= self.SEUIL_SESSIONS:
-                signaux.append(
-                    Signal(
-                        f"recycling_{type_hash}",
-                        f"{type_hash} vu {nb} fois — fingerprint recyclé",
-                        0.7,
-                    )
-                )
-            sph = data.get("sessions_par_heure", 0)
-            if sph >= 30:
-                signaux.append(
-                    Signal(
-                        f"velocity_{type_hash}",
-                        f"{sph} sessions/h avec le même {type_hash}",
-                        0.8,
-                    )
-                )
+            )
         return _verdict(self.name, self.version, signaux)
 
 
