@@ -1,0 +1,34 @@
+# Rythme de récolte : que coûte et que rapporte la lenteur de noezia ? (question d'Ethan, 12/11)
+# Campagne 95 : noezia récolte 500 annonces sans faute en 61 minutes, soit 7 secondes par page, quand
+# patchright met 45 secondes. Cette campagne mesure la même récolte avec trois réglages déjà permis :
+#   noezia              : réglage par défaut (comportement humain à chaque page)
+#   noezia-sans-pause   : sans l'interaction après chargement (`interaction_post_page: false`)
+#   noezia-rapide       : sans l'interaction, et images, médias et polices coupés (`bloquer_ressources: true`)
+# Niveaux 01 (rien ne bloque : on lit la vitesse et la note) et 03 (détecteurs de comportement actifs :
+# on lit si un rythme plus rapide se fait arrêter). L'Arena ne compte pas encore les pages par heure
+# (palier 2) : un passage rapide qui réussit ici ne prouve rien contre un compteur de débit.
+#
+#   SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne configs/experiments/recolte-rythme.yaml
+#
+# 3 réglages × 2 niveaux × 1 scénario × 2 répétitions = 12 passages de 42 pages, un à la fois
+# (environ 20 minutes pour le réglage par défaut, moins pour les deux autres).
+experiment:
+  name: recolte_rythme
+  description: >-
+    Récolte du site vitrine à 40 annonces par noezia avec trois réglages de rythme (défaut, sans interaction
+    après chargement, ressources lourdes coupées), aux niveaux 01 et 03, notée en complétude et exactitude.
+  environment: local
+  engines:
+    - noezia
+    - name: noezia
+      label: noezia-sans-pause
+      options: {interaction_post_page: false}
+    - name: noezia
+      label: noezia-rapide
+      options: {interaction_post_page: false, bloquer_ressources: true}
+  protections: ["01", "03"]
+  scenarios:
+    - recolte_vitrine
+  repetitions: 2
+  seed: 20261112
+  output: [json, html]
