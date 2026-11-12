@@ -6,6 +6,23 @@ import { load } from './vendor/botd-2.0.0.esm.js';
 
 const jeton = document.querySelector('meta[name="sl-session"]')?.content || '';
 const debut = performance.now();
+
+// Voix de synthèse : Chrome ne charge la liste qu'après le premier appel de getVoices() et l'annonce par l'événement
+// `voiceschanged` ; lue d'emblée, elle est vide chez tout le monde (campagnes 96 et 97 : 0 voix pour un vrai
+// Chrome 156). L'appel part dès le chargement du script ; headlessSignals() attend l'annonce au plus DELAI_VOIX_MS
+// après ce départ, pendant que les autres sondes tournent. La promesse dit si le navigateur a annoncé la liste.
+const DELAI_VOIX_MS = 250;
+function attendreVoix(delaiMs) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof speechSynthesis === 'undefined') { resolve(false); return; }
+      speechSynthesis.addEventListener('voiceschanged', () => resolve(true), { once: true });
+      if (speechSynthesis.getVoices().length > 0) { resolve(false); return; }
+      setTimeout(() => resolve(false), delaiMs);
+    } catch (_) { resolve(false); }
+  });
+}
+const voixPretes = attendreVoix(DELAI_VOIX_MS);
 const evenements = { mousemove: 0, click: 0, keydown: 0, scroll: 0, touchstart: 0 };
 let premiereInteraction = null;
 const delais_souris = [];
@@ -451,9 +468,12 @@ async function headlessSignals() {
       r.webdriver_getter_natif = /\[native code\]/.test(desc.get.toString());
     }
   } catch (_) { /* ignore */ }
-  // speechSynthesis.getVoices
+  // speechSynthesis.getVoices, lue une fois que la liste a eu le temps d'arriver (voir attendreVoix) ;
+  // voices_attente_ms : temps qu'elle a eu depuis le chargement du script.
   try {
     if (typeof speechSynthesis !== 'undefined') {
+      r.voices_evenement = await voixPretes;
+      r.voices_attente_ms = Math.round(performance.now() - debut);
       const voix = speechSynthesis.getVoices();
       r.voices_count = voix.length;
       r.getVoices_natif = /\[native code\]/.test(speechSynthesis.getVoices.toString());
@@ -848,22 +868,32 @@ function fontFingerprintTest() {
       'Ubuntu', 'DejaVu Sans', 'Liberation Mono',
       'Wingdings', 'Symbol',
     ];
+    // Trois familles de référence : la police qui EST la chasse fixe par défaut du navigateur (Menlo dans Chrome
+    // sous macOS) ne se distingue pas de `monospace`, mais de `sans-serif` ou de `serif`. Comparée au seul
+    // `monospace`, elle était donnée absente (campagnes 96 et 97).
+    const BASES = ['monospace', 'sans-serif', 'serif'];
     const TEXTE = 'mmmmmmmmmmlli1WwQq';
     const span = document.createElement('span');
     span.style.cssText = 'font-size:72px;position:absolute;top:-9999px;left:-9999px;visibility:hidden';
     span.textContent = TEXTE;
     document.body.appendChild(span);
-    span.style.fontFamily = 'monospace';
-    const lRef = span.offsetWidth;
-    const hRef = span.offsetHeight;
+    const reference = {};
+    for (const base of BASES) {
+      span.style.fontFamily = base;
+      reference[base] = [span.offsetWidth, span.offsetHeight];
+    }
     const presentes = [];
     const absentes = [];
     for (const p of POLICES) {
-      span.style.fontFamily = `'${p}',monospace`;
-      if (span.offsetWidth !== lRef || span.offsetHeight !== hRef) presentes.push(p);
+      const vue = BASES.some((base) => {
+        span.style.fontFamily = `'${p}',${base}`;
+        return span.offsetWidth !== reference[base][0] || span.offsetHeight !== reference[base][1];
+      });
+      if (vue) presentes.push(p);
       else absentes.push(p);
     }
     span.remove();
+    r.bases = BASES;
     r.presentes = presentes;
     r.absentes = absentes;
     r.count = presentes.length;

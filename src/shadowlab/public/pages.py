@@ -14,7 +14,7 @@ from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-12.5"
+VERSION_INFORMATION = "2026-11-12.6"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -54,7 +54,7 @@ DONNEES_RELEVEES: list[tuple[str, str]] = [
     ("webrtc_test", "Sonde réseau WebRTC : sautée sur ce site, aucune connexion n'est ouverte vers un autre serveur."),
     (
         "headless_signals",
-        "Page au premier plan ou non, indicateur d'automatisation, nombre de voix de synthèse, nombre et types de périphériques audio et vidéo (sans leur nom), état des autorisations de localisation, caméra et micro (rien ne vous est demandé).",
+        "Page au premier plan ou non, indicateur d'automatisation, nombre de voix de synthèse (compté après une attente d'un quart de seconde au plus, dont la durée est notée, avec l'indication que le navigateur a fini de charger leur liste), nombre et types de périphériques audio et vidéo (sans leur nom), état des autorisations de localisation, caméra et micro (rien ne vous est demandé).",
     ),
     ("stack_trace_test", "Forme des messages d'erreur internes du navigateur, pour le script de cette page."),
     ("performance_memory", "Mémoire utilisée par la page et position de la fenêtre sur l'écran."),
@@ -71,7 +71,10 @@ DONNEES_RELEVEES: list[tuple[str, str]] = [
     ("raf_timing", "Rythme d'affichage : intervalles entre six rafraîchissements de l'écran."),
     ("domrect_fingerprint", "Taille à l'écran de trois courts textes de test (elle dépend des polices et du système)."),
     ("audio_context", "Empreinte d'un son de test calculé sans être joué : un nombre. Le micro n'est jamais utilisé."),
-    ("font_fingerprint", "Polices présentes parmi une liste fixe de 25 polices courantes."),
+    (
+        "font_fingerprint",
+        "Polices présentes parmi une liste fixe de 25 polices courantes, repérées par comparaison avec trois familles génériques (chasse fixe, sans empattement, avec empattement), dont la liste est envoyée.",
+    ),
     ("math_constants", "Résultats de quelques calculs mathématiques, qui varient selon le moteur du navigateur."),
     ("deep_proxy", "Contrôles techniques : fonctions du navigateur imitées ou d'origine."),
     (

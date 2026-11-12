@@ -1212,10 +1212,16 @@ class DetecteurCoherenceEnvironnement:
 
 
 class DetecteurChromeApis:
-    """Vérifie la présence et cohérence des API chrome.* que les vrais Chrome exposent."""
+    """Vérifie la présence et cohérence des API chrome.* que les vrais Chrome exposent.
+
+    V1.1 (12/11/2026) : `chrome.runtime` n'est plus exigé. Un vrai Chrome ne l'expose pas sur une page ordinaire
+    (campagnes 96 et 97 : absent dans tous les relevés de Google Chrome 156 avec interface, comme chez les témoins
+    sans interface) ; l'exiger classait tout vrai Chrome et ne laissait passer que l'imitation d'anciens outils.
+    `runtime_incomplet` ne juge plus qu'un chrome.runtime présent sans `PlatformOs` : une imitation partielle.
+    """
 
     name = "chrome-apis"
-    version = "1"
+    version = "1.1"
 
     LOADTIMES_CLES_ATTENDUES = sorted(
         [
@@ -1261,8 +1267,10 @@ class DetecteurChromeApis:
                 )
             if not chrome.get("chrome_csi"):
                 signaux.append(Signal("csi_absent", "Chrome annoncé sans chrome.csi()", 0.25))
-            if not chrome.get("runtime_PlatformOs"):
-                signaux.append(Signal("runtime_incomplet", "chrome.runtime sans PlatformOs (mock partiel)", 0.5))
+            if chrome.get("chrome_runtime") and not chrome.get("runtime_PlatformOs"):
+                signaux.append(
+                    Signal("runtime_incomplet", "chrome.runtime présent sans PlatformOs (imitation partielle)", 0.5)
+                )
 
         return _verdict(self.name, self.version, signaux)
 
@@ -1347,10 +1355,25 @@ class DetecteurLangues:
 
 
 class DetecteurHeadless:
-    """Détecte les signaux spécifiques à un navigateur headless."""
+    """Détecte les signaux spécifiques à un navigateur headless.
+
+    V1.1 (12/11/2026) : `voices_vide` ne juge que des voix qui ont eu le temps d'arriver. Chrome charge la liste
+    après le premier appel de getVoices() et l'annonce par l'événement `voiceschanged` : lue d'emblée, elle était
+    vide chez tout le monde, vrai Chrome 156 avec interface compris (campagnes 96 et 97, tous les relevés).
+    L'observateur l'attend désormais (au plus `DELAI_VOIX_MS`) et dit combien de temps elle a eu ; un relevé plus
+    ancien ne fait pas conclure la règle.
+    """
 
     name = "headless"
-    version = "1"
+    version = "1.1"
+    DELAI_VOIX_MS = 250  # attente maximale de `voiceschanged` dans observateur.js (`DELAI_VOIX_MS`)
+
+    def _voix_attendues(self, hs: dict[str, Any]) -> bool:
+        """La liste des voix a eu le temps d'arriver : le navigateur l'a annoncée, ou l'attente maximale est passée."""
+        attente = hs.get("voices_attente_ms")
+        return hs.get("voices_evenement") is True or (
+            isinstance(attente, int | float) and attente >= self.DELAI_VOIX_MS
+        )
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1401,11 +1424,11 @@ class DetecteurHeadless:
                     0.4,
                 )
             )
-        if hs.get("voices_count") is not None and hs["voices_count"] == 0:
+        if hs.get("voices_count") is not None and hs["voices_count"] == 0 and self._voix_attendues(hs):
             signaux.append(
                 Signal(
                     "voices_vide",
-                    "speechSynthesis.getVoices() retourne une liste vide",
+                    f"speechSynthesis.getVoices() vide après {hs.get('voices_attente_ms')} ms d'attente",
                     0.4,
                 )
             )
@@ -1952,10 +1975,15 @@ class DetecteurWorkerConsistency:
 
 
 class DetecteurConnectionDynamic:
-    """Vérifie la cohérence de l'API NetworkInformation."""
+    """Vérifie la cohérence de l'API NetworkInformation.
+
+    V1.1 (12/11/2026) : `rtt_zero` retiré. Une latence estimée nulle n'est pas une valeur propre au mode sans
+    interface : Chrome l'estime d'après ses échanges réseau, et sur l'Arena, servie en local, le vrai Chrome 156
+    avec interface donne 0 ou 50 selon les passages (campagnes 96 et 97), les témoins sans interface 0, comme lui.
+    """
 
     name = "connection-dynamic"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1975,11 +2003,8 @@ class DetecteurConnectionDynamic:
             signaux.append(Signal("downlink_non_number", f"downlink type={cd.get('downlink_type')}", 0.5))
 
         rtt = cd.get("rtt_1")
-        if isinstance(rtt, (int, float)):
-            if rtt == 0:
-                signaux.append(Signal("rtt_zero", "rtt=0 (valeur par défaut headless)", 0.4))
-            if rtt > 500:
-                signaux.append(Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3))
+        if isinstance(rtt, (int, float)) and rtt > 500:
+            signaux.append(Signal("rtt_anormal", f"rtt={rtt} (> 500ms, suspect)", 0.3))
 
         return _verdict(self.name, self.version, signaux)
 
@@ -2102,10 +2127,16 @@ class DetecteurAudioContext:
 
 
 class DetecteurPolices:
-    """Empreinte des polices installées : cohérence avec l'OS déclaré et nombre minimal."""
+    """Empreinte des polices installées : cohérence avec l'OS déclaré et nombre minimal.
+
+    V1.1 (12/11/2026) : `polices_os_manquantes` ne juge qu'un relevé fait contre plusieurs familles de référence
+    (`bases`). Comparée au seul `monospace`, la police à chasse fixe par défaut du navigateur paraît absente : Menlo
+    dans le vrai Chrome 156 sous macOS (campagnes 96 et 97, tous les relevés), Courier New dans le Chromium sans
+    interface des témoins. L'observateur compare désormais à `monospace`, `sans-serif` et `serif`.
+    """
 
     name = "polices"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -2124,7 +2155,9 @@ class DetecteurPolices:
             signaux.append(Signal("tres_peu_polices", f"seulement {count} polices détectées (headless)", 0.5))
 
         manquantes = fp.get("os_manquantes") or []
-        if manquantes:
+        # Un relevé sans `bases` (d'avant le 12/11/2026) ne voit pas la police à chasse fixe par défaut : il ne prouve
+        # aucune absence. Une police vue, elle, est là quelle que soit la référence (`os_inattendues` reste jugé).
+        if manquantes and len(fp.get("bases") or []) >= 2:
             signaux.append(
                 Signal(
                     "polices_os_manquantes",
