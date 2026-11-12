@@ -172,6 +172,23 @@ humaines, 1.7).
 Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
 le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
+En-têtes envoyés par NOEZIA, lus le 12/11 dans la base (campagne 94, `observations_http`) : quatre écarts
+probables avec un vrai Chrome, **à confirmer en les comparant aux en-têtes des sessions humaines** (elles
+donneront la référence) avant de corriger en 1.9 :
+- `User-Agent` avec la version complète (`Chrome/129.0.6668.100`) et la vraie version de macOS
+  (`Mac OS X 15_1`) ; un Chrome récent réduit les deux (`Chrome/129.0.0.0`, `Mac OS X 10_15_7`) ;
+- `sec-ch-ua-arch`, `-bitness`, `-full-version-list` et `-model` envoyés à chaque requête, alors qu'un vrai
+  Chrome ne les envoie que si le site les demande ;
+- `Accept-Language: de-DE` seul, alors que le profil prévoit `de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7` : le
+  réglage de langue du navigateur écrase l'en-tête du profil ;
+- la version annoncée (129 à 132) ne correspond pas au navigateur réel (156), donc pas non plus à son TLS.
+  **Le moteur se contredit lui-même, sans référence extérieure** (mesuré, même passage de la campagne 94) :
+  dans la même page, `navigator.userAgent` annonce Chrome 129 et `navigator.userAgentData` Chrome 156, et
+  l'en-tête `sec-ch-ua` dit 129. Correction visée : annoncer partout la version réelle du navigateur.
+Aucun détecteur de l'Arena ne relève ces écarts aujourd'hui : leur effet se mesurera contre Cloudflare (1.8).
+Une règle « version du User-Agent différente de celle de `userAgentData` » la mesurerait dans l'Arena ; à
+décider avec Ethan (règle 4 du § 8 : on n'ajoute à l'Arena que ce qu'un palier exige).
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -235,6 +252,20 @@ navigateur piloté par outil (ce n'est pas une session humaine) :
   `/lab/defi` et `/lab/captcha` y échappent). Une page de liste demande 20 photos d'un coup ; la rafale
   permise est de 15 au niveau 04, 8 au 05, 4 au 06 et 2 au 07. À ces niveaux, une partie des photos reçoit
   donc un 429, pour un humain comme pour un moteur. Effet sur le verdict d'un passage : non mesuré.
+
+Points connus pour 1.7 et 1.9, lus le 12/11 dans les relevés de comportement de la campagne 94 (passages
+`pagination` de NOEZIA au niveau 05 sans `cdp`) — hypothèses à confirmer par le rejeu des sessions humaines :
+- **`pas_de_scroll` se déclenche sur une page qui ne peut pas défiler.** `/lab/catalogue` tient en 10 lignes,
+  bien moins haut que la fenêtre. Le moteur tourne la molette (12 à 48 crans relevés par page) mais le
+  navigateur n'émet aucun événement de défilement : 0 sur les 31 pages relevées. La règle compte les
+  défilements sans savoir si la page est plus haute que la fenêtre. Un humain y serait classé de même.
+- **`pas_de_pause` ne lit que les 50 premiers délais de souris d'une page** (borne de l'observateur). Un seul
+  geste continu de 50 événements, soit moins d'une seconde, suffit : c'est le cas d'une page par passage
+  arrêté (délai maximal 58 à 60 ms sur 50 délais, alors que la page dure 2,7 à 3,4 s). Très probable aussi
+  chez un humain qui balaie l'écran en arrivant.
+- Conséquence : ces deux signaux font le score composite 0,85 qui arrête NOEZIA au niveau 05. Ne pas
+  « corriger le moteur » sur eux avant d'avoir le taux humain ; si les humains les déclenchent, c'est le
+  détecteur qu'on corrige (hauteur de page dans le relevé, pauses cherchées sur toute la page).
 
 En parallèle possible : 1.2 et 1.4 (fichiers distincts). 1.9 est la seule étape dont la taille est
 inconnue : elle sera chiffrée après 1.3, 1.7 et 1.8, pas avant.

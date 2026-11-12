@@ -1,0 +1,28 @@
+# Contrôle du correctif du WAF au niveau 07 (docs/PLAN.md § 2, ablations 93 et 94).
+# Campagne 94 : au niveau 07 sans cdp, les deux seuls passages arrivés à Turnstile ont été bloqués par le
+# WAF (règle CRS 942432 sur le nom du champ cf-turnstile-response). Cette campagne courte refait ces
+# passages après le correctif : ceux qui arrivent à Turnstile ne doivent plus être bloqués par le WAF.
+# Seuls les premiers passages y arrivent : dès que la même empreinte a été vue plusieurs fois, la
+# corrélation entre sessions arrête le moteur plus tôt (résultat attendu, déjà mesuré dans la campagne 94).
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab campagne configs/experiments/controle-waf-07.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# 1 moteur × 1 niveau × 3 scénarios × 2 répétitions = 6 passages, un à la fois (environ 6 minutes).
+experiment:
+  name: controle_waf_07
+  description: >-
+    Niveau 07 sans cdp, noezia seul : vérifier que la vérification Turnstile et reCAPTCHA (clés de test)
+    n'est plus bloquée par le WAF après l'exclusion de la règle 942432 sur ces deux chemins.
+  environment: local
+  engines:
+    - noezia
+  protections: ["07scdp"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 2
+  seed: 20261112
+  output: [json, html]
