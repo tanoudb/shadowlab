@@ -482,11 +482,11 @@ def _public(args: argparse.Namespace) -> int:
         )
         return 0
     try:
+        boite = messages.connexion(messages.chemin(reglages.base_donnees))  # refuse une base homonyme
         cx = donnees.ouvrir(reglages.base_donnees)
     except ValueError as erreur:
         print(f"Refus : {erreur}", file=sys.stderr)
         return 2
-    boite = messages.connexion(messages.chemin(reglages.base_donnees))
     if args.action == "purger":
         n = donnees.purger(cx, reglages.conservation_jours)
         m = messages.purger(boite, reglages.conservation_jours)
@@ -499,7 +499,7 @@ def _public(args: argparse.Namespace) -> int:
             return 0
         print(f"{len(recus)} message(s) de contact (effacer : uv run shadowlab public effacer-message <n°>)")
         for message in recus:
-            print(f"\nn° {message['id']} — reçu le {message['recu_le'][:16].replace('T', ' ')} UTC")
+            print(f"\nn° {message['id']} — reçu le {message['recu_le']}")
             for ligne in messages.nettoyer(message["texte"]).splitlines():
                 print(f"    {ligne}")
         return 0

@@ -44,8 +44,7 @@ CSP = (
 SIGNATURE = re.compile(r"[0-9a-f]{64}")
 HOTE = re.compile(r"(?P<nom>[a-z0-9.-]+|\[[0-9a-f:.]+\])(?::[0-9]{1,5})?")  # nom[:port], rien d'autre
 TAILLE_FORMULAIRE = 4096
-# Formulaire de contact : 2 000 caractères, jusqu'à 12 octets chacun une fois encodés par le navigateur.
-TAILLE_FORMULAIRE_CONTACT = 32 * 1024
+OCTETS_PAR_CARACTERE = 12  # un caractère de 4 octets, une fois encodé dans un formulaire (%F0%9F…)
 PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers envois du labo (12/11/2026)
 UNE_JOURNEE_S = 24 * 3600
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
@@ -137,6 +136,7 @@ def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
 def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None) -> FastAPI:
     _verifier_reglages(reglages)
     limites = limites or Limites()
+    messages.chemin(reglages.base_donnees)  # refuse une base qui porterait le nom du fichier des messages
     cx = donnees.ouvrir(reglages.base_donnees)  # refuse la base du laboratoire
     try:
         donnees.purger(cx, reglages.conservation_jours)
@@ -151,6 +151,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     limiteur = Limiteur(limites.sessions_par_adresse)
     limiteur_messages = Limiteur(limites.messages_par_adresse)
     fichier_messages = messages.chemin(reglages.base_donnees)
+    taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
     derniere_purge = [time.monotonic()]
 
@@ -313,7 +314,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 reponse = await call_next(request)
         reponse.headers["Content-Security-Policy"] = CSP
         reponse.headers["X-Content-Type-Options"] = "nosniff"
-        reponse.headers["Referrer-Policy"] = "same-origin"
+        # Depuis une page de contact, la page suivante ne reçoit aucun référent : une session en cours ne
+        # note pas qu'on en vient.
+        depuis_contact = request.url.path.startswith("/contact")
+        reponse.headers["Referrer-Policy"] = "no-referrer" if depuis_contact else "same-origin"
         reponse.headers["X-Frame-Options"] = "DENY"
         reponse.headers.setdefault("Cache-Control", "no-store")
         if reglages.https:
@@ -442,12 +446,16 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     async def ecrire(request: Request) -> Response:
         if not meme_origine(request):
             return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
-        champs = await formulaire(request, TAILLE_FORMULAIRE_CONTACT)
+        champs = await formulaire(request, taille_formulaire_contact)
         if champs is None:
             return refus(400, "Requête refusée", "Formulaire illisible ou trop long.")
-        if not csrf_valide(request, champs):
-            return refus(403, "Requête refusée", "Le formulaire a expiré : rechargez la page de contact.")
+        # À partir d'ici, un refus rend le formulaire avec le texte tapé : il n'est jamais perdu.
         texte = messages.nettoyer(champs.get("message", ""))
+        if not csrf_valide(request, champs):
+            expire = (
+                "Le formulaire a expiré : envoyez-le de nouveau. Si cela se répète, autorisez les cookies de ce site."
+            )
+            return page_contact(request, expire, texte, status_code=403)
         if not texte:
             return page_contact(request, "Écrivez votre message.", status_code=422)
         if len(texte) > limites.taille_message:
@@ -455,10 +463,11 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return page_contact(request, trop_long, texte, status_code=422)
         with boite() as cx:
             if messages.nombre(cx) >= limites.messages_gardes:
-                return refus(503, "Boîte pleine", "Le formulaire n'accepte plus de message pour le moment.")
+                pleine = "Le formulaire n'accepte plus de message pour le moment. Réessayez dans quelques jours."
+                return page_contact(request, pleine, texte, status_code=503)
             trop = messages.du_jour(cx) >= limites.messages_par_jour
             if trop or not limiteur_messages.autoriser(adresse_de(request)):
-                return refus(429, "Trop de messages", "Trop de messages ont été envoyés. Réessayez plus tard.")
+                return page_contact(request, "Trop de messages ont été envoyés. Réessayez plus tard.", texte, 429)
             messages.ajouter(cx, texte)
         journal.info("message de contact reçu")  # jamais son texte
         return RedirectResponse("/contact/envoye", status_code=303)

@@ -316,13 +316,14 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   humains ». Limites : le rejeu ne rejoue ni le WAF, ni la limite de débit de Nginx, ni les défis et CAPTCHA.
 - **D-57 — 12/11/2026 — Site public : un formulaire de contact à la place d'une adresse affichée.** Ethan
   ne veut pas afficher son adresse e-mail sur un lien très partagé. Choix : la page d'information nomme le
-  responsable (`SHADOWLAB_PUBLIC_CONTACT`, un nom ou un pseudonyme suffit) et renvoie vers `/contact` ; un
-  message n'est que son texte et sa date (ni adresse IP, ni session, ni navigateur), 2 000 caractères au
-  plus, caractères de contrôle retirés ; il est gardé dans un fichier à part de la base des sessions
+  responsable (`SHADOWLAB_PUBLIC_CONTACT` ; Ethan y met un pseudonyme, c'est son choix : le RGPD demande
+  l'identité du responsable, voir `notes/ia/questions-ouvertes.md`) et renvoie vers `/contact` ; un
+  message n'est que son texte et le jour de sa réception (ni adresse IP, ni session, ni navigateur, ni
+  heure), 2 000 caractères au plus, caractères de contrôle retirés ; il est gardé dans un fichier à part de la base des sessions
   (`messages.sqlite3`, droits 600, `secure_delete`) et purgé à la même échéance ; lecture et effacement par
   `shadowlab public messages` et `effacer-message`. Limites : 3 messages par heure et par adresse, 30 par
   jour, 500 gardés. Pourquoi un fichier à part : la base des sessions garde le schéma du labo sans migration
   (la migration 9 est réservée au palier 2) et peut être copiée pour le rejeu sans emporter des messages où
-  un visiteur a écrit comment le joindre. Limite : rien ne prévient le responsable d'un nouveau message ;
-  `shadowlab public servir` en donne le nombre au démarrage. Écarté : un envoi par e-mail (il faudrait un
+  un visiteur a écrit comment le joindre. Limite : aucun envoi au responsable ; `shadowlab public servir`
+  donne le nombre de messages au démarrage et écrit une ligne à l'écran à chaque arrivée. Écarté : un envoi par e-mail (il faudrait un
   compte d'envoi et son secret sur le poste).

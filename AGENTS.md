@@ -68,7 +68,8 @@ recommander des optimisations.
   (complétude, exactitude). Campagne : `SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne
   configs/experiments/recolte-palier1.yaml` (environ 2 h).
 - **Application publique réduite** (`src/shadowlab/public/`, D-55) : la seule partie faite pour être mise en
-  ligne. Site vitrine, consentement, collecte fermée, suppression de sa session ; aucune route du labo.
+  ligne. Site vitrine, consentement, collecte fermée, suppression de sa session, formulaire de contact
+  (D-57, aucune adresse affichée) ; aucune route du labo.
   Lancement et conditions : `docs/site-public.md`. Le labo lui-même ne se met jamais en ligne.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,

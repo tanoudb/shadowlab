@@ -219,7 +219,7 @@ def information(
 
 <section>
 <h2>Ce qui n'est pas relevé</h2>
-<p>Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni mesure d'audience, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré.</p>
+<p>Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni mesure d'audience, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré. Seule exception : ce que vous écrivez vous-même dans le formulaire de contact.</p>
 <p>Comme pour tout site web, l'hébergement (le serveur) et le service placé devant le site pour le protéger voient passer toutes les données en transit pour les acheminer : votre adresse IP, les pages demandées et ce que la page envoie. L'application de recherche, elle, n'enregistre pas votre adresse IP.</p>
 <p>Ces données ne disent pas qui vous êtes. Mais une empreinte de navigateur peut, rapprochée d'autres sources, permettre de reconnaître un appareil : c'est pourquoi elles sont traitées comme des données personnelles.</p>
 </section>
@@ -248,7 +248,7 @@ def information(
 <section>
 <h2>Qui est responsable</h2>
 <p>{contact}</p>
-<p>Pour lui écrire : <a href="/contact">formulaire de contact</a>. Votre message est enregistré tel quel, avec sa date et rien d'autre (ni adresse IP, ni lien avec une session), puis effacé au bout de {jours} jours.</p>
+<p>Pour lui écrire : <a href="/contact">formulaire de contact</a>. Seuls le texte de votre message et le jour de sa réception sont enregistrés (ni adresse IP, ni navigateur, ni identifiant de session), puis effacés au bout de {jours} jours.</p>
 </section>
 
 <section>
@@ -325,7 +325,7 @@ def contact(csrf: str, jours: int, taille: int, *, erreur: str = "", texte: str 
 <p class="discret">Pour une demande sur une session, donnez son identifiant (il est affiché sur la page « Ma session »). Si vous attendez une réponse, indiquez comment vous joindre. {taille} caractères au plus.</p>
 <p class="actions"><button class="bouton-plein" type="submit">Envoyer</button><a href="/">Revenir à la page d'information</a></p>
 </form>
-<p class="discret">Votre message est enregistré tel quel, avec sa date et rien d'autre : ni adresse IP, ni navigateur, ni lien avec une session. Il est lu par le responsable du site, puis effacé automatiquement au bout de {jours} jours.</p>
+<p class="discret">Seuls le texte de votre message et le jour de sa réception sont enregistrés : ni adresse IP, ni navigateur, ni identifiant de session. Le message ne sert qu'à vous répondre ; le responsable du site le lit, puis il est effacé automatiquement au bout de {jours} jours.</p>
 </article>"""
     return _page("Contact", corps)
 
