@@ -409,7 +409,7 @@ suivantes. Il faut au moins `css`, `adresse` ou `colonne`.
 | `format` | convertit la valeur (section 5) | `texte`, `entier`, `nombre`, `duree_ms` | `texte` |
 | `vide_si` | valeurs qui veulent dire « rien » (donnent une valeur vide) | liste de textes | aucune |
 | `tous` | toutes les valeurs, en liste, pas seulement la première | `true` | `false` |
-| `lien` | rend l'adresse absolue ; demande `attribut` | `true` | `false` |
+| `lien` | rend l'adresse absolue et sans `#fragment` ; demande `attribut` | `true` | `false` |
 | `present` | vrai si l'élément existe, faux sinon | `true` | `false` |
 | `adaptatif` | relocalise l'élément par ressemblance si le sélecteur ne trouve plus rien (section 5) | `true` | `false` |
 
