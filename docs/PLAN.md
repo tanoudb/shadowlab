@@ -426,6 +426,25 @@ scénarios × 5 répétitions. 17 h 52 à 18 h 06, heure locale. Configuration :
 - **Conséquence pour l'objectif** : le niveau 06 de l'objectif n'est pas tenu avec la corrélation. Le seuil de
   discrétion n'est atteint que niveau 06 sans corrélation (campagne 100).
 
+### Récolte générale (12/11, D-70)
+
+La commande `shadowlab recolte` (recettes YAML, parcours, reprise, notation, deux moteurs) est fusionnée dans la
+branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
+
+- **Mesuré** (commande réelle, site du labo sur un port à part, niveau 01) : moteur `http`, vitrine à 500
+  annonces : 525 pages, 500 annonces, 7 000 champs sur 7 000, 0,8 s ; site de rallye factice : 427 pages, 4 569
+  enregistrements, 34 410 champs sur 34 410. Récolte incrémentale (vitrine à 45 puis 50 annonces) : 8 pages
+  lues, 45 évitées, 5 nouveautés, 53 pages sur 53. Moteur `navigateur` (vrai Chrome, identité native) : vitrine
+  à 45 annonces, 48 pages sur 48 en 5 min 50 s. Essai de campagne (`recolte-generale-essai.yaml`, base à part) :
+  4 passages sur 4 à 100 %, dont le rallye à 3 rallyes par le navigateur (85 pages en 612 s).
+- **Pas mesuré** : aucun vrai site, aucune vraie protection ; aucun niveau protégé de l'Arena (la commande vise
+  le site en direct, donc le niveau 01) ; le mode navigateur n'a tourné qu'au niveau 01 ; la coupure d'une
+  redirection vers un autre hôte n'est pas vérifiée dans un vrai Chrome ; le rythme « prudent » n'a jamais
+  tourné en temps réel ; le CSV n'a pas été ouvert dans Excel.
+- **Campagne de preuve** (`recolte-generale.yaml`) lancée à 21 h 08 dans une base à part, arrêtée à 21 h 43 pour
+  la fusion après un seul passage fini (vitrine à 150 annonces par le navigateur : réussi, 1 164 s). À relancer
+  dans la base du labo. Suite complète relancée après la fusion : résultat au journal suivant.
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -600,6 +619,9 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 | Accord pour supprimer `pool.py` | 2.5 |
 | Un serveur Linux x86_64 avec Docker, et un proxy résidentiel | 3.2, 3.3, 3.4 |
 | Une clé reCAPTCHA v3 ; un environnement de tor-i qu'on a le droit de viser (facultatif) | 3.4 |
+| Les données de rallye : usage personnel ou produit ? | récolte générale (D-70) |
+| L'accord du site de rallye réel avant d'y pointer le moteur (D-30 : sans autorisation, la recette est refusée) | récolte générale (D-70) |
+| Les quatre questions de la conception du palier 2 (`docs/recherche/identite-qui-dure-2026-11-12.md` § 10) : mesurer le niveau 06 comme une première visite ; prouver d'abord une identité sans compte ; faire lui-même des visites qui reviennent pendant 3 jours ; faire tourner une course de 7 jours en fond sur le Mac mini | palier 2 |
 | Sa décision sur les sites tiers (hors périmètre aujourd'hui) | ne bloque pas la v1 |
 
 Détail et recommandations : `notes/ia/questions-ouvertes.md`.
@@ -624,6 +646,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains |
+| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, preuve par campagne en cours** | 12/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; essai de campagne : 4 passages sur 4 à 100 % ; campagne de preuve complète à relancer dans la base du labo. Aucun vrai site (§ 2). Passe avant les calibrages restants ; 1.9 et les paliers 2 à 4 restent au plan |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

@@ -508,3 +508,48 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   XSS, commandes et fichiers n'ont pas été étudiées ; la base compte 1 blocage sur 121 vérifications de
   CAPTCHA de la campagne 100 (61 reCAPTCHA, 60 Turnstile), soit plus que le calcul ne le prévoit : écart non
   expliqué. Le passage 34119 reste compté comme échec dans la campagne 100. Décidé par : coordination.
+- **D-70 — 12/11/2026 — Commande de récolte générale : une recette par site, fusionnée dans la branche de
+  travail.** Demande d'Ethan (12/11) : « je veux que tu me parles en concret à chaque fois avec le niveau de
+  notre objectif » ; « car après le scraper j'en aurais besoin pour scraper des sites justement ». Premiers
+  sites visés : « annonce immobilier et site de rallye », « avec le suivi des châssis etc., les spectacles
+  [comprendre : spéciales], tout ». Accord de fusion donné à 21 h 40 : « Oui, fusionne ». Choix : une commande
+  `shadowlab recolte lancer | reprendre | etat | essayer | noter` (`commande_recolte.py`) qui récolte un site
+  entier à partir d'une **recette** YAML par site (`configs/recettes/`, lue par `engines/noezia/recettes.py`),
+  avec un parcours, un état SQLite qui permet de reprendre, une notation générale (pages, enregistrements,
+  champs), une récolte incrémentale (`revisiter`, `nouveautes.jsonl`), deux moteurs (`http`, `navigateur`) et
+  un second site factice à contenu connu, des résultats de rallye (`/lab/rallye`). Branche `recolte-integration`
+  fusionnée dans `niveau-authentifie-perimetre` (commit `b1a40ed`, 49 fichiers, environ 12 300 lignes
+  ajoutées) ; rien sur `master`. Décisions de réalisation : (1) `robots.txt` respecté par défaut ;
+  `--ignorer-robots` est explicite et écrit dans `resume.json`. (2) Lecteur de `robots.txt` maison, sans
+  expression régulière (un fichier hostile ne peut pas bloquer la récolte) et sans nouvelle dépendance.
+  (3) Une recette qui vise un site qui n'est pas à nous exige une ligne `autorisation` ; D-30 reste en
+  vigueur. (4) Une redirection vers un autre hôte n'est jamais suivie : zéro requête vers cet hôte. (5) Arrêt
+  au premier signe d'alerte ; jamais de clic sur un défi d'un site tiers ; aucun solveur de CAPTCHA. (6) CSV au
+  format d'Excel en France (point-virgule, BOM, virgule décimale) ; le JSON Lines reste la donnée exacte.
+  (7) Photos : les adresses seulement. (8) Extraction adaptative jamais par défaut. (9) Une valeur douteuse
+  donne une valeur vide et une alerte, jamais une valeur fausse en silence. Pourquoi : le moteur doit devenir
+  un outil qu'Ethan utilise sur de vrais sites (ligne « Livrable » de l'objectif, `docs/PLAN.md` § 1), et une
+  commande générale par recette évite d'écrire un programme par site. Ordre de travail : la commande passe
+  avant les calibrages restants du labo ; l'étape 1.9 et les paliers 2 à 4 du plan ne sont pas retirés.
+  Mesures (commande réelle, site du labo sur un port à part) : moteur `http`, vitrine à 500 annonces : 525
+  pages, 500 annonces, 7 000 champs sur 7 000, 0,8 s ; site de rallye : 427 pages, 4 569 enregistrements,
+  34 410 champs sur 34 410. Récolte incrémentale, vitrine à 45 puis 50 annonces : 8 pages lues, 45 évitées,
+  5 nouveautés, notation 53 pages sur 53. Moteur `navigateur` (vrai Chrome, identité native, niveau 01) :
+  vitrine à 45 annonces, 48 pages sur 48 en 5 min 50 s. Essai de campagne (`recolte-generale-essai.yaml`,
+  base à part, campagne n° 1 de cette base) : 4 passages sur 4 à 100 %, dont le site de rallye à 3 rallyes par
+  le navigateur (85 pages en 612 s). Campagne de preuve complète (`recolte-generale.yaml`) lancée à 21 h 08
+  dans la même base à part, arrêtée à 21 h 43 pour la fusion après un seul passage fini (vitrine à 150
+  annonces par le navigateur : réussi, 1 164 s) ; à relancer dans la base du labo. Méthode : briques écrites
+  dans des branches à part, chaque commit de tests vu en échec avant son code ; relecture indépendante (six
+  défauts corrigés) ; relecture de sécurité automatique (lecteur de `robots.txt` réécrit) ; recette du site de
+  rallye écrite par un agent qui n'avait lu ni le code du site ni l'exemple du document (première version en
+  3 minutes environ, 100 % après correction des noms de champs). Avant la fusion, la branche avait 1 205 tests
+  rapides verts ; suite complète relancée après la fusion, résultat au journal suivant. **Limites, non
+  prouvé** : aucun vrai site, aucune vraie protection ; la commande n'a été jugée par aucun niveau protégé de
+  l'Arena (elle vise le site en direct, donc le niveau 01 ; le chemin par l'Arena est écrit dans les
+  scénarios de campagne, jamais lancé) ; le mode navigateur n'a tourné qu'au niveau 01 ; en mode navigateur,
+  Chrome charge de lui-même les sous-ressources d'autres hôtes et la coupure d'une redirection vers un autre
+  hôte n'a pas été vérifiée dans un vrai Chrome ; `attendre` (bloc chargé en JavaScript) n'est pas branché ;
+  un champ adaptatif sans signature mémorisée échoue sans alerte ; le rythme « prudent » n'a jamais tourné en
+  temps réel ; le CSV n'a pas été ouvert dans Excel ; la campagne de preuve complète n'a pas fini. Décidé par :
+  Ethan (accord de fusion), coordination (choix de réalisation).

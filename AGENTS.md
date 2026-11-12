@@ -80,7 +80,8 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **769 tests verts** (`uv run pytest`, 12/11 à 18 h 11, hors campagne : 731 rapides et 38 d'intégration avec de
+- **1 247 tests verts** (`uv run pytest`, 12/11 à 21 h 52, après la fusion de la récolte, hors campagne : 1 207
+  rapides et 40 d'intégration avec de
   vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
@@ -100,8 +101,25 @@ recommander des optimisations.
   CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 complet à 0 sur 15 (corrélation entre sessions,
   campagne 101), aucun humain en base, une machine, un Chrome sur macOS, pas de témoin, rien contre une
   protection réelle ; l'identité native n'est pas le réglage par défaut. Le produit n'est pas atteint.
+- **Récolte générale** (D-70, fusionnée le 12/11 dans cette branche, commit `b1a40ed`, rien sur `master`) :
+  `shadowlab recolte lancer | reprendre | etat | essayer | noter`. Une **recette** YAML par site
+  (`configs/recettes/`), un parcours avec état SQLite et reprise, `robots.txt` respecté, rythme, sentinelle
+  (arrêt au premier signe d'alerte), deux moteurs (`http`, `navigateur` = vrai Chrome en identité native),
+  export JSON Lines et CSV pour Excel France, notation (pages, enregistrements, champs), récolte incrémentale.
+  Second site factice à contenu connu : `/lab/rallye`. Guide : `docs/recolte.md`.
+  Mesuré (moteur `http`, site du labo) : vitrine à 500 annonces, 525 pages, 7 000 champs sur 7 000, 0,8 s ;
+  rallye, 427 pages, 34 410 champs sur 34 410. Moteur `navigateur`, niveau 01 : vitrine à 45 annonces, 48
+  pages sur 48 en 5 min 50 s. Essai de campagne : 4 passages sur 4 à 100 %. 1 205 tests rapides verts avant la
+  fusion ; suite complète relancée après, résultat au journal suivant.
+  **Non prouvé** : aucun vrai site ni vraie protection ; jamais jugée par un niveau protégé de l'Arena (la
+  commande vise le site en direct, donc le niveau 01) ; mode navigateur au niveau 01 seulement, coupure d'une
+  redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non branché ; champ adaptatif
+  sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ; CSV jamais ouvert dans
+  Excel ; campagne de preuve complète non terminée (à relancer dans la base du labo).
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
-  auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, commande de récolte générale (liste puis fiches, tableaux, arbre ; conception en cours dans `docs/recherche/recolte-generale-2026-11-12.md`, attend l'accord d'Ethan).
+  auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, récolte d'un vrai site (aucune
+  n'a été faite), récolte jugée par un niveau protégé de l'Arena, identité qui dure (palier 2, conception
+  `docs/recherche/identite-qui-dure-2026-11-12.md` à valider par Ethan).
 
 ## Niveaux de difficulté Arena
 | Niveau | Nom | Protections |
@@ -132,6 +150,10 @@ uv run shadowlab campagne configs/experiments/recaptcha-v3.yaml  # démo reCAPTC
 uv run shadowlab campagne configs/experiments/connexion-arena.yaml  # le moteur franchit le login (01/05/06)
 uv run shadowlab campagne configs/experiments/extraction-adaptative.yaml  # relocalisation malgré mutation CSS
 uv run shadowlab recolter <url> [selecteur] [--similaires] [--json]  # récolte HTTP furtive
+uv run shadowlab recolte lancer configs/recettes/vitrine.yaml   # récolte générale d'un site (recette) ; `--moteur navigateur` pour Chrome
+uv run shadowlab recolte noter vitrine-annonces --verite vitrine   # note contre la vérité du site factice (`rallye` pour l'autre)
+uv run shadowlab recolte etat <nom> | reprendre <nom> | essayer <recette> <adresse>   # voir, reprendre, tester une recette sur une page
+SHADOWLAB_VITRINE_TAILLE=150 SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-generale.yaml  # preuve (~3 h 30) ; recolte-generale-essai.yaml d'abord
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
@@ -153,10 +175,12 @@ src/shadowlab/
 ├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker)
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
-│   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte
-├── site/            # Site de test FastAPI (app, pages, vitrine, gardien, static/)
+│   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
+│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export
+├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
-├── scenarios.py     # 17 scénarios de test
+├── scenarios.py     # 19 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
+├── commande_recolte.py  # `shadowlab recolte` : lancer, reprendre, etat, essayer, noter (D-70)
 ├── detection.py     # 42 détecteurs
 ├── issues.py        # Classification en 6 issues
 ├── correlation.py   # Corrélation cross-session : recyclage d'empreintes entre sessions
@@ -180,9 +204,9 @@ src/shadowlab/
 frontend/            # Interface React + TypeScript (Vite), consomme /api
 │   ├── src/screens/ # Configurer, Experiences, Suivi, Passage, Comparer, Moteurs, Protections
 │   └── src/         # api.ts, stats.ts (Wilson), hooks.ts (SSE), ui.tsx, types.ts
-configs/             # Profils Arena + campagnes YAML
+configs/             # Profils Arena + campagnes YAML ; recettes/ = une recette de récolte par site (vitrine, rallye-demo)
 docker/              # Coraza WAF + Nginx (Docker Compose)
-docs/                # Architecture, décisions, recherche
+docs/                # Architecture, décisions, recherche ; recolte.md = guide de la commande de récolte
 moteurs_isoles/      # pyproject.toml par environnement isolé
 scripts/             # site-public-tunnel.sh (site public en ligne par tunnel Cloudflare)
 tests/               # tests Python (pytest)
@@ -204,6 +228,10 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Schéma : ajouter une migration à la fin de `database.MIGRATIONS`, ne jamais modifier une migration passée.
 - Données de détection affichées par `textContent` dans le tableau de bord (jamais `innerHTML`).
 - Ne pas lancer de tests ni de travaux lourds pendant une campagne de mesure : ils faussent CPU et durées.
+- Récolte générale (D-70) : une recette qui vise un site qui n'est pas à nous porte une ligne `autorisation`
+  (D-30) ; `robots.txt` est respecté par défaut ; aucune redirection vers un autre hôte n'est suivie ; la
+  commande ne clique jamais sur un défi d'un site tiers et n'a aucun solveur de CAPTCHA. Une valeur douteuse
+  donne une valeur vide et une alerte, jamais une valeur fausse en silence.
 - CAPTCHA provider en test keys → résultat étiqueté `captcha_test`, jamais confondu avec un vrai contournement.
 
 ## Pièges

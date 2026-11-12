@@ -50,8 +50,25 @@ uv run shadowlab campagne configs/experiments/essai.yaml   # campagne courte
 
 Une campagne démarre elle-même le site s'il ne tourne pas. Les rapports (HTML, CSV, JSON) sont écrits dans
 `outputs/rapports/<n°>/`. Autres commandes : `shadowlab valider <fichier.yaml>`, `arreter`, `reprendre <n°>`,
-`rapport <n°>`, `liste`, `supprimer <n°>`, `arena appliquer|arreter|etat`, `recolter <url>`, `rejeu`. La liste
+`rapport <n°>`, `liste`, `supprimer <n°>`, `arena appliquer|arreter|etat`, `recolter <url>`, `recolte`, `rejeu`. La liste
 complète et les commandes de campagnes de référence sont dans la section « Commandes vérifiées » d'`AGENTS.md`.
+
+## Récolter un site
+
+La commande `shadowlab recolte` récolte un site entier à partir d'une **recette** (un fichier YAML par site, dans
+`configs/recettes/`). Deux sites factices du labo ont leur recette : des annonces immobilières et des résultats
+de rallye.
+
+```bash
+uv run shadowlab recolte lancer configs/recettes/vitrine.yaml       # récolte les annonces factices
+uv run shadowlab recolte noter vitrine-annonces --verite vitrine    # compare à ce que le site contient vraiment
+uv run shadowlab recolte etat vitrine-annonces                      # où en est la récolte
+```
+
+Les données sont écrites dans `outputs/recoltes/<nom>/passe-001/` (JSON Lines et CSV pour Excel). La commande
+respecte `robots.txt`, ne suit aucune redirection vers un autre site et n'a aucun solveur de CAPTCHA. Un site
+qui n'est pas à nous exige une ligne `autorisation` dans la recette. Elle n'a été éprouvée que sur nos deux
+sites factices. Guide complet : [`docs/recolte.md`](docs/recolte.md).
 
 ## Écrire une campagne
 
@@ -129,6 +146,8 @@ Laboratoire :
 | `SHADOWLAB_PORT_AVAL` | `8781` | Port de Nginx dans la pile Docker de l'Arena |
 | `SHADOWLAB_VITRINE_GRAINE` | `20261111` | Graine du site vitrine (contenu connu) |
 | `SHADOWLAB_VITRINE_TAILLE` | `500` | Nombre d'annonces du site vitrine |
+| `SHADOWLAB_RALLYE_GRAINE` | `20261112` | Graine du site de rallye factice (contenu connu) |
+| `SHADOWLAB_RALLYE_TAILLE` | `24` | Nombre de rallyes du site de rallye factice |
 
 Application publique (`SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` et `SHADOWLAB_SORTIES` s'appliquent aussi) :
 
@@ -146,6 +165,7 @@ Application publique (`SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` et 
 
 - [`AGENTS.md`](AGENTS.md) : source de vérité du projet (état, commandes vérifiées, carte du code, règles, pièges)
 - [`docs/PLAN.md`](docs/PLAN.md) : plan de travail unique (objectif, état mesuré, étapes)
+- [`docs/recolte.md`](docs/recolte.md) : guide de la commande de récolte (écrire une recette, lancer, reprendre)
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) : décisions et leurs raisons
 - [`docs/architecture.md`](docs/architecture.md) : architecture et limites
 - [`docs/site-public.md`](docs/site-public.md) : application publique

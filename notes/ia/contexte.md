@@ -16,12 +16,13 @@ Un moteur de récolte généraliste qui, lancé depuis un serveur Linux, mène u
 protégé sans se faire bannir, et rapporte des données complètes et exactes. Il se prouve par des mesures
 sur nos propres cibles (site vitrine factice, tor-i).
 
-## État au 2026-11-12 (18 h 15)
+## État au 2026-11-12 (21 h 50)
 - **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, quatre paliers, règles, suivi au § 8).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 12/11 à 18 h 11, sans campagne : **769 verts** (`uv run pytest` : 731 rapides et 38 d'intégration
+- Tests au 12/11 à 21 h 52, après la fusion de la récolte, sans campagne : **1 247 verts** (`uv run pytest` :
+  1 207 rapides et 40 d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
   passages orphelins), rien sur `master`.
@@ -48,15 +49,15 @@ sur nos propres cibles (site vitrine factice, tor-i).
 - Site public : parcours vérifié à l'écran à 16 h 17, feu vert à la mise en ligne, réserve : le script de tunnel
   n'a jamais tourné avec un vrai tunnel (le filtre du journal de `cloudflared` n'a jamais vu une vraie ligne).
 - Consigne d'Ethan du 12/11 : il aura besoin du scraper pour de vrais sites (premiers visés : annonces
-  immobilières, site de rallye avec suivi des châssis). Après la mesure des niveaux 04 à 06, la commande de
-  récolte générale (liste puis fiches, tableaux, arbre) passe avant les calibrages restants du labo. La règle
+  immobilières, site de rallye avec suivi des châssis). La commande de récolte générale (liste puis fiches,
+  tableaux, arbre) est faite et fusionnée (D-70) ; elle passe avant les calibrages restants du labo. La règle
   D-30 (pas de site tiers protégé sans autorisation) reste en vigueur ; la lever est une décision d'Ethan.
 - Défauts de l'Arena soupçonnés d'arrêter aussi les humains : `pas_de_scroll`, `pas_de_pause`, `meta-composite`
   (se déclenche chez tout le monde, ne pèse dans aucune décision), WAF du niveau 07 sur Turnstile. Les
   sessions humaines trancheront.
 - Manquent pour l'objectif : les sessions humaines et le calibrage de l'Arena, le bannissement dans
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
-  Linux, un test contre Cloudflare, la commande de récolte générale.
+  Linux, un test contre Cloudflare, la preuve de la récolte générale (campagne complète, un vrai site).
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native
@@ -77,17 +78,19 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
 1. **Site libre à 20 h** : aucune campagne ni `shadowlab site` en cours. Ethan fait 5 sessions humaines
    locales (`uv run shadowlab site`, puis `http://127.0.0.1:8770/manuel`), puis `uv run shadowlab rejeu`
    (jalon A sur l'Arena corrigée) ; comparer ses en-têtes et son empreinte à NOEZIA.
-2. **Récolte générale** : conception `docs/recherche/recolte-generale-2026-11-12.md`, soumise à Ethan à
-   16 h 43, réponse attendue. Étapes 1, 2, 3, 5 et la recette du rallye (étape 6) faites, relues et assemblées
-   dans `recolte-integration` (poussée, dossier `../noezia-shadowlab-recolte`) : 1 106 tests rapides verts ;
-   commande réelle à 100 % sur la vitrine (500 annonces, 0,8 s) et sur le site de rallye factice (427 pages).
-   Rien n'est fusionné dans la branche de travail sans son accord. Depuis : étapes 4 (moteur navigateur,
-   un essai réel de 48 pages), 7 (incrémental) et 8 (guide `docs/recolte.md`) faites et assemblées ; 1 195
-   tests rapides verts (journal du 12/11, 19 h 10 et 19 h 40). Reste la campagne de preuve avec les deux
-   moteurs, puis la fusion.
+2. **Récolte générale** : fusionnée dans `niveau-authentifie-perimetre` (commit `b1a40ed`, accord d'Ethan à
+   21 h 40, D-70), rien sur `master`. Guide `docs/recolte.md`, conception
+   `docs/recherche/recolte-generale-2026-11-12.md`. Mesuré avec la commande réelle : vitrine à 500 annonces,
+   525 pages, 7 000 champs sur 7 000 (0,8 s) ; rallye factice, 427 pages, 34 410 champs sur 34 410 ; navigateur,
+   48 pages sur 48 au niveau 01. 1 205 tests rapides verts avant la fusion ; **suite complète relancée après la
+   fusion, résultat au journal suivant**. Campagne de preuve (`recolte-generale.yaml`) arrêtée à 21 h 43 après un
+   passage fini : **à relancer dans la base du labo** (environ 3 h 30, site du labo libre). Rien n'est prouvé
+   sur un vrai site ni contre un niveau protégé de l'Arena.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
-5. Plan (§ 2, § 8), `AGENTS.md` (État), journal, pousser.
+5. **Palier 2** : conception `docs/recherche/identite-qui-dure-2026-11-12.md`, à valider par Ethan (quatre
+   questions au § 10 de ce document, reprises au `docs/PLAN.md` § 7). Aucune session humaine en base à 21 h 30.
+6. Plan (§ 2, § 8), `AGENTS.md` (État), journal, pousser.
 
 Ce qu'on attend d'Ethan : `docs/PLAN.md` § 7 et `notes/ia/questions-ouvertes.md`.

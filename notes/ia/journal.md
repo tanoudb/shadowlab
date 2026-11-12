@@ -2959,3 +2959,23 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Décisions** : la porte d'entrée n'agit que si le moteur exécute du JavaScript (HTTP : alerte immédiate) ; `attendre`
   (sélecteur de bloc chargé en JavaScript) pas branché.
 - **Reste** : lancer le test d'intégration quand l'écran est libre ; vérifier la garde de redirection dans Chrome.
+
+## 2026-11-12 (21h50) — Claude (Sonnet 5.5, documentation) — Fusion de la récolte générale : décision D-70 et mise à jour des documents
+
+- **Accord et fusion** : Ethan a répondu « Oui, fusionne » à 21 h 40 ; `recolte-integration` est fusionnée dans
+  `niveau-authentifie-perimetre` (commit `b1a40ed`, 49 fichiers, environ 12 300 lignes ajoutées), rien sur
+  `master`. Suite complète relancée après la fusion, résultat au journal suivant (avant : 1 205 tests rapides).
+- **D-70** écrite dans `docs/DECISIONS.md` (numéro libre sur toutes les branches) : une recette par site,
+  `robots.txt` respecté par défaut, ligne `autorisation` pour un site tiers (D-30 inchangé), redirection vers un
+  autre hôte jamais suivie, aucun solveur de CAPTCHA, CSV pour Excel France, mesures et limites.
+- **Documents mis à jour** : `AGENTS.md` (État, commandes, carte du code, une règle), `README.md` (section
+  « Récolter un site », réglages du rallye), `docs/PLAN.md` (§ 2 bloc récolte générale, § 7, § 8),
+  `notes/ia/contexte.md`. Nombre de scénarios compté dans le code : 19 (17 avant).
+- **Campagne de preuve** (`recolte-generale.yaml`) lancée à 21 h 08 dans une base à part, arrêtée à 21 h 43 pour
+  la fusion après un passage fini (vitrine à 150 annonces par le navigateur, réussi, 1 164 s) : à relancer dans
+  la base du labo.
+- **Non prouvé** : aucun vrai site ni vraie protection ; aucun niveau protégé de l'Arena ; navigateur au niveau
+  01 seulement ; `attendre` non branché ; rythme « prudent » jamais tourné ; CSV jamais ouvert dans Excel.
+- **Reste** : résultat de la suite complète ; relancer la campagne de preuve ; sessions humaines et tunnel du
+  site public (Ethan) ; valider la conception du palier 2 (`docs/recherche/identite-qui-dure-2026-11-12.md`) ;
+  réponses d'Ethan sur l'usage des données de rallye et l'accord du site réel (`docs/PLAN.md` § 7).
