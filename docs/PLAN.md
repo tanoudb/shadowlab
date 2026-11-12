@@ -142,7 +142,8 @@ Passages réussis sur 15 (Wilson : 12/15 → 55 à 93 % ; 2/15 → 4 à 38 %).
 Ce que la base dit (campagne 94) :
 - **Les témoins restent arrêtés sans `cdp`** (60/60 chacun), dès la page du défi, par les détecteurs
   d'origine : `regles-http`, `botd`, `chrome-apis`, `coherence-profonde`, `regles-js`, plus `headless` pour
-  playwright. L'Arena garde donc des signaux valides contre eux.
+  playwright (et `correlation-session` aux niveaux 06 et 07). L'Arena garde donc des signaux valides
+  contre eux.
 - **Niveau 04** : NOEZIA passe 15/15.
 - **Niveau 05** : 12/15. Les 3 arrêts sont sur `pagination` : score composite 0,85 (seuil 0,6) =
   `pas_de_scroll` + `pas_de_pause` (délai maximal entre deux mouvements de souris : 58 à 60 ms). Turnstile
@@ -172,24 +173,34 @@ humaines, 1.7).
 Incohérence confirmée le 11/11 (journal de la campagne 90) : le moteur annonce Chrome 129 à 132 alors que
 le navigateur embarqué est Chromium 156.0.8078.4. À corriger en 1.9.
 
-En-têtes envoyés par NOEZIA, lus le 12/11 dans la base (campagne 94, `observations_http`) : quatre écarts
-probables avec un vrai Chrome, **à confirmer en les comparant aux en-têtes des sessions humaines** (elles
-donneront la référence) avant de corriger en 1.9 :
-- `User-Agent` avec la vraie version de macOS (`Mac OS X 15_1`) : le même Chromium, piloté par les témoins
-  sans réglage, envoie la version figée `Mac OS X 10_15_7` (mesuré, campagne 94). La version complète
-  (`Chrome/129.0.6668.100`) est aussi suspecte : un Chrome grand public la réduit (`Chrome/129.0.0.0`),
-  à vérifier sur le Chrome d'Ethan (le Chromium d'essai, lui, garde la version complète) ;
-- `sec-ch-ua-arch`, `-bitness`, `-full-version-list` et `-model` envoyés à chaque requête : le même
-  Chromium piloté par les témoins n'envoie que `sec-ch-ua`, `-mobile` et `-platform` (mesuré, campagne 94) ;
-- `Accept-Language: de-DE` seul, alors que le profil prévoit `de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7` : le
-  réglage de langue du navigateur écrase l'en-tête du profil ;
-- la version annoncée (129 à 132) ne correspond pas au navigateur réel (156), donc pas non plus à son TLS.
-  **Le moteur se contredit lui-même, sans référence extérieure** (mesuré, même passage de la campagne 94) :
-  dans la même page, `navigator.userAgent` annonce Chrome 129 et `navigator.userAgentData` Chrome 156, et
-  l'en-tête `sec-ch-ua` dit 129. Correction visée : annoncer partout la version réelle du navigateur.
+En-têtes envoyés par NOEZIA, comptés le 12/11 sur les 1 160 requêtes de ses 60 passages de la campagne 94
+(`observations_http`), et comparés au même Chromium piloté sans réglage par les témoins :
+- **« HeadlessChrome » fuit sur 182 requêtes (16 %).** 144 des 311 envois `POST /lab/collecte` partent avec
+  le `User-Agent` d'origine du navigateur (`HeadlessChrome/156.0.8078.4`), sans aucun réglage du moteur ;
+  38 navigations vers une page qui a elle-même pour référent (sans doute le retour après un défi) gardent
+  le `User-Agent` réglé (`Chrome/129`) mais retrouvent le `sec-ch-ua` d'origine (« HeadlessChrome » v156). Le réglage du moteur ne couvre donc pas toutes les
+  requêtes. L'Arena ne le voit pas (`regles-http` ne classe jamais NOEZIA) : c'est un manque de l'Arena
+  autant qu'un défaut du moteur. **C'est l'écart le plus grave trouvé à ce jour.**
+- **Le moteur se contredit sur sa version, sans référence extérieure** : `User-Agent` et `sec-ch-ua` réglés
+  annoncent Chrome 129 ou 130 (version tirée au sort dans le profil), `navigator.userAgentData` et les
+  requêtes non réglées disent 156, la version réelle.
+- `User-Agent` réglé avec la vraie version de macOS (`Mac OS X 15_1`) ; les témoins envoient la version
+  figée `Mac OS X 10_15_7`. La version complète dans le `User-Agent` est aussi à vérifier sur le Chrome
+  d'Ethan (un Chrome grand public la réduit à `Chrome/129.0.0.0` ; le Chromium d'essai la garde).
+- `sec-ch-ua-arch`, `-bitness`, `-full-version-list` et `-model` sur 1 016 requêtes (toutes sauf les 144
+  non réglées) ; les témoins n'envoient que `sec-ch-ua`, `-mobile` et `-platform`.
+- `Accept-Language` change d'une requête à l'autre dans une même session : valeur complète du profil sur
+  804 requêtes (fichiers et envois), langue seule (`de-DE`, `fr-FR`, `en-US`) sur 212 (les pages), absent
+  sur les 144 non réglées.
+
+Piste pour 1.9, à trancher par une mesure : la documentation de Patchright (la base du moteur) recommande
+un vrai Chrome avec interface, sans `User-Agent` ni en-têtes imposés. Le moteur fait l'inverse (sans
+interface, identité réécrite), et ce sont ses réécritures qui fuient. Première mesure, sans changer de
+code : `configs/experiments/ablation-interface.yaml` (patchright avec un vrai Chrome et son interface,
+rien d'imposé ; noezia avec interface), à comparer à la référence du même jour.
 
 Empreinte JavaScript : NOEZIA comparé champ par champ au même Chromium piloté sans réglage (patchright,
-campagne 94, niveau 04 sans `cdp` ; 84 champs différents sur 306). La différence est mesurée ; ce que fait
+campagne 94, niveau 04 sans `cdp` ; 84 champs différents sur 315 comparés). La différence est mesurée ; ce que fait
 un vrai Chrome reste **à lire dans les sessions humaines**, qui trancheront champ par champ. Candidats
 pour 1.9, du plus net au moins net :
 - `navigator.webdriver` **absent** chez NOEZIA (ni valeur, ni propriété sur le prototype) ; le témoin a
@@ -204,8 +215,10 @@ pour 1.9, du plus net au moins net :
   erreur (fonction enveloppée) ; `chrome.runtime` présent.
 
 Aucun détecteur de l'Arena ne relève ces écarts aujourd'hui : leur effet se mesurera contre Cloudflare (1.8).
-Une règle « version du User-Agent différente de celle de `userAgentData` » la mesurerait dans l'Arena ; à
-décider avec Ethan (règle 4 du § 8 : on n'ajoute à l'Arena que ce qu'un palier exige).
+Deux règles les mesureraient dans l'Arena : « HeadlessChrome » dans un en-tête de n'importe quelle requête
+d'une session (pas seulement la première), et une version du `User-Agent` différente de celle de
+`userAgentData`. À décider avec Ethan (règle 4 du § 8 : on n'ajoute à l'Arena que ce qu'un palier exige).
+Chiffres de ce paragraphe et des deux précédents recomptés le 12/11 par une vérification indépendante.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -274,11 +287,11 @@ navigateur piloté par outil (ce n'est pas une session humaine) :
 Points connus pour 1.7 et 1.9, lus le 12/11 dans les relevés de comportement de la campagne 94 (passages
 `pagination` de NOEZIA au niveau 05 sans `cdp`) — hypothèses à confirmer par le rejeu des sessions humaines :
 - **`pas_de_scroll` se déclenche sur une page qui ne peut pas défiler.** `/lab/catalogue` tient en 10 lignes,
-  bien moins haut que la fenêtre. Le moteur tourne la molette (12 à 48 crans relevés par page) mais le
-  navigateur n'émet aucun événement de défilement : 0 sur les 31 pages relevées. La règle compte les
+  bien moins haut que la fenêtre. Le moteur tourne la molette sur 7 des 31 pages relevées (12 à 48 crans)
+  mais le navigateur n'émet aucun événement de défilement : 0 sur les 31 pages. La règle compte les
   défilements sans savoir si la page est plus haute que la fenêtre. Un humain y serait classé de même.
 - **`pas_de_pause` ne lit que les 50 premiers délais de souris d'une page** (borne de l'observateur). Un seul
-  geste continu de 50 événements, soit moins d'une seconde, suffit : c'est le cas d'une page par passage
+  geste continu de 50 événements, soit environ 1,5 seconde, suffit : c'est le cas d'une page par passage
   arrêté (délai maximal 58 à 60 ms sur 50 délais, alors que la page dure 2,7 à 3,4 s). Très probable aussi
   chez un humain qui balaie l'écran en arrivant.
 - Conséquence : ces deux signaux font le score composite 0,85 qui arrête NOEZIA au niveau 05. Ne pas
