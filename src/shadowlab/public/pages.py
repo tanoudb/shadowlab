@@ -14,7 +14,7 @@ from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-12.3"
+VERSION_INFORMATION = "2026-11-12.4"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -100,10 +100,12 @@ DONNEES_COMPORTEMENT: list[tuple[str, str]] = [
     ("premiere_interaction_ms", "Délai avant votre première action sur la page."),
     ("duree_page_ms", "Temps passé sur la page."),
     ("delais_souris_ms", "Délais entre deux mouvements de souris (50 au plus)."),
+    ("delai_souris_max_ms", "Plus long délai entre deux mouvements de souris sur toute la page : un seul nombre."),
     ("angles_segments", "Changements de direction de la souris, en angles (40 au plus). Pas sa position."),
     ("delais_clavier_ms", "Délais entre deux touches (40 au plus). Jamais les touches elles-mêmes."),
     ("delais_scroll_ms", "Délais entre deux défilements (50 au plus)."),
     ("wheel_deltas", "Amplitude des crans de la molette (50 au plus)."),
+    ("page_defilable", "La page dépassait-elle la hauteur de la fenêtre quand vous l'avez quittée ? (oui ou non)"),
 ]
 
 

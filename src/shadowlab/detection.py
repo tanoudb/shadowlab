@@ -18,6 +18,7 @@ from typing import Any, Protocol
 SEUIL_AUTOMATISE = 1.0
 SEUIL_RYTHME_PAR_S = 4.0
 SEUIL_DUREE_PAGE_MS = 500
+PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délais de souris d'une page
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
 MARQUEURS_UA_OUTILS = re.compile(r"python|curl|httpx|requests|aiohttp|wget|go-http|java/|okhttp", re.I)
@@ -586,10 +587,12 @@ class DetecteurComportement:
     patterns imparfaits (ratio mousemove/click élevé, hover erratique, micro-pauses
     dans les trajectoires, retours en arrière). L'absence de ces imperfections est
     elle-même un signal.
+    V2.1 (12/11/2026) : `pas_de_scroll` ne compte que les pages qui pouvaient défiler (`page_defilable`) ;
+    la V2 classait aussi la molette tournée sur une page plus courte que la fenêtre (campagne 94).
     """
 
     name = "comportement"
-    version = "2"
+    version = "2.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -615,7 +618,6 @@ class DetecteurComportement:
         evenements = [r.get("evenements", {}) for r in releves]
         total_moves = sum(e.get("mousemove", 0) for e in evenements)
         total_clicks = sum(e.get("click", 0) for e in evenements)
-        total_scrolls = sum(e.get("scroll", 0) for e in evenements)
         interactions = sum(sum(e.values()) for e in evenements)
         duree = sum(r.get("duree_page_ms") or 0 for r in releves)
 
@@ -641,12 +643,18 @@ class DetecteurComportement:
                     )
                 )
 
-        # Absence totale de scroll sur des pages longues : un humain scrolle pour lire
-        if total_moves > 20 and total_scrolls == 0 and len(releves) >= 2:
+        # Absence totale de scroll sur des pages longues : un humain scrolle pour lire.
+        # Seules comptent les pages qui pouvaient défiler (`page_defilable`, lu par l'observateur à la sortie de la
+        # page) : sur une page plus courte que la fenêtre, la molette ne produit aucun événement `scroll`, pour un
+        # humain comme pour un robot. Un relevé ancien, sans ce champ, n'est pas compté : la règle ne conclut pas.
+        defilables = [r.get("evenements", {}) for r in releves if r.get("page_defilable") is True]
+        moves_defilables = sum(e.get("mousemove", 0) for e in defilables)
+        scrolls_defilables = sum(e.get("scroll", 0) for e in defilables)
+        if moves_defilables > 20 and scrolls_defilables == 0 and len(defilables) >= 2:
             signaux.append(
                 Signal(
                     "pas_de_scroll",
-                    "mouvements souris sans aucun défilement sur plusieurs pages",
+                    "mouvements souris sans aucun défilement sur plusieurs pages plus hautes que la fenêtre",
                     0.35,
                 )
             )
@@ -823,16 +831,33 @@ class DetecteurCoherenceProfonde:
         return _verdict(self.name, self.version, signaux)
 
 
+def _plus_longue_pause(releve: dict[str, Any], delais: list[float]) -> float | None:
+    """Plus grand délai entre deux mouvements de souris sur toute la page ; None si le relevé ne le dit pas.
+
+    Relevé récent : `delai_souris_max_ms`, tenu par l'observateur sur toute la page. Relevé ancien, sans ce champ :
+    sous le plafond, la liste contient tous les délais de la page et son maximum fait foi ; plafonnée, la suite de
+    la page est inconnue et la règle ne conclut pas.
+    """
+    maximum = releve.get("delai_souris_max_ms")
+    if isinstance(maximum, (int, float)) and not isinstance(maximum, bool):
+        return maximum
+    if not delais or len(delais) >= PLAFOND_DELAIS_SOURIS:
+        return None
+    return max(delais)
+
+
 class DetecteurEntropieInteraction:
     """Analyse l'entropie temporelle des interactions souris.
 
     Un humain a une distribution de délais entre mouvements souris qui suit
     approximativement une loi log-normale. Un robot a des délais trop réguliers
     (faible écart-type) ou trop uniformément distribués.
+    V1.1 (12/11/2026) : `pas_de_pause` juge la page entière (`delai_souris_max_ms`) ; la V1 ne lisait que les
+    50 premiers délais, soit un seul geste continu d'environ 1,5 s (campagne 94).
     """
 
     name = "entropie-interaction"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -870,10 +895,11 @@ class DetecteurEntropieInteraction:
                     Signal("timing_quantifie", f"{ratio_unique:.0%} de délais uniques ({uniques}/{len(delais)})", 0.5)
                 )
 
-            # Aucun délai long (> 500ms) → pas de pause humaine
-            if len(delais) > 20 and max(delais) < 80:
+            # Aucune pause entre deux mouvements de souris sur toute la page → pas de pause humaine
+            plus_longue = _plus_longue_pause(r, delais)
+            if len(delais) > 20 and plus_longue is not None and plus_longue < 80:
                 signaux.append(
-                    Signal("pas_de_pause", f"max délai souris = {max(delais):.0f}ms (pas de pause humaine)", 0.5)
+                    Signal("pas_de_pause", f"max délai souris = {plus_longue:.0f}ms (pas de pause humaine)", 0.5)
                 )
 
             # Trajectoire trop linéaire : angles entre segments consécutifs
