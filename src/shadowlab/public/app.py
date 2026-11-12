@@ -13,10 +13,11 @@ import logging
 import re
 import secrets
 import sqlite3
+import sys
 import time
 from collections import deque
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -49,6 +50,11 @@ PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers 
 UNE_JOURNEE_S = 24 * 3600
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
 ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
+# Chemins jamais journalisés : les pages de contact, et ce que le navigateur charge avec chacune d'elles (feuille
+# de style, icône). Horodatées à la milliseconde, rapprochées des requêtes notées d'une session, ces lignes
+# dateraient un message, que D-57 ne garde qu'au jour ; une feuille de style chargée sans page notée trahirait
+# aussi une page de contact. Il ne reste qu'une ligne par page, et aucune pour une page de contact.
+NON_JOURNALISES = ("/contact", "/lab/static/", "/favicon.ico")
 journal = logging.getLogger("shadowlab.public")
 
 
@@ -117,6 +123,14 @@ def _verifier_reglages(reglages: ReglagesPublics) -> None:
 def _nettoyer(chemin: str) -> str:
     """Chemin lisible et borné pour le journal (jamais la chaîne de requête)."""
     return "".join(c if c.isprintable() and c != " " else "?" for c in chemin[:120])
+
+
+def _avis_au_responsable(texte: str) -> None:
+    """Une ligne à l'écran du responsable, jamais dans le journal. Seulement si la sortie standard est un
+    terminal : recueillie (journald sous systemd, fichier), sa ligne horodatée daterait ce qu'elle annonce."""
+    with suppress(OSError, ValueError):  # sortie absente ou fermée : l'avis n'est qu'une commodité
+        if sys.stdout is not None and sys.stdout.isatty():
+            print(texte, flush=True)
 
 
 def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
@@ -324,8 +338,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         if reglages.https:
             reponse.headers["Strict-Transport-Security"] = "max-age=31536000"
         # Ni adresse, ni chaîne de requête (le jeton y passe), ni en-têtes : méthode, chemin, statut. Niveau DEBUG :
-        # le fichier tournant le reçoit, l'écran seulement en mode verbeux.
-        journal.debug("%s %s %s", _nettoyer(request.method), _nettoyer(request.url.path), reponse.status_code)
+        # le fichier tournant le reçoit, l'écran seulement en mode verbeux. Rien pour NON_JOURNALISES.
+        if not request.url.path.startswith(NON_JOURNALISES):
+            journal.debug("%s %s %s", _nettoyer(request.method), _nettoyer(request.url.path), reponse.status_code)
         return reponse
 
     # --- Information et consentement ---------------------------------------------------------------
@@ -470,7 +485,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             if trop or not limiteur_messages.autoriser(adresse_de(request)):
                 return page_contact(request, "Trop de messages ont été envoyés. Réessayez plus tard.", texte, 429)
             messages.ajouter(cx, texte)
-        journal.info("message de contact reçu")  # jamais son texte
+        _avis_au_responsable("message de contact reçu")  # jamais son texte, jamais dans le journal
         return RedirectResponse("/contact/envoye", status_code=303)
 
     # --- Site vitrine : mêmes chemins que dans le labo ---------------------------------------------
