@@ -422,3 +422,20 @@ def test_le_site_du_labo_n_est_demarre_que_s_il_ne_tourne_pas(monkeypatch, regla
     with commande_recolte.site_du_labo(recette, reglages):
         pass
     assert appels == []
+
+
+# --- Alertes de lecture, notation d'un résultat vide, ce que la vérité attend ------------------
+
+RECETTE_ENTIER = RECETTE_VITRINE.read_text(encoding="utf-8").replace(
+    "ville: '[data-champ=\"ville\"]'", "ville: {css: '[data-champ=\"ville\"]', format: entier}"
+)
+
+
+def test_etat_montre_aussi_les_alertes_de_lecture(pilote, tmp_path, capsys):
+    recette = tmp_path / "entier.yaml"
+    recette.write_text(RECETTE_ENTIER, encoding="utf-8")
+    lancer(recette=recette)
+    capsys.readouterr()
+    assert main(["recolte", "etat", "vitrine-annonces"]) == 0
+    sortie = capsys.readouterr().out
+    assert "Alertes de lecture : 45 au total" in sortie and "45 × fiche · champ « ville »" in sortie
