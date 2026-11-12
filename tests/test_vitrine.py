@@ -268,3 +268,17 @@ def test_prix_affiche_avant_la_galerie():
     """Le prix se lit sans faire défiler : il précède la galerie dans la fiche."""
     page = vitrine.page_fiche("", vitrine.generer(GRAINE, 1)[0])
     assert page.index('data-champ="prix"') < page.index('class="galerie"')
+
+
+def test_pages_attendues_listes_et_fiches():
+    pages = vitrine.pages_attendues(GRAINE, 45)
+    assert len(pages) == len(set(pages)) == 3 + 45  # 3 pages de liste, 45 fiches
+    assert pages[0] == "/lab/vitrine/annonces"  # la liste commence sans paramètre, comme la récolte
+    assert "/lab/vitrine/annonces?page=2" in pages and "/lab/vitrine/annonces?page=3" in pages
+    assert "/lab/vitrine/annonces?page=4" not in pages
+    references = [a["reference"] for a in vitrine.verite(GRAINE, 45)["annonces"]]
+    assert {f"/lab/vitrine/annonces/{r}" for r in references} <= set(pages)
+
+
+def test_pages_attendues_pour_la_vitrine_complete():
+    assert len(vitrine.pages_attendues(GRAINE, 500)) == 25 + 500

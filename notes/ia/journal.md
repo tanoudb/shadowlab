@@ -2947,3 +2947,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   Résultat à lire dans la base à part, puis à refaire dans la base du labo après la fusion.
 - **État** : aucune session humaine en base à 21 h 08 ; `recolte-integration` et la conception du palier 2
   attendent l'accord d'Ethan.
+
+## 12/11/2026 (19 h) — récolte générale, étape 4 : moteur navigateur et sentinelle (branche `recolte-4-navigateur`)
+- **Fait** : moteur `navigateur` (`engines/noezia/navigateur.py`, adaptateur de `DriverNoezia` en identité native, Chrome
+  visible, comportement humain gardé, `caffeinate` pendant la passe) accepté par `construire_moteur` ; sentinelle complète
+  (`detecter_defi` : Arena, Cloudflare, Turnstile, reCAPTCHA, hCaptcha ; alerte `defi`) ; porte d'entrée (première page,
+  `porte_entree.attendre_s`, attente sans action par relecture de la page, comptée dans `resume.json`) ; option
+  `verifier_tls` de `DriverNoezia` ; garde `hotes_navigation` sur le cadre principal ; `resoudre_defis` coupé hors du labo.
+- **Tests** : `tests/test_sentinelle.py`, `tests/test_moteur_navigateur.py` (rapides, pilote factice) ; intégration
+  `tests/test_recolte_navigateur.py` ÉCRIT, NON EXÉCUTÉ (aucun navigateur autorisé).
+- **Décisions** : la porte d'entrée n'agit que si le moteur exécute du JavaScript (HTTP : alerte immédiate) ; `attendre`
+  (sélecteur de bloc chargé en JavaScript) pas branché.
+- **Reste** : lancer le test d'intégration quand l'écran est libre ; vérifier la garde de redirection dans Chrome.

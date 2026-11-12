@@ -1,0 +1,170 @@
+# configs/recettes/rallye-demo.yaml : site factice de résultats de rallye (« Chrono Démo »).
+# Saisons → calendrier paginé → rallye → spéciales (temps), classement final, engagés → pilotes et châssis.
+# Écrite à partir des pages seules : aucun attribut data-champ, tout se lit par classe, nom de colonne ou adresse.
+recette: 1
+nom: rallye-demo
+autorisation: site à nous (labo local)
+moteur: http
+hotes: [127.0.0.1]
+depart:
+  - url: http://127.0.0.1:8770/lab/rallye/saisons
+    type: saisons
+parametres_ignores: [sl]     # jeton de session du labo (meta sl-session), sans effet sur le contenu
+rythme: libre                # site à nous : aucun délai ajouté
+variables:
+  saison: '*'                # --tranche saison=2025 : une seule saison
+  championnat: '*'           # --tranche championnat="Coupe Démo Asphalte" : lignes de ce championnat seulement
+pages:
+  saisons:
+    url: '^/lab/rallye/saisons$'
+    requis: 'ul.saisons'
+    suivre:
+      - liens: 'ul.saisons a'
+        vers: calendrier
+        garder_si: {contient: '{saison}'}      # le texte du lien est « Saison 2025 »
+
+  calendrier:
+    url: '^/lab/rallye/saisons/\d{4}(\?page=\d+)?$'
+    requis: 'table.calendrier'
+    suivre:                                    # les rallyes de la page (de la tranche), puis la page suivante
+      - liens: 'table.calendrier td.rallye a'
+        vers: rallye
+        garder_si: {contient: '{championnat}', contexte: 'tr'}
+      - liens: 'a[rel="next"]'
+        vers: calendrier
+
+  rallye:
+    url: '^/lab/rallye/rallyes/\d+$'
+    requis: 'dl.fiche'
+    revisiter: jamais
+    enregistrements:
+      - collection: rallyes
+        cle: id
+        champs:
+          id: {adresse: '/rallyes/(\d+)$'}
+          nom: 'h1.titre'
+          date_debut: {css: 'time.debut', attribut: datetime}
+          date_fin: {css: 'time.fin', attribut: datetime}
+          saison: {css: 'dd.saison', format: entier}
+          championnat: 'dd.championnat'
+          surface: 'dd.surface'
+          lieu: 'dd.lieu'
+          km_chrono: {css: 'dd.km', format: nombre}     # « 19,1 km » → 19.1 (hors spéciales annulées)
+          nb_engages: {css: 'dd.nb-engages', format: entier}
+    suivre:                                             # un rallye entier avant le suivant
+      - liens: 'table.speciales td.nom a'
+        vers: speciale
+      - liens: 'a.classement'
+        vers: classement
+      - liens: 'a.engages'
+        vers: engages
+
+  speciale:
+    url: '^/lab/rallye/speciales/\d+$'
+    requis: 'h1.titre'                                  # une spéciale annulée n'a pas de tableau : page normale, 0 temps
+    revisiter: jamais
+    enregistrements:
+      - collection: speciales                           # lue sur sa propre page : seule à donner l'heure de départ ISO
+        cle: id
+        champs:
+          id: {adresse: '/speciales/(\d+)$'}
+          rallye: {css: 'nav.fil a.rallye', attribut: href, motif: '/rallyes/(\d+)$'}
+          numero: {css: 'h1.titre', motif: '^ES(\d+) ', format: entier}
+          nom: {css: 'h1.titre', motif: '· (.+)$'}
+          km: {css: 'p.details span.km', format: nombre}
+          depart: {css: 'p.details time', attribut: datetime}
+          annulee: {css: 'p.annulee', present: true}    # annulée : pas de tableau de temps
+      - collection: temps
+        cle: [speciale, numero]
+        lignes: 'table.temps tr'
+        champs:
+          speciale: {adresse: '/speciales/(\d+)$'}
+          numero: {colonne: 'N°', format: entier}
+          rang: {colonne: 'Pos.', vide_si: ['-'], format: entier}   # ex æquo : le même rang deux fois ; « - » pour un abandon
+          pilote: {colonne: Équipage, css: 'a.pilote'}
+          pilote_id: {colonne: Équipage, css: 'a.pilote', attribut: href, motif: '/pilotes/(\d+)$'}
+          copilote: {colonne: Équipage, css: 'span.copilote'}
+          voiture: {colonne: Voiture}
+          temps: {colonne: Temps}                       # texte affiché (« 3:59.9 », « Abandon »)
+          temps_ms: {colonne: Temps, vide_si: [Abandon], format: duree_ms}
+          ecart_ms: {colonne: Écart, vide_si: ['—'], motif: '\+(.+)$', format: duree_ms}
+
+  classement:
+    url: '^/lab/rallye/rallyes/\d+/classement$'
+    requis: 'table.classement'
+    revisiter: jamais
+    enregistrements:
+      - collection: classements
+        cle: [rallye, numero]
+        lignes: 'table.classement tr'
+        champs:
+          rallye: {adresse: '/rallyes/(\d+)/classement$'}
+          numero: {colonne: 'N°', format: entier}
+          rang: {colonne: 'Pos.', vide_si: ['Ab.'], format: entier}   # « Ab. » : abandon, pas de rang
+          pilote: {colonne: Équipage, css: 'a.pilote'}
+          pilote_id: {colonne: Équipage, css: 'a.pilote', attribut: href, motif: '/pilotes/(\d+)$'}
+          copilote: {colonne: Équipage, css: 'span.copilote'}
+          groupe: {colonne: Groupe}
+          voiture: {colonne: Voiture}
+          temps_total_ms: {colonne: 'Temps total', vide_si: ['-'], format: duree_ms}
+          ecart_ms: {colonne: Écart, vide_si: ['—'], motif: '\+(.+)$', format: duree_ms}
+
+  engages:
+    url: '^/lab/rallye/rallyes/\d+/engages$'
+    requis: 'table.engages'
+    revisiter: jamais
+    enregistrements:
+      - collection: engages
+        cle: [rallye, numero]
+        lignes: 'table.engages tr'
+        champs:
+          rallye: {adresse: '/rallyes/(\d+)/engages$'}
+          numero: {colonne: 'N°', format: entier}
+          pilote: {colonne: Pilote}
+          pilote_id: {colonne: Pilote, css: 'a', attribut: href, motif: '/pilotes/(\d+)$'}
+          copilote: {colonne: Copilote}
+          voiture: {colonne: Voiture}
+          chassis: {colonne: Châssis}
+          groupe: {colonne: Groupe}
+    suivre:                                             # pilotes et châssis des engagés ; leurs pages ne renvoient nulle part
+      - liens: 'table.engages td a[href*="/pilotes/"]'
+        vers: pilote
+      - liens: 'table.engages td a[href*="/chassis/"]'
+        vers: chassis
+
+  pilote:                                               # pas de « suivre » : sa liste d'engagements renvoie vers d'autres saisons
+    url: '^/lab/rallye/pilotes/\d+$'
+    requis: 'dl.fiche'
+    revisiter: jamais
+    enregistrements:
+      - collection: pilotes
+        cle: id
+        champs:
+          id: {adresse: '/pilotes/(\d+)$'}
+          nom: 'h1.titre'
+          nationalite: 'dd.nationalite'
+          nb_rallyes: {css: 'dd.nb-rallyes', format: entier}
+
+  chassis:                                              # idem : l'historique renvoie vers toutes les saisons
+    url: '^/lab/rallye/chassis/DEMO-[A-Z]+-\d+$'
+    requis: 'dl.fiche'
+    revisiter: jamais
+    enregistrements:
+      - collection: chassis
+        cle: code
+        champs:
+          code: {adresse: '/chassis/(DEMO-[A-Z]+-\d+)$'}
+          marque: 'dd.marque'
+          modele: 'dd.modele'
+          annee: {css: 'dd.annee', format: entier}
+          nb_rallyes: {css: 'dd.nb-rallyes', format: entier}
+      - collection: historique
+        cle: [chassis, rallye]
+        lignes: 'table.historique tr'
+        champs:
+          chassis: {adresse: '/chassis/(DEMO-[A-Z]+-\d+)$'}
+          rallye: {colonne: Rallye, css: 'a', attribut: href, motif: '/rallyes/(\d+)$'}
+          date: {colonne: Date, css: 'time', attribut: datetime}
+          pilote_id: {colonne: Pilote, css: 'a', attribut: href, motif: '/pilotes/(\d+)$'}
+          pilote: {colonne: Pilote}
+          resultat: {colonne: Résultat}

@@ -22,6 +22,8 @@ class ReponseBrute:
 class DriverHttp(Driver):
     runtime = "http"
     executes_javascript = False
+    # Destination de la dernière redirection non suivie (option `suivre_redirections: false`), sinon None.
+    location: str | None = None
 
     def start_session(self) -> None:
         self._url = ""
@@ -41,6 +43,7 @@ class DriverHttp(Driver):
         from lxml import html as lhtml
 
         debut = time.perf_counter()
+        self.location = None
         for _ in range(REDIRECTIONS_MAX + 1):
             self.verifier(url)
             self.mesures.request_count += 1
@@ -50,6 +53,11 @@ class DriverHttp(Driver):
                 self.mesures.error_count += 1
                 raise
             if reponse.status in (301, 302, 303, 307, 308) and "location" in reponse.headers:
+                if not self.options.get("suivre_redirections", True):
+                    # Le contrôle de la destination (hôte, périmètre, robots.txt) revient à l'appelant, AVANT qu'elle
+                    # soit demandée : on rend la 3xx telle quelle et on garde sa destination.
+                    self.location = reponse.headers["location"]
+                    break
                 url = urljoin(url, reponse.headers["location"])
                 if reponse.status in (301, 302, 303):
                     methode, donnees = "GET", None
