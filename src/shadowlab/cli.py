@@ -75,6 +75,27 @@ def main(argv: list[str] | None = None) -> int:
         "--insecure", action="store_true", help="désactiver la vérification TLS (cert auto-signé, ex. Arena locale)"
     )
     p = sous.add_parser(
+        "recolte", help="récolte générale d'un site décrit par une recette (docs/recherche/recolte-generale)"
+    )
+    p.add_argument("action", choices=["lancer", "reprendre", "etat", "essayer", "noter"])
+    p.add_argument("cible", help="lancer, essayer : fichier de recette ; reprendre, etat, noter : nom de la récolte")
+    p.add_argument("adresse", nargs="?", help="essayer : adresse de la page, ou fichier .html")
+    p.add_argument("--moteur", choices=["http", "navigateur"], help="remplace le moteur de la recette")
+    p.add_argument(
+        "--tranche", action="append", default=[], metavar="NOM=VALEUR", help="valeur d'une variable de la recette"
+    )
+    p.add_argument("--pages-max", type=int, help="arrête la passe après N pages lues")
+    p.add_argument("--sans", default="", help="types de pages à ne pas visiter, séparés par des virgules")
+    p.add_argument("--tout-refaire", action="store_true", help="ignore les passes précédentes")
+    p.add_argument("--ignorer-robots", action="store_true", help="ne lit pas robots.txt (écrit dans resume.json)")
+    p.add_argument("--sortie", type=Path, help="dossier de l'état et des données (défaut : outputs/recoltes/<nom>)")
+    p.add_argument("--maintenant", action="store_true", help="reprendre : passer outre l'attente après une alerte")
+    p.add_argument("--recette-modifiee", action="store_true", help="reprendre : la recette a changé depuis le début")
+    p.add_argument("--pages", action="store_true", help="etat : le journal page par page")
+    p.add_argument("--verite", choices=["vitrine", "rallye"], help="noter : la vérité du site du labo")
+    p.add_argument("--type", help="essayer : type de page imposé (obligatoire pour un fichier .html)")
+    p.add_argument("--base", help="essayer : adresse d'où vient le fichier .html")
+    p = sous.add_parser(
         "public", help="application publique réduite : vitrine et sessions humaines (docs/site-public.md)"
     )
     p.add_argument("action", choices=["servir", "purger", "supprimer", "messages", "effacer-message"])
@@ -184,6 +205,11 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(_nettoyer(texte[:3000]))
         return 0
+
+    if args.commande == "recolte":
+        from . import commande_recolte
+
+        return commande_recolte.executer(args, reglages)
 
     if args.commande == "rejeu":
         return _rejeu(args, reglages)

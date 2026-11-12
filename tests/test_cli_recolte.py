@@ -1,7 +1,6 @@
 """Commande `shadowlab recolte` : lancer, reprendre, etat, essayer, noter (pilote factice, sans réseau)."""
 
 import contextlib
-import logging
 
 import pytest
 from outils_recolte import GRAINE, RECETTE_VITRINE, TAILLE, PiloteFactice, creer_client
@@ -258,7 +257,7 @@ def test_noter_une_recolte_partielle_echoue(pilote, capsys):
     lancer("--pages-max", "10")
     capsys.readouterr()
     assert main(["recolte", "noter", "vitrine-annonces", "--verite", "vitrine"]) == 1
-    assert "sous le seuil" in capsys.readouterr().out
+    assert "Sous le seuil" in capsys.readouterr().out
 
 
 def test_noter_une_recolte_inconnue_code_2(pilote):
@@ -310,7 +309,7 @@ def test_noter_le_rallye_dit_la_collection_qui_pech(recolte_rallye, reglages, ca
     etat.fermer()
     assert main(["recolte", "noter", "rallye-demo", "--verite", "rallye"]) == 1
     sortie = capsys.readouterr().out
-    assert "temps 0/" in sortie and "sous le seuil" in sortie
+    assert "temps 0/" in sortie and "Sous le seuil" in sortie
 
 
 # --- Détails -----------------------------------------------------------------------------------
@@ -322,10 +321,10 @@ def test_l_ecran_ne_laisse_passer_aucun_caractere_de_controle_venu_du_site(pilot
     assert "\x1b" not in capsys.readouterr().out
 
 
-def test_les_evenements_vont_aussi_au_journal(pilote, caplog):
-    with caplog.at_level(logging.DEBUG, logger="shadowlab.recolte"):
-        lancer()
-    assert any("debut" in r.getMessage() for r in caplog.records if r.name == "shadowlab.recolte")
+def test_les_evenements_vont_aussi_au_journal_du_labo(pilote, reglages):
+    lancer()
+    journal = (reglages.sorties / "logs" / "shadowlab.jsonl").read_text(encoding="utf-8")
+    assert "récolte vitrine-annonces passe 1 : debut" in journal
 
 
 def test_le_site_du_labo_n_est_demarre_que_s_il_ne_tourne_pas(monkeypatch, reglages, capsys):

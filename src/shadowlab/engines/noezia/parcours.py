@@ -14,6 +14,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import random
 import re
@@ -30,7 +31,7 @@ from ..base import Driver
 from .etat import Etat, Page, canonique
 from .export import ecrire_exports
 from .extraction import Signatures
-from .recettes import Recette, _est_local, chemin_et_parametres, extraire
+from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
 from .rythme import Cadence, rythme_de
 from .sentinelle import FENETRE, Alerte, Sentinelle
@@ -178,6 +179,11 @@ def _empreinte(texte: str) -> str:
     return "sha256:" + hashlib.sha256(texte.encode("utf-8")).hexdigest()
 
 
+def nettoyer(texte: str) -> str:
+    """Retire les caractères de contrôle (une adresse ou un texte du site ne doit pas piloter le terminal)."""
+    return "".join(c if c.isprintable() else "?" for c in str(texte))
+
+
 def _hote(adresse: str) -> str:
     return (urlsplit(adresse).hostname or "").lower()
 
@@ -190,6 +196,9 @@ def _origine(adresse: str) -> str:
 def _chemin_et_requete(adresse: str) -> str:
     morceaux = urlsplit(adresse)
     return (morceaux.path or "/") + (f"?{morceaux.query}" if morceaux.query else "")
+
+
+_JOURNAL = logging.getLogger("shadowlab.recolte")
 
 
 def _maintenant() -> str:
@@ -219,7 +228,7 @@ class Parcours:
         self.moteur = moteur
         self.dossier = dossier
         self.options = options or Options()
-        self._ecran = ecran
+        self._ecran = lambda message: ecran(nettoyer(message))
         self._horloge = horloge
         self._dormir = dormir
         self._alea = alea or random.Random()
@@ -263,7 +272,7 @@ class Parcours:
                 self.recette.parametres_ignores,
                 self.recette.bornes.par_type,
             )
-            etat.evenement(passe, "debut", {"moteur": self.moteur.description()["nom"]}, self._horodatage())
+            self._evenement(etat, passe, "debut", {"moteur": self.moteur.description()["nom"]})
             return self._executer(etat, passe, reprise=False)
         finally:
             etat.fermer()
@@ -311,12 +320,19 @@ class Parcours:
             remises = etat.reprendre_passe(passe["numero"])
             if recette_modifiee and passe["empreinte"] != self.empreinte:
                 etat.changer_recette(passe["numero"], self.empreinte, self.texte_recette)
-            etat.evenement(passe["numero"], "reprise", {"pages_remises_en_file": remises}, self._horodatage())
+            self._evenement(etat, passe["numero"], "reprise", {"pages_remises_en_file": remises})
             return self._executer(etat, passe["numero"], reprise=True)
         finally:
             etat.fermer()
             self.moteur.fermer()
             verrou.liberer()
+
+    def _evenement(self, etat: Etat, passe: int, genre: str, detail: Mapping[str, Any]) -> None:
+        """Un événement de la passe : dans l'état, et dans le journal du labo (niveau DEBUG, fichier seulement)."""
+        etat.evenement(passe, genre, detail, self._horodatage())
+        _JOURNAL.debug(
+            "récolte %s passe %s : %s %s", self.recette.nom, passe, genre, json.dumps(detail, ensure_ascii=False)
+        )
 
     # ── Contrôles de départ ─────────────────────────────────────────────
     def _controles(self, reprise: bool = False) -> None:
@@ -407,7 +423,7 @@ class Parcours:
             self._ecran("INTERROMPU : état gardé, la passe peut être reprise.")
         etat.terminer_passe(passe, statut, arret, self._horodatage())
         if arret:
-            etat.evenement(passe, "arret", arret, self._horodatage())
+            self._evenement(etat, passe, "arret", arret)
         return self._conclure(etat, passe, statut, arret)
 
     def _annoncer(self, etat: Etat, passe: int, reprise: bool) -> None:
@@ -486,7 +502,7 @@ class Parcours:
             return Alerte("hors_site", f"hors périmètre : {erreur}", page.adresse), 0
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             etat.terminer_page(page, etat="echec", decision="echec", quand=quand())
-            etat.evenement(self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)}, quand())
+            self._evenement(etat, self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(page.type, "echec", page.adresse), 1
 
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
@@ -528,9 +544,7 @@ class Parcours:
             self.recette, reponse.html, reponse.adresse_finale, page.type, self.options.tranche, self._signatures
         )
         if resultat.alertes:
-            etat.evenement(
-                self._passe, "extraction", {"adresse": page.adresse, "alertes": resultat.alertes}, self._horodatage()
-            )
+            self._evenement(etat, self._passe, "extraction", {"adresse": page.adresse, "alertes": resultat.alertes})
         if not resultat.conforme:
             etat.terminer_page(
                 page, etat="faite", statut=reponse.statut, decision="anormale", quand=self._horodatage(),
@@ -663,4 +677,80 @@ class Parcours:
         )
 
 
-__all__ = ["Bilan", "Moteur", "MoteurDriver", "Options", "Parcours", "RefusParcours", "Verrou", "canonique"]
+@dataclass
+class Essai:
+    """Une page lue pour voir : rien n'est écrit, aucune file."""
+
+    adresse: str
+    type: str
+    statut: int | None
+    adresse_finale: str
+    resultat: Resultat | None  # None : statut hors 2xx, rien n'a été lu
+
+
+def type_de_page(recette: Recette, adresse: str) -> str:
+    """Le premier type de page dont le motif `url` correspond à l'adresse."""
+    cible = chemin_et_parametres(adresse, recette.parametres_ignores)
+    for nom, page in recette.pages.items():
+        if re.search(page.url, cible):  # regex-recette
+            return nom
+    raise RefusParcours(
+        f"aucun type de page de la recette « {recette.nom} » ne correspond à {cible} (`--type` pour en imposer un)"
+    )
+
+
+def essayer(
+    recette: Recette,
+    moteur: Moteur | None,
+    adresse: str,
+    *,
+    type_page: str | None = None,
+    tranche: Mapping[str, str] | None = None,
+    ignorer_robots: bool = False,
+    html: str | None = None,
+) -> Essai:
+    """Lit UNE page (par le moteur, ou le `html` donné) et rend ce que la recette y trouve. N'écrit rien."""
+    type_page = type_page or type_de_page(recette, adresse)
+    if type_page not in recette.pages:
+        raise RefusParcours(f"type de page inconnu : « {type_page} » (connus : {', '.join(recette.pages)})")
+    if html is not None:
+        return Essai(adresse, type_page, None, adresse, extraire(recette, html, adresse, type_page, tranche))
+    assert moteur is not None
+    moteur.ouvrir()
+    try:
+        if not ignorer_robots:
+            url = f"{_origine(adresse)}/robots.txt"
+            try:
+                reponse = moteur.lire(url)
+                robots = Robots.depuis_reponse(reponse.statut or 0, reponse.html, recette.robots.agent)
+            except DestinationRefusee:
+                raise
+            except Exception:  # noqa: BLE001
+                robots = Robots.inaccessible(recette.robots.agent)
+            if robots.etat == "inaccessible" or not robots.permis(_chemin_et_requete(adresse)):
+                raise RefusParcours(
+                    f"robots.txt ne permet pas cette page : {adresse} (`--ignorer-robots` pour passer outre)"
+                )
+        reponse = moteur.lire(adresse)
+    finally:
+        moteur.fermer()
+    if reponse.statut is None or not 200 <= reponse.statut < 300:
+        return Essai(adresse, type_page, reponse.statut, reponse.adresse_finale, None)
+    resultat = extraire(recette, reponse.html, reponse.adresse_finale, type_page, tranche)
+    return Essai(adresse, type_page, reponse.statut, reponse.adresse_finale, resultat)
+
+
+__all__ = [
+    "Bilan",
+    "Essai",
+    "Moteur",
+    "MoteurDriver",
+    "Options",
+    "Parcours",
+    "RefusParcours",
+    "Verrou",
+    "canonique",
+    "essayer",
+    "nettoyer",
+    "type_de_page",
+]
