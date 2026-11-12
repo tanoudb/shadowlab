@@ -14,8 +14,6 @@ from datetime import datetime, timedelta
 
 from . import database as db
 
-# Seul type lu par la règle (`DetecteurCorrelationSession.EMPREINTE`) : profil et canvas hachés ensemble.
-TYPE_REGLE = "profil_canvas"
 FENETRE_DEBIT = timedelta(minutes=60)
 
 
@@ -24,9 +22,6 @@ def hash_session(empreinte_js: dict) -> dict[str, str]:
 
     La forme lue est celle de `collecter()` dans `site/static/observateur.js` : `navigateur`,
     `ecran` et `canvas` sont au premier niveau.
-
-    `profil_canvas` hache les deux ensemble : une session porte une seule empreinte, donc un seul fait compté.
-    `profil_complet` et `canvas` restent enregistrés séparément pour l'analyse ; la règle ne les lit pas.
     """
     nav = empreinte_js.get("navigateur") or {}
     ecran = empreinte_js.get("ecran") or {}
@@ -53,8 +48,6 @@ def hash_session(empreinte_js: dict) -> dict[str, str]:
     # Un canvas en échec renvoie « erreur: … » : ce texte commun n'est pas une empreinte.
     if canvas and not canvas.startswith("erreur"):
         result["canvas"] = hashlib.sha256(canvas.encode()).hexdigest()[:16]
-    combine = f"{result['profil_complet']}:{result.get('canvas', '')}"
-    result[TYPE_REGLE] = hashlib.sha256(combine.encode()).hexdigest()[:16]
     return result
 
 
@@ -85,32 +78,33 @@ def enregistrer_hash(cx: sqlite3.Connection, jeton: str, empreinte_js: dict) -> 
 
 
 def correlation_session(cx: sqlite3.Connection, empreinte_js: dict) -> dict[str, dict]:
-    """Données de corrélation de l'empreinte combinée (`profil_canvas`) ; vide si elle n'a jamais été vue.
+    """Données de corrélation de chaque hash de l'empreinte déjà vu (`profil_complet`, `canvas`).
 
-    `nb_sessions` : jetons distincts vus avec cette empreinte depuis la création de la ligne, la session courante
-    comprise (`/lab/collecte` l'enregistre avant de juger). `sessions_derniere_heure` et `derniere_heure_exacte` :
-    voir `_sessions_derniere_heure`.
+    `nb_sessions` : jetons distincts vus avec ce hash depuis la création de la ligne, la session courante comprise
+    (`/lab/collecte` l'enregistre avant de juger). `sessions_derniere_heure` et `derniere_heure_exacte` : voir
+    `_sessions_derniere_heure`.
     """
-    row = cx.execute(
-        "SELECT nb_sessions, premiere_vue, derniere_vue, sessions FROM empreintes_vues WHERE type = ? AND hash = ?",
-        (TYPE_REGLE, hash_session(empreinte_js)[TYPE_REGLE]),
-    ).fetchone()
-    if not row:
-        return {}
-    compte, exact = _sessions_derniere_heure(cx, row, datetime.fromisoformat(db.maintenant()))
-    return {
-        TYPE_REGLE: {
-            "nb_sessions": row["nb_sessions"],
-            "premiere_vue": row["premiere_vue"],
-            "derniere_vue": row["derniere_vue"],
-            "sessions_derniere_heure": compte,
-            "derniere_heure_exacte": exact,
-        }
-    }
+    maintenant = datetime.fromisoformat(db.maintenant())
+    resultats: dict[str, dict] = {}
+    for type_hash, valeur in hash_session(empreinte_js).items():
+        row = cx.execute(
+            "SELECT nb_sessions, premiere_vue, derniere_vue, sessions FROM empreintes_vues WHERE type = ? AND hash = ?",
+            (type_hash, valeur),
+        ).fetchone()
+        if row:
+            compte, exact = _sessions_derniere_heure(cx, row, maintenant)
+            resultats[type_hash] = {
+                "nb_sessions": row["nb_sessions"],
+                "premiere_vue": row["premiere_vue"],
+                "derniere_vue": row["derniere_vue"],
+                "sessions_derniere_heure": compte,
+                "derniere_heure_exacte": exact,
+            }
+    return resultats
 
 
 def _sessions_derniere_heure(cx: sqlite3.Connection, row: sqlite3.Row, maintenant: datetime) -> tuple[int, bool]:
-    """Sessions de cette empreinte commencées dans les 60 dernières minutes, et si ce compte est exact.
+    """Sessions de ce hash commencées dans les 60 dernières minutes, et si ce compte est exact.
 
     L'heure d'une session est celle de sa première empreinte (`observations_js`). La ligne ne garde que les
     10 derniers jetons (`sessions`, dans l'ordre d'arrivée). Le compte est exact :

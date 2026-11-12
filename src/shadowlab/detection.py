@@ -2431,21 +2431,21 @@ class DetecteurMetaComposite:
 
 
 class DetecteurCorrelationSession:
-    """Même empreinte (profil et canvas ensemble) vue dans plusieurs sessions de la base (`correlation.py`).
+    """Même profil ou même canvas vu dans plusieurs sessions de la base (`correlation.py`).
 
     Compte des sessions (jetons), pas des visiteurs : un humain qui revient avec le même navigateur compte autant
-    de fois qu'il revient, et une empreinte qui change à chaque session n'est jamais revue.
-    V1.1 (12/11/2026) : un fait, un signal — profil et canvas comptés ensemble (`profil_canvas`) au lieu d'un
-    signal chacun pour la même observation ; libellés conformes à ce qui est compté (« rotation de fingerprint
-    massive » désignait une empreinte stable revue) ; débit compté sur les 60 dernières minutes au lieu d'une
-    moyenne sur toute la vie de l'empreinte, aveugle sous une minute et à 40 par heure pour deux sessions à
-    3 minutes d'écart. Seuils et poids inchangés.
+    de fois qu'il revient.
+    V1.1 (12/11/2026) : un fait, un signal — un seul signal de comptage, sur le plus grand des deux comptes
+    (profil, canvas), au lieu d'un signal chacun pour la même observation ; de même pour le débit. Libellés
+    conformes à ce qui est compté (« rotation de fingerprint massive » désignait une empreinte stable revue).
+    Débit compté sur les 60 dernières minutes au lieu d'une moyenne sur toute la vie du hash, aveugle sous une
+    minute et à 40 par heure pour deux sessions à 3 minutes d'écart. Seuils et poids inchangés.
     """
 
     name = "correlation-session"
     version = "1.1"
 
-    EMPREINTE = "profil_canvas"  # `correlation.TYPE_REGLE`
+    NOMS = {"profil_complet": "profil", "canvas": "canvas"}  # types de `correlation.hash_session`
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
     SEUIL_DEBIT = 30  # sessions commencées dans les 60 dernières minutes
@@ -2454,20 +2454,27 @@ class DetecteurCorrelationSession:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
-        data = obs.correlation.get(self.EMPREINTE) or {}
-        nb = data.get("nb_sessions", 1)
+        comptes = {t: d.get("nb_sessions", 1) for t, d in obs.correlation.items()}
+        nb = max(comptes.values(), default=0)
         if nb >= self.SEUIL_SESSIONS:
             seuil, poids = (self.SEUIL_RAPIDE, 1.0) if nb >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
-            description = f"empreinte (profil et canvas) vue dans {nb} sessions de la base, celle-ci comprise"
-            signaux.append(Signal(f"recycling_{self.EMPREINTE}", f"{description} (seuil {seuil})", poids))
-        debit = data.get("sessions_derniere_heure", 0)
-        if debit >= self.SEUIL_DEBIT:
-            borne = "" if data.get("derniere_heure_exacte", False) else "au moins "
-            description = f"{borne}{debit} sessions de cette empreinte (profil et canvas) commencées"
+            franchis = [(t, n) for t, n in comptes.items() if n >= seuil]
+            vus = " et ".join(f"{self.NOMS.get(t, t)} vu dans {n} sessions" for t, n in franchis)
+            code = max(franchis, key=lambda f: f[1])[0]  # le plus grand compte ; à égalité, le profil
+            signaux.append(Signal(f"recycling_{code}", f"{vus} de la base, celle-ci comprise (seuil {seuil})", poids))
+        debits = {t: d.get("sessions_derniere_heure", 0) for t, d in obs.correlation.items()}
+        if max(debits.values(), default=0) >= self.SEUIL_DEBIT:
+            franchis = [(t, n) for t, n in debits.items() if n >= self.SEUIL_DEBIT]
+            parties = " et ".join(
+                f"{'' if obs.correlation[t].get('derniere_heure_exacte', False) else 'au moins '}{n} sessions de même"
+                f" {self.NOMS.get(t, t)}"
+                for t, n in franchis
+            )
+            code = max(franchis, key=lambda f: f[1])[0]
             signaux.append(
                 Signal(
-                    f"velocity_{self.EMPREINTE}",
-                    f"{description} dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
+                    f"velocity_{code}",
+                    f"{parties} commencées dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
                     0.8,
                 )
             )
