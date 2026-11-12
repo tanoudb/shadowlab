@@ -506,3 +506,70 @@ def test_noter_attendu_montre_cle_et_champs_de_la_verite_sans_rien_noter(reglage
 
 def test_noter_attendu_exige_une_verite(reglages):
     assert main(["recolte", "noter", "x", "--attendu"]) == 2
+
+
+# --- noter et etat après une passe incrémentale -------------------------------------------------
+
+
+def _passe_incrementale_de_45_a_50(pilote, monkeypatch, capsys):
+    """Passe 1 sur 45 annonces, puis passe 2 sur 50 : la seconde n'en lit que 8 pages et en évite 45."""
+    lancer()
+    with creer_client(monkeypatch, 50) as site_50:
+        second = PiloteFactice(site_50)
+        monkeypatch.setattr(
+            commande_recolte, "construire_moteur", lambda nom, recette, reglages: MoteurDriver(second, nom)
+        )
+        lancer()
+    capsys.readouterr()
+    return second
+
+
+def test_noter_apres_une_passe_incrementale_compte_les_pages_evitees_comme_lues(pilote, monkeypatch, capsys):
+    second = _passe_incrementale_de_45_a_50(pilote, monkeypatch, capsys)
+    assert second.requetes_pages == 8
+    assert main(["recolte", "noter", "vitrine-annonces", "--verite", "vitrine"]) == 0
+    sortie = capsys.readouterr().out
+    assert "pages 53/53" in sortie and "enregistrements 50/50" in sortie and f"champs {50 * 14}/{50 * 14}" in sortie
+    assert "manquantes" not in sortie and "Sous le seuil" not in sortie
+
+
+def test_noter_une_page_evitee_mais_jamais_lue_avec_succes_reste_manquante(pilote, monkeypatch, capsys):
+    """Une page introuvable à la passe 1 est redemandée à la passe 2 : si elle l'est encore, elle manque."""
+    pilote.reponses["AN-000005"] = (404, "<html><body>introuvable</body></html>")
+    lancer()
+    with creer_client(monkeypatch, 45) as site:
+        second = PiloteFactice(site)
+        second.reponses["AN-000005"] = (404, "<html><body>introuvable</body></html>")
+        monkeypatch.setattr(
+            commande_recolte, "construire_moteur", lambda nom, recette, reglages: MoteurDriver(second, nom)
+        )
+        lancer()
+    capsys.readouterr()
+    assert main(["recolte", "noter", "vitrine-annonces", "--verite", "vitrine"]) == 1
+    sortie = capsys.readouterr().out
+    assert "pages 47/48" in sortie and "AN-000005" in sortie
+
+
+def test_etat_d_une_passe_incrementale_dit_lues_evitees_et_neuves(pilote, monkeypatch, capsys):
+    _passe_incrementale_de_45_a_50(pilote, monkeypatch, capsys)
+    assert main(["recolte", "etat", "vitrine-annonces"]) == 0
+    sortie = capsys.readouterr().out
+    assert "passe 2" in sortie and "8 pages faites" in sortie
+    assert "incrémentale : 8 lue(s) (3 relue(s), 5 neuve(s)), 45 évitée(s) car déjà lues" in sortie
+
+
+def test_etat_d_une_premiere_passe_ne_parle_pas_d_incrementale(pilote, capsys):
+    lancer()
+    capsys.readouterr()
+    main(["recolte", "etat", "vitrine-annonces"])
+    assert "incrémentale" not in capsys.readouterr().out
+
+
+def test_noter_apres_tout_refaire_est_inchange_et_etat_n_est_pas_incremental(pilote, capsys):
+    lancer()
+    lancer("--tout-refaire")
+    capsys.readouterr()
+    assert main(["recolte", "noter", "vitrine-annonces", "--verite", "vitrine"]) == 0
+    assert "pages 48/48" in capsys.readouterr().out
+    main(["recolte", "etat", "vitrine-annonces"])
+    assert "incrémentale" not in capsys.readouterr().out

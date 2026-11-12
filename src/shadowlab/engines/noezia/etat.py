@@ -415,10 +415,12 @@ class Etat:
             "lues": par_etat.get("faite", 0) + par_etat.get("echec", 0),
         }
 
-    def passe_de_base(self) -> int:
-        """La plus récente passe lancée avec `--tout-refaire` (elle a effacé les enregistrements : les pages lues
-        avant elle ne comptent plus), sinon la première."""
-        for ligne in self._cx.execute("SELECT numero, options FROM passes ORDER BY numero DESC"):
+    def passe_de_base(self, jusqu_a: int | None = None) -> int:
+        """La plus récente passe (au plus `jusqu_a`) lancée avec `--tout-refaire` (elle a effacé les
+        enregistrements : les pages lues avant elle ne comptent plus), sinon la première."""
+        for ligne in self._cx.execute(
+            "SELECT numero, options FROM passes WHERE numero <= COALESCE(?, numero) ORDER BY numero DESC", (jusqu_a,)
+        ):
             if json.loads(ligne["options"]).get("tout_refaire"):
                 return ligne["numero"]
         return 1
@@ -454,6 +456,16 @@ class Etat:
             (passe,),
         )
         return [r[0] for r in lignes]
+
+    def adresses_couvertes(self, passe: int) -> list[str]:
+        """Pages qu'on peut dire lues avec succès pour cette passe : celles qu'elle a lues (comme `adresses_lues`)
+        et celles qu'elle a évitées parce qu'une passe précédente (depuis le dernier `--tout-refaire`) les avait
+        déjà lues avec succès. Une page en échec, anormale, introuvable ou interdite n'y est jamais : elle n'est
+        pas évitée, elle est redemandée. C'est ce que la notation compare aux pages attendues."""
+        evitees = self._cx.execute(
+            "SELECT adresse FROM pages WHERE passe = ? AND etat = 'evitee' ORDER BY id", (passe,)
+        )
+        return self.adresses_lues(passe) + [r[0] for r in evitees]
 
     def collections(self) -> list[str]:
         return [r[0] for r in self._cx.execute("SELECT DISTINCT collection FROM enregistrements ORDER BY collection")]

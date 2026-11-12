@@ -204,6 +204,13 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
             f"{c['interdites_robots']} interdite(s) par robots.txt, {c['anormales']} anormale(s), "
             f"{c['introuvables']} introuvable(s), {c['hors_site']} lien(s) hors site"
         )
+        base = etat.passe_de_base(numero)
+        if numero > base and not passe["options"].get("tout_refaire"):  # passe incrémentale
+            relues = etat.pages_relues(numero, base)
+            print(
+                f"  incrémentale : {c['lues']} lue(s) ({relues} relue(s), {c['lues'] - relues} neuve(s)), "
+                f"{c['evitees']} évitée(s) car déjà lues"
+            )
         print(f"  enregistrements : {enregistrements}")
         for ligne in lignes_alertes(etat.alertes_lecture(numero)):
             print(f"  {ligne}")
@@ -331,7 +338,7 @@ def _noter(args: argparse.Namespace, reglages: Reglages) -> int:
     etat = Etat(dossier / "etat.sqlite3")
     try:
         graine, taille, collections, verite, attendues = _verite_du_labo(args, reglages)
-        pages = notation.noter_pages(attendues, etat.adresses_lues(passe["numero"]))
+        pages = notation.noter_pages(attendues, etat.adresses_couvertes(passe["numero"]))
         brut = {nom: etat.enregistrements(nom) for nom in collections}
         notes = {
             nom: notation.noter_recolte(brut[nom], verite, liste=liste, cle=cle)
