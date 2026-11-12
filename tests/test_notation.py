@@ -2,7 +2,9 @@
 
 from copy import deepcopy
 
-from shadowlab.notation import noter_recolte
+import pytest
+
+from shadowlab.notation import noter_pages, noter_recolte
 from shadowlab.site import vitrine
 
 GRAINE = 20261112
@@ -94,10 +96,6 @@ def test_recolte_vide():
 
 
 # --- Notation générale (récolte générale, étape 3) ---------------------------------------------
-
-import pytest  # noqa: E402
-
-from shadowlab.notation import noter_pages  # noqa: E402
 
 
 def verite_rallye():
@@ -253,3 +251,53 @@ def test_noter_pages_manquantes_plafonnees_et_attendues_vides():
     attendues = [f"/lab/p/{i}" for i in range(50)]
     assert len(noter_pages(attendues, [])["pages_manquantes"]) == 20
     assert noter_pages([], [])["completude_pages"] == 0.0
+
+
+# --- Clés : jamais de conversion en flottant ---------------------------------------------------
+
+
+def _notes_cle(attendu, lu):
+    """Note une récolte d'un enregistrement dont la clé attendue est `attendu` et la clé lue `lu`."""
+    v = {"l": [{"k": attendu, "x": "a"}]}
+    return noter_recolte([{"k": lu, "x": "a"}], v, liste="l", cle="k")
+
+
+@pytest.mark.parametrize(
+    ("attendu", "lu"),
+    [(7, "7"), (7, " 7 "), (7, 7.0), ("7", 7), ("AB", " AB "), ("007", "007")],
+)
+def test_cles_equivalentes(attendu, lu):
+    assert _notes_cle(attendu, lu)["enregistrements_retrouves"] == 1
+
+
+@pytest.mark.parametrize(
+    ("attendu", "lu"),
+    [
+        (1000, "01000"),
+        ("01000", 1000),
+        ("01000", "1000"),
+        ("007", 7),
+        (1000, "1e3"),
+        ("1e3", "1000"),
+        (12345678901234567890, "12345678901234567891"),
+        (12345678901234567890, 12345678901234567891),
+        (7, 7.5),
+    ],
+)
+def test_cles_distinctes(attendu, lu):
+    note = _notes_cle(attendu, lu)
+    assert note["enregistrements_retrouves"] == 0 and note["annonces_en_trop"] == 1
+
+
+@pytest.mark.parametrize("lu", ["nan", "inf", "Infinity", "-inf", float("nan"), float("inf")])
+def test_cles_non_finies_ne_levent_pas(lu):
+    assert _notes_cle("x", lu)["enregistrements_retrouves"] == 0
+
+
+def test_deux_enregistrements_a_zeros_en_tete_restent_distincts():
+    v = {"l": [{"cp": "01000", "n": "Bourg"}, {"cp": "1000", "n": "Autre"}]}
+    recolte = [{"cp": "01000", "n": "Bourg"}, {"cp": "1000", "n": "Autre"}]
+    note = noter_recolte(recolte, v, liste="l", cle="cp")
+    assert note["enregistrements_retrouves"] == 2 and note["exactitude"] == 1
+    note = noter_recolte(recolte[:1], v, liste="l", cle="cp")
+    assert note["enregistrements_retrouves"] == 1 and note["references_manquantes"] == ["1000"]
