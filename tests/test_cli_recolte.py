@@ -10,7 +10,7 @@ from shadowlab.cli import main
 from shadowlab.engines.noezia.etat import Etat
 from shadowlab.engines.noezia.parcours import MoteurDriver
 from shadowlab.engines.noezia.recettes import Enregistrement
-from shadowlab.site import rallye
+from shadowlab.site import rallye, vitrine
 
 QUAND = "2026-11-12T10:00:00+00:00"
 
@@ -439,3 +439,70 @@ def test_etat_montre_aussi_les_alertes_de_lecture(pilote, tmp_path, capsys):
     assert main(["recolte", "etat", "vitrine-annonces"]) == 0
     sortie = capsys.readouterr().out
     assert "Alertes de lecture : 45 au total" in sortie and "45 × fiche · champ « ville »" in sortie
+
+
+def etat_avec(reglages, nom, enregistrements):
+    """Un état d'une passe terminée qui ne contient que ces enregistrements (collection « annonces »)."""
+    dossier = reglages.sorties / "recoltes" / nom
+    etat = Etat(dossier / "etat.sqlite3")
+    passe = etat.ouvrir_passe(nom, "sha256:x", "t", "c", {"nom": "http"}, {}, QUAND)
+    etat.empiler(passe, [("http://127.0.0.1:8770/lab/vitrine/annonces", "liste")])
+    page = etat.prochaine(passe)
+    etat.terminer_page(page, etat="faite", statut=200, decision="ok", quand=QUAND, enregistrements=enregistrements)
+    etat.terminer_passe(passe, "terminee", None, QUAND)
+    etat.fermer()
+
+
+def verite_vitrine(reglages):
+    return vitrine.verite(reglages.vitrine_graine, reglages.vitrine_taille)["annonces"]
+
+
+def test_noter_dit_pourquoi_quand_la_cle_attendue_n_existe_nulle_part(reglages, capsys):
+    brut = [Enregistrement("annonces", (a["reference"],), {"code": a["reference"], "titre": a["titre"]})
+            for a in verite_vitrine(reglages)[:3]]  # fmt: skip
+    etat_avec(reglages, "cle-fausse", brut)
+    assert main(["recolte", "noter", "cle-fausse", "--verite", "vitrine"]) == 1
+    sortie = capsys.readouterr().out
+    assert "la clé attendue est `reference`" in sortie and "ont les champs : code, titre" in sortie
+    assert "champs 0/0" not in sortie.replace("rien à comparer", "")  # jamais 0/0 sans explication
+    assert "rien à comparer" in sortie and "Sous le seuil" in sortie
+
+
+def test_noter_dit_quand_aucun_enregistrement_de_la_collection_n_est_recolte(reglages, capsys):
+    etat_avec(reglages, "vide", [Enregistrement("autre", ("1",), {"id": "1"})])
+    assert main(["recolte", "noter", "vide", "--verite", "vitrine"]) == 1
+    sortie = capsys.readouterr().out
+    assert "aucun enregistrement « annonces » récolté" in sortie and "collections récoltées : autre" in sortie
+    assert "Sous le seuil" in sortie
+
+
+def test_noter_dit_quand_les_cles_recoltees_ne_correspondent_a_aucune_verite(reglages, capsys):
+    brut = [Enregistrement("annonces", ("ZZ-1",), {"reference": "ZZ-1", "titre": "x"})]
+    etat_avec(reglages, "cles-autres", brut)
+    assert main(["recolte", "noter", "cles-autres", "--verite", "vitrine"]) == 1
+    sortie = capsys.readouterr().out
+    assert "aucune clé récoltée ne correspond" in sortie and "ZZ-1" in sortie
+
+
+def test_noter_liste_les_champs_en_plus_sans_changer_la_note(reglages, capsys):
+    brut = [Enregistrement("annonces", (a["reference"],), {**a, "bonus": 1, "autre": "x"})
+            for a in verite_vitrine(reglages)]  # fmt: skip
+    etat_avec(reglages, "en-plus", brut)
+    main(["recolte", "noter", "en-plus", "--verite", "vitrine"])
+    sortie = capsys.readouterr().out
+    assert "annonces : champs produits mais absents de la vérité (non notés) : bonus, autre" in sortie
+    n = len(verite_vitrine(reglages))
+    assert f"enregistrements {n}/{n}" in sortie and f"champs {n * 14}/{n * 14}" in sortie  # la note ne bouge pas
+
+
+def test_noter_attendu_montre_cle_et_champs_de_la_verite_sans_rien_noter(reglages, capsys):
+    assert main(["recolte", "noter", "n-existe-pas", "--verite", "vitrine", "--attendu"]) == 0
+    sortie = capsys.readouterr().out
+    assert f"annonces · clé : reference · {len(verite_vitrine(reglages))} enregistrements" in sortie
+    assert "champs : reference, titre," in sortie and "Notation" not in sortie
+    assert main(["recolte", "noter", "n-existe-pas", "--verite", "rallye", "--attendu"]) == 0
+    assert " · clé : " in capsys.readouterr().out
+
+
+def test_noter_attendu_exige_une_verite(reglages):
+    assert main(["recolte", "noter", "x", "--attendu"]) == 2
