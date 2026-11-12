@@ -13,7 +13,7 @@ from shadowlab.engines.noezia.etat import Etat
 from shadowlab.engines.noezia.sentinelle import Alerte, detecter_defi
 
 PAGE_ARENA = (
-    '<!doctype html><html><head><title>Vérification — ShadowLab</title></head>'
+    "<!doctype html><html><head><title>Vérification — ShadowLab</title></head>"
     '<body data-arena="defi"><main class="arena"><h1>Vérification</h1><div id="defi" hidden></div></main></body></html>'
 )
 # Page de défi d'un fournisseur, écrite à la main : formulaire de défi, cadre d'un service de vérification.
@@ -37,8 +37,17 @@ class PiloteNavigateur(PiloteFactice):
         super().__init__(client, hotes)
         self.dom_apres_attente: list[str] = []  # contenu de la page à chaque relecture (le défi se valide seul)
         self.relectures = 0
+        self._frais = False
+
+    def navigate(self, url):
+        # Le premier `etat_page` qui suit est celui de `MoteurDriver.lire` (en-têtes), pas une relecture.
+        self._frais = True
+        return super().navigate(url)
 
     def etat_page(self):
+        if self._frais:
+            self._frais = False
+            return 200, self.urls[-1], {}
         self.relectures += 1
         if self.dom_apres_attente:
             self._texte = self.dom_apres_attente.pop(0)
@@ -172,7 +181,7 @@ def test_defi_d_un_fournisseur_a_la_premiere_page_attente_sans_action_puis_arret
     bilan = p.lancer()
     assert bilan.code == 3 and bilan.statut == "arretee" and bilan.arret["signe"] == "defi"
     assert sum(p.horloge_factice.pauses) == pytest.approx(15)  # attendu 15 s, pas une de plus
-    assert pilote.relectures == 15  # la page est relue sur place
+    assert pilote.relectures == 16  # la page est regardée sur place : une fois, puis après chaque seconde
     assert pilote.requetes_pages == 1  # aucune nouvelle requête, aucun rechargement, aucun clic
     assert "15" in bilan.arret["detail"]
     assert lu(dossier)["porte_entree"] == {"defi": "cloudflare", "franchie": False, "attente_s": 15.0}
@@ -185,8 +194,8 @@ def test_defi_qui_se_valide_seul_la_passe_continue_et_c_est_compte_a_part(dossie
     p = fabriquer(dossier, pilote, texte=avec_porte())
     bilan = p.lancer()
     assert bilan.code == 0 and bilan.resume["pages"]["faites"] == 48
-    assert pilote.relectures == 3 and sum(p.horloge_factice.pauses) == pytest.approx(3)
-    assert bilan.resume["porte_entree"] == {"defi": "cloudflare", "franchie": True, "attente_s": 3.0}
+    assert pilote.relectures == 3 and sum(p.horloge_factice.pauses) == pytest.approx(2)
+    assert bilan.resume["porte_entree"] == {"defi": "cloudflare", "franchie": True, "attente_s": 2.0}
     assert lu(dossier)["porte_entree"]["franchie"] is True
 
 
