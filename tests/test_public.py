@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import sqlite3
@@ -1812,3 +1813,97 @@ def test_en_tete_d_adresse_present_n_avertit_pas(client):
         assert avertissements == []
     finally:
         journal.removeHandler(capture)
+
+
+# --- Droits des fichiers dès la création, effacement sans promesse fausse -------------------------------------
+
+
+def test_droits_des_fichiers_des_leur_creation(monkeypatch, reglages_publics):
+    """Le dossier de la base est en 700 et les deux fichiers en 600 AVANT que SQLite les ouvre : aucune fenêtre où un
+    fichier existe avec des droits plus larges, avec ou sans le script de tunnel."""
+    vus: dict[str, tuple[int, int | None]] = {}
+    vrai = sqlite3.connect
+
+    def espion(base, *args, **kwargs):
+        chemin = Path(base)
+        existe = chemin.exists()
+        vus.setdefault(
+            chemin.name, (chemin.parent.stat().st_mode & 0o777, chemin.stat().st_mode & 0o777 if existe else None)
+        )
+        return vrai(base, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", espion)
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "essai").status_code == 303
+    assert vus["public.sqlite3"] == (0o700, 0o600), "créé en 600 avant l'ouverture, dans un dossier en 700"
+    assert vus["messages.sqlite3"] == (0o700, 0o600)
+    dossier = reglages_publics.base_donnees.parent
+    assert dossier.stat().st_mode & 0o777 == 0o700
+    fichiers = sorted(dossier.glob("*.sqlite3*"))
+    assert fichiers and all(f.stat().st_mode & 0o777 == 0o600 for f in fichiers), fichiers
+
+
+def test_droits_resserres_sur_un_dossier_et_des_fichiers_existants(reglages_publics):
+    dossier = reglages_publics.base_donnees.parent
+    dossier.mkdir(parents=True)
+    dossier.chmod(0o755)
+    for nom in ("public.sqlite3", "messages.sqlite3"):
+        (dossier / nom).touch()
+        (dossier / nom).chmod(0o644)
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "essai").status_code == 303
+    assert dossier.stat().st_mode & 0o777 == 0o700
+    assert all(f.stat().st_mode & 0o777 == 0o600 for f in dossier.glob("*.sqlite3*"))
+
+
+def test_documentation_sans_promesse_d_ecrasement_physique():
+    """`secure_delete` vide les pages dans la base ; il ne garantit pas l'écrasement physique (journal de SQLite,
+    SSD, copie sur écriture, sauvegardes). Docstrings et documentation ne le promettent plus."""
+    from shadowlab.public import donnees
+
+    doc = (Path(__file__).parents[1] / "docs" / "site-public.md").read_text(encoding="utf-8")
+    for texte in (doc, donnees.connexion.__doc__, boite.connexion.__doc__):
+        assert not re.search(r"est écrasé", texte), "plus de promesse d'écrasement sur le disque"
+    assert "ne garantit pas" in doc and "FileVault" in doc
+    assert re.search(r"exclure.{0,40}outputs/", doc, re.S), "exclure outputs/ des sauvegardes"
+
+
+# --- L'application publique ne charge que ses propres variables ------------------------------------------------
+
+FICHIER_ENV = """# commentaire
+SHADOWLAB_PUBLIC_CONTACT=Pseudo
+export SHADOWLAB_VITRINE_TAILLE=7
+SHADOWLAB_SORTIES=/tmp/sorties-essai
+SHADOWLAB_JETON=jeton-du-labo
+SHADOWLAB_PUBLICITE=non
+CLE_API_DU_LABO=secret-du-labo
+"""
+
+
+@pytest.fixture
+def environnement_isole(monkeypatch, tmp_path) -> dict[str, str]:
+    """Un `.env` temporaire à la racine, et un environnement de processus que le test peut lire sans fuite."""
+    (tmp_path / ".env").write_text(FICHIER_ENV, encoding="utf-8")
+    monkeypatch.setattr(config, "RACINE", tmp_path)
+    environnement = {k: v for k, v in os.environ.items() if not k.startswith("SHADOWLAB_")}
+    monkeypatch.setattr(os, "environ", environnement)
+    return environnement
+
+
+def test_charger_public_ne_charge_que_ses_variables(environnement_isole):
+    reglages = charger_public()
+    assert reglages.contact == "Pseudo" and reglages.vitrine_taille == 7, "ses propres variables sont lues"
+    assert environnement_isole["SHADOWLAB_PUBLIC_CONTACT"] == "Pseudo"
+    for autre in ("SHADOWLAB_JETON", "SHADOWLAB_PUBLICITE", "CLE_API_DU_LABO"):
+        assert autre not in environnement_isole, f"{autre} appartient au labo : il n'entre pas dans le processus"
+
+
+def test_charger_public_garde_la_priorite_de_l_environnement(environnement_isole):
+    environnement_isole["SHADOWLAB_PUBLIC_CONTACT"] = "Exporté"
+    assert charger_public().contact == "Exporté"
+
+
+def test_le_labo_charge_toujours_tout_le_fichier_env(environnement_isole):
+    reglages = config.charger()
+    assert reglages.jeton_api == "jeton-du-labo"
+    assert environnement_isole["CLE_API_DU_LABO"] == "secret-du-labo"
