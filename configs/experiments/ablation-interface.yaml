@@ -1,33 +1,42 @@
-# Vrai Chrome avec interface, sans identité réécrite (docs/PLAN.md § 2, en-têtes de la campagne 94).
-# Constat : le réglage du User-Agent par noezia ne couvre pas toutes ses requêtes, et « HeadlessChrome »
-# fuit sur 16 % d'entre elles. La documentation de Patchright, la base du moteur, recommande l'inverse de
-# ce que fait noezia : un vrai Chrome (channel="chrome"), avec interface (headless=False), sans User-Agent
-# ni en-têtes imposés. Cette campagne mesure cette configuration de deux façons, à comparer niveau par
-# niveau à la campagne de référence lancée le même jour :
-#   patchright-chrome-interface : la base du moteur telle que sa documentation la recommande, sans rien
-#                                 de noezia (le pilote garde la fenêtre par défaut de Playwright, 1280 × 720) ;
-#   noezia-natif                : noezia avec l'option `identite_native` (ni profil, ni User-Agent, ni
-#                                 script d'empreinte) et son comportement humain, ses défis, sa récolte.
-# Écart avec la recommandation complète : un contexte neuf à chaque passage, pas de profil persistant.
+# Identité réécrite ou identité d'origine ? (docs/PLAN.md § 2, en-têtes de la campagne 94, D-59)
+# Constat : noezia réécrit son identité, la réécriture ne couvre pas toutes ses requêtes, et « HeadlessChrome »
+# fuit sur 16 % d'entre elles. La documentation de Patchright, la base du moteur, recommande l'inverse : un
+# vrai Chrome (channel="chrome"), avec interface (headless=False), sans User-Agent ni en-têtes imposés.
+# Cette campagne compare, niveau par niveau, cinq configurations :
+#   noezia                      : le moteur tel qu'il est (sans interface, identité réécrite)
+#   noezia-natif                : option `identite_native` (ni profil, ni User-Agent, ni script d'empreinte),
+#                                 vrai Chrome avec interface, comportement humain et défis de noezia
+#   patchright-chrome-interface : la base du moteur comme sa documentation la recommande, rien de noezia
+#                                 (le pilote garde la fenêtre par défaut de Playwright, 1280 × 720)
+#   patchright, playwright      : les deux témoins de la référence, sans réglage
+# Niveaux 01 à 03 tels quels (comparables à la référence n° 90) ; niveaux 04 à 07 sans le détecteur cdp
+# (profils `04scdp` à `07scdp`) : avec cdp, tous les moteurs sont refusés de la même façon (campagnes 90 et
+# 93), on n'y lirait rien. Écart avec la recommandation complète de Patchright : un contexte neuf à chaque
+# passage, pas de profil persistant.
 #
-#   uv run shadowlab campagne configs/experiments/ablation-interface.yaml
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-cdp.yaml uv run shadowlab campagne configs/experiments/ablation-interface.yaml
+#   3. uv run shadowlab arena appliquer
 #
 # Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
-# 2 configurations × 7 niveaux × 3 scénarios × 5 répétitions = 210 passages, un à la fois.
+# 5 configurations × 7 niveaux × 3 scénarios × 5 répétitions = 525 passages, un à la fois (environ 2 h 30).
 experiment:
   name: ablation_interface
   description: >-
-    Patchright dans sa configuration recommandée (vrai Chrome, avec interface, rien d'imposé) et noezia
-    en identité native, sur les niveaux 01 à 07, mêmes scénarios et répétitions que la référence.
+    noezia tel qu'il est, noezia en identité native, patchright dans sa configuration recommandée et les deux
+    témoins, sur les niveaux 01 à 03 et 04 à 07 sans cdp, mêmes scénarios et répétitions que la référence.
   environment: local
   engines:
-    - name: patchright
-      label: patchright-chrome-interface
-      options: {headless: false, channel: chrome}
+    - noezia
     - name: noezia
       label: noezia-natif
       options: {headless: false, channel: chrome, identite_native: true}
-  protections: ["01", "02", "03", "04", "05", "06", "07"]
+    - name: patchright
+      label: patchright-chrome-interface
+      options: {headless: false, channel: chrome}
+    - patchright
+    - playwright
+  protections: ["01", "02", "03", "04scdp", "05scdp", "06scdp", "07scdp"]
   scenarios:
     - static_html
     - javascript_content
