@@ -256,16 +256,19 @@ class DetecteurTls:
     V2 : 17 règles couvrant GREASE, ALPN, chiffrements (compte, ordre, TLS 1.3),
     extensions (Chrome/Firefox-spécifiques, comptage), groupes (courbes, ordre),
     signatures, version TLS, et détection OpenSSL.
+    V2.1 (12/11/2026) : ALPS reconnu sous ses deux numéros ; la V2 signalait tout Chrome récent.
     """
 
     name = "tls"
-    version = "2"
+    version = "2.1"
 
     _TLS13_SUITES = frozenset({"1301", "1302", "1303"})
     _CIPHERS_NAVIGATEUR = frozenset({"1301", "1302", "1303", "c02b", "c02f"})
     _EXT_NAVIGATEUR = frozenset({"0000", "000a", "000b", "000d", "002b", "0033"})
     _EXT_CHROME_OBLIGATOIRES = frozenset({"001b"})
-    _EXT_CHROME_SPECIFIQUES = frozenset({"4469", "001b"})
+    # ALPS (application_settings) : ancien numéro 17513, puis 17613 dans les Chrome récents (seul vu en campagne 93).
+    _EXT_ALPS = frozenset({"4469", "44cd"})
+    _EXT_CHROME_SPECIFIQUES = _EXT_ALPS | {"001b"}
     _GRP_X25519 = "001d"
     _GRP_P256 = "0017"
     _GRP_FFDHE = "0100"
@@ -401,7 +404,7 @@ class DetecteurTls:
                         0.5,
                     )
                 )
-            if "4469" not in ext_set:
+            if not self._EXT_ALPS & ext_set:
                 signaux.append(
                     Signal(
                         "chrome_sans_alps",

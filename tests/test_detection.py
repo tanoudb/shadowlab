@@ -666,6 +666,20 @@ def test_tls_chrome_sans_alps():
     assert "chrome_sans_alps" in s
 
 
+def test_tls_chrome_alps_nouveau_numero():
+    """Chrome récent annonce ALPS sous le numéro 17613 (44cd), plus sous 17513 (4469) : ce n'est pas un Chrome
+    sans ALPS. Relevé sur les 180 ClientHello de la campagne 93 (Chromium 156) : 44cd partout, 4469 nulle part."""
+    exts = ["44cd" if e == "4469" else e for e in _EXTENSIONS_CHROME]
+    s = _tls_signaux(UA_CHROME, _tls_chrome(extensions=exts))
+    assert "chrome_sans_alps" not in s
+
+
+def test_tls_firefox_avec_alps_nouveau_numero():
+    exts = _tls_firefox()["extensions"] + ["44cd"]
+    s = _tls_signaux(UA_FIREFOX, _tls_firefox(extensions=exts, nb_extensions=len(exts)))
+    assert "firefox_ext_chrome" in s
+
+
 def test_tls_firefox_sans_record_size():
     ext_sans_rs = [e for e in _tls_firefox()["extensions"] if e != "001c"]
     s = _tls_signaux(UA_FIREFOX, _tls_firefox(extensions=ext_sans_rs, nb_extensions=len(ext_sans_rs)))
