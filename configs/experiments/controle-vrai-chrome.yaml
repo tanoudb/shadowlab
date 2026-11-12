@@ -6,22 +6,25 @@
 # Cette campagne refait la même mesure après la correction, sur les mêmes cellules (15 passages chacune) :
 #   noezia-natif                : vrai Chrome avec interface, identité d'origine, comportement et défis de noezia
 #   patchright-chrome-interface : vrai Chrome avec interface, rien de noezia
-#   patchright                  : témoin sans réglage ; il doit rester arrêté dès le niveau 03
+#   patchright                  : témoin sans réglage ; il doit rester arrêté à chaque niveau
 # Deux lectures : (1) le vrai Chrome n'est plus arrêté par le composite ; (2) le témoin l'est toujours.
 # Ce qui arrêterait encore le vrai Chrome (comportement, défis, WAF) est une mesure, pas un défaut de la campagne.
-# Niveaux 06 et 07 sans le détecteur correlation-session, comme la campagne 97 (profils `06scorr` et `07scorr`).
+# Niveaux 04, 05 et 06 seulement : ceux de l'objectif (01 à 06) où le vrai Chrome était arrêté. Le niveau 03
+# (15 sur 15 dans la campagne 97) et le niveau 07 (hors objectif) sont laissés de côté pour tenir dans le temps.
+# Niveau 06 sans le détecteur correlation-session, comme la campagne 97 (profil `06scorr`).
 #
 #   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
 #   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/controle-vrai-chrome.yaml
 #   3. uv run shadowlab arena appliquer
 #
 # Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
-# 3 configurations × 5 niveaux × 3 scénarios × 5 répétitions = 225 passages, un à la fois (environ 1 h 15).
+# 3 configurations × 3 niveaux × 3 scénarios × 5 répétitions = 135 passages, un à la fois (45 minutes si le vrai
+# Chrome passe, 1 h 40 s'il est encore arrêté : un passage refusé attend 30 s avant d'abandonner).
 experiment:
   name: controle_vrai_chrome
   description: >-
     Après la correction de quatre règles de l'Arena (D-66) : noezia en identité native, patchright dans sa
-    configuration recommandée et un témoin, sur les niveaux 03 à 05 et 06 et 07 sans corrélation entre sessions.
+    configuration recommandée et un témoin, sur les niveaux 04, 05 et 06 sans corrélation entre sessions.
   environment: local
   engines:
     - name: noezia
@@ -31,7 +34,7 @@ experiment:
       label: patchright-chrome-interface
       options: {headless: false, channel: chrome}
     - patchright
-  protections: ["03", "04", "05", "06scorr", "07scorr"]
+  protections: ["04", "05", "06scorr"]
   scenarios:
     - static_html
     - javascript_content
