@@ -85,19 +85,19 @@ def noter_recolte(
 ) -> dict[str, Any]:
     """Note les enregistrements récoltés contre `verite[liste]`, retrouvés par `cle`.
 
-        `cle` est un nom de champ ou une suite de noms (clé composée, ex. `("rallye", "speciale", "numero")`).
-        Les parties de clé se comparent sans espaces ; un entier et son écriture exacte en texte sont égaux, mais
-        `"007"` reste distinct de `7` (voir `_partie_de_cle`). Un doublon
-        ne compte qu'une fois ; un enregistrement à clé inconnue ou incomplète est « en trop ». Les clés attendues
-        doivent être uniques. Les clés `annonces_*` gardent leur nom d'origine (appel historique de la vitrine) ;
-        `enregistrements_*` en sont les noms généraux.
+    `cle` est un nom de champ ou une suite de noms (clé composée, ex. `("rallye", "speciale", "numero")`).
+    Les parties de clé se comparent sans espaces ; un entier et son écriture exacte en texte sont égaux, mais
+    `"007"` reste distinct de `7` (voir `_partie_de_cle`). Un doublon
+    ne compte qu'une fois ; un enregistrement à clé inconnue ou incomplète est « en trop ». Les clés attendues
+    doivent être uniques. Les clés `annonces_*` gardent leur nom d'origine (appel historique de la vitrine) ;
+    `enregistrements_*` en sont les noms généraux.
 
-        `cle_absente` : parties de la clé attendue présentes dans aucun enregistrement récolté ; `champs_recoltes` :
-        champs produits (hors métadonnées `_…` de l'état) ; `champs_en_plus` : ceux que la vérité n'a pas
-        (information seulement, la note n'en dépend pas).
+    `cle_absente` : parties de la clé attendue présentes dans aucun enregistrement récolté ; `champs_recoltes` :
+    champs produits (hors métadonnées `_…` de l'état) ; `champs_en_plus` : ceux que la vérité n'a pas
+    (information seulement, la note n'en dépend pas).
 
-        `exactitude` vaut `None` quand aucun champ n'est comparé (rien retrouvé) : l'appelant doit le gérer avant de
-        la comparer à un seuil.
+    `exactitude` vaut `None` quand aucun champ n'est comparé (rien retrouvé) : l'appelant doit le gérer avant de
+    la comparer à un seuil.
     """
     champs_cle = (cle,) if isinstance(cle, str) else tuple(cle)
     if not champs_cle:
