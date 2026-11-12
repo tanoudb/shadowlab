@@ -446,3 +446,30 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   référence est un Chrome piloté, pas encore une session humaine ; `meta-composite` (« session trop
   propre », D-45) se déclenche chez tout le monde sans peser dans aucune décision : à revoir avec Ethan.
   Décidé par : coordination (travail d'un sous-agent Opus, relu).
+- **D-67 — 12/11/2026 — Site public, troisième relecture : le journal ne garde que les erreurs, une page de
+  contact ne laisse aucune trace dans une session (complète D-57 et D-65).** Une relecture de sécurité
+  indépendante, avant la mise en ligne, a trouvé des écarts entre ce que la page d'information promet et ce que
+  l'application fait. Choix : (1) le journal de l'application ne garde plus que les réponses de code 400 ou
+  plus (méthode, chemin, code ; ni adresse, ni jeton, ni identifiant de session) ; une requête réussie n'écrit
+  rien. Avant, chaque page vue était datée à la milliseconde dans un fichier que ni la suppression d'une
+  session ni la purge ne touchaient, alors que la page dit « rien n'est enregistré ». (2) Les pages de contact
+  ne chargent plus rien sous `/lab/` (feuille de style servie sous `/contact/style.css`) et ne mènent qu'à `/`
+  ou `/contact…` : la base d'une session en cours ne note plus ni l'ouverture du formulaire ni l'envoi (avant,
+  une feuille de style au référent réduit à « / » les datait). (3) Limites par adresse : les empreintes
+  expirées sortent de la mémoire au plus une minute après la première requête qui suit leur délai ; une table
+  pleine n'est plus remise à zéro (l'adresse inconnue est refusée) ; un en-tête d'adresse absent est signalé
+  une fois au journal. (4) Le dossier de la base est en 700 et ses fichiers en 600 dès leur création, par
+  l'application elle-même. (5) L'application publique ne charge du fichier `.env` que ses propres variables
+  (`SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*`, `SHADOWLAB_SORTIES`) : les clés du laboratoire n'entrent pas
+  dans un processus exposé. (6) Le journal de `cloudflared` est filtré avant écriture (adresses réduites à
+  l'hôte, chaînes de requête et jetons masqués). (7) Plus de promesse d'écrasement physique : `secure_delete`
+  vide les pages dans la base, mais ni le journal de SQLite, ni le disque, ni les sauvegardes ne sont
+  garantis ; chiffrement du disque et exclusion de `outputs/` des sauvegardes reviennent au responsable.
+  (8) Les messages de contact sont purgés le jour limite compris (ils vivaient un jour de trop). Texte
+  d'information en version 2026-11-12.7 : journal des erreurs, empreinte d'adresse en mémoire vive, délai réel
+  de l'effacement automatique. Limites acceptées, écrites dans `docs/site-public.md` : le responsable présent
+  devant l'écran voit l'heure d'arrivée d'un message ; quelques adresses suffisent à épuiser le plafond du jour
+  du formulaire ; quiconque a le lien peut ouvrir une session par script, donc une session publique ne prouve
+  pas qu'un humain était là (question ouverte pour Ethan) ; le filtre du journal de `cloudflared` n'a jamais
+  été vérifié avec un vrai tunnel. Décidé par : coordination (relecture d'un sous-agent, corrections d'un
+  autre, relues).
