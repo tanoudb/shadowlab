@@ -185,6 +185,7 @@ export interface PassageLigne {
   error: string | null;
   cpu_usage: number | null;
   cpu_time_ms: number | null;
+  /** En Mo (pic de mémoire du navigateur et de ses processus), déjà converti : ne pas diviser. */
   memory_usage: number | null;
   request_count: number | null;
   detections: number;
