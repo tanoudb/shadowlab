@@ -1,0 +1,41 @@
+# Contrôle de la décision D-66 : un vrai Chrome passe-t-il l'Arena une fois les quatre règles corrigées ?
+# Campagne 97 (avant) : Google Chrome 156 avec interface, piloté sans aucune réécriture, passait les niveaux 02
+# et 03 puis était arrêté à chaque passage aux niveaux 04, 05 et 06 (défi JavaScript résolu mais refusé pour
+# « empreinte suspecte », score composite 1,03 puis 1,31) par quatre signaux qu'un humain déclenche aussi :
+# `voices_vide`, `runtime_incomplet`, `polices_os_manquantes`, `rtt_zero`.
+# Cette campagne refait la même mesure après la correction, sur les mêmes cellules (15 passages chacune) :
+#   noezia-natif                : vrai Chrome avec interface, identité d'origine, comportement et défis de noezia
+#   patchright-chrome-interface : vrai Chrome avec interface, rien de noezia
+#   patchright                  : témoin sans réglage ; il doit rester arrêté dès le niveau 03
+# Deux lectures : (1) le vrai Chrome n'est plus arrêté par le composite ; (2) le témoin l'est toujours.
+# Ce qui arrêterait encore le vrai Chrome (comportement, défis, WAF) est une mesure, pas un défaut de la campagne.
+# Niveaux 06 et 07 sans le détecteur correlation-session, comme la campagne 97 (profils `06scorr` et `07scorr`).
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/controle-vrai-chrome.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
+# 3 configurations × 5 niveaux × 3 scénarios × 5 répétitions = 225 passages, un à la fois (environ 1 h 15).
+experiment:
+  name: controle_vrai_chrome
+  description: >-
+    Après la correction de quatre règles de l'Arena (D-66) : noezia en identité native, patchright dans sa
+    configuration recommandée et un témoin, sur les niveaux 03 à 05 et 06 et 07 sans corrélation entre sessions.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: patchright
+      label: patchright-chrome-interface
+      options: {headless: false, channel: chrome}
+    - patchright
+  protections: ["03", "04", "05", "06scorr", "07scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261112
+  output: [json, html]
