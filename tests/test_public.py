@@ -25,6 +25,7 @@ from shadowlab import config
 from shadowlab import database as db
 from shadowlab.config import ReglagesPublics, charger_public
 from shadowlab.public import Limites, creer_app_publique, purger
+from shadowlab.public import messages as boite
 from shadowlab.public.donnees import ENTETES_GARDES
 from shadowlab.public.pages import DONNEES_COMPORTEMENT, DONNEES_RELEVEES
 
@@ -379,6 +380,7 @@ def pages_servies(client: TestClient) -> list[str]:
     pages.append(client.get("/lab/static/vitrine.css").text)
     pages.append(client.get("/lab/static/vitrine.js").text)
     pages.append(client.get("/session").text)
+    pages += [client.get("/contact").text, client.get("/contact/envoye").text]
     merci = terminer(client)
     pages.append(merci.text)
     champs = champs_du_formulaire(merci.text, "/session/supprimer")
@@ -1073,3 +1075,204 @@ def test_secret_valide_inchange_et_cree_s_il_manque(tmp_path):
     assert [p.name for p in dossier.iterdir()] == ["secret"], "aucun fichier temporaire ne reste"
     (dossier / "secret").write_text("cle-choisie\n")
     assert secret_arena.charger(dossier) == b"cle-choisie"
+
+
+# === E. Formulaire de contact (D-57) : écrire au responsable sans qu'une adresse soit affichée ====
+
+
+def ecrire(client: TestClient, texte: str, adresse: str = IP, **entetes):
+    """Envoie le formulaire de contact comme un navigateur : jeton lu dans la page, même origine."""
+    champs = champs_du_formulaire(client.get("/contact").text, "/contact")
+    return client.post(
+        "/contact",
+        data={**champs, "message": texte},
+        headers={"Origin": ORIGINE, "X-Forwarded-For": adresse, **entetes},
+        follow_redirects=False,
+    )
+
+
+def texte_rendu(reponse) -> str | None:
+    """Texte remis dans le formulaire de contact par une réponse de refus."""
+    assert champs_du_formulaire(reponse.text, "/contact")["csrf"]
+    return Selector(reponse.text).css('form[action="/contact"] textarea[name="message"]::text').get()
+
+
+def messages_recus(reglages: ReglagesPublics) -> list[str]:
+    cx = boite.connexion(boite.chemin(reglages.base_donnees))
+    try:
+        return [ligne["texte"] for ligne in boite.lister(cx)]
+    finally:
+        cx.close()
+
+
+def test_contact_remplace_l_adresse_dans_les_pages(client):
+    page = Selector(client.get("/contact").text)
+    formulaire = page.css('form[action="/contact"][method="post"]')
+    assert formulaire.css('textarea[name="message"][required][maxlength="2000"]')
+    assert formulaire.css('input[type="hidden"][name="csrf"]')
+    assert "90 jours" in client.get("/contact").text, "la durée de conservation du message est annoncée"
+
+    information = client.get("/").text
+    assert Selector(information).css('a[href="/contact"]'), "la page d'information mène au formulaire"
+    assert escape(CONTACT) in information, "le responsable reste nommé"
+    sans_session = client.get("/session").text
+    commencer(client)
+    ma_session = client.get("/session").text
+    merci = terminer(client).text
+    for texte in (sans_session, ma_session, merci):
+        assert Selector(texte).css('a[href="/contact"]'), texte[:200]
+        assert "écrivez à :" not in texte and escape(CONTACT) not in texte
+
+
+def test_contact_textes_exacts(client):
+    information = client.get("/").text
+    assert "ce que vous écrivez vous-même dans le formulaire de contact" in information
+    for texte in (information, client.get("/contact").text):
+        assert "jour de sa réception" in texte and "tel quel" not in texte and "ni lien avec" not in texte
+
+
+def test_base_nommee_comme_la_boite_refusee(reglages_publics):
+    homonyme = reglages_publics.base_donnees.with_name(boite.FICHIER)
+    with pytest.raises(ValueError, match="messages"):
+        creer_app_publique(replace(reglages_publics, base_donnees=homonyme))
+
+
+def test_contact_enregistre_le_message_a_part_sans_adresse(client, reglages_publics):
+    journalises: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            journalises.append(record.getMessage())
+
+    journal = logging.getLogger("shadowlab.public")
+    capture, niveau = Capture(level=logging.DEBUG), journal.level
+    journal.addHandler(capture)
+    journal.setLevel(logging.DEBUG)
+    texte = "Bonjour,\nmerci d'effacer la session 0123456789abcdef0123456789abcdef.\nRéponse : moi@exemple.test"
+    try:
+        r = ecrire(client, texte.replace("\n", "\r\n"), **ENTETES_IP)
+    finally:
+        journal.removeHandler(capture)
+        journal.setLevel(niveau)
+    assert r.status_code == 303 and r.headers["location"] == "/contact/envoye"
+    assert client.get("/contact/envoye").status_code == 200
+    assert messages_recus(reglages_publics) == [texte]
+    for reponse in (r, client.get("/contact"), client.get("/contact/envoye")):
+        assert reponse.headers["referrer-policy"] == "no-referrer", "la page suivante ne dit pas d'où l'on vient"
+    assert client.get("/").headers["referrer-policy"] == "same-origin"
+
+    fichier = boite.chemin(reglages_publics.base_donnees)
+    assert fichier.parent == reglages_publics.base_donnees.parent and fichier != reglages_publics.base_donnees
+    assert fichier.stat().st_mode & 0o777 == 0o600
+    cx = sqlite3.connect(fichier)
+    lignes = cx.execute("SELECT * FROM messages").fetchall()
+    cx.close()
+    assert [ligne[1] for ligne in lignes] == [datetime.now(UTC).date().isoformat()], "le jour, jamais l'heure"
+    tout = "\n".join(str(ligne) for ligne in lignes)
+    assert IP not in tout and "testclient" not in tout, "ni adresse, ni client : le texte et sa date seulement"
+    assert "moi@exemple.test" not in contenu_de_la_base(reglages_publics), "jamais dans la base des sessions"
+    assert "moi@exemple.test" not in "\n".join(journalises) and IP not in "\n".join(journalises)
+
+
+def test_contact_protege(client, reglages_publics):
+    champs = champs_du_formulaire(client.get("/contact").text, "/contact")
+    donnees = {**champs, "message": "essai"}
+    assert client.post("/contact", data=donnees, headers={"Origin": "https://ailleurs.test"}).status_code == 403
+    for envoi in ({"message": "essai"}, {**donnees, "csrf": "0" * 32}):
+        r = client.post("/contact", data=envoi, headers={"Origin": ORIGINE})
+        assert r.status_code == 403
+        assert texte_rendu(r) == "essai", "formulaire expiré : le texte tapé est rendu, avec un jeton neuf"
+    assert client.get("/contact/envoye").status_code == 200, "page fixe, sans effet"
+    assert messages_recus(reglages_publics) == []
+
+
+def test_contact_message_vide_ou_trop_long(client, reglages_publics):
+    assert ecrire(client, "   ").status_code == 422
+    trop_long = "<script>alert(1)</script>" + "x" * 2000
+    r = ecrire(client, trop_long)
+    assert r.status_code == 422
+    assert "<script>alert(1)" not in r.text and escape("<script>alert(1)</script>") in r.text, "texte rendu, échappé"
+    assert messages_recus(reglages_publics) == []
+    accents = "é" * 2000  # 12 000 octets une fois encodé dans le formulaire : la borne compte les caractères
+    assert ecrire(client, accents).status_code == 303
+    assert messages_recus(reglages_publics) == [accents]
+    assert ecrire(client, "x" * 40_000).status_code == 400, "formulaire démesuré : refusé sans être lu en entier"
+    with fabriquer(reglages_publics, taille_message=5000) as c:
+        assert ecrire(c, "é" * 5000, AUTRE_IP).status_code == 303, "la borne du formulaire suit la limite de caractères"
+
+
+def test_contact_retire_les_caracteres_de_controle(client, reglages_publics):
+    recu = "ligne 1\n\x1b[31mrouge\x00\u202e fin\tici"
+    assert ecrire(client, recu).status_code == 303
+    # Les espaces insécables (posées par macOS et iOS avant « ? » et « ! ») deviennent des espaces ordinaires.
+    assert ecrire(client, "Jean\u00a0Dupont, d'accord\u202f?").status_code == 303
+    assert messages_recus(reglages_publics) == ["ligne 1\n[31mrouge fin\tici", "Jean Dupont, d'accord ?"]
+
+
+def test_contact_limite_par_adresse(reglages_publics):
+    with fabriquer(reglages_publics, messages_par_adresse=2) as c:
+        assert [ecrire(c, "essai", IP).status_code for _ in range(2)] == [303, 303]
+        refus = ecrire(c, "troisième essai", IP)
+        assert refus.status_code == 429 and texte_rendu(refus) == "troisième essai"
+        assert ecrire(c, "essai", AUTRE_IP).status_code == 303
+    assert len(messages_recus(reglages_publics)) == 3
+
+
+def test_contact_plafond_par_jour_et_boite_pleine(reglages_publics):
+    with fabriquer(reglages_publics, messages_par_jour=2) as c:
+        assert [ecrire(c, "essai", f"192.0.2.{n}").status_code for n in range(1, 4)] == [303, 303, 429]
+    with fabriquer(reglages_publics, messages_gardes=2) as c:
+        refus = ecrire(c, "boîte pleine", "192.0.2.9")
+        assert refus.status_code == 503 and texte_rendu(refus) == "boîte pleine"
+    assert len(messages_recus(reglages_publics)) == 2
+
+
+def vieillir_message(reglages: ReglagesPublics, texte: str, jours: int) -> None:
+    moment = (datetime.now(UTC) - timedelta(days=jours)).date().isoformat()
+    cx = boite.connexion(boite.chemin(reglages.base_donnees))
+    cx.execute("UPDATE messages SET recu_le = ? WHERE texte = ?", (moment, texte))
+    cx.close()
+
+
+def test_purge_des_messages(client, reglages_publics):
+    assert ecrire(client, "vieux").status_code == 303
+    assert ecrire(client, "récent").status_code == 303
+    vieillir_message(reglages_publics, "vieux", 91)
+    vieillir_message(reglages_publics, "récent", 89)
+    creer_app_publique(reglages_publics)  # purge au démarrage, comme pour les sessions
+    assert messages_recus(reglages_publics) == ["récent"]
+
+
+def test_commandes_messages(monkeypatch, reglages_publics, capsys):
+    from shadowlab import cli
+
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONSERVATION_JOURS", "90")
+    assert cli.main(["public", "messages"]) == 0
+    assert "Aucun message" in capsys.readouterr().out
+    with fabriquer(reglages_publics) as c:
+        assert ecrire(c, "premier message\nsur deux lignes").status_code == 303
+        assert ecrire(c, "second \x1b[2Jmessage").status_code == 303
+        assert ecrire(c, "à purger").status_code == 303
+    assert cli.main(["public", "messages"]) == 0
+    sortie = capsys.readouterr().out
+    assert "3 message(s)" in sortie and "premier message" in sortie and "sur deux lignes" in sortie
+    assert "\x1b" not in sortie, "aucune séquence de terminal venue d'un visiteur"
+    cx = boite.connexion(boite.chemin(reglages_publics.base_donnees))
+    brut = boite.ajouter(cx, "écrit sans passer par le formulaire \x1b[2J")
+    cx.close()
+    assert cli.main(["public", "messages"]) == 0
+    assert "\x1b" not in capsys.readouterr().out, "nettoyé à l'affichage aussi"
+    assert cli.main(["public", "effacer-message", str(brut)]) == 0
+    capsys.readouterr()
+    numero = re.search(r"n° (\d+) .*\n\s+second", sortie).group(1)
+    assert cli.main(["public", "effacer-message", numero]) == 0
+    assert cli.main(["public", "effacer-message", numero]) == 1, "déjà effacé"
+    assert cli.main(["public", "effacer-message"]) == 2
+    vieillir_message(reglages_publics, "à purger", 100)
+    capsys.readouterr()
+    assert cli.main(["public", "purger"]) == 0
+    assert "1 message" in capsys.readouterr().out
+    assert messages_recus(reglages_publics) == ["premier message\nsur deux lignes"]

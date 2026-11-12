@@ -1,4 +1,5 @@
-"""Application publique réduite (étape 1.6) : le site vitrine, les sessions humaines consenties et leur collecte.
+"""Application publique réduite (étape 1.6) : le site vitrine, les sessions humaines consenties, leur collecte
+et le formulaire de contact (D-57).
 
 Elle est faite pour être mise en ligne derrière un mandataire HTTPS ; l'application du laboratoire
 (`site.app.creer_app`), elle, ne l'est jamais. Mode d'emploi et garanties : `docs/site-public.md`.

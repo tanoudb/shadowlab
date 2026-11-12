@@ -14,7 +14,7 @@ from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-12.2"
+VERSION_INFORMATION = "2026-11-12.3"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -219,7 +219,7 @@ def information(
 
 <section>
 <h2>Ce qui n'est pas relevé</h2>
-<p>Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni mesure d'audience, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré.</p>
+<p>Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni mesure d'audience, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré. Seule exception : ce que vous écrivez vous-même dans le formulaire de contact.</p>
 <p>Comme pour tout site web, l'hébergement (le serveur) et le service placé devant le site pour le protéger voient passer toutes les données en transit pour les acheminer : votre adresse IP, les pages demandées et ce que la page envoie. L'application de recherche, elle, n'enregistre pas votre adresse IP.</p>
 <p>Ces données ne disent pas qui vous êtes. Mais une empreinte de navigateur peut, rapprochée d'autres sources, permettre de reconnaître un appareil : c'est pourquoi elles sont traitées comme des données personnelles.</p>
 </section>
@@ -248,13 +248,14 @@ def information(
 <section>
 <h2>Qui est responsable</h2>
 <p>{contact}</p>
+<p>Pour lui écrire : <a href="/contact">formulaire de contact</a>. Seuls le texte de votre message et le jour de sa réception sont enregistrés (ni adresse IP, ni navigateur, ni identifiant de session), puis effacés au bout de {jours} jours.</p>
 </section>
 
 <section>
 <h2>Vos droits</h2>
 <ul>
 <li>La page « Ma session », pendant la session puis dans ce navigateur jusqu'à l'effacement automatique, affiche l'identifiant de votre session et un bouton « Supprimer ma session » qui efface aussitôt toutes les données qui la concernent.</li>
-<li>Depuis un autre appareil, si vous avez effacé les cookies de ce site, ou pour toute question (accès, effacement, opposition), écrivez au responsable ci-dessus en donnant l'identifiant de session.</li>
+<li>Depuis un autre appareil, si vous avez effacé les cookies de ce site, ou pour toute question (accès, effacement, opposition), écrivez au responsable par le <a href="/contact">formulaire de contact</a> en donnant l'identifiant de session.</li>
 <li>Vous pouvez retirer votre consentement à tout moment de la même façon.</li>
 <li>Vous pouvez aussi adresser une réclamation à la CNIL.</li>
 </ul>
@@ -265,7 +266,7 @@ def information(
     return _page("Participer", corps)
 
 
-def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, contact: str, en_cours: bool) -> str:
+def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, en_cours: bool) -> str:
     terminer = f'<p class="actions">{_bouton_terminer(csrf)}</p>' if en_cours else ""
     etat = "en cours" if en_cours else "terminée"
     return f"""<div class="encadre">
@@ -277,37 +278,65 @@ def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, contac
 <input type="hidden" name="session" value="{escape(suppression)}">
 <button class="bouton-plein bouton-danger" type="submit">Supprimer ma session</button>
 </form>
-<p class="discret">Vous pourrez aussi la supprimer plus tard depuis la page <a href="/session">Ma session</a>, dans ce navigateur, jusqu'à son effacement automatique. Depuis un autre appareil, ou si vous avez effacé les cookies de ce site, écrivez à : {escape(contact)}, avec l'identifiant ci-dessus.</p>
+<p class="discret">Vous pourrez aussi la supprimer plus tard depuis la page <a href="/session">Ma session</a>, dans ce navigateur, jusqu'à son effacement automatique. Depuis un autre appareil, ou si vous avez effacé les cookies de ce site, écrivez au responsable par le <a href="/contact">formulaire de contact</a>, avec l'identifiant ci-dessus.</p>
 </div>"""
 
 
-def merci(jeton: str, suppression: str, csrf: str, jours: int, contact: str) -> str:
+def merci(jeton: str, suppression: str, csrf: str, jours: int) -> str:
     corps = f"""<article class="info">
 <h1>Merci !</h1>
 <p class="chapeau">Votre session est terminée. Elle aidera à vérifier que nos détecteurs laissent passer les vraies personnes.</p>
-{_encadre_session(jeton, suppression, csrf, jours, contact, en_cours=False)}
+{_encadre_session(jeton, suppression, csrf, jours, en_cours=False)}
 <p><a href="/lab/vitrine">Revenir au site</a></p>
 </article>"""
     return _page("Merci", corps)
 
 
-def ma_session(jeton: str, suppression: str, csrf: str, jours: int, contact: str, en_cours: bool) -> str:
+def ma_session(jeton: str, suppression: str, csrf: str, jours: int, en_cours: bool) -> str:
     corps = f"""<article class="info">
 <h1>Ma session</h1>
-{_encadre_session(jeton, suppression, csrf, jours, contact, en_cours)}
+{_encadre_session(jeton, suppression, csrf, jours, en_cours)}
 <p><a href="/lab/vitrine">Revenir au site</a></p>
 </article>"""
     return _page("Ma session", corps)
 
 
-def aucune_session(contact: str) -> str:
-    corps = f"""<article class="info">
+def aucune_session() -> str:
+    corps = """<article class="info">
 <h1>Aucune session</h1>
 <p>Aucune session d'observation n'est enregistrée pour ce navigateur : vous n'avez pas participé depuis ce navigateur, la session a été supprimée, ou ses cookies ont été effacés.</p>
-<p>Pour une session ouverte ailleurs, écrivez à : {escape(contact)}, avec son identifiant.</p>
+<p>Pour une session ouverte ailleurs, écrivez au responsable par le <a href="/contact">formulaire de contact</a>, avec son identifiant.</p>
 <p class="actions"><a class="bouton-plein" href="/">Participer</a><a href="/lab/vitrine">Revenir au site</a></p>
 </article>"""
     return _page("Aucune session", corps)
+
+
+def contact(csrf: str, jours: int, taille: int, *, erreur: str = "", texte: str = "") -> str:
+    """Formulaire pour écrire au responsable. `texte` (échappé) rend au visiteur un message refusé."""
+    alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>' if erreur else ""
+    corps = f"""<article class="info">
+<h1>Écrire au responsable</h1>
+<p class="chapeau">Pour une question, ou pour une demande sur une session ouverte depuis un autre appareil : accès, effacement, retrait de votre accord.</p>
+<form class="encadre contact" method="post" action="/contact">
+{alerte}
+<input type="hidden" name="csrf" value="{escape(csrf)}">
+<label for="message">Votre message</label>
+<textarea id="message" name="message" rows="8" maxlength="{taille}" required>{escape(texte)}</textarea>
+<p class="discret">Pour une demande sur une session, donnez son identifiant (il est affiché sur la page « Ma session »). Si vous attendez une réponse, indiquez comment vous joindre. {taille} caractères au plus.</p>
+<p class="actions"><button class="bouton-plein" type="submit">Envoyer</button><a href="/">Revenir à la page d'information</a></p>
+</form>
+<p class="discret">Seuls le texte de votre message et le jour de sa réception sont enregistrés : ni adresse IP, ni navigateur, ni identifiant de session. Le message ne sert qu'à vous répondre ; le responsable du site le lit, puis il est effacé automatiquement au bout de {jours} jours.</p>
+</article>"""
+    return _page("Contact", corps)
+
+
+def contact_envoye() -> str:
+    corps = """<article class="info">
+<h1>Message envoyé</h1>
+<p>Votre message a bien été enregistré. Le responsable le lira ; il ne pourra vous répondre que si vous avez indiqué comment vous joindre.</p>
+<p><a href="/lab/vitrine">Revenir au site</a></p>
+</article>"""
+    return _page("Message envoyé", corps)
 
 
 def supprimee(existait: bool) -> str:
