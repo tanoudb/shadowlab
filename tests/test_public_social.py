@@ -714,6 +714,50 @@ def test_generateur_partage_les_photos(n):
         assert any(p.auteur == a.pseudonyme for p in univers.publications), "chaque auteur a publié"
 
 
+def test_mosaique_chaque_vignette_une_fois_dans_l_ordre():
+    """Toutes les suites de formats de 1 à 12 vignettes : chaque vignette exactement une fois, dans l'ordre, et
+    chaque bande reçoit les formats pour lesquels elle est dessinée (un portrait n'atterrit pas dans une case large)."""
+    attendus = {
+        "solo": "L",
+        "duo": "LL",
+        "trio-g": "LLL",
+        "trio-d": "LLL",
+        "l-p": "LP",
+        "p-l": "PL",
+        "ll-p": "LLP",
+        "p-ll": "PLL",
+        "l-pp": "LPP",
+        "pp-l": "PPL",
+        "pp": "PP",
+        "p": "P",
+    }
+    assert set(attendus) == set(social.TAILLES_BANDE)
+    for n in range(1, 13):
+        for code in range(2**n):
+            portraits = [bool(code >> k & 1) for k in range(n)]
+            formats = "".join("P" if p else "L" for p in portraits)
+            bandes = social.composer_bandes(portraits)
+            assert sum(nombre for _, nombre in bandes) == n, formats
+            debut = 0
+            for nom, nombre in bandes:
+                assert nombre == social.TAILLES_BANDE[nom] == len(attendus[nom]), (formats, nom)
+                assert formats[debut : debut + nombre] == attendus[nom], (formats, bandes)
+                debut += nombre
+    assert social.composer_bandes([]) == []
+    assert [b for b, _ in social.composer_bandes([False] * 12)] == ["trio-g", "duo", "trio-d", "duo", "duo"]
+    assert [b for b, _ in social.composer_bandes([False] * 4)] == ["duo", "duo"]
+
+
+def test_mosaique_dans_les_pages(client):
+    """Les vignettes d'une page sont toutes dans une bande, dans l'ordre d'Explorer."""
+    univers = social.generer(GRAINE, TAILLE, social.charger_photos(social.DOSSIER_PHOTOS))
+    sel = Selector(client.get("/lab/social/explorer").text)
+    bandes = sel.css(".mosaique > .bande")
+    assert bandes and all(any(c.startswith("bande-") for c in b.attrib["class"].split()) for b in bandes)
+    liens = [a.attrib["href"] for b in bandes for a in b.css("a.vignette")]
+    assert liens == [f"/lab/social/p/{i}" for i in univers.exploration[: social.PAR_PAGE_GRILLE]]
+
+
 @pytest.mark.parametrize("taille", [1, 2, 7])
 def test_generateur_petite_taille(taille, reglages_publics):
     univers = social.generer(GRAINE, taille, photos_factices(3))

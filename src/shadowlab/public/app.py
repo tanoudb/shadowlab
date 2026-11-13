@@ -706,6 +706,13 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             request, lambda langue, jeton, h: social.page_etiquette(jeton, univers, etiquette, langue, h)
         )
 
+    @app.get("/lab/social/credits", response_class=HTMLResponse)
+    def social_credits(request: Request, page: int = 1) -> HTMLResponse:
+        """Crédits des photos (les licences demandent l'attribution) : seule page avec des liens sortants."""
+        if not 1 <= page <= social.nb_pages(len(univers.photos), social.PAR_PAGE_GRILLE):
+            raise HTTPException(404, "page inexistante")
+        return page_sociale(request, lambda langue, jeton, h: social.page_credits(jeton, univers, page, langue, h))
+
     @app.get("/lab/social/photos/{fichier}")
     def social_photo(fichier: str) -> FileResponse:
         """Seuls les fichiers du manifeste (liste blanche) : jamais un chemin libre, ni le manifeste lui-même."""
