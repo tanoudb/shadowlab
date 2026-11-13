@@ -14,6 +14,8 @@ from typing import Any
 
 VERSIONS_JA4 = {0x0304: "13", 0x0303: "12", 0x0302: "11", 0x0301: "10", 0x0300: "s3", 0x0002: "s2"}
 EXT_SNI, EXT_GROUPES, EXT_FORMATS_EC, EXT_SIGNATURES, EXT_ALPN, EXT_VERSIONS = 0, 10, 11, 13, 16, 43
+# Ajoutée par un client qui reprend sa session TLS 1.3 : le même client en porte une de plus (mesuré, campagne 106).
+EXT_PRE_SHARED_KEY = 41
 TAILLE_MAX = 64 * 1024
 
 
@@ -169,10 +171,10 @@ def _hache12(texte: str) -> str:
     return hashlib.sha256(texte.encode()).hexdigest()[:12] if texte else "000000000000"
 
 
-def ja4(hello: ClientHello) -> str:
-    """Empreinte JA4 du ClientHello (toujours `t` : TLS sur TCP)."""
+def ja4(hello: ClientHello, sans_extensions: frozenset[int] = frozenset()) -> str:
+    """Empreinte JA4 du ClientHello (toujours `t` : TLS sur TCP). `sans_extensions` en retire avant le calcul."""
     ciphers = [v for v in hello.ciphers if not est_grease(v)]
-    extensions = [v for v in hello.extensions if not est_grease(v)]
+    extensions = [v for v in hello.extensions if not est_grease(v) and v not in sans_extensions]
     versions = [v for v in hello.versions if not est_grease(v)]
     version = VERSIONS_JA4.get(max(versions) if versions else hello.version_legacy, "00")
     sni = "d" if EXT_SNI in extensions else "i"
@@ -192,12 +194,20 @@ def ja4(hello: ClientHello) -> str:
     return f"{partie_a}_{partie_b}_{partie_c}"
 
 
+def ja4_liaison(hello: ClientHello) -> str:
+    """JA4 sans `pre_shared_key` : identique pour un même client avec ou sans reprise de session TLS.
+
+    C'est la valeur à laquelle les cookies de défi sont liés ; le JA4 complet reste celui qui est enregistré."""
+    return ja4(hello, frozenset({EXT_PRE_SHARED_KEY}))
+
+
 def empreinte(hello: ClientHello) -> dict[str, Any]:
     chaine = ja3(hello)
     return {
         "ja3": chaine,
         "ja3_hash": hashlib.md5(chaine.encode(), usedforsecurity=False).hexdigest(),
         "ja4": ja4(hello),
+        "liaison": ja4_liaison(hello),
         "details": {
             "version_legacy": hello.version_legacy,
             "versions": [v for v in hello.versions if not est_grease(v)],

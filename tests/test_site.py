@@ -316,7 +316,7 @@ def _entetes_sceau(reglages, profil="06", session=JETON, ja4=""):
 
     secret = secrets_arena.charger(reglages.dossier_arena)
     observation = "obs-test"
-    signature = secrets_arena.signer(secret, observation, profil, session, ja4)
+    signature = secrets_arena.signer(secret, observation, profil, session, ja4, "")
     return {
         "x-shadowlab-sceau": signature,
         "x-shadowlab-obs": observation,

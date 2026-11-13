@@ -153,6 +153,7 @@ def test_sans_liaison_demandee_rien_ne_change(client, reglages):
 def test_le_sceau_couvre_la_liaison(client, reglages):
     liaison = _liaison(_hello(EXTENSIONS_CHROME))
     entetes = _entetes(reglages, liaison)
+    _poser(client, reglages, liaison)
     assert client.get(f"/lab/vitrine?sl={JETON}", headers=entetes).status_code == 200
     # Liaison modifiée en chemin, sceau inchangé : le sceau tombe, la requête est traitée comme venue d'ailleurs.
     falsifie = {**entetes, "x-shadowlab-liaison": "autre"}

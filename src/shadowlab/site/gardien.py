@@ -50,6 +50,7 @@ class Sceau:
     profil: str
     session: str
     ja4: str
+    liaison: str
     lier_tls: bool
 
 
@@ -63,15 +64,17 @@ def lire_sceau(request: Request, secret: bytes) -> Sceau | None:
     profil = h.get("x-shadowlab-profil", "")
     session = h.get("x-shadowlab-session", "")
     ja4 = h.get("x-shadowlab-ja4", "")
-    if not secrets_arena.verifier(secret, signature, observation, profil, session, ja4):
+    liaison = h.get("x-shadowlab-liaison", "")
+    if not secrets_arena.verifier(secret, signature, observation, profil, session, ja4, liaison):
         return None
     configuration = profils.charger().de(profil)
     lier = bool(configuration and configuration.defi_js.lier_tls)
-    return Sceau(observation, profil, session, ja4, lier)
+    return Sceau(observation, profil, session, ja4, liaison, lier)
 
 
 def empreinte_liee(sceau: Sceau) -> str:
-    return sceau.ja4 if sceau.lier_tls else ""
+    """Empreinte de liaison (JA4 sans `pre_shared_key`) si le niveau lie les cookies au TLS, sinon rien."""
+    return sceau.liaison if sceau.lier_tls else ""
 
 
 def retour_sur(cible: str) -> str:

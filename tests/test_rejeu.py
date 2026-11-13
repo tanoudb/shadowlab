@@ -586,7 +586,7 @@ def test_meme_verdict_que_l_arena(client, reglages, monkeypatch, tmp_path):
             ):
                 client.cookies.set(nom, defis.creer_cookie(secret, usage, jeton, ""))
             sceau = {
-                "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", code, jeton, ""),
+                "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", code, jeton, "", ""),
                 "x-shadowlab-obs": "obs",
                 "x-shadowlab-profil": code,
                 "x-shadowlab-session": jeton,
@@ -639,7 +639,7 @@ def test_detecteur_exclu_ne_fait_pas_servir_le_captcha(client, reglages, monkeyp
     r = client.post("/manuel/commencer", data={"protection": "93", "consentement": "oui"})
     jeton = re.search(r"sl=([0-9a-f]{32})", r.text).group(1)
     sceau = {
-        "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", "93", jeton, ""),
+        "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", "93", jeton, "", ""),
         "x-shadowlab-obs": "obs",
         "x-shadowlab-profil": "93",
         "x-shadowlab-session": jeton,
