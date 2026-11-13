@@ -31,11 +31,15 @@ import math
 import random
 import statistics
 import time
+from collections import Counter
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from types import SimpleNamespace
 
 import pytest
 
+from shadowlab.detection import DetecteurComportement, DetecteurEntropieInteraction, Observations
 from shadowlab.engines.noezia.comportement.defilement import SimulateurDefilement
 from shadowlab.engines.noezia.comportement.souris import SimulateurSouris
 from shadowlab.engines.noezia.config import ConfigNoezia
@@ -170,3 +174,55 @@ def test_aucune_page_ne_recoit_une_trajectoire_presque_droite(sessions):
         f"dont {sous_seuil} sous {SEUIL_DETECTEUR} rad (seuil de `trajectoire_lineaire`) ; "
         f"la plus basse : {min(moyennes):.3f} rad"
     )
+
+
+# Signaux de `DetecteurComportement` qui lisent la souris ; les autres (ressources, rythme et durée des pages,
+# navigation linéaire) jugent les requêtes de la session, pas le mouvement.
+SIGNAUX_SOURIS_COMPORTEMENT = {"aucune_interaction", "clic_sans_souris", "ratio_move_click_faible", "pas_de_scroll"}
+
+
+def releve_comportement(page: PageSimulee) -> dict:
+    """Le relevé `comportement` qu'`observateur.js` envoie en quittant la page (souris et molette, sans clavier)."""
+    heures = [t for _, _, t in page.mouvements]
+    delais = [arrondi_js((b - a) * 1000, 2) for a, b in pairwise(heures)]
+    premiere = min(heures[0], page.molette[0]) if page.molette else heures[0]
+    return {
+        "evenements": {
+            "mousemove": len(page.mouvements),
+            "click": 0,
+            "keydown": 0,
+            "scroll": len(page.molette),
+            "touchstart": 0,
+        },
+        "premiere_interaction_ms": round((premiere - page.debut) * 1000),
+        "duree_page_ms": round((page.fin - page.debut) * 1000),
+        "delais_souris_ms": delais[:50],
+        "delai_souris_max_ms": max(delais) if delais else None,
+        "angles_segments": page.angles,
+        "delais_clavier_ms": [],
+        "page_defilable": True,
+    }
+
+
+def observations_session(session: list[PageSimulee]) -> Observations:
+    """Une session telle que le site la reçoit : une requête de page et un relevé de comportement par page."""
+    origine = datetime(2026, 11, 13, tzinfo=UTC)
+    http = [{"path": "/lab/static/observateur.js", "received_at": origine.isoformat(), "headers": []}]
+    js = []
+    for n, page in enumerate(session):
+        chemin = f"/lab/vitrine/annonces/AN-{n:06d}"
+        recu = (origine + timedelta(seconds=page.debut)).isoformat()
+        http.append({"path": chemin, "received_at": recu, "headers": []})
+        js.append({"kind": "comportement", "page": chemin, "payload": releve_comportement(page)})
+    return Observations(http=http, js=js)
+
+
+def test_traces_simulees_muettes_pour_les_regles_qui_lisent_la_souris(sessions):
+    """Toutes les règles de souris de detection.py (`entropie-interaction` en entier, celles de `comportement`)."""
+    entropie, comportement = DetecteurEntropieInteraction(), DetecteurComportement()
+    signaux: Counter[str] = Counter()
+    for session in sessions:
+        obs = observations_session(session)
+        signaux.update(s.code for s in entropie.classer(obs).signals)
+        signaux.update(s.code for s in comportement.classer(obs).signals if s.code in SIGNAUX_SOURIS_COMPORTEMENT)
+    assert not signaux, f"signaux sur {len(sessions)} sessions simulées : {dict(signaux)}"
