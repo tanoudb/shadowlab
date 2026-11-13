@@ -21,9 +21,8 @@ from .site import pages, vitrine
 
 DELAI_DEFI_S = 20
 NB_REQUETES_RAFALE = 30
-PORTE_ENTREE_PASSAGE_S = (
-    15  # attente de la porte d'entrée d'une recette lancée par l'Arena (défi d'entrée dès le niveau 04)
-)
+# Attente de la porte d'entrée d'une recette lancée par l'Arena (elle sert un défi d'entrée dès le niveau 04).
+PORTE_ENTREE_PASSAGE_S = 15
 
 
 @dataclass
@@ -660,10 +659,12 @@ def recette_du_passage(nom: str, base: str) -> tuple[Recette, str]:
         cible = morceaux.path + (f"?{morceaux.query}" if morceaux.query else "")
         departs.append(depart.model_copy(update={"url": urljoin(f"{base}/", cible.lstrip("/"))}))
     ignores = list(dict.fromkeys([*recette.parametres_ignores, "sl"]))
-    reglages = {"depart": departs, "hotes": [urlsplit(base).hostname or ""], "parametres_ignores": ignores}
-    if (
-        recette.porte_entree is None
-    ):  # l'Arena sert un défi d'entrée dès le niveau 04 ; la recette du fichier garde la sienne
+    reglages: dict[str, Any] = {
+        "depart": departs,
+        "hotes": [urlsplit(base).hostname or ""],
+        "parametres_ignores": ignores,
+    }
+    if recette.porte_entree is None:  # une recette qui déclare sa porte d'entrée garde la sienne
         reglages["porte_entree"] = PorteEntree(attendre_s=PORTE_ENTREE_PASSAGE_S)
     recette = recette.model_copy(update=reglages)
     return recette, texte
