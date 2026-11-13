@@ -15,6 +15,7 @@ from collections import deque
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,7 +55,9 @@ CSP_ATTENDUE = (
 )
 GRAINE, TAILLE = 20261113, 30
 LANGUES = {"fr": "fr-FR,fr;q=0.9", "en": "en-US,en;q=0.9"}
-TYPES_DE_PAGE = ("fil", "explorer", "p", "u", "t")
+TYPES_DE_PAGE = ("fil", "explorer", "p", "u", "t", "credits")
+# Seuls liens sortants du site : sur les pages de crédits, vers la page d'origine de chaque photo et vers sa licence.
+HOTES_CREDITS = frozenset({"commons.wikimedia.org", "creativecommons.org"})
 # Ce qu'une page du réseau social peut lier ou charger : ses propres pages, la vitrine (l'autre site), l'observateur
 # du labo (pendant une session), ses deux fichiers statiques, et les pages de l'application publique.
 PREFIXES_PERMIS = (
@@ -139,6 +142,7 @@ def parcourir(client: TestClient, langue: str = "fr") -> dict[str, str]:
         assert r.headers["content-type"].startswith("text/html"), chemin
         vues[chemin] = r.text
         for lien in Selector(r.text).css("a::attr(href)").getall():
+            lien = lien.split("#")[0]  # une ancre ne fait pas une autre page (le serveur ne la voit jamais)
             if lien.startswith("/lab/social/") and lien not in vues:
                 a_voir.append(lien)
     return vues
@@ -148,6 +152,19 @@ def references(html: str) -> list[str]:
     """Tout ce qu'une page lie, charge ou envoie : liens, images, scripts, feuilles, formulaires."""
     sel = Selector(html)
     return sel.css("a::attr(href), img::attr(src), script::attr(src), link::attr(href), form::attr(action)").getall()
+
+
+def lien_sortant_permis(html: str, ref: str) -> bool:
+    """`ref` est un lien `<a>` de la page, en https, vers l'un des HOTES_CREDITS exactement, avec
+    `rel="noopener noreferrer"` sur chaque lien qui y mène. Rien d'autre (ni image, ni script, ni formulaire)."""
+    morceaux = urlsplit(ref)
+    if morceaux.scheme != "https" or morceaux.hostname not in HOTES_CREDITS or morceaux.port is not None:
+        return False
+    liens = [a for a in Selector(html).css("a") if a.attrib.get("href") == ref]
+    autres = Selector(html).css("img, script, link, form, iframe, source")
+    if any(ref in (e.attrib.get(n) or "") for e in autres for n in ("src", "href", "action", "srcset")):
+        return False
+    return bool(liens) and all({"noopener", "noreferrer"} <= set(a.attrib.get("rel", "").split()) for a in liens)
 
 
 def requetes_notees(html: str) -> list[str]:
@@ -185,6 +202,8 @@ def test_parcours_de_toutes_les_pages(client, langue, en_session):
     for chemin, html in pages.items():
         assert f'<html lang="{langue}">' in html, chemin
         for ref in references(html):
+            if type_de_page(chemin) == "credits" and lien_sortant_permis(html, ref):
+                continue  # vérifié par test_liens_sortants_seulement_sur_les_credits
             assert ref.startswith("/") and not ref.startswith("//"), f"{chemin} : lien qui sort du site ({ref})"
             sans_requete = ref.split("?")[0]
             assert sans_requete not in ROUTES_INTERDITES, f"{chemin} : route du labo ({ref})"
@@ -312,7 +331,10 @@ def test_politique_de_securite(client, en_session):
     for langue in LANGUES:
         for chemin, html in parcourir(client, langue).items():
             assert client.get(chemin).headers["content-security-policy"] == CSP_ATTENDUE, chemin
-            assert not re.search(r"(?:https?:)?//[a-z0-9]", html, re.I), f"{chemin} : adresse vers un autre hôte"
+            texte = html
+            if type_de_page(chemin) == "credits":  # seule exception : les liens de crédit (page d'origine, licence)
+                texte = re.sub(r'href="https://(?:commons\.wikimedia\.org|creativecommons\.org)/[^"]*"', "", html)
+            assert not re.search(r"(?:https?:)?//[a-z0-9]", texte, re.I), f"{chemin} : adresse vers un autre hôte"
             assert "<style" not in html.lower(), chemin
             sel = Selector(html)
             for element in sel.xpath("//*"):
@@ -512,6 +534,149 @@ def test_manifeste_invalide_refuse(tmp_path, entrees):
         social.charger_photos(tmp_path)
 
 
+# --- Crédits des photos : les licences demandent l'attribution -------------------------------------
+
+CREDIT = {"fr": "Photo : {auteur} · {licence} · crédits", "en": "Photo: {auteur} · {licence} · credits"}
+
+
+def texte_de(sel) -> str:
+    return " ".join(" ".join(sel.xpath(".//text()").getall()).split())
+
+
+def titre_affiche(titre: str) -> str:
+    """Le titre de la photo sur Commons, sans l'extension du fichier."""
+    return re.sub(r"\.(?:jpe?g|png|tiff?)$", "", titre, flags=re.I).replace("_", " ").strip()
+
+
+def en_https(adresse: str) -> str:
+    return "https://" + adresse.removeprefix("http://").removeprefix("https://")
+
+
+def pages_de_credits(client: TestClient, langue: str) -> dict[str, str]:
+    return {c: h for c, h in parcourir(client, langue).items() if type_de_page(c) == "credits"}
+
+
+def test_manifeste_porte_les_credits():
+    for photo in social.charger_photos(social.DOSSIER_PHOTOS):
+        assert photo.titre and photo.auteur and photo.licence and photo.modifie, photo.id
+        assert urlsplit(photo.origine).hostname == "commons.wikimedia.org", photo.id
+        assert photo.licence_url is None or urlsplit(photo.licence_url).hostname == "creativecommons.org", photo.id
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+def test_ligne_de_credit_sur_chaque_publication(client, langue):
+    """Chaque publication crédite sa photo (auteur, licence) et mène à son entrée dans la page de crédits."""
+    entetes = {"Accept-Language": LANGUES[langue]}
+    univers = social.generer(GRAINE, TAILLE, social.charger_photos(social.DOSSIER_PHOTOS))
+    for publication in univers.publications:
+        sel = Selector(client.get(f"/lab/social/p/{publication.identifiant}", headers=entetes).text)
+        credit = sel.css(".credit")
+        assert len(credit) == 1, publication.identifiant
+        photo = publication.photo
+        assert texte_de(credit) == CREDIT[langue].format(auteur=photo.auteur, licence=photo.licence)
+        liens = credit.css("a")
+        assert len(liens) == 1 and texte_de(liens) == CREDIT[langue].rsplit(" ", 1)[1]
+        adresse = liens.attrib["href"]
+        chemin, _, ancre = adresse.partition("#")
+        assert chemin.startswith("/lab/social/credits") and ancre == f"photo-{photo.id}", adresse
+        page = Selector(client.get(chemin, headers=entetes).text)
+        assert page.css(f'[id="photo-{photo.id}"]'), f"{adresse} : l'ancre est sur la page visée"
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+def test_page_de_credits_complete(client, langue):
+    """Toutes les photos du manifeste, chacune une fois : vignette, titre, auteur, licence (et son lien quand il
+    existe), page d'origine, mention « redimensionnée ». Au plus PAR_PAGE_GRILLE par page (plafonds d'une session)."""
+    photos = social.charger_photos(social.DOSSIER_PHOTOS)
+    pages = pages_de_credits(client, langue)
+    assert "/lab/social/credits" in pages, "la page de crédits est atteinte depuis le fil"
+    vues: list[str] = []
+    for chemin, html in pages.items():
+        sel = Selector(html)
+        entrees = sel.css('[id^="photo-"]')
+        assert 1 <= len(entrees) <= social.PAR_PAGE_GRILLE, chemin
+        vues += [e.attrib["id"].removeprefix("photo-") for e in entrees]
+        intro = texte_de(sel.css(".credits-intro"))
+        if langue == "fr":
+            assert all(m in intro for m in ("vraies photos", "licence libre", "fictifs")), intro
+        else:
+            assert all(m in intro for m in ("real photos", "free licence", "fictional")), intro
+    assert sorted(vues) == sorted(p.id for p in photos), "chaque photo du manifeste, une fois"
+    entrees = {
+        e.attrib["id"].removeprefix("photo-"): e
+        for html in pages.values()
+        for e in Selector(html).css('[id^="photo-"]')
+    }
+    for photo in photos:
+        entree = entrees[photo.id]
+        texte = texte_de(entree)
+        assert entree.css(f'img[src="/lab/social/photos/{photo.id}-480.jpg"][alt]'), photo.id
+        for attendu in (titre_affiche(photo.titre), photo.auteur, photo.licence):
+            assert attendu in texte, (photo.id, attendu)
+        assert ("redimensionnée" if langue == "fr" else "resized") in texte, photo.id
+        sortants = {a.attrib["href"]: texte_de(a) for a in entree.css("a")}
+        assert en_https(photo.origine) in sortants, photo.id
+        if photo.licence_url:
+            assert sortants.get(en_https(photo.licence_url)) == photo.licence, photo.id
+        else:
+            assert not any(urlsplit(h).hostname == "creativecommons.org" for h in sortants), photo.id
+
+
+def test_credits_pagination(client):
+    nb = social.nb_pages(len(social.charger_photos(social.DOSSIER_PHOTOS)), social.PAR_PAGE_GRILLE)
+    assert client.get("/lab/social/credits").text == client.get("/lab/social/credits?page=1").text
+    assert client.get(f"/lab/social/credits?page={nb}").status_code == 200
+    for page in (0, nb + 1, -1):
+        assert client.get(f"/lab/social/credits?page={page}").status_code == 404, page
+
+
+def test_pied_de_page_mene_aux_credits(client):
+    for chemin, html in parcourir(client).items():
+        assert Selector(html).css('footer a[href="/lab/social/credits"]'), chemin
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+@pytest.mark.parametrize("en_session", [False, True], ids=["hors-session", "en-session"])
+def test_liens_sortants_seulement_sur_les_credits(client, langue, en_session):
+    """Les seuls liens vers un autre hôte : `<a>` en https vers commons.wikimedia.org ou creativecommons.org
+    exactement, avec rel="noopener noreferrer", sur les pages de crédits. Aucune ressource extérieure nulle part."""
+    if en_session:
+        commencer(client)
+    sortants = 0
+    for chemin, html in parcourir(client, langue).items():
+        sel = Selector(html)
+        for ref in sel.css("img::attr(src), script::attr(src), link::attr(href), form::attr(action)").getall():
+            assert ref.startswith("/") and not ref.startswith("//"), f"{chemin} : ressource extérieure ({ref})"
+        for ref in sel.css("a::attr(href)").getall():
+            if ref.startswith("/") and not ref.startswith("//"):
+                continue
+            assert type_de_page(chemin) == "credits", f"{chemin} : lien sortant hors des crédits ({ref})"
+            assert lien_sortant_permis(html, ref), f"{chemin} : lien sortant refusé ({ref})"
+            sortants += 1
+    assert sortants >= len(social.charger_photos(social.DOSSIER_PHOTOS)), "page d'origine de chaque photo"
+
+
+def test_liens_de_credit_verifies_au_rendu(tmp_path, monkeypatch, reglages_publics):
+    """Un manifeste qui pointerait ailleurs ne produit aucun lien ; une adresse en http passe en https."""
+    dossier = dossier_de_photos(tmp_path, 3)
+    manifeste = json.loads((dossier / "manifeste.json").read_text(encoding="utf-8"))
+    autres = [
+        {"origine": "https://exemple.org/File:a.jpg", "licence_url": "https://exemple.org/licence"},
+        {"origine": "http://commons.wikimedia.org/wiki/File:b.jpg", "licence_url": "http://creativecommons.org/x/"},
+        {"origine": "https://commons.wikimedia.org.exemple.org/c", "licence_url": "javascript:alert(1)"},
+    ]
+    for entree, champs in zip(manifeste["photos"], autres, strict=True):
+        entree.update(champs, titre="Essai.jpg", modifie="redimensionnée")
+    (dossier / "manifeste.json").write_text(json.dumps(manifeste), encoding="utf-8")
+    monkeypatch.setattr(social, "DOSSIER_PHOTOS", dossier)
+    with fabriquer(reglages_publics) as c:
+        html = c.get("/lab/social/credits").text
+    liens = Selector(html).css("a::attr(href)").getall()
+    assert "https://commons.wikimedia.org/wiki/File:b.jpg" in liens
+    assert "https://creativecommons.org/x/" in liens
+    assert not [h for h in liens if "exemple.org" in h or "javascript" in h or h.startswith("http://")], liens
+
+
 # --- Le générateur ------------------------------------------------------------------------------
 
 
@@ -565,6 +730,8 @@ def test_aucune_marque_ni_adresse_ni_vraie_personne(client, langue):
     for chemin, html in parcourir(client, langue).items():
         texte = " ".join(Selector(html).xpath("//body//text()").getall())
         assert not COURRIEL.search(texte), chemin
+        if type_de_page(chemin) == "credits":
+            continue  # les crédits citent de vrais auteurs et les titres d'origine (« Apple-tree blossoms… »)
         for marque in MARQUES:
             assert not re.search(rf"\b{marque}\b", texte, re.I), f"{chemin} : {marque}"
     for _, nom in social.AUTEURS:
