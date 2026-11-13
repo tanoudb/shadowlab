@@ -171,8 +171,18 @@ def _init_constantes() -> None:
 _init_constantes()
 
 
+# Fichiers qu'une page charge d'elle-même, sans que la personne ou le robot l'ait demandé un par un : la limite de
+# débit ne les compte pas (une liste de la vitrine tire 20 photos en moins d'une seconde ; sans cette exemption,
+# tout navigateur serait limité aux niveaux 04 à 07, campagne 103). Le WAF les voit toujours. Tout le reste
+# (pages, API, envois, vérifications) reste compté. Liste unique : la modifier ici, et dans le test.
+CHEMINS_STATIQUES = ("static", "vitrine/photos")
+# Appels du dispositif de l'Arena lui-même (déjà hors limite avant ce correctif, inchangés).
+CHEMINS_DISPOSITIF = ("collecte", "verdict", "defi", "captcha")
+
+
 def rendre_nginx(profils: Profils) -> str:
     cartes, zones, limites = [], [], []
+    statiques, dispositif = "|".join(CHEMINS_STATIQUES), "|".join(CHEMINS_DISPOSITIF)
     for code in profils.codes_arena:
         p = profils.de(code)
         if p is None:
@@ -203,7 +213,8 @@ http {{
     proxy_set_header Connection "";
     proxy_set_header Host $http_host;
     location = /arena-sante {{ proxy_pass http://waf/waf-sante; }}
-    location ~ ^/lab/(static|collecte|verdict|defi|captcha)(/|$) {{ proxy_pass http://waf; }}
+    location ~ ^/lab/({statiques})/ {{ proxy_pass http://waf; }}
+    location ~ ^/lab/({dispositif})(/|$) {{ proxy_pass http://waf; }}
     location / {{
 {chr(10).join(limites)}
       add_header X-ShadowLab-Limite $limit_req_status always;
