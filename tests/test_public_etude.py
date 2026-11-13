@@ -1,13 +1,15 @@
 """Site d'étude « Humain ou robot ? » : le fond de la nouvelle application publique (cadrage du 13/11/2026, v2).
 
 Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md` (« Règles », « Langue », « Textes de l'accueil »).
-Étape 1 : deux langues sans cookie de plus.
+Étape 1 : deux langues sans cookie de plus. Étape 2 : l'accueil de l'étude et la notice.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from html import escape
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +27,7 @@ from test_public import (
 )
 
 from shadowlab.config import ReglagesPublics
+from shadowlab.public.social import MARQUE as MARQUE_SOCIAL
 
 ACCEPT = {"fr": "fr-FR,fr;q=0.9", "en": "en-US,en;q=0.9"}
 AUTRE = {"fr": "en", "en": "fr"}
@@ -287,8 +290,8 @@ def test_liste_des_donnees_dans_les_deux_langues_tiree_de_l_observateur():
 
 
 def notice(client: TestClient, langue: str) -> str:
-    """La notice complète dans une langue (étape 1 : l'accueil `/{langue}` la porte encore en entier)."""
-    r = client.get(f"/{langue}")
+    """La notice complète dans une langue, à son adresse (étape 2)."""
+    r = client.get(f"/{langue}/information")
     assert r.status_code == 200
     return r.text
 
@@ -343,3 +346,219 @@ def test_toujours_exactement_trois_cookies(reglages_publics):
             assert fil.status_code == 200
             assert {k.name for k in c.cookies.jar} <= COOKIES
     assert poses == COOKIES
+
+
+# === Étape 2 : l'accueil de l'étude et la notice =====================================================
+
+PUBLIC_CSS = Path(__file__).parents[1] / "src" / "shadowlab" / "public" / "static" / "public.css"
+# Textes du cadrage (« Textes de l'accueil »), mot pour mot.
+TEXTES_ACCUEIL = {
+    "fr": (
+        "Humain ou robot ?",
+        "Une étude ouverte sur la façon dont de vraies personnes naviguent sur le Web.",
+        "Les sites se protègent des robots avec des détecteurs. Ces détecteurs se trompent parfois et prennent de "
+        "vraies personnes pour des robots. Aidez-nous à les améliorer : promenez-vous 5 à 10 minutes sur un faux "
+        "réseau social de photos, comme vous le feriez sur un vrai.",
+    ),
+    "en": (
+        "Human or bot?",
+        "An open study of how real people browse the web.",
+        "Websites use detectors to keep bots out. Those detectors sometimes get it wrong and flag real people. Help "
+        "us make them better: spend 5 to 10 minutes browsing a fake photo-sharing network, the way you would browse "
+        "a real one.",
+    ),
+}
+LIEN_HABITAT = {
+    "fr": "un second site de démonstration, des annonces fictives",
+    "en": "a second demonstration site, with fictional listings",
+}
+BUT = {
+    "fr": ("mesurer et améliorer nos détecteurs de robots", "ne servent à rien d'autre"),
+    "en": ("measure and improve our bot detectors", "used for nothing else"),
+}
+# Classes stables, pour le dessin à venir.
+CLASSES_ACCUEIL = (
+    "accueil",
+    "accueil-entete",
+    "accueil-titre",
+    "accueil-sous-titre",
+    "accueil-accroche",
+    "accueil-etapes",
+    "etapes",
+    "etape",
+    "accueil-releve",
+    "releve-franchise",
+    "releve-oui",
+    "releve-non",
+    "accueil-but",
+    "accueil-sites",
+    "site-vedette",
+    "site-second",
+    "fictif",
+    "accord",
+    "accord-notice",
+    "accord-case",
+    "lien-notice",
+    "bouton-principal",
+    "visiter-sans-participer",
+    "autre-langue",
+)
+CLASSES_NOTICE = ("notice", "notice-chapeau", "notice-section", "notice-retour", "autre-langue", "donnees")
+
+
+def texte_de(html: str | None, css: str | None = "main") -> str:
+    """Texte visible d'une page (ou d'un fragment, `css=None`), espaces normalisées."""
+    sel = Selector(html or "<p></p>")
+    noeuds = sel.css(css) if css else sel
+    return " ".join(" ".join(noeuds.xpath(".//text()").getall()).split())
+
+
+def classes_de(html: str) -> set[str]:
+    return {c for valeur in Selector(html).css("[class]::attr(class)").getall() for c in valeur.split()}
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_de_l_etude(client, langue):
+    html = client.get(f"/{langue}").text
+    sel = Selector(html)
+    titre, sous_titre, accroche = TEXTES_ACCUEIL[langue]
+    assert [texte_de(h, None) for h in sel.css("main h1").getall()] == [titre], "un seul titre de premier niveau"
+    assert texte_de(html, ".accueil-sous-titre") == sous_titre
+    assert texte_de(html, ".accueil-accroche") == accroche
+    etapes = sel.css("main ol.etapes > li.etape")
+    assert len(etapes) == 3, "trois étapes « comment ça se passe »"
+    assert all(e.css("h3") and e.css("p") for e in etapes)
+    for section in sel.css("main section"):
+        assert section.css("h2"), "chaque section a son titre"
+    assert set(CLASSES_ACCUEIL) <= classes_de(html), set(CLASSES_ACCUEIL) - classes_de(html)
+    assert sel.css('link[rel="stylesheet"]::attr(href)').getall() == ["/public/static/public.css"]
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_resume_du_releve_exact_et_a_un_seul_endroit(client, langue):
+    """Le résumé dit ce que relève AUJOURD'HUI observateur.js : des nombres et des délais. Pas la position de la
+    souris, pas ce qui est tapé. La phrase du cadrage sur les « mouvements de la souris » attend le second script."""
+    from shadowlab.public.pages import RESUME_RELEVE
+
+    html = client.get(f"/{langue}").text
+    resume = RESUME_RELEVE[langue]
+    assert set(RESUME_RELEVE) == {"fr", "en"} and set(resume) == set(RESUME_RELEVE["fr"])
+    assert texte_de(html, ".releve-franchise") == resume["franchise"]
+    assert [texte_de(li, None) for li in Selector(html).css(".releve-oui li").getall()] == resume["oui"]
+    assert [texte_de(li, None) for li in Selector(html).css(".releve-non li").getall()] == resume["non"]
+    annonce = " ".join([resume["franchise"], *resume["oui"]]).lower()
+    for futur in ("mouvements de la souris", "mouse movements", "trajectoire", "trajectory", "rythme des clics"):
+        assert futur not in annonce, futur
+    jamais = " ".join(resume["non"]).lower()
+    assert "position" in jamais
+    assert ("ce que vous tapez" if langue == "fr" else "what you type") in jamais
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_presente_mosaik_en_grand_et_habitat_en_lien_discret(client, langue):
+    html = client.get(f"/{langue}").text
+    sel = Selector(html)
+    assert MARQUE_SOCIAL in texte_de(html, ".site-vedette")
+    liens = sel.css('.site-second a[href="/lab/vitrine"]').getall()
+    assert [texte_de(a, None) for a in liens] == [LIEN_HABITAT[langue]]
+    assert ("Tout y est fictif" if langue == "fr" else "Everything there is fictional") in texte_de(html, ".fictif")
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_accord_notice_a_cote_et_visite_sans_participer(client, langue):
+    sel = Selector(client.get(f"/{langue}").text)
+    formulaire = sel.css('form.accord[action="/session/commencer"][method="post"]')
+    assert formulaire.css('input[type="checkbox"][name="consentement"][value="oui"][required]')
+    assert formulaire.css('input[type="hidden"][name="csrf"]')
+    assert formulaire.css('input[type="hidden"][name="langue"]::attr(value)').get() == langue
+    case = formulaire.css(".accord-case")
+    libelle = texte_de(case.get(), "label")
+    assert ("J'ai lu la notice complète" if langue == "fr" else "I have read the full notice") in libelle
+    assert case.css(f'a.lien-notice[href="/{langue}/information"]'), "la notice juste à côté de la case"
+    assert formulaire.css('button[type="submit"]')
+    assert sel.css('a.visiter-sans-participer[href="/lab/social/fil"]')
+    autre = AUTRE[langue]
+    assert sel.css(f'.autre-langue a[href="/{autre}"][hreflang="{autre}"]'), "lien vers l'autre langue"
+
+
+def test_racine_dans_la_langue_du_navigateur_avec_lien_vers_l_autre(client):
+    for langue in ("fr", "en"):
+        html = client.get("/", headers={"Accept-Language": ACCEPT[langue]}).text
+        assert texte_de(html, "main h1") == TEXTES_ACCUEIL[langue][0]
+        assert Selector(html).css(f'.autre-langue a[href="/{AUTRE[langue]}"]')
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_et_notice_disent_le_but(client, langue):
+    mesurer, rien_d_autre = BUT[langue]
+    for html in (client.get(f"/{langue}").text, notice(client, langue)):
+        texte = texte_de(html)
+        assert mesurer in texte and rien_d_autre in texte
+    assert "ne servent qu'à ce calcul" not in notice(client, "fr")
+
+
+def test_commencer_mene_au_reseau_social(client):
+    r = commencer_depuis(client, "fr")
+    assert r.status_code == 303 and r.headers["location"] == "/lab/social/fil"
+    accueil_en_session = Selector(client.get("/fr").text)
+    assert not accueil_en_session.css('form[action="/session/commencer"]'), "pas un second accord"
+    assert accueil_en_session.css('a.bouton-principal[href="/lab/social/fil"]'), "reprendre la visite"
+    double = client.post(
+        "/session/commencer",
+        data={**champs_du_formulaire(client.get("/session").text, "/session/terminer"), "consentement": "oui"},
+        headers={"Origin": ORIGINE},
+        follow_redirects=False,
+    )
+    assert double.status_code == 303 and double.headers["location"] == "/lab/social/fil"
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_notice_a_son_adresse(client, langue):
+    html = notice(client, langue)
+    sel = Selector(html)
+    assert langue_html(html) == langue
+    assert not sel.css('form[action="/session/commencer"]'), "l'accord se donne sur l'accueil"
+    assert sel.css(f'.notice-retour a[href="/{langue}"]'), "retour à l'accueil pour participer"
+    assert sel.css(f'.autre-langue a[href="/{AUTRE[langue]}/information"]')
+    assert set(CLASSES_NOTICE) <= classes_de(html), set(CLASSES_NOTICE) - classes_de(html)
+    assert sel.css('link[rel="stylesheet"]::attr(href)').getall() == ["/public/static/public.css"]
+
+
+def test_ancien_chemin_de_la_notice(client):
+    """« /information », sans préfixe, sert la notice dans la langue du navigateur ; « / » garde l'accord."""
+    for langue in ("fr", "en"):
+        r = client.get("/information", headers={"Accept-Language": ACCEPT[langue]})
+        assert r.status_code == 200 and langue_html(r.text) == langue
+        assert squelette(r.text) == squelette(notice(client, langue))
+    assert Selector(client.get("/").text).css('form[action="/session/commencer"]')
+
+
+def test_feuille_de_style_de_l_etude(client):
+    r = client.get("/public/static/public.css")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/css")
+    assert r.content == PUBLIC_CSS.read_bytes()
+    contact = client.get("/contact/style.css")
+    assert contact.content == PUBLIC_CSS.read_bytes(), "les pages de contact ont la même feuille, sous /contact/"
+    assert not re.search(r"(?:https?:)?//[a-z0-9]|@import|url\(", r.text, re.I), "aucune ressource extérieure"
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
+    pages = parcours_complet(client, langue)
+    pages["notice"] = notice(client, langue)
+    for nom, html in pages.items():
+        if nom.startswith("vitrine"):
+            continue
+        assert "<style" not in html.lower() and "<script" not in html.lower(), nom
+        assert not re.search(r"(?:https?:)?//[a-z0-9]", html, re.I), nom
+        for element in Selector(html).xpath("//*"):
+            for attribut in element.attrib:
+                assert attribut.lower() != "style" and not attribut.lower().startswith("on"), (nom, attribut)
+        feuilles = Selector(html).css('link[rel="stylesheet"]::attr(href)').getall()
+        assert feuilles in (["/public/static/public.css"], ["/contact/style.css"]), (nom, feuilles)
+
+
+def test_version_du_texte_d_information_changee():
+    from shadowlab.public.pages import VERSION_INFORMATION
+
+    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1")
