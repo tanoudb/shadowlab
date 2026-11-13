@@ -80,7 +80,7 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 278 tests verts** (`uv run pytest`, 13/11 à 2 h 24, après D-71 et D-72, hors campagne : 1 234
+- **1 285 tests verts** (`uv run pytest`, 13/11 à 5 h 06, après D-71, D-72 et D-73, hors campagne : 1 241
   rapides et 44 d'intégration avec de
   vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
@@ -119,15 +119,21 @@ recommander des optimisations.
   sans corrélation, 21 pages et 280 champs sur 280 à chacun, aucun blocage ; le témoin `http` 0 sur 15.
   Réserves : 3 passages par niveau, 21 pages par passage, CAPTCHA en clés de test aux niveaux 05 et 06, niveau
   06 sans corrélation, niveau 07 non mesuré, aucun humain en base.
+  **Parcours long par l'Arena** (scénario `recolte_recette_rallye`, `recolte-arena-rallye.yaml`, 427 pages dans
+  une seule session, environ 50 minutes) : campagne 106, réussi aux niveaux 04 et 05, arrêté à la 10ᵉ page au
+  niveau 06 sans corrélation (l'Arena redemandait le défi quand Chrome reprenait sa session TLS : D-73) ;
+  campagne 107 (13/11) : 427 pages et 34 410 champs sur 34 410 aux niveaux 04, 05 et 06 sans corrélation, un
+  passage par niveau. Le cookie de défi de l'Arena vit une heure : une passe plus longue sera redéfiée et
+  arrêtée par la sentinelle (arrêt puis `reprendre`, jamais mesuré).
   **Non prouvé** : aucun vrai site ni vraie protection ; la commande elle-même vise le site en direct (niveau
-  01), les niveaux protégés ne sont mesurés que par campagne ; le site de rallye par l'Arena ; un parcours
-  long ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non
+  01), les niveaux protégés ne sont mesurés que par campagne ; une passe de plus d'une heure sous
+  protection ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non
   branché ; champ adaptatif sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ;
   CSV jamais ouvert dans Excel.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, récolte d'un vrai site (aucune
-  n'a été faite), récolte par l'Arena à 30 passages par niveau et sur un parcours long (3 passages et 21 pages
-  à la campagne 105), identité qui dure (palier 2, conception
+  n'a été faite), récolte par l'Arena à 30 passages par niveau (3 à la campagne 105, 1 par niveau pour les
+  427 pages de la campagne 107), identité qui dure (palier 2, conception
   `docs/recherche/identite-qui-dure-2026-11-12.md` à valider par Ethan).
 
 ## Niveaux de difficulté Arena
@@ -164,6 +170,7 @@ uv run shadowlab recolte noter vitrine-annonces --verite vitrine   # note contre
 uv run shadowlab recolte etat <nom> | reprendre <nom> | essayer <recette> <adresse>   # voir, reprendre, tester une recette sur une page
 SHADOWLAB_VITRINE_TAILLE=150 SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-generale.yaml  # preuve (~3 h 30) ; recolte-generale-essai.yaml d'abord
 SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VITRINE_TAILLE=20 uv run shadowlab campagne configs/experiments/recolte-arena.yaml  # la récolte jugée par les niveaux 02 à 06 sans corrélation (campagne 105, 40 min) ; `arena appliquer` avec la variable avant, sans elle après
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-arena-rallye.yaml  # 427 pages d'une seule session aux niveaux 04 à 06 sans corrélation (campagne 107, 2 h 35) ; même encadrement par `arena appliquer`
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
@@ -254,6 +261,9 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Une ablation passe par des profils supplémentaires (`SHADOWLAB_PROFILS_EXTRA`, exemple
   `configs/experiments/ablation-cdp.yaml`) : `shadowlab arena appliquer` avec la variable avant la campagne,
   puis `shadowlab arena appliquer` sans elle après, sinon Nginx garde les profils supplémentaires.
+- Un vrai Chrome n'a pas un JA4 unique : quand il reprend sa session TLS, son ClientHello porte l'extension
+  `pre_shared_key` en plus (`t13d1517h2_…` devient `t13d1518h2_…`). Tout ce qui lie quelque chose au TLS doit
+  passer par l'empreinte de liaison (`tls.ja4_liaison`, D-73), pas par le JA4 exact.
 - Le navigateur garde les scripts de `/lab/static` en cache une heure : après une modification, vérifier avec
   une adresse neuve (`?v=2`). La racine `/` redirige vers l'ancien tableau de bord `/tableau`.
 

@@ -597,3 +597,24 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   déclaré une porte) ; le statut rendu par le moteur reste celui de la première réponse, la porte d'entrée
   est le seul endroit qui regarde l'état actuel ; jamais essayé sur un vrai défi d'un fournisseur. Décidé
   par : coordination (travail d'un sous-agent, relu).
+
+- **D-73 — 13/11/2026 — L'Arena lie les cookies de défi au JA4 sans `pre_shared_key`.** Constat (campagne
+  106, parcours de 427 pages) : au niveau 06 sans corrélation, l'Arena a redemandé le défi JavaScript et les
+  deux CAPTCHA à la 10ᵉ page d'une session qui les avait déjà passés ; la sentinelle a arrêté la récolte.
+  Cause, lue dans la base : aux niveaux 05 à 07 (`lier_tls`), le cookie de réussite était lié au JA4 exact.
+  Or un vrai Chrome qui reprend sa session TLS 1.3 envoie une extension de plus, `pre_shared_key` (0029) :
+  son JA4 passe de `t13d1517h2_8daaf6152771_cb7bf5808d99` à `t13d1518h2_8daaf6152771_e2d80978ab2e`, rien
+  d'autre ne change. Dès qu'une page part sur une connexion reprise, le cookie n'est plus reconnu. Un humain
+  avec un vrai Chrome serait redéfié de la même façon : faux positif de l'Arena (règle 3 du plan).
+  Décision : le frontal calcule une empreinte de liaison, le JA4 sans l'extension 41, la transmet au site
+  dans l'en-tête interne `X-ShadowLab-Liaison`, couvert par le sceau ; les cookies de défi, de CAPTCHA et de
+  connexion y sont liés. Le JA4 complet reste enregistré et vu par les détecteurs. Seule l'extension 41 est
+  écartée : c'est la seule mesurée. Un cookie reste refusé à un client d'empreinte différente.
+  Preuve : tests vus en échec avant (commit `3b96d79`), verts après (`d9bcb3d`, fusion `d4e6d4e`), 1 285
+  tests verts ; sur les trois vrais ClientHello de la campagne 106, la liaison est la même ; campagne 107 :
+  au niveau 06 sans corrélation, une page demandée sur une connexion reprise ne déclenche plus de défi, et
+  les 427 pages sont lues (9 à la campagne 106). Un test verrouille aussi que le frontal écarte tout en-tête
+  `X-ShadowLab-*` envoyé par le client (c'était déjà le cas, sans test). Limites : `early_data` (002a), que
+  Chrome n'envoie pas par défaut, n'est ni mesurée ni écartée ; un seul Chrome, sur macOS ; aucun humain en
+  base pour confirmer ; le niveau 05 avait le même défaut et n'était passé à la campagne 106 que parce que la
+  connexion reprise n'avait porté aucune page. Décidé par : coordination (travail d'un sous-agent, relu).

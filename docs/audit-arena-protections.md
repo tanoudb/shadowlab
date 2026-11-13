@@ -208,7 +208,7 @@ du contenu, donc l'observateur JS ne s'exécute jamais).
 
 | Protection | Active | Mécanisme |
 |---|---|---|
-| Defi JS | Oui, difficulté 15, lié TLS | SHA-256 + cookie lié au JA4 |
+| Defi JS | Oui, difficulté 15, lié TLS | SHA-256 + cookie lié au JA4 (sans `pre_shared_key` depuis D-73) |
 | Fingerprinting | `bloquer: tout` | Comme niveaux 03-04 |
 | Turnstile | Oui, test keys | Cloudflare Turnstile (mode test) |
 | reCAPTCHA | Oui, test keys | Google reCAPTCHA v2 (mode test) |

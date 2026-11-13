@@ -3054,3 +3054,36 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `notes/ia/contexte.md`.
 - **Reste** : la même mesure à 30 passages par niveau et sur le site de rallye (427 pages) ; sessions humaines
   d'Ethan ; palier 2 à valider ; tunnel du site public.
+
+## 2026-11-13 (7h50) — Claude (Fable 5.2, coordination) — Campagnes 106 et 107 : 427 pages d'une seule session à travers l'Arena ; liaison TLS corrigée (D-73)
+
+- **Campagne 106** (`configs/experiments/recolte-arena-rallye.yaml`, nouveau fichier ; 13/11 de 3 h 07 à 4 h 50,
+  3 passages, 0 panne ; site de rallye factice, 427 pages, moteur navigateur) : niveau 04, 427 pages et 34 410
+  champs sur 34 410 en 2 940 s ; niveau 05, pareil en 3 155 s ; niveau 06 sans corrélation, **arrêt à la 10ᵉ
+  page** (9 pages lues, 86 s) sur « statut 403 » : l'Arena avait redemandé le défi JavaScript et les CAPTCHA.
+- **Cause, lue dans la base** : aux niveaux 05 à 07, le cookie de défi était lié au JA4 exact (`lier_tls`). Le
+  vrai Chrome a rouvert une connexion en reprenant sa session TLS, avec l'extension `pre_shared_key` (0029) en
+  plus : JA4 `t13d1517h2_…` devenu `t13d1518h2_…`. Les trois passages ont eu cette connexion ; au niveau 05
+  elle n'a porté aucune page, au niveau 06 elle en a porté. Un humain aurait été redéfié de même. 135
+  connexions de ce Chrome avec reprise en base, 2 908 sans.
+- **D-73** (branche `arena-liaison-tls`, sous-agent Sonnet, relu ; commits `3b96d79` tests, `d9bcb3d` code,
+  fusion `d4e6d4e`) : empreinte de liaison = JA4 sans l'extension 41, en-tête interne `X-ShadowLab-Liaison`
+  couvert par le sceau, cookies liés à elle. Fichiers : `arena/tls.py`, `arena/frontal.py`, `site/gardien.py`,
+  `configs/arena/profils.yaml` (commentaire), `tests/test_liaison_tls.py` (7 tests), `tests/test_site.py`,
+  `tests/test_rejeu.py`. Vérifié par moi sur les trois vrais ClientHello de la 106 : JA4 recalculés identiques
+  à la base, liaison identique pour les trois. Suite complète à 5 h 06 : 1 285 tests verts, lint propre.
+- **Campagne 107** (le même fichier, 13/11 de 5 h 07 à 7 h 40, 3 passages, 0 panne) : **427 pages et 34 410
+  champs sur 34 410 aux niveaux 04, 05 et 06 sans corrélation** (3 143, 2 935 et 3 133 s), un seul défi
+  d'entrée par passage, aucun blocage, `detecte_par` vide. Au niveau 06, une page est passée par une connexion
+  reprise (`t13d1518h2_…`) sans nouveau défi : D-73 vérifiée dans un vrai Chrome.
+- **Constat pour l'endurance** : `DUREE_COOKIE_S = 3600` dans `arena/defis.py`. Une passe de plus d'une heure
+  sera redéfiée à partir du niveau 04 et arrêtée par la sentinelle (un 403 en cours de passe arrête toujours).
+  Le plan compte déjà les reprises (« le travail va au bout, reprises comprises ») ; arrêt puis `reprendre`
+  à travers l'Arena n'a jamais été mesuré.
+- **Réserves** : un passage par niveau ; CAPTCHA en clés de test aux niveaux 05 et 06 ; niveau 06 sans
+  corrélation ; niveau 07 non mesuré ; aucun humain en base ; site à nous, en local ; un Chrome sur macOS.
+- **État** : Arena remise en profils normaux à 7 h 40, ports 8770 et 8743 libres, aucun dossier de travail à
+  part, branche poussée. Écrit : `docs/PLAN.md` § 2 et § 8, `docs/DECISIONS.md` (D-73), `AGENTS.md`,
+  `notes/ia/contexte.md`, `docs/audit-arena-protections.md` (une précision).
+- **Reste** : la vitrine à 30 passages par niveau (04 à 06 sans corrélation) ; une passe de plus d'une heure
+  avec reprise ; sessions humaines d'Ethan ; palier 2 à valider ; tunnel du site public.

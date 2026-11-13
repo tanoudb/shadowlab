@@ -521,7 +521,7 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   son JA4 passe de `t13d1517h2_…` à `t13d1518h2_…`. Les trois passages ont eu cette connexion (environ
   50 s après le début) ; aux niveaux 04 (pas de liaison) et 05 (la connexion reprise n'a porté qu'un envoi
   de mesures, pas une page), cela n'a rien déclenché. Un humain avec un vrai Chrome aurait reçu le défi une
-  seconde fois de la même façon : défaut de l'Arena, en cours de correction. En base : 135 connexions de ce
+  seconde fois de la même façon : défaut de l'Arena, corrigé par D-73. En base : 135 connexions de ce
   Chrome avec reprise, 2 908 sans.
   **Constat pour l'endurance** : le cookie de défi de l'Arena vit 3 600 s. Une passe de plus d'une heure
   sera donc redéfiée en cours de route à partir du niveau 04, et la sentinelle l'arrêtera. Les 427 pages
@@ -529,6 +529,23 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   un défi qui se valide seul en cours de passe, ou arrêter puis reprendre) : à concevoir avant l'endurance.
   Réserves : un seul passage par niveau ; CAPTCHA en clés de test ; niveau 06 sans corrélation ; site à
   nous, en local ; une machine.
+- **Campagne 107 : le même parcours long, après D-73** (13/11 de 5 h 07 à 7 h 40, 3 passages, 0 panne) :
+
+  | Niveau | Pages lues | Champs exacts | Durée | Issue |
+  |--------|-----------|---------------|-------|-------|
+  | 04 | 427 sur 427 | 34 410 sur 34 410 | 3 143 s (7,4 s par page) | réussi |
+  | 05 | 427 sur 427 | 34 410 sur 34 410 | 2 935 s (6,9 s par page) | réussi (`captcha_test`) |
+  | 06 sans corr. | 427 sur 427 | 34 410 sur 34 410 | 3 133 s (7,3 s par page) | réussi (`captcha_test`) |
+
+  **Une session lit 427 pages de suite à chacun des trois niveaux, sans blocage, sans détecteur qui la
+  signale, sans page en échec, et le défi d'entrée n'est demandé qu'une fois.** Au niveau 06, une page a été
+  demandée sur une connexion reprise par Chrome (JA4 `t13d1518h2_…`, 6 requêtes dont 1 page) : c'est le
+  cas exact qui arrêtait la campagne 106, et l'Arena n'a pas redemandé le défi. D-73 est donc vérifiée
+  dans un vrai Chrome, par l'Arena. Avec la 106 : 5 passages de 427 pages réussis sur 5 aux niveaux 04 et 05
+  (2 et 2) et 06 sans corrélation (1), le sixième arrêté par le défaut corrigé.
+  Réserves : un passage par niveau et par campagne ; CAPTCHA en clés de test aux niveaux 05 et 06 ; niveau 06
+  sans corrélation ; niveau 07 non mesuré ; 53 minutes au plus par passe, sous la durée de vie du cookie de
+  défi (une heure) ; aucun humain en base ; site à nous, en local ; une machine, un Chrome sur macOS.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -731,7 +748,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains |
-| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages par niveau)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06, deux défauts trouvés : D-71 dans l'Arena, D-72 dans la commande), puis campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun ; 1 278 tests verts (fusion `1c59d55`). Reste : 30 passages par niveau, le site de rallye par l'Arena, un parcours long (endurance), aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
+| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages de 21 pages par niveau ; 427 pages d'une seule session aux niveaux 04, 05 et 06 sans corrélation)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12 au niveau 01, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06 ; D-71 dans l'Arena, D-72 dans la commande), campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun. Parcours long : campagne 106 (427 pages aux niveaux 04 et 05, arrêt au niveau 06 : D-73 dans l'Arena), campagne 107 : 427 pages et 34 410 champs sur 34 410 aux trois niveaux ; 1 285 tests verts (fusion `d4e6d4e`). Reste : 30 passages par niveau ; une passe de plus d'une heure (le cookie de défi expire : arrêt puis reprise, jamais mesuré) ; aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

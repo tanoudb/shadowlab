@@ -21,7 +21,7 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 13/11 à 2 h 24, après D-71 et D-72, sans campagne : **1 278 verts** (`uv run pytest` : 1 234
+- Tests au 13/11 à 5 h 06, après D-71, D-72 et D-73, sans campagne : **1 285 verts** (`uv run pytest` : 1 241
   rapides et 44 d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
@@ -89,8 +89,13 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    voyait pas un défi déjà franchi) ; **campagne 105 : le moteur navigateur fait 15 passages sur 15 du niveau
    02 au niveau 06 sans corrélation, 21 pages et 280 champs sur 280 à chacun**, aucun blocage. Réserves : 3
    passages par niveau, 21 pages par passage, CAPTCHA en clés de test, pas de corrélation, pas de niveau 07,
-   pas d'humain en base. Rien n'est prouvé sur un vrai site. Suite utile : 30 passages par niveau, le site de
-   rallye par l'Arena, un parcours long.
+   pas d'humain en base. **Parcours long (13/11)** : campagne 106, le site de rallye (427 pages, une seule
+   session) passe aux niveaux 04 et 05 et s'arrête à la 10ᵉ page au niveau 06 sans corrélation, parce que
+   l'Arena redemandait le défi quand Chrome reprenait sa session TLS (D-73, corrigé) ; **campagne 107 : 427
+   pages et 34 410 champs sur 34 410 aux niveaux 04, 05 et 06 sans corrélation**, un passage par niveau,
+   environ 50 minutes chacun. Le cookie de défi de l'Arena vit une heure : une passe plus longue sera redéfiée
+   et arrêtée (arrêt puis reprise, jamais mesuré). Rien n'est prouvé sur un vrai site. Suite utile : 30
+   passages par niveau ; une passe de plus d'une heure avec reprise.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
