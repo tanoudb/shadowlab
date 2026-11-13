@@ -3008,3 +3008,22 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **État** : aucune session humaine en base ; aucune campagne en cours ; ports 8770 et 8785 libres.
 - **Reste** : la récolte jugée par les niveaux 02 à 06 de l'Arena ; sessions humaines d'Ethan puis `shadowlab
   rejeu` ; conception du palier 2 à valider ; tunnel du site public ; `recolte-rythme.yaml`.
+
+## 2026-11-13 (1h50) — Claude (Fable 5.2, coordination) — Campagne 103 : la récolte jugée par l'Arena ; limite de débit corrigée (D-71)
+
+- **Campagne 103** (`configs/experiments/recolte-arena.yaml`, 13/11 de 1 h 20 à 1 h 39, 30 passages, 0 panne,
+  vitrine à 20 annonces, scénario `recolte_recette_vitrine`, entrée par l'Arena avec le jeton du passage) :
+  moteur `navigateur` (noezia en identité native) : 3 sur 3 aux niveaux 02 et 03 (138 à 178 s), 0 sur 3 aux
+  niveaux 04, 05 et 06 sans corrélation ; moteur `http` (curl-cffi, témoin) : 0 sur 15 (empreinte aux niveaux
+  02 et 03, défi JavaScript jamais validé ensuite).
+- **Cause des neuf arrêts du navigateur** : « débit dépassé (429) », premier refus sur une photo de la page de
+  liste (photo 18 au niveau 04, 9 au 05, 4 au 06), après un défi JavaScript validé et des CAPTCHA en clés de
+  test. `limit_req` de Nginx comptait les 20 photos que la page charge en moins d'une seconde. Un humain
+  aurait été arrêté de la même façon. La sentinelle de la récolte a arrêté au premier refus, comme prévu.
+- **D-71** : `/lab/vitrine/photos/` n'est plus compté par la limite de débit (branche `arena-debit-pages`,
+  fusion `c0c9d52`). Vu en échec avant (2 tests rapides, 2 tests contre le Nginx de la pile), vert après
+  `shadowlab arena appliquer` : 46 tests de l'Arena. Suite complète à 1 h 48 : 1 272 tests verts, lint propre.
+- **Observé au passage** : dans une campagne, le pilote `curl-cffi` du scénario n'imite pas un navigateur
+  (aucun `User-Agent`, règle 920320 du WAF), contrairement au moteur `http` de la commande
+  (`impersonate: chrome`) : le témoin HTTP de la 103 est donc plus faible que la commande réelle.
+- **Reste** : refaire la campagne `recolte-arena.yaml` après D-71 ; sessions humaines d'Ethan ; palier 2.

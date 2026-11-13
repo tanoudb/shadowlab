@@ -553,3 +553,24 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   un champ adaptatif sans signature mémorisée échoue sans alerte ; le rythme « prudent » n'a jamais tourné en
   temps réel ; le CSV n'a pas été ouvert dans Excel ; la campagne de preuve complète n'a pas fini. Décidé par :
   Ethan (accord de fusion), coordination (choix de réalisation).
+- **D-71 — 13/11/2026 — La limite de débit de l'Arena ne compte plus les photos qu'une page charge.** Constat :
+  campagne 103 (`configs/experiments/recolte-arena.yaml`, la récolte générale jugée par l'Arena, vitrine à 20
+  annonces). Le moteur en identité native passe les niveaux 02 et 03 (3 sur 3 chacun) puis est arrêté aux
+  niveaux 04, 05 et 06 sans corrélation (0 sur 3 chacun), toujours pour la même raison : « débit dépassé
+  (429) ». Lu requête par requête : la page de liste charge 20 photos en moins d'une seconde, et `limit_req`
+  de Nginx comptait ces photos avec la rafale du niveau (15, 8, 4) ; le premier refus tombe sur la photo 18 au
+  niveau 04, la photo 9 au 05, la photo 4 au 06. Le défi JavaScript et les CAPTCHA en clés de test étaient
+  déjà validés. Tout navigateur charge ces images en parallèle : un humain qui ouvre cette page aurait été
+  classé « bloqué » aux niveaux 04 à 07. Le défaut n'était jamais apparu parce que les scénarios habituels
+  n'utilisent que des pages légères ; `/lab/static` était déjà hors limite, pas les photos. Choix :
+  `/lab/vitrine/photos/` rejoint `/lab/static/` dans une `location` Nginx sans `limit_req` (liste unique
+  `CHEMINS_STATIQUES`, `arena/profils.py`) ; les pages, les envois, la collecte du parcours et les
+  vérifications de CAPTCHA restent comptés ; débits et rafales par niveau inchangés. Pourquoi : une limite de
+  débit vise les pages et les appels, pas les fichiers qu'une page charge d'elle-même ; un détecteur n'est
+  valide que s'il laisse passer les humains (plan § 8, règle 3). Preuve : 2 tests rapides et 2 tests contre le
+  Nginx de la pile vus en échec avant, 46 verts après `shadowlab arena appliquer` (sans reconstruction
+  d'image). Limites : un client peut télécharger les photos sans limite (le WAF les voit toujours) ; tout
+  nouveau fichier chargé par une page doit être ajouté à la liste ; les appels `collecte`, `verdict`, `defi` et
+  `captcha` étaient déjà hors limite avant cette décision et le restent ; aucun humain n'a encore été mesuré
+  derrière la limite de débit (le rejeu des sessions humaines ne la rejoue pas) ; la campagne 103 est à
+  refaire après la correction. Décidé par : coordination (travail d'un sous-agent, relu).

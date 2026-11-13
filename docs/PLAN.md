@@ -451,6 +451,20 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   3 répétitions ; sites à nous, en local. Une première campagne, lancée à 21 h 08 dans une base à part, avait
   été arrêtée à 21 h 43 pour la fusion (un passage fini, réussi).
 - Suite complète après la fusion : 1 247 tests verts (journal du 12/11, 21 h 55).
+- **Campagne 103 : la récolte jugée par l'Arena** (`recolte-arena.yaml`, 13/11 de 1 h 20 à 1 h 39, 30 passages,
+  0 panne, vitrine à 20 annonces, entrée par l'Arena avec le jeton du passage). Passages réussis sur 3 :
+
+  | Moteur de la récolte | 02 | 03 | 04 | 05 | 06 sans corr. |
+  |----------------------|----|----|----|----|---------------|
+  | `navigateur` (noezia en identité native) | 3 | 3 | 0 | 0 | 0 |
+  | `http` (curl-cffi, témoin) | 0 | 0 | 0 | 0 | 0 |
+
+  Le moteur navigateur récolte tout aux niveaux 02 et 03 (138 à 178 s pour 21 pages). Aux niveaux 04 à 06, il
+  valide le défi JavaScript et les CAPTCHA en clés de test, puis reçoit un 429 sur une photo de la page de
+  liste (photo 18 au niveau 04, 9 au 05, 4 au 06) et la sentinelle arrête la récolte, comme prévu, au premier
+  refus. Ce n'est pas le moteur : la limite de débit de l'Arena comptait les photos qu'une page charge
+  (défaut corrigé par D-71). Le témoin `http` est arrêté partout : empreinte aux niveaux 02 et 03, défi
+  JavaScript jamais validé du 04 au 06. Campagne à refaire après D-71.
 
 ## 3. Pourquoi on a perdu du temps
 
