@@ -2,6 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "labo",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "shadowlab",
+        "site"
+      ],
+      "port": 8770
+    },
+    {
       "name": "apercu-vitrine",
       "runtimeExecutable": "env",
       "runtimeArgs": [
