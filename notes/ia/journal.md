@@ -3118,3 +3118,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Décision de coordination** : corriger le mouvement de souris du moteur (étape 1.9), pas le détecteur.
 - **Reste** : la correction (sous-agent, test d'abord), puis une campagne de contrôle ; une passe de plus d'une
   heure avec reprise ; sessions humaines d'Ethan ; palier 2 à valider ; tunnel du site public.
+
+## 2026-11-13 (23h30) — Claude (Fable 5.2, coordination) — Reprise après coupure ; souris du moteur corrigée (D-74)
+
+- **Coupure** : la session s'est arrêtée vers 13 h, la boucle aussi ; rien n'a tourné jusqu'à 23 h 13. Le
+  sous-agent de la souris avait déposé deux commits avant d'être coupé (`88358ca` test, `34f0ae4` code), sans
+  rapport. Relus et remesurés par moi.
+- **D-74** : tremblement de la main visible au pixel dans `engines/noezia/comportement/souris.py` ; banc de
+  mesure `tests/test_souris_trajectoire.py` (2 tests). Rouge avant (295 pages sur 20 869 sous 0,15 rad), vert
+  après ; minimum 0,196 rad, durée d'une page inchangée. Fusion `5e87a54`, suite complète relancée à 23 h 21.
+- **Non fait** : la campagne de contrôle dans un vrai Chrome (`recolte-arena-35.yaml`, à comparer à la 108).
+  Elle passe après la demande d'Ethan ci-dessous, et rien ne doit changer dans les pages du labo d'ici là.
+- **Demande d'Ethan (23 h 30)** : deux beaux sites factices à mettre en ligne derrière Cloudflare, en anglais
+  et en français, pour faire tester par une communauté (Reddit, amis) en disant que c'est une étude sur la
+  façon dont les humains utilisent un navigateur et sur la différence entre un humain et une IA ; voir le
+  nombre de visiteurs ; que les gens soient au courant de ce qui est relevé. Chantier ouvert dans
+  l'application publique (`src/shadowlab/public/`).

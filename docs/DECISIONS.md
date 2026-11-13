@@ -618,3 +618,24 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Chrome n'envoie pas par défaut, n'est ni mesurée ni écartée ; un seul Chrome, sur macOS ; aucun humain en
   base pour confirmer ; le niveau 05 avait le même défaut et n'était passé à la campagne 106 que parce que la
   connexion reprise n'avait porté aucune page. Décidé par : coordination (travail d'un sous-agent, relu).
+
+- **D-74 — 13/11/2026 — Le mouvement de souris du moteur garde un tremblement visible au pixel.** Constat
+  (campagne 108) : au niveau 05, deux sessions de récolte sur 35 bloquées par le détecteur de comportement,
+  signal `trajectoire_lineaire` (moyenne des angles entre segments de souris sous 0,08 rad). Sur environ 4 400
+  pages lues par le moteur (campagnes 105 à 108), la moyenne passe sous ce seuil environ une fois sur 1 000,
+  toujours sur un mouvement court, avec beaucoup d'angles exactement nuls. Cause, établie par un banc de
+  mesure sans navigateur (`tests/test_souris_trajectoire.py`) qui rejoue le code réel du moteur et le calcul
+  de `observateur.js` : le bruit du mouvement (écart-type de 0,15 à 0,7 px) disparaît quand la position est
+  arrondie au pixel entier, et la page reçoit une ligne lisse. Le banc retrouve la base : 0,13 % des pages
+  sous 0,08 (base : 0,09 %), 1,5 % sous 0,15 (base : 1,4 %), mêmes quantiles.
+  Décision : `comportement/souris.py` ajoute à la trajectoire un tremblement de la main (processus à bande
+  étroite, 8 à 12 Hz, 1,5 px au repos plus une part du pas parcouru), nul au départ, la cible restant exacte.
+  On corrige le moteur ; le détecteur, l'observateur et les profils de l'Arena ne changent pas.
+  Preuve : test vu en échec avant (commit `88358ca` : 295 pages sur 20 869 sous 0,15, dont 27 sous 0,08), vert
+  après (`34f0ae4`, fusion `5e87a54`) ; dans le banc, sur 20 900 pages : minimum 0,196 rad (0,062 avant),
+  médiane 0,94 (0,72 avant), durée d'une page inchangée (5,3 s) ; aucune autre règle de souris de
+  `detection.py` ne se déclenche sur 1 000 sessions simulées. Limites : pas encore mesuré dans un vrai
+  Chrome (campagne de contrôle à faire) ; toute la distribution monte, la souris bouge plus qu'avant ;
+  aucune session humaine pour dire si c'est plus proche d'une vraie main ; le banc ne reproduit ni la cadence
+  d'images de Chrome ni les gestes vers un élément. Décidé par : coordination (travail d'un sous-agent Opus,
+  coupé avant son rapport, relu et remesuré).
