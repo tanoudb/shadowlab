@@ -1,0 +1,36 @@
+# La commande de récolte jugée par l'Arena : première mesure aux niveaux protégés.
+# La campagne 102 a prouvé la récolte au niveau 01 (site en direct, aucune protection) : 12 passages sur 12 à
+# 100 %. Ici le même parcours entre par l'Arena et porte le jeton du passage sur chaque requête
+# (scénario `recolte_recette_vitrine`), donc chaque niveau le juge comme il juge un passage ordinaire.
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+#   curl-cffi    : moteur `http` de la récolte, sans JavaScript ; il sert de témoin : un niveau qui demande
+#                  un défi JavaScript doit l'arrêter (arrêt de la sentinelle, pas une panne)
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus.
+# Niveau 06 sans le détecteur correlation-session (profil `06scorr`), comme les campagnes 97 à 100.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+# Petite vitrine (20 annonces, 21 pages) : c'est une première mesure d'un chemin jamais lancé.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VITRINE_TAILLE=20 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# 2 moteurs × 5 niveaux × 1 scénario × 3 répétitions = 30 passages (environ 1 h, estimation).
+experiment:
+  name: recolte_arena
+  description: >-
+    La récolte générale (vitrine à 20 annonces) jugée par les niveaux 02 à 06 de l'Arena (06 sans corrélation),
+    avec le moteur navigateur en identité native et le moteur HTTP en témoin.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+    - curl-cffi
+  protections: ["02", "03", "04", "05", "06scorr"]
+  scenarios:
+    - recolte_recette_vitrine
+  repetitions: 3
+  seed: 20261113
+  output: [json, html]
