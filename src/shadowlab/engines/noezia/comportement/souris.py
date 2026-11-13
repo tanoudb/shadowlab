@@ -52,6 +52,14 @@ def _bruit_mouvement(vitesse: float, amplitude: float = 0.15) -> float:
     return random.gauss(0, sigma)
 
 
+# Tremblement de la main (voir `trajectoire`) : bande du tremblement physiologique, écart-type au repos, part du pas
+# parcouru en une image (bruit dépendant du signal, Harris & Wolpert 1998) et persistance d'une image à l'autre.
+TREMBLEMENT_HZ = (8.0, 12.0)
+TREMBLEMENT_REPOS_PX = 1.5
+TREMBLEMENT_PAR_PAS = 0.2
+TREMBLEMENT_PERSISTANCE = 0.8
+
+
 def trajectoire(
     x0: float,
     y0: float,
@@ -82,6 +90,20 @@ def trajectoire(
     perp_x = -math.sin(angle) * courbure
     perp_y = math.cos(angle) * courbure
 
+    # Tremblement de la main, assez fort pour survivre à l'arrondi au pixel entier (`clientX`, `clientY`) : le bruit
+    # de `_bruit_mouvement` (écart-type de 0,15 à 0,7 px) y disparaît, la page reçoit une ligne lisse aux angles nuls
+    # entre segments (signal `trajectoire_lineaire`, campagne 108). Processus AR(2) à bande étroite autour de 8 à 12 Hz,
+    # corrélé d'une image à l'autre : ni bruit blanc qui zigzague, ni oscillation régulière. Écart-type stationnaire :
+    # un fond au repos plus une part du pas parcouru en une image ; nul au départ, et le dernier point reste la cible.
+    dt = duree_s / n_points
+    r = TREMBLEMENT_PERSISTANCE
+    c1 = 2.0 * r * math.cos(2.0 * math.pi * random.uniform(*TREMBLEMENT_HZ) * dt)
+    c2 = -r * r
+    # écart-type stationnaire du processus pour une innovation d'écart-type 1
+    gain = math.sqrt((1.0 + r * r) / ((1.0 - r * r) * ((1.0 + r * r) ** 2 - c1 * c1)))
+    tx = (0.0, 0.0)
+    ty = (0.0, 0.0)
+
     for i in range(n_points + 1):
         t_norm = i / n_points
         s = minimum_jerk(t_norm)
@@ -99,6 +121,11 @@ def trajectoire(
         if 0 < i < n_points:
             bx += _bruit_mouvement(vitesse)
             by += _bruit_mouvement(vitesse)
+            ecart = (TREMBLEMENT_REPOS_PX + TREMBLEMENT_PAR_PAS * vitesse * dt) / gain
+            tx = (c1 * tx[0] + c2 * tx[1] + random.gauss(0, ecart), tx[0])
+            ty = (c1 * ty[0] + c2 * ty[1] + random.gauss(0, ecart), ty[0])
+            bx += tx[0]
+            by += ty[0]
 
         # Timing avec jitter ex-gaussien (pas uniforme — indétectable)
         t_s = t_norm * duree_s
