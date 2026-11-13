@@ -1,0 +1,112 @@
+{
+  "photos": [
+    {
+      "id": "remplacement-01",
+      "sujet": "mer",
+      "largeur": 1080,
+      "hauteur": 1350,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-02",
+      "sujet": "montagne",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-03",
+      "sujet": "ville",
+      "largeur": 1080,
+      "hauteur": 1350,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-04",
+      "sujet": "foret",
+      "largeur": 1080,
+      "hauteur": 1350,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-05",
+      "sujet": "lac",
+      "largeur": 1080,
+      "hauteur": 720,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-06",
+      "sujet": "desert",
+      "largeur": 1080,
+      "hauteur": 720,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-07",
+      "sujet": "architecture",
+      "largeur": 1080,
+      "hauteur": 1350,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-08",
+      "sujet": "cuisine",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-09",
+      "sujet": "plante",
+      "largeur": 1080,
+      "hauteur": 1350,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-10",
+      "sujet": "animal",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-11",
+      "sujet": "ciel",
+      "largeur": 1080,
+      "hauteur": 720,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    },
+    {
+      "id": "remplacement-12",
+      "sujet": "objet",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
+      "licence": "CC0",
+      "origine": null
+    }
+  ]
+}

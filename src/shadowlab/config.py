@@ -58,6 +58,8 @@ class ReglagesPublics:
     entete_ip: str  # en-tête où le mandataire met l'adresse du visiteur ("" = adresse de la connexion)
     vitrine_graine: int
     vitrine_taille: int
+    social_graine: int = 20261113  # graine du réseau social fictif « Mosaïk Démo » (public/social.py)
+    social_taille: int = 120  # nombre de publications du réseau social fictif
 
 
 def _charger_env(chemin: Path | None = None, acceptes: tuple[str, ...] | None = None) -> None:
@@ -129,4 +131,6 @@ def charger_public() -> ReglagesPublics:
         entete_ip=os.environ.get("SHADOWLAB_PUBLIC_ENTETE_IP", "X-Forwarded-For").strip(),
         vitrine_graine=int(os.environ.get("SHADOWLAB_VITRINE_GRAINE", "20261111")),
         vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
+        social_graine=int(os.environ.get("SHADOWLAB_PUBLIC_SOCIAL_GRAINE", "20261113")),
+        social_taille=max(1, int(os.environ.get("SHADOWLAB_PUBLIC_SOCIAL_TAILLE", "120"))),
     )

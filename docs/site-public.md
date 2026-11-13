@@ -13,7 +13,14 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
 - la collecte de l'observateur (`POST /lab/collecte`), seulement pendant une session consentie ;
 - le formulaire de contact (`GET /contact`, `POST /contact`, `GET /contact/envoye`, D-57) : écrire au
   responsable sans qu'une adresse soit affichée ; sa feuille de style est servie sous `/contact/style.css` ;
-- quatre fichiers statiques, en liste fermée : `observateur.js`, `vendor/botd-2.0.0.esm.js`, `vitrine.css`, `vitrine.js`.
+- quatre fichiers statiques, en liste fermée : `observateur.js`, `vendor/botd-2.0.0.esm.js`, `vitrine.css`, `vitrine.js` ;
+- le réseau social fictif « Mosaïk Démo » (squelette du 13/11, `public/social.py`, cadrage
+  `docs/recherche/site-public-communaute-2026-11-13.md`) : `/lab/social` (redirige vers le fil), `/lab/social/fil`,
+  `/lab/social/explorer` (paramètre `page`), `/lab/social/p/{identifiant}`, `/lab/social/u/{pseudonyme}`,
+  `/lab/social/t/{etiquette}`, et les photos `/lab/social/photos/{fichier}` (seulement les fichiers du manifeste
+  `public/static/social/photos/manifeste.json`). Même traitement que la vitrine : observateur et requêtes notées
+  pendant une session seulement. Sa feuille et son script, `social.css` et `social.js`, sont servis sous
+  `/public/static/` (liste fermée) ; le script ne fait aucune requête et n'écrit rien dans le navigateur.
 
 Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
 test, la démo reCAPTCHA, `/lab/verdict` et les autres pages du labo. Ces modules ne sont même pas importés
@@ -130,6 +137,7 @@ l'adresse et filtre `sed` vérifiés à vide).
 | `SHADOWLAB_PUBLIC_BASE` | `outputs/public/public.sqlite3` | Base publique. Une base qui contient une expérience du labo est refusée |
 | `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (dernière valeur lue). Vide = adresse de la connexion |
 | `SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` | `20261111`, `500` | Contenu du site vitrine, comme dans le labo |
+| `SHADOWLAB_PUBLIC_SOCIAL_GRAINE`, `SHADOWLAB_PUBLIC_SOCIAL_TAILLE` | `20261113`, `120` | Contenu du réseau social fictif : graine et nombre de publications (au moins 1) |
 
 L'application publique ne charge du fichier `.env` que `SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*` et
 `SHADOWLAB_SORTIES` : les clés propres au labo (jeton d'API, clés reCAPTCHA…) n'entrent pas dans son processus.
@@ -221,7 +229,8 @@ n'est enregistré » pour qui visite sans participer. La page d'information le d
 que les erreurs… »).
 
 **Aucune ligne**, même en erreur, pour les pages de contact (`/contact…`, feuille de style `/contact/style.css`
-comprise) ni pour ce qu'un navigateur charge avec chaque page (fichiers `/lab/static/…`, `/favicon.ico`) :
+comprise) ni pour ce qu'un navigateur charge avec chaque page (fichiers `/lab/static/…` et `/public/static/…`,
+`/favicon.ico`) :
 rapprochée des requêtes notées d'une session à la même milliseconde, une ligne `POST /contact` daterait un
 message, que D-57 ne garde qu'au jour (`test_contact_absent_du_fichier_de_journal`). L'avis « message de contact
 reçu » ne passe pas par ce journal (voir « Purge et suppression »). L'application écrit aussi un avertissement,

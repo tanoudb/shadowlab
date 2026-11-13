@@ -1,4 +1,5 @@
-"""Fabrique de l'application publique : site vitrine, sessions humaines consenties et collecte. Rien d'autre.
+"""Fabrique de l'application publique : site vitrine, réseau social fictif, sessions humaines consenties et collecte.
+Rien d'autre.
 
 Ni l'API du laboratoire, ni /labo, ni /tableau, ni le gardien, le frontal, les détecteurs ou les moteurs :
 ils ne sont même pas importés. Toute route qui n'est pas déclarée ici répond 404. Voir docs/site-public.md.
@@ -29,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
-from . import donnees, messages, pages
+from . import donnees, messages, pages, social
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
 # Liste fermée : rien d'autre du dossier statique du laboratoire n'est servi.
@@ -39,6 +40,10 @@ FICHIERS_STATIQUES = {
     "vitrine.css": "text/css",
     "vitrine.js": "text/javascript",
 }
+# Fichiers propres à l'application publique (réseau social), servis sous /public/static/ : liste fermée aussi.
+STATIQUES_PUBLICS = Path(__file__).resolve().parent / "static"
+FICHIERS_PUBLICS = {"social.css": "text/css", "social.js": "text/javascript"}
+LANGUES = ("fr", "en")
 CSP = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
     "style-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
@@ -55,8 +60,29 @@ ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
 # Même parmi les erreurs, jamais les pages de contact (feuille de style comprise, servie sous /contact/) ni ce que
 # le navigateur charge avec une page (fichiers statiques, icône) : horodatées à la milliseconde, rapprochées des
 # requêtes notées d'une session, ces lignes dateraient un message, que D-57 ne garde qu'au jour.
-NON_JOURNALISES = ("/contact", "/lab/static/", "/favicon.ico")
+NON_JOURNALISES = ("/contact", "/lab/static/", "/public/static/", "/favicon.ico")
 journal = logging.getLogger("shadowlab.public")
+
+
+def langue_de(request: Request) -> str:
+    """Langue d'une page du réseau social : la langue préférée d'`Accept-Language` parmi `LANGUES`, français par
+    défaut. Première version : le préfixe d'adresse (`/fr`, `/en`) et la langue notée avec l'accord de la session
+    viendront avant elle (cadrage du 13/11/2026, « Langue »)."""
+    choix: list[tuple[float, int, str]] = []
+    for rang, morceau in enumerate(request.headers.get("accept-language", "").split(",")):
+        etiquette, *parametres = (p.strip() for p in morceau.split(";"))
+        langue = etiquette.lower().split("-")[0]
+        poids = 1.0
+        for parametre in parametres:
+            cle, _, valeur = parametre.partition("=")
+            if cle.strip().lower() == "q":
+                try:
+                    poids = float(valeur)
+                except ValueError:
+                    poids = 0.0
+        if langue in LANGUES and poids > 0:
+            choix.append((-poids, rang, langue))
+    return min(choix)[2] if choix else "fr"
 
 
 @dataclass(frozen=True)
@@ -206,6 +232,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     fichier_messages = messages.chemin(reglages.base_donnees)
     taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
     annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
+    dossier_photos = social.DOSSIER_PHOTOS
+    photos = social.charger_photos(dossier_photos)  # refuse un manifeste illisible, vide ou incomplet
+    fichiers_photos = social.fichiers(photos)
+    univers = social.generer(reglages.social_graine, reglages.social_taille, photos)
     derniere_purge = [time.monotonic()]
 
     # Sans redirection sur barre oblique finale : elle serait construite en http:// derrière le mandataire.
@@ -616,6 +646,81 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         if type_media is None:
             raise HTTPException(404, "fichier inconnu")
         return FileResponse(STATIQUES / chemin, media_type=type_media)
+
+    # --- Réseau social fictif « Mosaïk Démo » (public/social.py) : même traitement que la vitrine -----
+
+    def page_sociale(request: Request, rendre: Callable[[str, str, vitrine.Habillage], str]) -> HTMLResponse:
+        """Page du réseau social, dans la langue du visiteur. Pendant une session : jeton, observateur du labo (sans
+        tiers) et bandeau avec le bouton « Terminer », d'où le CSRF ; hors session, ni observateur ni cookie."""
+        langue = langue_de(request)
+        jeton = request.state.session
+        if jeton is None:
+            habillage = vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=social.bandeau(langue, None))
+            return HTMLResponse(rendre(langue, "", habillage))
+        return avec_csrf(
+            request,
+            lambda csrf: rendre(
+                langue,
+                jeton,
+                vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=social.bandeau(langue, csrf)),
+            ),
+        )
+
+    @app.get("/lab/social")
+    def social_accueil() -> RedirectResponse:
+        return RedirectResponse("/lab/social/fil", status_code=302)  # adresse relative : jamais http:// en ligne
+
+    @app.get("/lab/social/fil", response_class=HTMLResponse)
+    def social_fil(request: Request, page: int = 1) -> HTMLResponse:
+        if not 1 <= page <= social.nb_pages(len(univers.publications), social.PAR_PAGE_FIL):
+            raise HTTPException(404, "page inexistante")
+        return page_sociale(request, lambda langue, jeton, h: social.page_fil(jeton, univers, page, langue, h))
+
+    @app.get("/lab/social/explorer", response_class=HTMLResponse)
+    def social_explorer(request: Request, page: int = 1) -> HTMLResponse:
+        if not 1 <= page <= social.nb_pages(len(univers.exploration), social.PAR_PAGE_GRILLE):
+            raise HTTPException(404, "page inexistante")
+        return page_sociale(request, lambda langue, jeton, h: social.page_explorer(jeton, univers, page, langue, h))
+
+    @app.get("/lab/social/p/{identifiant}", response_class=HTMLResponse)
+    def social_publication(request: Request, identifiant: str) -> HTMLResponse:
+        publication = univers.publication(identifiant)
+        if publication is None:
+            raise HTTPException(404, "publication inconnue")
+        return page_sociale(
+            request, lambda langue, jeton, h: social.page_publication(jeton, univers, publication, langue, h)
+        )
+
+    @app.get("/lab/social/u/{pseudonyme}", response_class=HTMLResponse)
+    def social_profil(request: Request, pseudonyme: str) -> HTMLResponse:
+        auteur = univers.auteur(pseudonyme)
+        if auteur is None:
+            raise HTTPException(404, "profil inconnu")
+        return page_sociale(request, lambda langue, jeton, h: social.page_profil(jeton, univers, auteur, langue, h))
+
+    @app.get("/lab/social/t/{etiquette}", response_class=HTMLResponse)
+    def social_etiquette(request: Request, etiquette: str) -> HTMLResponse:
+        if etiquette not in univers.libelles:
+            raise HTTPException(404, "étiquette inconnue")
+        return page_sociale(
+            request, lambda langue, jeton, h: social.page_etiquette(jeton, univers, etiquette, langue, h)
+        )
+
+    @app.get("/lab/social/photos/{fichier}")
+    def social_photo(fichier: str) -> FileResponse:
+        """Seuls les fichiers du manifeste (liste blanche) : jamais un chemin libre, ni le manifeste lui-même."""
+        if fichier not in fichiers_photos:
+            raise HTTPException(404, "photo inexistante")
+        return FileResponse(
+            dossier_photos / fichier, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"}
+        )
+
+    @app.get("/public/static/{chemin:path}")
+    def statique_public(chemin: str) -> FileResponse:
+        type_media = FICHIERS_PUBLICS.get(chemin)
+        if type_media is None:
+            raise HTTPException(404, "fichier inconnu")
+        return FileResponse(STATIQUES_PUBLICS / chemin, media_type=type_media)
 
     # --- Collecte -----------------------------------------------------------------------------------
 

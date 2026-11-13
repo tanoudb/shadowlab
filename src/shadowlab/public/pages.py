@@ -12,6 +12,7 @@ from html import escape
 from ..config import ReglagesPublics
 from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
+from .social import MARQUE as MARQUE_SOCIAL
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
 VERSION_INFORMATION = "2026-11-12.7"
@@ -162,15 +163,16 @@ def _bouton_terminer(csrf: str) -> str:
 
 def bandeau(csrf: str | None) -> str:
     """Bandeau des pages vitrine. Avec un jeton anti-CSRF (session en cours) : « Ma session » et un bouton pour
-    terminer ; sans : invitation à participer."""
+    terminer ; sans : invitation à participer. Toujours un lien vers l'autre site, le réseau social fictif."""
+    autre = f'<a class="autre-site" href="/lab/social/fil">Autre site : {escape(MARQUE_SOCIAL)}</a>'
     if csrf is not None:
         return f"""<aside class="session-publique en-cours" aria-label="Session d'observation"><div class="conteneur">
 <p><span class="pastille" aria-hidden="true"></span>Session d'observation en cours : votre navigation sur ce site est enregistrée. Gardez l'onglet visible.</p>
-<div class="actions"><a href="/session">Ma session</a>{_bouton_terminer(csrf)}</div>
+<div class="actions"><a href="/session">Ma session</a>{_bouton_terminer(csrf)}{autre}</div>
 </div></aside>"""
-    return """<aside class="session-publique" aria-label="Recherche"><div class="conteneur">
+    return f"""<aside class="session-publique" aria-label="Recherche"><div class="conteneur">
 <p>Site fictif, sans vraies annonces. Vous visitez sans participer : rien n'est enregistré, hors le journal technique des erreurs décrit sur la page d'information.</p>
-<a href="/">Participer à la recherche</a>
+<div class="actions"><a href="/">Participer à la recherche</a>{autre}</div>
 </div></aside>"""
 
 

@@ -1,0 +1,117 @@
+/* Réseau social fictif « Mosaïk Démo » : feuille sobre du squelette (le dessin viendra après). */
+:root {
+  --encre: #1d2330;
+  --discret: #5f6878;
+  --fond: #f6f6f4;
+  --carte: #ffffff;
+  --trait: #e3e3de;
+  --accent: #b2385a;
+  --accent-fonce: #8c2645;
+  --rayon: 12px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body.social { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--encre); background: var(--fond); }
+a { color: var(--accent); }
+a:hover { color: var(--accent-fonce); }
+img { max-width: 100%; height: auto; }
+h1, h2 { line-height: 1.25; }
+.conteneur { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+
+/* En-tête et pied */
+.entete { background: var(--carte); border-bottom: 1px solid var(--trait); }
+.entete .conteneur { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; }
+.marque { font-size: 1.3rem; font-weight: 700; color: var(--encre); text-decoration: none; letter-spacing: .01em; }
+.navigation { display: flex; gap: 20px; }
+.navigation a { color: var(--encre); text-decoration: none; font-weight: 500; }
+.navigation a:hover { color: var(--accent); }
+.principal { padding-top: 24px; padding-bottom: 48px; }
+.pied { border-top: 1px solid var(--trait); background: var(--carte); color: var(--discret); font-size: .9rem; text-align: center; padding: 20px 0; }
+.titre-page { font-size: 1.5rem; margin: 0 0 20px; }
+.titre-section { font-size: 1.1rem; margin: 32px 0 12px; }
+.discret, .compteur { color: var(--discret); font-size: .92rem; }
+
+/* Bandeau de la session (mêmes classes que la vitrine) */
+.session-publique { background: #ecf0f3; border-bottom: 1px solid var(--trait); font-size: .95rem; }
+.session-publique.en-cours { background: #fff3d1; border-bottom-color: #ecd9a0; }
+.session-publique .conteneur { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-top: 10px; padding-bottom: 10px; }
+.session-publique p { margin: 0; }
+.session-publique a { font-weight: 600; }
+.session-publique .bouton-plein { padding: 7px 16px; }
+.pastille { display: inline-block; width: .65em; height: .65em; border-radius: 50%; background: #c4302b; margin-right: .5em; vertical-align: .05em; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+.en-ligne { display: inline; margin: 0; }
+.bouton-plein { display: inline-block; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 18px; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+.bouton-plein:hover, .bouton-plein:focus-visible { background: var(--accent-fonce); color: #fff; }
+
+/* Auteurs et avatars */
+.avatar { display: inline-block; flex: none; border-radius: 50%; overflow: hidden; vertical-align: middle; }
+.auteur { display: inline-flex; align-items: center; gap: 8px; color: var(--encre); text-decoration: none; font-weight: 600; }
+.auteur:hover .auteur-nom { text-decoration: underline; }
+.auteur-nom { font-weight: 600; color: var(--encre); text-decoration: none; }
+
+/* Publications (fil et page d'une publication) */
+.fil { display: grid; gap: 28px; max-width: 620px; margin: 0 auto; }
+.publication { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; }
+.publication-entete { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+.date { color: var(--discret); font-size: .88rem; }
+.publication-photo { display: block; margin: 0; background: var(--trait); }
+.publication-photo img { display: block; width: 100%; }
+.publication-corps { padding: 12px 14px 16px; }
+.publication-actions { display: flex; align-items: center; gap: 18px; }
+.aime { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--trait); border-radius: 999px; padding: 5px 12px; font: inherit; color: var(--encre); cursor: pointer; }
+.aime .coeur { color: var(--discret); }
+.aime[aria-pressed="true"] { border-color: var(--accent); }
+.aime[aria-pressed="true"] .coeur { color: var(--accent); }
+.commentaires-lien { color: var(--discret); text-decoration: none; font-size: .92rem; }
+.commentaires-lien:hover { text-decoration: underline; }
+.legende { margin: 10px 0 6px; }
+.etiquettes { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; }
+.etiquette { text-decoration: none; font-weight: 500; }
+.etiquette:hover { text-decoration: underline; }
+.suite { display: flex; justify-content: center; margin: 32px 0 0; }
+.voir-plus { background: var(--carte); border: 1px solid var(--trait); border-radius: 999px; padding: 9px 22px; text-decoration: none; font-weight: 600; }
+.voir-plus:hover { border-color: var(--accent); }
+.fin { color: var(--discret); margin: 0; }
+
+.publication-seule { max-width: 760px; margin: 0 auto; }
+.commentaires h2 { font-size: 1rem; margin: 20px 0 8px; }
+.commentaires .compte { color: var(--discret); font-weight: 400; }
+.commentaires-liste { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
+.commentaire { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.commentaire-local .auteur-nom { color: var(--accent); }
+.aucun-commentaire { color: var(--discret); margin: 0 0 12px; }
+.zone-commentaire { display: grid; gap: 8px; }
+.zone-commentaire label { font-weight: 600; font-size: .92rem; }
+.zone-commentaire textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--trait); border-radius: 8px; font: inherit; color: var(--encre); background: #fff; resize: vertical; }
+.zone-commentaire textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.zone-commentaire .publier { justify-self: start; }
+.zone-commentaire .discret { margin: 0; }
+
+/* Grilles de vignettes (explorer, profil, étiquette, autres publications) */
+.grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vignette { position: relative; display: block; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 6px; background: var(--trait); }
+.vignette img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vignette-info { position: absolute; left: 8px; bottom: 6px; color: #fff; font-size: .85rem; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+@media (max-width: 560px) { .grille { grid-template-columns: repeat(2, 1fr); } }
+
+/* Explorer : recherche dans la page */
+.recherche { display: grid; gap: 6px; max-width: 480px; margin-bottom: 20px; }
+.recherche label { font-weight: 600; font-size: .92rem; }
+.recherche input { width: 100%; padding: 9px 12px; border: 1px solid var(--trait); border-radius: 999px; font: inherit; background: #fff; color: var(--encre); }
+.recherche input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.recherche-vide { color: var(--discret); margin: 0; }
+.listes h2 { font-size: 1rem; margin: 16px 0 8px; }
+.puces { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.listes + .grille { margin-top: 24px; }
+
+/* Profil et étiquette */
+.profil { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
+.profil-nom { font-size: 1.5rem; margin: 0; }
+.profil-pseudo { color: var(--discret); margin: 2px 0 6px; }
+.profil-bio { margin: 0 0 6px; }
+.profil-chiffres { display: flex; gap: 18px; margin: 0; color: var(--discret); }
+.profil-chiffres strong { color: var(--encre); }
+.etiquette-entete .titre-page { margin-bottom: 4px; }
+.etiquette-entete .compteur { margin: 0 0 20px; }
