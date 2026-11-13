@@ -3155,3 +3155,32 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   sans personne reconnaissable, dans `outputs/photos-social/originaux/` ; sinon images dessinées par programme.
 - **Repoussé** : la campagne de contrôle de D-74 (`recolte-arena-35.yaml`), après ce chantier ; les pages
   du labo ne doivent pas changer d'ici là.
+
+## 2026-11-14 (0h55) — Claude (Fable 5.2, coordination) — Réseau social fictif : squelette rendu, 94 photos de Wikimedia Commons, dessin et fond lancés
+
+- **Ethan (0 h 05)** : « c'est pas à moi de le faire », les photos se prennent en ligne en open source.
+- **Photos** : voie permise trouvée en relisant `robots.txt` de Wikimedia Commons (pages `/wiki/…` ouvertes à
+  tous ; `/w/` et `/api/` fermés ; fichiers ouverts). 186 pages lues, 135 fichiers, une requête toutes les
+  4 s, en-tête descriptif sans coordonnées. Un 429 au 3ᵉ fichier sur l'ancienne adresse reconstruite
+  (`upload.wikimedia.org/…/thumb/…`) ; repris sans incident par les liens que les pages proposent
+  (`thumb.wikimedia.org`). **94 photos gardées** sur 159 candidates (images remarquables), licences lues page
+  par page : CC BY-SA 4.0 (51), CC BY-SA 3.0 (21), CC BY 4.0 (9), CC0 (4), domaine public (4), CC BY 2.0 (3),
+  CC BY 2.5 (1), CC BY 3.0 (1). Les 8 planches vues par moi : aucune personne reconnaissable. Fichiers de
+  960 px de grand côté (les pages ne proposent pas plus sans passer par l'original), EXIF retirés, 19 Mo.
+  Outils et originaux dans `outputs/photos-social*` (hors git). 36 images dessinées par programme gardées en
+  réserve (`outputs/photos-social/dessinees/`).
+- **Squelette « Mosaïk Démo »** (branche `public-communaute`, sous-agent Opus, relu) : `public/social.py`,
+  routes `/lab/social/…`, `static/social.css|js`, `tests/test_public_social.py`. 1 340 tests rapides verts.
+  Vu à l'écran par moi avec une vraie session d'essai (accord, fil, j'aime, commentaire, explorer, profil,
+  terminer) : rien de ce qui est tapé ne part ; `shadowlab rejeu --base` rejoue la session sans erreur.
+- **Constat du rejeu (défaut de l'Arena, à corriger après la campagne de contrôle de D-74)** :
+  `detection.Observations.documents` compte les photos comme des pages, et `rythme_soutenu` divise par la
+  durée depuis la première page. Sans défi d'entrée (site public), une page et ses photos dans la même
+  seconde dépassent 4 « pages » par seconde : un humain serait arrêté aux niveaux 06 et 07. Dans le labo, le
+  défi d'entrée dilue le calcul (pire valeur vue sur un vrai passage de la 108 : 2,05). Figé par deux tests
+  en échec attendu dans la branche.
+- **En cours** : deux sous-agents Opus, le dessin du réseau social et la page de crédits (`public-communaute`),
+  et le fond : langues, accueil « Humain ou robot ? », notice, fréquentation, plafond de sessions réglable
+  (`public-fond`, dossier `../noezia-shadowlab-fond`).
+- **Reste** : relevé enrichi (second script, notice), dessin de l'accueil, quatrième relecture (vie privée,
+  sécurité, licences), campagne de contrôle de D-74. Disque à 7,5 Go libres.
