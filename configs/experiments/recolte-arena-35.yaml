@@ -1,0 +1,36 @@
+# La récolte jugée par l'Arena, avec assez de passages pour un intervalle de confiance.
+# La campagne 105 a donné 3 passages sur 3 à chaque niveau (borne basse de Wilson : 44 %). Ici, 35 passages par
+# niveau aux trois niveaux qui servent un défi d'entrée : à 35 sur 35, la borne basse de Wilson passe 90 %
+# (90,1 %) ; à 30 sur 30 elle resterait à 88,6 %.
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+# Pas de témoin `http` : il est arrêté à tous ces niveaux (campagnes 103, 104 et 105, 0 sur 45).
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus.
+# Niveau 06 sans le détecteur correlation-session (profil `06scorr`), comme les campagnes 97 à 107.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+# Petite vitrine (20 annonces, 21 pages par passage) : c'est la répétition qui compte ici, pas la longueur
+# (pour la longueur : `recolte-arena-rallye.yaml`, 427 pages par passage).
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VITRINE_TAILLE=20 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena-35.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# Pour libérer le port : `uv run shadowlab arreter`, puis `uv run shadowlab reprendre <n°>` avec les mêmes variables.
+# 1 moteur × 3 niveaux × 1 scénario × 35 répétitions = 105 passages (environ 4 h 40, à 160 s par passage).
+experiment:
+  name: recolte_arena_35
+  description: >-
+    La récolte générale (vitrine à 20 annonces) jugée par les niveaux 04, 05 et 06 de l'Arena (06 sans
+    corrélation), 35 passages par niveau, avec le moteur navigateur en identité native.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["04", "05", "06scorr"]
+  scenarios:
+    - recolte_recette_vitrine
+  repetitions: 35
+  seed: 20261113
+  output: [json, html]
