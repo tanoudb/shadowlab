@@ -860,7 +860,13 @@ Points propres au moteur `navigateur` (d'après le code, non rejoués ici) :
   exception volontaire : `porte_entree: {attendre_s: N}` attend, **sans aucune action**, un défi qui se
   valide seul
   sur la première page (au plus N secondes). S'il passe, la passe continue et la porte est comptée à part dans
-  `resume.json` ; sinon, arrêt. Un défi plus tard dans la passe arrête toujours. Le moteur `http` ne peut pas
+  `resume.json` ; sinon, arrêt. Un défi plus tard dans la passe arrête toujours.
+  Cas « déjà franchie pendant la lecture » : si le défi s'est validé pendant la lecture même, le premier statut
+  est celui de la page de défi (403) alors que la vraie page est déjà là. Sur la première page, avec une porte
+  déclarée, un statut d'alerte sans défi dans la page déclenche un regard sur place (aucune requête, aucune
+  attente) : état actuel en 2xx et sans défi, la passe continue et `resume.json` note
+  `porte_entree: {defi: "statut 403", franchie: true, attente_s: 0.0}` (la nature du défi n'est plus connue).
+  Sans porte déclarée, ou en cours de passe, un 403 reste une alerte de statut. Le moteur `http` ne peut pas
   attendre (pas de JavaScript). Non rejoué ici : aucun défi de ce type sur nos sites de test locaux.
   Nuance du code : avec le moteur `navigateur` et uniquement des hôtes locaux (le labo), l'option
   `resoudre_defis` du navigateur est active pour passer les défis maison de l'Arena ; sur un site tiers elle

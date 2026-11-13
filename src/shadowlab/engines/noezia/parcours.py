@@ -34,7 +34,7 @@ from .extraction import Signatures
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
 from .rythme import Cadence, rythme_de
-from .sentinelle import FENETRE, Alerte, Sentinelle, detecter_defi
+from .sentinelle import FENETRE, STATUTS_ALERTE, Alerte, Sentinelle, detecter_defi
 
 NOUVEAUX_ESSAIS = 2  # sur panne réseau, 500, 502, 504 (après le premier essai), attente croissante
 STATUTS_A_RETENTER = frozenset({500, 502, 504})
@@ -683,6 +683,8 @@ class Parcours:
         Un défi qui arrive plus tard dans la passe n'attend pas : `Sentinelle.examiner` l'arrête."""
         porte = self.recette.porte_entree
         defi = detecter_defi(reponse.html, reponse.entetes)
+        if porte is not None and defi is None and reponse.statut in STATUTS_ALERTE:
+            return self._porte_deja_franchie(reponse), None
         if porte is None or defi is None:
             return reponse, None
         attendu = 0.0
@@ -705,6 +707,28 @@ class Parcours:
         self._evenement(self._etat, self._passe, "porte_entree", self._porte)
         detail = f"page de défi ({defi}) toujours là après {attendu:g} s d'attente sans action"
         return reponse, Alerte("defi", detail, page.adresse, reponse.statut)
+
+    def _porte_deja_franchie(self, reponse: Reponse) -> Reponse:
+        """Statut d'alerte à la première page, aucun défi dans le DOM lu : le défi a pu se valider PENDANT la lecture
+        (le statut est alors celui de la page de défi, périmé). On regarde la page sur place, sans requête ni attente.
+        État actuel en 2xx et sans défi : la porte est franchie, la page lue est l'état actuel. Sinon la réponse
+        reste telle quelle et la sentinelle arrête sur le statut. La nature du défi n'est plus connue : `defi` porte
+        le statut périmé (« statut 403 »)."""
+        courante = self.moteur.relire()
+        if (
+            courante is None  # un moteur sans JavaScript : rien n'a pu changer
+            or courante.statut is None
+            or not 200 <= courante.statut < 300
+            or detecter_defi(courante.html, courante.entetes) is not None
+        ):
+            return reponse
+        courante.duree_ms = reponse.duree_ms
+        self._porte = {"defi": f"statut {reponse.statut}", "franchie": True, "attente_s": 0.0}
+        self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+        self._ecran(
+            f"Porte d'entrée : déjà franchie pendant la lecture (premier statut {reponse.statut}), sans action."
+        )
+        return courante
 
     def _lire_la_page(self, page: Page, reponse: Reponse, total_ms: Callable[[], float]) -> str:
         etat = self._etat
