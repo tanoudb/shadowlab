@@ -465,6 +465,23 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   refus. Ce n'est pas le moteur : la limite de débit de l'Arena comptait les photos qu'une page charge
   (défaut corrigé par D-71). Le témoin `http` est arrêté partout : empreinte aux niveaux 02 et 03, défi
   JavaScript jamais validé du 04 au 06. Campagne à refaire après D-71.
+- **Campagne 104 : la même, après D-71** (13/11 de 1 h 49 à 2 h 07, 30 passages, 0 panne). Passages réussis
+  sur 3 :
+
+  | Moteur de la récolte | 02 | 03 | 04 | 05 | 06 sans corr. |
+  |----------------------|----|----|----|----|---------------|
+  | `navigateur` (noezia en identité native) | 3 | 3 | 0 | 0 | 0 |
+  | `http` (curl-cffi, témoin) | 0 | 0 | 0 | 0 | 0 |
+
+  D-71 a fait son effet : plus aucun 429, les 18 photos de la liste sont servies. Mais la récolte s'arrête
+  quand même à la première page aux niveaux 04 à 06 (0 page lue, arrêt en 11 à 24 s), sur le signe
+  « statut 403 ». Le navigateur a pourtant franchi l'entrée : défi JavaScript validé, CAPTCHA en clés de
+  test passés aux niveaux 05 et 06, vraie page reçue en 200. **Cette fois le défaut est dans la commande de
+  récolte** : après un défi d'entrée, le moteur rend encore le statut de la page de défi (403) avec le
+  contenu de la vraie page ; la porte d'entrée de la sentinelle ne reconnaît qu'un défi encore affiché, et
+  la recette du passage n'en déclarait pas. La récolte n'a donc toujours pas été jugée par les détecteurs
+  des niveaux 04 à 06 : elle n'y a lu aucune page. Niveaux 02 et 03 : 150 à 166 s pour 21 pages, comme à
+  la 103.
 
 ## 3. Pourquoi on a perdu du temps
 
