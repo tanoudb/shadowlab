@@ -3,7 +3,7 @@
 #
 # limitation   : requêtes de pages par seconde et par session (Nginx, statiques exclus)
 # waf          : Coraza + OWASP CRS. `detection` journalise ; `blocage` bloque au seuil
-# defi_js      : preuve de travail SHA-256. `lier_tls` lie le cookie au JA4 du client
+# defi_js      : preuve de travail SHA-256. `lier_tls` lie le cookie au JA4 du client sans `pre_shared_key` (stable à la reprise de session TLS)
 # captcha      : demo CAPTCHA servi quand une règle classe la session comme automatisée
 # fingerprinting : examen actif des signaux navigateur (FingerprintJS, BotD, comportement)
 #   detecteurs : liste explicite des détecteurs consultés pour ce niveau (vide = legacy 6)

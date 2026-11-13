@@ -224,15 +224,16 @@ class _Connexion:
 
     def _relayer(self, methode, cible, entetes, corps, jeton, profil, obs_id, chemin):
         reglages = self.serveur.reglages
-        ja4 = self.empreinte["ja4"]
+        ja4, liaison = self.empreinte["ja4"], self.empreinte["liaison"]
         obs = str(obs_id or 0)
         internes = [
             ("X-ShadowLab-Profil", profil),
             ("X-ShadowLab-Session", jeton),
             ("X-ShadowLab-Obs", obs),
             ("X-ShadowLab-JA4", ja4),
+            ("X-ShadowLab-Liaison", liaison),
             ("X-ShadowLab-Amont", str(reglages.port)),
-            ("X-ShadowLab-Sceau", secrets_arena.signer(self.serveur.secret, obs, profil, jeton, ja4)),
+            ("X-ShadowLab-Sceau", secrets_arena.signer(self.serveur.secret, obs, profil, jeton, ja4, liaison)),
             ("X-Forwarded-For", self.adresse),
             ("X-Forwarded-Proto", "https"),
         ]
