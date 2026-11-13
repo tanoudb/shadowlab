@@ -2992,3 +2992,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   8770 libre aux sessions humaines d'Ethan ; journal dans `outputs/campagne-recolte-generale.log`.
 - **Reste** : lire la campagne 102 et l'écrire au § 2 du plan ; sessions humaines d'Ethan puis `shadowlab
   rejeu` ; conception du palier 2 à valider ; récolte par un niveau protégé de l'Arena jamais lancée.
+
+## 2026-11-13 (1h20) — Claude (Fable 5.2, coordination) — Campagne 102 : la récolte générale prouvée au niveau 01
+
+- **Campagne 102** (`configs/experiments/recolte-generale.yaml`, base du labo, 12/11 21 h 54 à 13/11 1 h 18,
+  0 panne, lancée avec `SHADOWLAB_PORT=8785`, `SHADOWLAB_VITRINE_TAILLE=150`, `SHADOWLAB_RALLYE_TAILLE=24`) :
+  12 passages sur 12 réussis. Chaque passage : pages, enregistrements et champs à 100 %, aucune page en échec.
+- **Par moteur** : `noezia` en identité native (moteur `navigateur`) : vitrine à 150 annonces (158 pages) en
+  1 053, 1 038 et 1 147 s ; site de rallye à 24 rallyes (427 pages) en 2 868, 3 031 et 3 076 s, soit 6,6 à
+  7,3 s par page. `curl-cffi` (moteur `http`) : 0,3 à 0,4 s et 1,0 s.
+- **Ce que cela prouve** : le critère de l'étape 6 de la conception (la même commande, les deux sites, les deux
+  moteurs, au moins 99 %). **Ce que cela ne prouve pas** : rien au-dessus du niveau 01 (site en direct), rien
+  sur un vrai site, 3 répétitions seulement.
+- **Écrit** : `docs/PLAN.md` (§ 2 bloc « Récolte générale », § 8), `AGENTS.md` (État), `contexte.md`.
+- **État** : aucune session humaine en base ; aucune campagne en cours ; ports 8770 et 8785 libres.
+- **Reste** : la récolte jugée par les niveaux 02 à 06 de l'Arena ; sessions humaines d'Ethan puis `shadowlab
+  rejeu` ; conception du palier 2 à valider ; tunnel du site public ; `recolte-rythme.yaml`.

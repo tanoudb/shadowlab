@@ -109,13 +109,14 @@ recommander des optimisations.
   Second site factice à contenu connu : `/lab/rallye`. Guide : `docs/recolte.md`.
   Mesuré (moteur `http`, site du labo) : vitrine à 500 annonces, 525 pages, 7 000 champs sur 7 000, 0,8 s ;
   rallye, 427 pages, 34 410 champs sur 34 410. Moteur `navigateur`, niveau 01 : vitrine à 45 annonces, 48
-  pages sur 48 en 5 min 50 s. Essai de campagne : 4 passages sur 4 à 100 %. 1 205 tests rapides verts avant la
-  fusion ; suite complète relancée après, résultat au journal suivant.
+  pages sur 48 en 5 min 50 s. Campagne 102 (`recolte-generale.yaml`, les deux moteurs, les deux sites factices,
+  niveau 01, 3 répétitions) : 12 passages sur 12, pages, enregistrements et champs à 100 % ; en navigateur,
+  environ 7 s par page (427 pages de rallye en 48 à 51 minutes). 1 247 tests verts après la fusion.
   **Non prouvé** : aucun vrai site ni vraie protection ; jamais jugée par un niveau protégé de l'Arena (la
   commande vise le site en direct, donc le niveau 01) ; mode navigateur au niveau 01 seulement, coupure d'une
   redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non branché ; champ adaptatif
   sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ; CSV jamais ouvert dans
-  Excel ; campagne de preuve complète non terminée (à relancer dans la base du labo).
+  Excel.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, récolte d'un vrai site (aucune
   n'a été faite), récolte jugée par un niveau protégé de l'Arena, identité qui dure (palier 2, conception

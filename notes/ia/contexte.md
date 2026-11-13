@@ -82,10 +82,11 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    21 h 40, D-70), rien sur `master`. Guide `docs/recolte.md`, conception
    `docs/recherche/recolte-generale-2026-11-12.md`. Mesuré avec la commande réelle : vitrine à 500 annonces,
    525 pages, 7 000 champs sur 7 000 (0,8 s) ; rallye factice, 427 pages, 34 410 champs sur 34 410 ; navigateur,
-   48 pages sur 48 au niveau 01. 1 205 tests rapides verts avant la fusion ; **suite complète relancée après la
-   fusion, résultat au journal suivant**. Campagne de preuve (`recolte-generale.yaml`) arrêtée à 21 h 43 après un
-   passage fini : **à relancer dans la base du labo** (environ 3 h 30, site du labo libre). Rien n'est prouvé
-   sur un vrai site ni contre un niveau protégé de l'Arena.
+   48 pages sur 48 au niveau 01. Après la fusion : 1 247 tests verts. **Campagne de preuve n° 102** (12/11, 21 h 54
+   à 1 h 18) : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux
+   sites factices, niveau 01. Rien n'est prouvé sur un vrai site ni contre un niveau protégé de l'Arena : la
+   prochaine mesure utile est la récolte jugée par les niveaux 02 à 06 (scénarios `recolte_recette_*`, entrée
+   par l'Arena), jamais lancée.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).

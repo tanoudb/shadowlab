@@ -441,9 +441,16 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   le site en direct, donc le niveau 01) ; le mode navigateur n'a tourné qu'au niveau 01 ; la coupure d'une
   redirection vers un autre hôte n'est pas vérifiée dans un vrai Chrome ; le rythme « prudent » n'a jamais
   tourné en temps réel ; le CSV n'a pas été ouvert dans Excel.
-- **Campagne de preuve** (`recolte-generale.yaml`) lancée à 21 h 08 dans une base à part, arrêtée à 21 h 43 pour
-  la fusion après un seul passage fini (vitrine à 150 annonces par le navigateur : réussi, 1 164 s). À relancer
-  dans la base du labo. Suite complète relancée après la fusion : résultat au journal suivant.
+- **Campagne de preuve, n° 102** (`recolte-generale.yaml`, base du labo, le 12/11 de 21 h 54 à 1 h 18, 0 panne) :
+  `noezia` en identité native (moteur `navigateur`) et `curl-cffi` (moteur `http`), niveau 01, vitrine à 150
+  annonces (158 pages) et site de rallye à 24 rallyes (427 pages), 3 répétitions. **12 passages sur 12 réussis ;
+  pages, enregistrements et champs à 100 % à chaque passage, aucune page en échec.** Durées en navigateur :
+  vitrine 1 053, 1 038 et 1 147 s (6,6 à 7,3 s par page) ; rallye 2 868, 3 031 et 3 076 s (6,7 à 7,2 s par
+  page). En HTTP : 0,3 à 0,4 s et 1,0 s. C'est le critère de l'étape 6 de la conception : la même commande sur
+  les deux sites, avec les deux moteurs. Réserves : niveau 01 seulement (site en direct, aucune protection) ;
+  3 répétitions ; sites à nous, en local. Une première campagne, lancée à 21 h 08 dans une base à part, avait
+  été arrêtée à 21 h 43 pour la fusion (un passage fini, réussi).
+- Suite complète après la fusion : 1 247 tests verts (journal du 12/11, 21 h 55).
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -646,7 +653,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains |
-| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, preuve par campagne en cours** | 12/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; essai de campagne : 4 passages sur 4 à 100 % ; campagne de preuve complète à relancer dans la base du labo. Aucun vrai site (§ 2). Passe avant les calibrages restants ; 1.9 et les paliers 2 à 4 restent au plan |
+| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; 1 247 tests verts ; campagne 102 : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Reste : la récolte jugée par un niveau protégé de l'Arena, jamais lancée. Aucun vrai site (§ 2). Passe avant les calibrages restants ; 1.9 et les paliers 2 à 4 restent au plan |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |
