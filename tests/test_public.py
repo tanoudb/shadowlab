@@ -170,6 +170,21 @@ ROUTES_INTERDITES = [
     "/lab/static/vendor/fingerprintjs-5.3.0.esm.js",
     "/lab/static/vendor/botd-LICENSE.txt",
     "/lab/static/%2e%2e/app.py",
+    # Réseau social (cadrage du 13/11, v2) : rien du labo sous ses préfixes, ni sous les fichiers statiques publics.
+    # Le parcours de toutes ses pages, lui, est dans test_public_social.py (aucun lien vers ces routes).
+    "/lab/social/",
+    "/lab/social/api/publications",
+    "/lab/social/photos/",
+    "/lab/social/photos/manifeste.json",
+    "/lab/social/photos/%2e%2e/%2e%2e/app.py",
+    "/lab/social/static/observateur.js",
+    "/lab/social/connexion",
+    "/public/static/",
+    "/public/static/observateur.js",
+    "/public/static/vitrine.css",
+    "/public/static/lab.css",
+    "/public/static/%2e%2e/app.py",
+    "/public/static/social/photos/manifeste.json",
 ]
 
 
@@ -381,6 +396,20 @@ def pages_servies(client: TestClient) -> list[str]:
     pages += [client.get(chemin).text for chemin in PAGES_VITRINE]
     pages.append(client.get("/lab/static/vitrine.css").text)
     pages.append(client.get("/lab/static/vitrine.js").text)
+    # Réseau social : un fil, une publication, un profil, une étiquette, l'explorateur, et ses deux fichiers.
+    fil = client.get("/lab/social/fil")
+    assert fil.status_code == 200
+    pages.append(fil.text)
+    publication = client.get(Selector(fil.text).css('a[href^="/lab/social/p/"]::attr(href)').get())
+    assert publication.status_code == 200
+    pages.append(publication.text)
+    for prefixe in ("/lab/social/u/", "/lab/social/t/"):
+        lien = Selector(publication.text).css(f'a[href^="{prefixe}"]::attr(href)').get()
+        pages.append(client.get(lien).text)
+    for chemin in ("/lab/social/explorer", "/public/static/social.css", "/public/static/social.js"):
+        r = client.get(chemin)
+        assert r.status_code == 200, chemin
+        pages.append(r.text)
     pages.append(client.get("/session").text)
     pages += [client.get("/contact").text, client.get("/contact/envoye").text]
     merci = terminer(client)
