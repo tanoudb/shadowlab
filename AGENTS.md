@@ -80,8 +80,8 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 247 tests verts** (`uv run pytest`, 12/11 à 21 h 52, après la fusion de la récolte, hors campagne : 1 207
-  rapides et 40 d'intégration avec de
+- **1 278 tests verts** (`uv run pytest`, 13/11 à 2 h 24, après D-71 et D-72, hors campagne : 1 234
+  rapides et 44 d'intégration avec de
   vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
@@ -112,14 +112,22 @@ recommander des optimisations.
   pages sur 48 en 5 min 50 s. Campagne 102 (`recolte-generale.yaml`, les deux moteurs, les deux sites factices,
   niveau 01, 3 répétitions) : 12 passages sur 12, pages, enregistrements et champs à 100 % ; en navigateur,
   environ 7 s par page (427 pages de rallye en 48 à 51 minutes). 1 247 tests verts après la fusion.
-  **Non prouvé** : aucun vrai site ni vraie protection ; jamais jugée par un niveau protégé de l'Arena (la
-  commande vise le site en direct, donc le niveau 01) ; mode navigateur au niveau 01 seulement, coupure d'une
-  redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non branché ; champ adaptatif
-  sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ; CSV jamais ouvert dans
-  Excel.
+  **Par l'Arena** (scénario `recolte_recette_vitrine`, `configs/experiments/recolte-arena.yaml`, vitrine à 20
+  annonces) : campagnes 103 et 104, 0 sur 3 aux niveaux 04 à 06, deux défauts corrigés (D-71 : la limite de
+  débit comptait les photos d'une page ; D-72 : la porte d'entrée ne voyait pas un défi déjà franchi pendant
+  la lecture) ; campagne 105 (13/11) : le moteur navigateur fait 15 passages sur 15 du niveau 02 au niveau 06
+  sans corrélation, 21 pages et 280 champs sur 280 à chacun, aucun blocage ; le témoin `http` 0 sur 15.
+  Réserves : 3 passages par niveau, 21 pages par passage, CAPTCHA en clés de test aux niveaux 05 et 06, niveau
+  06 sans corrélation, niveau 07 non mesuré, aucun humain en base.
+  **Non prouvé** : aucun vrai site ni vraie protection ; la commande elle-même vise le site en direct (niveau
+  01), les niveaux protégés ne sont mesurés que par campagne ; le site de rallye par l'Arena ; un parcours
+  long ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non
+  branché ; champ adaptatif sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ;
+  CSV jamais ouvert dans Excel.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son
   auto-résolution (test keys flaky), produit NOEZIA v1 visé (`docs/PLAN.md` § 1 ; le paquet `engines/noezia/` existe mais le produit n'est pas atteint), couche IA, test sur serveur Linux réel, récolte d'un vrai site (aucune
-  n'a été faite), récolte jugée par un niveau protégé de l'Arena, identité qui dure (palier 2, conception
+  n'a été faite), récolte par l'Arena à 30 passages par niveau et sur un parcours long (3 passages et 21 pages
+  à la campagne 105), identité qui dure (palier 2, conception
   `docs/recherche/identite-qui-dure-2026-11-12.md` à valider par Ethan).
 
 ## Niveaux de difficulté Arena
@@ -155,6 +163,7 @@ uv run shadowlab recolte lancer configs/recettes/vitrine.yaml   # récolte gén�
 uv run shadowlab recolte noter vitrine-annonces --verite vitrine   # note contre la vérité du site factice (`rallye` pour l'autre)
 uv run shadowlab recolte etat <nom> | reprendre <nom> | essayer <recette> <adresse>   # voir, reprendre, tester une recette sur une page
 SHADOWLAB_VITRINE_TAILLE=150 SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-generale.yaml  # preuve (~3 h 30) ; recolte-generale-essai.yaml d'abord
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VITRINE_TAILLE=20 uv run shadowlab campagne configs/experiments/recolte-arena.yaml  # la récolte jugée par les niveaux 02 à 06 sans corrélation (campagne 105, 40 min) ; `arena appliquer` avec la variable avant, sans elle après
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)

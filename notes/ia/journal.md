@@ -3027,3 +3027,30 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   (aucun `User-Agent`, règle 920320 du WAF), contrairement au moteur `http` de la commande
   (`impersonate: chrome`) : le témoin HTTP de la 103 est donc plus faible que la commande réelle.
 - **Reste** : refaire la campagne `recolte-arena.yaml` après D-71 ; sessions humaines d'Ethan ; palier 2.
+
+## 2026-11-13 (3h15) — Claude (Fable 5.2, coordination) — Campagnes 104 et 105 : la récolte passe les niveaux 02 à 06 de l'Arena ; porte d'entrée corrigée (D-72)
+
+- **Campagne 104** (`recolte-arena.yaml` refaite après D-71, 13/11 de 1 h 49 à 2 h 07, 30 passages, 0 panne) :
+  navigateur 3 sur 3 aux niveaux 02 et 03, 0 sur 3 aux niveaux 04, 05 et 06 sans corrélation ; témoin `http`
+  0 sur 15. Plus aucun 429 (D-71 confirmé), mais arrêt à la première page sur « statut 403 », 0 page lue.
+- **Cause, lue dans la base et le code** : le navigateur franchit l'entrée (défi JavaScript validé, CAPTCHA en
+  clés de test, vraie page en 200), mais `DriverNoezia.navigate` rend le statut de la première réponse (403)
+  avec le contenu de la page actuelle ; `Parcours._porte_d_entree` ne reconnaissait qu'un défi encore affiché ;
+  la recette du passage ne déclarait pas de porte. Défaut de la commande de récolte, pas de l'Arena.
+- **D-72** (branche `recolte-porte-franchie`, sous-agent Sonnet, relu ; commits `82694b9` tests, `7af7575`
+  code, fusion `1c59d55`) : à la première page, avec une porte déclarée, un statut d'alerte sans défi dans la
+  page fait regarder la page sur place ; en 2xx et sans défi, la porte est comptée franchie
+  (`defi: "statut 403"`). La recette d'un passage par l'Arena déclare une porte (15 s). Inchangé : sans porte,
+  ou en cours de passe, un 403 arrête. Fichiers : `engines/noezia/parcours.py`, `scenarios.py`,
+  `docs/recolte.md`, `tests/test_sentinelle.py`, `tests/test_scenarios_recolte_generale.py`. Vu en échec avant
+  (2 tests), vert après ; suite complète à 2 h 24 : 1 278 tests verts, lint propre.
+- **Campagne 105** (la même, 13/11 de 2 h 24 à 3 h 04, 30 passages, 0 panne) : navigateur **15 sur 15** (3 sur
+  3 aux niveaux 02, 03, 04, 05 et 06 sans corrélation), à chaque passage 21 pages sur 21, 20 annonces sur 20,
+  280 champs sur 280, aucun blocage, `detecte_par` vide ; 136 à 195 s par passage. Témoin `http` 0 sur 15.
+- **Réserves** : 3 passages par niveau ; 21 pages par passage ; CAPTCHA en clés de test aux niveaux 05 et 06 ;
+  niveau 06 sans corrélation ; niveau 07 non mesuré ; aucun humain en base ; une machine, un Chrome sur macOS.
+- **État** : Arena remise en profils normaux à 3 h 04, ports 8770 et 8743 libres, aucun dossier de travail
+  à part, branche poussée. Écrit : `docs/PLAN.md` § 2 et § 8, `docs/DECISIONS.md` (D-72), `AGENTS.md`,
+  `notes/ia/contexte.md`.
+- **Reste** : la même mesure à 30 passages par niveau et sur le site de rallye (427 pages) ; sessions humaines
+  d'Ethan ; palier 2 à valider ; tunnel du site public.

@@ -574,3 +574,26 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `captcha` étaient déjà hors limite avant cette décision et le restent ; aucun humain n'a encore été mesuré
   derrière la limite de débit (le rejeu des sessions humaines ne la rejoue pas) ; la campagne 103 est à
   refaire après la correction. Décidé par : coordination (travail d'un sous-agent, relu).
+
+- **D-72 — 13/11/2026 — La porte d'entrée de la récolte reconnaît un défi déjà franchi pendant la lecture.**
+  Constat (campagne 104, après D-71) : la récolte en navigateur s'arrêtait à la première page aux niveaux 04 à
+  06 de l'Arena, sur « statut 403 », avec 0 page lue, alors que le navigateur avait franchi l'entrée et reçu
+  la vraie page en 200. Cause : après une navigation, le moteur rend le statut de la première réponse (la
+  page de défi, 403) avec l'adresse et le contenu de la page actuelle ; la porte d'entrée ne reconnaissait
+  qu'un défi encore affiché ; la recette d'un passage par l'Arena n'en déclarait pas. Le même défaut aurait
+  arrêté à tort une récolte sur un site tiers dont le défi se valide seul plus vite que le temps de lecture.
+  Décision : à la première page d'une passe, si la recette déclare `porte_entree`, qu'aucun défi n'est dans
+  la page lue et que le premier statut est un statut d'alerte, la commande regarde la page sur place (aucune
+  requête, aucune attente, aucune action). Page actuelle en 2xx et sans défi : la porte est franchie, comptée
+  à part dans `resume.json` (`defi: "statut 403"`, la nature du défi n'étant plus connue, `franchie: true`,
+  `attente_s: 0.0`), et la passe continue. La recette d'un passage par l'Arena déclare une porte d'entrée
+  (15 s) quand son fichier n'en a pas. Ce qui ne change pas : sans porte déclarée, un 403 à la première page
+  arrête ; en cours de passe, un 403 arrête toujours, même si la page est devenue lisible ; la commande ne
+  clique sur aucun défi d'un site tiers et ne résout rien (seul le moteur du labo passe les défis du labo).
+  Preuve : test vu en échec avant (commit `82694b9`), vert après (`7af7575`, fusion `1c59d55`), 1 278 tests
+  verts ; campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation (0 sur 3 aux niveaux
+  04 à 06 à la campagne 104). Limites : le critère est l'état actuel de la page, pas la preuve qu'un défi a
+  existé (une page 403 devenue lisible seule à la première visite passe aussi, uniquement si la recette a
+  déclaré une porte) ; le statut rendu par le moteur reste celui de la première réponse, la porte d'entrée
+  est le seul endroit qui regarde l'état actuel ; jamais essayé sur un vrai défi d'un fournisseur. Décidé
+  par : coordination (travail d'un sous-agent, relu).

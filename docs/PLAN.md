@@ -437,10 +437,10 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   lues, 45 évitées, 5 nouveautés, 53 pages sur 53. Moteur `navigateur` (vrai Chrome, identité native) : vitrine
   à 45 annonces, 48 pages sur 48 en 5 min 50 s. Essai de campagne (`recolte-generale-essai.yaml`, base à part) :
   4 passages sur 4 à 100 %, dont le rallye à 3 rallyes par le navigateur (85 pages en 612 s).
-- **Pas mesuré** : aucun vrai site, aucune vraie protection ; aucun niveau protégé de l'Arena (la commande vise
-  le site en direct, donc le niveau 01) ; le mode navigateur n'a tourné qu'au niveau 01 ; la coupure d'une
-  redirection vers un autre hôte n'est pas vérifiée dans un vrai Chrome ; le rythme « prudent » n'a jamais
-  tourné en temps réel ; le CSV n'a pas été ouvert dans Excel.
+- **Pas mesuré** : aucun vrai site, aucune vraie protection ; la commande elle-même vise le site en direct
+  (niveau 01), les niveaux protégés de l'Arena ne sont mesurés que par les scénarios de campagne (campagne 105,
+  plus bas) ; la coupure d'une redirection vers un autre hôte n'est pas vérifiée dans un vrai Chrome ; le
+  rythme « prudent » n'a jamais tourné en temps réel ; le CSV n'a pas été ouvert dans Excel.
 - **Campagne de preuve, n° 102** (`recolte-generale.yaml`, base du labo, le 12/11 de 21 h 54 à 1 h 18, 0 panne) :
   `noezia` en identité native (moteur `navigateur`) et `curl-cffi` (moteur `http`), niveau 01, vitrine à 150
   annonces (158 pages) et site de rallye à 24 rallyes (427 pages), 3 répétitions. **12 passages sur 12 réussis ;
@@ -482,6 +482,27 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   la recette du passage n'en déclarait pas. La récolte n'a donc toujours pas été jugée par les détecteurs
   des niveaux 04 à 06 : elle n'y a lu aucune page. Niveaux 02 et 03 : 150 à 166 s pour 21 pages, comme à
   la 103.
+- **Campagne 105 : la même, après D-72** (13/11 de 2 h 24 à 3 h 04, 30 passages, 0 panne, vitrine à 20
+  annonces, 21 pages par passage). Passages réussis sur 3 :
+
+  | Moteur de la récolte | 02 | 03 | 04 | 05 | 06 sans corr. |
+  |----------------------|----|----|----|----|---------------|
+  | `navigateur` (noezia en identité native) | 3 | 3 | 3 | 3 | 3 |
+  | `http` (curl-cffi, témoin) | 0 | 0 | 0 | 0 | 0 |
+
+  **Le moteur navigateur récolte tout, à chaque niveau : 15 passages sur 15, et à chacun 21 pages sur 21,
+  20 annonces sur 20, 280 champs exacts sur 280.** Aucun blocage, aucun détecteur ne le signale
+  (`detecte_par` vide), aucun refus en cours de passe. Durées : 136 à 195 s pour 21 pages (6,5 à 9,3 s par
+  page), sans écart net entre les niveaux. À l'entrée : défi JavaScript validé au niveau 04 ; défi
+  JavaScript, Turnstile et reCAPTCHA en clés de test (`captcha_test`) aux niveaux 05 et 06. Le témoin
+  `http` est arrêté partout (empreinte aux niveaux 02 et 03, défi JavaScript jamais validé ensuite).
+  C'est la première fois que la récolte complète est jugée par les détecteurs des niveaux 04 à 06.
+  **Réserves** : 3 passages par niveau (borne basse de Wilson : 44 % par niveau, 80 % sur les 15) ; 21 pages
+  par passage, donc rien sur l'endurance ; CAPTCHA en clés de test aux niveaux 05 et 06 ; niveau 06 sans
+  la corrélation entre sessions (avec elle, 0 sur 15 à la campagne 101) ; niveau 07 non mesuré ; Arena non
+  calibrée sur des humains ; une machine, un Chrome sur macOS ; les défis d'entrée sont ceux du labo, que
+  le moteur ne passe que sur le labo ; le témoin `http` de la campagne n'imite pas un navigateur, il est
+  plus faible que le moteur `http` de la commande.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -684,7 +705,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains |
-| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; 1 247 tests verts ; campagne 102 : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Reste : la récolte jugée par un niveau protégé de l'Arena, jamais lancée. Aucun vrai site (§ 2). Passe avant les calibrages restants ; 1.9 et les paliers 2 à 4 restent au plan |
+| Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages par niveau)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06, deux défauts trouvés : D-71 dans l'Arena, D-72 dans la commande), puis campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun ; 1 278 tests verts (fusion `1c59d55`). Reste : 30 passages par niveau, le site de rallye par l'Arena, un parcours long (endurance), aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

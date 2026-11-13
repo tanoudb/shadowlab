@@ -21,9 +21,9 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 12/11 à 21 h 52, après la fusion de la récolte, sans campagne : **1 247 verts** (`uv run pytest` :
-  1 207 rapides et 40 d'intégration
-  avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 16 h 16), lint propre. Branche
+- Tests au 13/11 à 2 h 24, après D-71 et D-72, sans campagne : **1 278 verts** (`uv run pytest` : 1 234
+  rapides et 44 d'intégration
+  avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
   passages orphelins), rien sur `master`.
 - Mesuré, campagne 97 (525 passages, 0 panne, `docs/PLAN.md` § 2) : le moteur `noezia` tel qu'il est fait
@@ -84,9 +84,13 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    525 pages, 7 000 champs sur 7 000 (0,8 s) ; rallye factice, 427 pages, 34 410 champs sur 34 410 ; navigateur,
    48 pages sur 48 au niveau 01. Après la fusion : 1 247 tests verts. **Campagne de preuve n° 102** (12/11, 21 h 54
    à 1 h 18) : 12 passages sur 12, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux
-   sites factices, niveau 01. Rien n'est prouvé sur un vrai site ni contre un niveau protégé de l'Arena : la
-   prochaine mesure utile est la récolte jugée par les niveaux 02 à 06 (scénarios `recolte_recette_*`, entrée
-   par l'Arena), jamais lancée.
+   sites factices, niveau 01. **Par l'Arena (13/11)** : campagnes 103 et 104, 0 sur 3 aux niveaux 04 à 06, deux
+   défauts trouvés et corrigés (D-71 : la limite de débit comptait les photos ; D-72 : la porte d'entrée ne
+   voyait pas un défi déjà franchi) ; **campagne 105 : le moteur navigateur fait 15 passages sur 15 du niveau
+   02 au niveau 06 sans corrélation, 21 pages et 280 champs sur 280 à chacun**, aucun blocage. Réserves : 3
+   passages par niveau, 21 pages par passage, CAPTCHA en clés de test, pas de corrélation, pas de niveau 07,
+   pas d'humain en base. Rien n'est prouvé sur un vrai site. Suite utile : 30 passages par niveau, le site de
+   rallye par l'Arena, un parcours long.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
