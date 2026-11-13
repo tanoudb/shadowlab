@@ -503,6 +503,32 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   calibrée sur des humains ; une machine, un Chrome sur macOS ; les défis d'entrée sont ceux du labo, que
   le moteur ne passe que sur le labo ; le témoin `http` de la campagne n'imite pas un navigateur, il est
   plus faible que le moteur `http` de la commande.
+- **Campagne 106 : un parcours long par l'Arena** (`recolte-arena-rallye.yaml`, 13/11 de 3 h 07 à 4 h 50,
+  3 passages, 0 panne) : le site de rallye, 427 pages lues par une seule session, moteur navigateur.
+
+  | Niveau | Pages lues | Champs exacts | Durée | Issue |
+  |--------|-----------|---------------|-------|-------|
+  | 04 | 427 sur 427 | 34 410 sur 34 410 | 2 940 s (6,9 s par page) | réussi |
+  | 05 | 427 sur 427 | 34 410 sur 34 410 | 3 155 s (7,4 s par page) | réussi (`captcha_test`) |
+  | 06 sans corr. | 9 sur 427 | 1 176 sur 1 176 lus | 86 s | **arrêté** : défi redemandé à la 10ᵉ page |
+
+  Aux niveaux 04 et 05, une session lit 427 pages de suite pendant 49 et 53 minutes sans blocage, sans
+  détecteur qui la signale, sans une seule page en échec. Au niveau 06, l'Arena a redemandé le défi
+  JavaScript et les deux CAPTCHA à la 10ᵉ page, et la sentinelle a arrêté la passe (un 403 en cours de
+  passe arrête toujours, c'est voulu). **Cause, lue dans la base : ce n'est pas le moteur.** Aux niveaux 05 à
+  07, l'Arena lie le cookie du défi au JA4 exact (`lier_tls`). Or le vrai Chrome a rouvert une connexion en
+  reprenant sa session TLS : son ClientHello porte alors l'extension `pre_shared_key` (0029) en plus, et
+  son JA4 passe de `t13d1517h2_…` à `t13d1518h2_…`. Les trois passages ont eu cette connexion (environ
+  50 s après le début) ; aux niveaux 04 (pas de liaison) et 05 (la connexion reprise n'a porté qu'un envoi
+  de mesures, pas une page), cela n'a rien déclenché. Un humain avec un vrai Chrome aurait reçu le défi une
+  seconde fois de la même façon : défaut de l'Arena, en cours de correction. En base : 135 connexions de ce
+  Chrome avec reprise, 2 908 sans.
+  **Constat pour l'endurance** : le cookie de défi de l'Arena vit 3 600 s. Une passe de plus d'une heure
+  sera donc redéfiée en cours de route à partir du niveau 04, et la sentinelle l'arrêtera. Les 427 pages
+  (53 minutes au plus) sont passées juste dessous. Un long travail demande une réponse à ce cas (attendre
+  un défi qui se valide seul en cours de passe, ou arrêter puis reprendre) : à concevoir avant l'endurance.
+  Réserves : un seul passage par niveau ; CAPTCHA en clés de test ; niveau 06 sans corrélation ; site à
+  nous, en local ; une machine.
 
 ## 3. Pourquoi on a perdu du temps
 
