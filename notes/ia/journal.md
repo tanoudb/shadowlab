@@ -3134,3 +3134,24 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   façon dont les humains utilisent un navigateur et sur la différence entre un humain et une IA ; voir le
   nombre de visiteurs ; que les gens soient au courant de ce qui est relevé. Chantier ouvert dans
   l'application publique (`src/shadowlab/public/`).
+
+## 2026-11-14 (0h00) — Claude (Fable 5.2, coordination) — Site public pour la communauté : recadré sur un faux réseau social
+
+- **Retour d'Ethan (13/11, 23 h 40)** : l'immobilier et le rallye ne donnent pas envie ; il veut « une sorte
+  de faux réseau social » avec des « photos open source », l'accueil « humain-robot », le compteur pour lui,
+  et « un maximum d'infos […] pour faire le meilleur détecteur ».
+- **Cadrage version 2** : `docs/recherche/site-public-communaute-2026-11-13.md` (poussé, `f928767`). Site
+  vedette « Mosaïk Démo » (nom de travail) sous `/lab/social/…`, beaucoup de pages courtes (l'observateur
+  envoie un relevé par page), aucune écriture venant du visiteur, avatars dessinés, relevé enrichi par un
+  second script propre au site public, notice à réécrire (elle promet de ne pas relever la position de la
+  souris), plafond de 40 sessions par jour à rendre réglable. But annoncé : mesurer et améliorer les
+  détecteurs ; les sessions publiques ne servent pas à régler le moteur.
+- **Fait** : sous-agent du premier cadrage arrêté (il avait seulement écrit le verrou
+  `tests/test_labo_inchange.py`, 35 tests verts, gardé) ; branche `public-communaute` dans le dossier
+  `../noezia-shadowlab-public` ; sous-agent Opus lancé sur le squelette du réseau social.
+- **Photos** : aucune téléchargée. `robots.txt` lus : Openverse (`anthropic-ai` refusé, `/v1/images/` fermé
+  à tous), Pexels et Pixabay (`ClaudeBot` refusé), Wikimedia Commons (`/w/` et `/api/` fermés). Pas de
+  générateur d'images sur le Mac. Demandé à Ethan : déposer lui-même 60 à 90 photos CC0 ou domaine public,
+  sans personne reconnaissable, dans `outputs/photos-social/originaux/` ; sinon images dessinées par programme.
+- **Repoussé** : la campagne de contrôle de D-74 (`recolte-arena-35.yaml`), après ce chantier ; les pages
+  du labo ne doivent pas changer d'ici là.
