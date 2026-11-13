@@ -3087,3 +3087,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `notes/ia/contexte.md`, `docs/audit-arena-protections.md` (une précision).
 - **Reste** : la vitrine à 30 passages par niveau (04 à 06 sans corrélation) ; une passe de plus d'une heure
   avec reprise ; sessions humaines d'Ethan ; palier 2 à valider ; tunnel du site public.
+
+## 2026-11-13 (9h50) — Claude (Fable 5.2, coordination) — Campagne 108 arrêtée à la demande d'Ethan, site du labo lancé
+
+- **Demande d'Ethan (9 h 33)** : « Lance le faux site stp ». Campagne 108 (`recolte-arena-35.yaml`, lancée à
+  7 h 55) arrêtée proprement à 9 h 36 (`shadowlab arreter`, statut `interrompu`), Arena remise en profils
+  normaux. Site du labo lancé sur le port 8770 (configuration `labo` ajoutée à `.claude/launch.json`).
+- **Campagne 108 à l'arrêt, 44 passages sur 105** : niveau 04, 35 sur 35 (140 à 192 s) ; niveau 05, 7 sur 9.
+  Les deux échecs du niveau 05 : passage 34335, le site n'a pas pu joindre Google pour vérifier le reCAPTCHA
+  en clé de test (`network_error`), la porte d'entrée a attendu 15 s puis arrêté ; passage 34342, **vrai
+  blocage du moteur** à la 8ᵉ page : détecteur de comportement, signal `trajectoire_lineaire` (angle moyen
+  entre segments de souris 0,073 rad, seuil 0,08), score composite 0,6. Niveau 06 sans corrélation : pas commencé.
+- **Reste** : reprendre la campagne (`shadowlab reprendre 108`, mêmes variables, `arena appliquer` avant et
+  après ; retirer `outputs/ARRET` si la commande ne le fait pas) quand Ethan a fini avec le site ; regarder
+  la fréquence de `trajectoire_lineaire` sur les passages restants avant de toucher au moteur (étape 1.9).
