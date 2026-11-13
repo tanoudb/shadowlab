@@ -718,11 +718,18 @@ def cles_collectees(source: str) -> tuple[set[str], set[str]]:
 
 
 def test_liste_des_donnees_tiree_de_l_observateur():
-    """La liste affichée couvre exactement ce que le script envoie : un champ ajouté sans elle fait échouer ce test."""
+    """La liste affichée couvre exactement ce que le script envoie, dans chaque langue de la notice : un champ ajouté
+    sans elle fait échouer ce test."""
+    from shadowlab.public.pages import RELEVES
+
     empreinte, comportement = cles_collectees(OBSERVATEUR.read_text(encoding="utf-8"))
     assert len(empreinte) > 30 and "webrtc_test" in empreinte
     assert {cle for cle, _ in DONNEES_RELEVEES} == empreinte
     assert {cle for cle, _ in DONNEES_COMPORTEMENT} == comportement
+    assert set(RELEVES) == {"fr", "en"}
+    for langue, (relevees, comport) in RELEVES.items():
+        assert {cle for cle, _ in relevees} == empreinte, langue
+        assert {cle for cle, _ in comport} == comportement, langue
 
 
 def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
