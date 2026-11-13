@@ -424,10 +424,11 @@ def test_photos_servies_depuis_le_manifeste_seulement(client):
             assert r.headers["cache-control"] == "public, max-age=3600"
             assert r.content == (social.DOSSIER_PHOTOS / f"{photo.id}-{taille}.jpg").read_bytes()
     premiere = photos[0].id
+    # Un « .. » en clair est résolu par le client avant l'envoi (il deviendrait /lab/social) : seules ses formes
+    # encodées atteignent le serveur.
     for nom in (
         "inconnu.jpg",
         "manifeste.json",
-        "..",
         "%2e%2e",
         "%2e%2e%2fmanifeste.json",
         "..%2f..%2fapp.py",
@@ -846,3 +847,27 @@ def test_rejeu_session_sociale_comme_le_temoin_vitrine(sessions_rejouees):
     for code in v_temoin:
         if not v_temoin[code][0]:
             assert not v_sociale[code][0], f"niveau {code} : {v_sociale[code]} (témoin : {v_temoin[code]})"
+
+
+def test_rejeu_sans_photos_la_meme_personne_passe_partout(client, tmp_path):
+    """Contrôle de la cause : la même session sociale, privée de ses requêtes de photos, n'est arrêtée nulle part."""
+    commencer(client)
+    visites = [(page, [r for r in ressources if "/photos/" not in r]) for page, ressources in visites_sociales(client)]
+    session = rejouer_base_de(tmp_path / "sans-photos" / "public.sqlite3", visites)
+    assert not any(arretee for arretee, _ in verdicts(session["resultat"]).values())
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Défaut connu, mesuré le 13/11 et hors du périmètre de ce squelette : aux niveaux 06 et 07, la session est "
+        "arrêtée à la première empreinte par le score composite, signal `rythme_soutenu` seul (0,5 ≥ seuil 0,5 au "
+        "06 et 0,3 au 07). Les photos comptant comme des pages (`Observations.documents`), la page et ses photos "
+        "chargées dans la même seconde font plus de 4 « pages » par seconde. Deux photos par page suffisent ; une "
+        "seule, ou aucune, et la session passe partout. Le témoin vitrine (photos SVG) est arrêté de la même façon."
+    ),
+)
+def test_rejeu_aucun_niveau_n_arrete_la_session_sociale(sessions_rejouees):
+    sociale, _ = sessions_rejouees
+    arrets = {code: v for code, v in verdicts(sociale["resultat"]).items() if v[0]}
+    assert not arrets, arrets
