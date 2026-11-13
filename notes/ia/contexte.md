@@ -94,8 +94,12 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    l'Arena redemandait le défi quand Chrome reprenait sa session TLS (D-73, corrigé) ; **campagne 107 : 427
    pages et 34 410 champs sur 34 410 aux niveaux 04, 05 et 06 sans corrélation**, un passage par niveau,
    environ 50 minutes chacun. Le cookie de défi de l'Arena vit une heure : une passe plus longue sera redéfiée
-   et arrêtée (arrêt puis reprise, jamais mesuré). Rien n'est prouvé sur un vrai site. Suite utile : 30
-   passages par niveau ; une passe de plus d'une heure avec reprise.
+   et arrêtée (arrêt puis reprise, jamais mesuré). **Campagne 108 (13/11), 35 passages par niveau** : 35 sur
+   35 au niveau 04, 32 sur 35 au niveau 05, 35 sur 35 au niveau 06 sans corrélation. Au niveau 05, **deux
+   blocages du moteur** par le détecteur de comportement (`trajectoire_lineaire` : souris trop droite), le
+   troisième échec est une erreur réseau du CAPTCHA de test. Sur environ 4 400 pages, la souris du moteur
+   passe sous le seuil environ une fois sur 1 000 (mouvement court de 10 à 15 angles) : défaut du moteur, à
+   corriger avant tout long travail. Rien n'est prouvé sur un vrai site.
 3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
    scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).

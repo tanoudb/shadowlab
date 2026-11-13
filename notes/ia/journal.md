@@ -3101,3 +3101,20 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Reste** : reprendre la campagne (`shadowlab reprendre 108`, mêmes variables, `arena appliquer` avant et
   après ; retirer `outputs/ARRET` si la commande ne le fait pas) quand Ethan a fini avec le site ; regarder
   la fréquence de `trajectoire_lineaire` sur les passages restants avant de toucher au moteur (étape 1.9).
+
+## 2026-11-13 (12h55) — Claude (Fable 5.2, coordination) — Campagne 108 terminée : 102 sur 105, deux blocages du moteur au niveau 05
+
+- **Ethan (10 h)** : il parlait du site en ligne, pas du site du labo. Site du labo arrêté, campagne 108 reprise
+  à 10 h 02 (`shadowlab reprendre 108`), finie à 12 h 47, Arena remise. Le site public reste à lancer par lui.
+- **Campagne 108** (`recolte-arena-35.yaml`, 105 passages, 0 panne) : niveau 04, 35 sur 35 (Wilson 90,1 à
+  100 %) ; niveau 05, 32 sur 35 (77,6 à 97,0 %) ; niveau 06 sans corrélation, 35 sur 35 (90,1 à 100 %). Chaque
+  passage réussi : 21 pages, 280 champs sur 280.
+- **Les trois échecs du niveau 05** : 34335, `network_error` à la vérification du reCAPTCHA de test (pas le
+  moteur) ; 34342 et 34366, blocage par le détecteur de comportement, signal `trajectoire_lineaire` (angle
+  moyen 0,073 et 0,065 rad, seuil 0,08), à la 8ᵉ et à la 13ᵉ page.
+- **Mesure du défaut** (lecture de `observations_js`, campagnes 105 à 108, environ 4 400 pages jugées) : médiane
+  0,72 rad ; 4 pages sous 0,08 (0,050, 0,060, 0,065, 0,073), toutes avec 10 à 15 angles. Environ une page sur
+  1 000. Au niveau 04 le signal ne bloque pas ; aux niveaux 05 et 06 il bloque.
+- **Décision de coordination** : corriger le mouvement de souris du moteur (étape 1.9), pas le détecteur.
+- **Reste** : la correction (sous-agent, test d'abord), puis une campagne de contrôle ; une passe de plus d'une
+  heure avec reprise ; sessions humaines d'Ethan ; palier 2 à valider ; tunnel du site public.
