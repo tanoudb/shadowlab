@@ -1,111 +1,327 @@
 {
   "photos": [
     {
-      "id": "remplacement-01",
-      "sujet": "mer",
-      "largeur": 1080,
-      "hauteur": 1350,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "id": "montagne-01",
+      "sujet": "Montagnes au coucher du soleil",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-02",
-      "sujet": "montagne",
+      "id": "montagne-02",
+      "sujet": "Montagnes au coucher du soleil",
       "largeur": 1080,
       "hauteur": 1080,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-03",
-      "sujet": "ville",
+      "id": "montagne-03",
+      "sujet": "Montagnes au coucher du soleil",
       "largeur": 1080,
-      "hauteur": 1350,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-04",
-      "sujet": "foret",
-      "largeur": 1080,
-      "hauteur": 1350,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
-      "origine": null
-    },
-    {
-      "id": "remplacement-05",
-      "sujet": "lac",
-      "largeur": 1080,
-      "hauteur": 720,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
-      "origine": null
-    },
-    {
-      "id": "remplacement-06",
-      "sujet": "desert",
-      "largeur": 1080,
-      "hauteur": 720,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
-      "origine": null
-    },
-    {
-      "id": "remplacement-07",
-      "sujet": "architecture",
-      "largeur": 1080,
-      "hauteur": 1350,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
-      "origine": null
-    },
-    {
-      "id": "remplacement-08",
-      "sujet": "cuisine",
+      "id": "mer-01",
+      "sujet": "Mer et horizon",
       "largeur": 1080,
       "hauteur": 1080,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-09",
-      "sujet": "plante",
+      "id": "mer-02",
+      "sujet": "Mer et horizon",
       "largeur": 1080,
-      "hauteur": 1350,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-10",
-      "sujet": "animal",
+      "id": "mer-03",
+      "sujet": "Mer et horizon",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "foret-01",
+      "sujet": "Forêt de sapins dans la brume",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "foret-02",
+      "sujet": "Forêt de sapins dans la brume",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "foret-03",
+      "sujet": "Forêt de sapins dans la brume",
       "largeur": 1080,
       "hauteur": 1080,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-11",
-      "sujet": "ciel",
-      "largeur": 1080,
-      "hauteur": 720,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "id": "ville-01",
+      "sujet": "Ville la nuit",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     },
     {
-      "id": "remplacement-12",
-      "sujet": "objet",
+      "id": "ville-02",
+      "sujet": "Ville la nuit",
       "largeur": 1080,
       "hauteur": 1080,
-      "auteur": "image de remplacement (dégradé généré par scripts/photos-remplacement.py)",
-      "licence": "CC0",
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "ville-03",
+      "sujet": "Ville la nuit",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "desert-01",
+      "sujet": "Désert et dunes",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "desert-02",
+      "sujet": "Désert et dunes",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "desert-03",
+      "sujet": "Désert et dunes",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "etoiles-01",
+      "sujet": "Ciel étoilé avec lune",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "etoiles-02",
+      "sujet": "Ciel étoilé avec lune",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "etoiles-03",
+      "sujet": "Ciel étoilé avec lune",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "lac-01",
+      "sujet": "Lac et reflets",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "lac-02",
+      "sujet": "Lac et reflets",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "lac-03",
+      "sujet": "Lac et reflets",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "collines-01",
+      "sujet": "Collines et champs",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "collines-02",
+      "sujet": "Collines et champs",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "collines-03",
+      "sujet": "Collines et champs",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "aurore-01",
+      "sujet": "Aurore boréale",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "aurore-02",
+      "sujet": "Aurore boréale",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "aurore-03",
+      "sujet": "Aurore boréale",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "phare-01",
+      "sujet": "Falaises et phare",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "phare-02",
+      "sujet": "Falaises et phare",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "phare-03",
+      "sujet": "Falaises et phare",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "ile-01",
+      "sujet": "Île et palmiers",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "ile-02",
+      "sujet": "Île et palmiers",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "ile-03",
+      "sujet": "Île et palmiers",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "abstrait-01",
+      "sujet": "Composition abstraite",
+      "largeur": 1080,
+      "hauteur": 864,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "abstrait-02",
+      "sujet": "Composition abstraite",
+      "largeur": 864,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
+      "origine": null
+    },
+    {
+      "id": "abstrait-03",
+      "sujet": "Composition abstraite",
+      "largeur": 1080,
+      "hauteur": 1080,
+      "auteur": "image dessinée par programme",
+      "licence": "aucune restriction (création du projet)",
       "origine": null
     }
   ]
