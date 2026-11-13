@@ -1,0 +1,35 @@
+# Un parcours long jugé par l'Arena : le site de rallye (427 pages) aux niveaux protégés.
+# La campagne 105 a montré la récolte de la vitrine (21 pages par passage) à travers les niveaux 02 à 06 sans
+# corrélation : 15 passages sur 15. Ici le parcours est vingt fois plus long : saisons, rallyes, spéciales,
+# classements, pilotes, châssis (scénario `recolte_recette_rallye`), environ 50 minutes par passage dans une
+# seule session. La question : un niveau protégé laisse-t-il la même session lire 427 pages de suite ?
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+# Pas de témoin `http` : il est arrêté à tous ces niveaux (campagnes 103, 104 et 105, 0 sur 45).
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus.
+# Niveau 06 sans le détecteur correlation-session (profil `06scorr`), comme les campagnes 97 à 105.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+# Une seule répétition par niveau : c'est une première mesure de durée, pas une preuve statistique.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_RALLYE_TAILLE=24 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena-rallye.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# 1 moteur × 3 niveaux × 1 scénario × 1 répétition = 3 passages (environ 2 h 30, estimation).
+experiment:
+  name: recolte_arena_rallye
+  description: >-
+    La récolte générale du site de rallye (427 pages dans une seule session) jugée par les niveaux 04, 05 et 06
+    de l'Arena (06 sans corrélation), avec le moteur navigateur en identité native.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["04", "05", "06scorr"]
+  scenarios:
+    - recolte_recette_rallye
+  repetitions: 1
+  seed: 20261113
+  output: [json, html]
