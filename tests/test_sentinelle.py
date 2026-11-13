@@ -37,6 +37,7 @@ class PiloteNavigateur(PiloteFactice):
         super().__init__(client, hotes)
         self.dom_apres_attente: list[str] = []  # contenu de la page à chaque relecture (le défi se valide seul)
         self.relectures = 0
+        self.statut_actuel = 200  # statut de l'état actuel de la page (`etat_page`), à ne pas confondre avec le premier
         self._frais = False
 
     def navigate(self, url):
@@ -51,7 +52,7 @@ class PiloteNavigateur(PiloteFactice):
         self.relectures += 1
         if self.dom_apres_attente:
             self._texte = self.dom_apres_attente.pop(0)
-        return 200, self.urls[-1], {}
+        return self.statut_actuel, self.urls[-1], {}
 
 
 @pytest.fixture
@@ -206,6 +207,50 @@ def test_sans_porte_entree_un_defi_a_la_premiere_page_est_une_alerte_immediate(d
     assert bilan.code == 3 and bilan.arret["signe"] == "defi"
     assert pilote.relectures == 0 and p.horloge_factice.pauses == []
     assert lu(dossier)["porte_entree"] is None
+
+
+def test_porte_deja_franchie_pendant_la_lecture_le_403_perime_n_arrete_pas_la_passe(dossier, pilote):
+    # Le navigateur a reçu la page de défi (403), le défi s'est validé pendant la lecture : la vraie page est là
+    # et l'état actuel est en 200. Le statut 403 de la première réponse est périmé.
+    vraie_liste = pilote.client.get("/lab/vitrine/annonces").text
+    pilote.reponses["=/lab/vitrine/annonces"] = (403, vraie_liste)
+    p = fabriquer(dossier, pilote, texte=avec_porte())
+    bilan = p.lancer()
+    assert bilan.code == 0 and bilan.statut == "terminee" and bilan.resume["pages"]["faites"] == 48
+    assert bilan.resume["porte_entree"] == {"defi": "statut 403", "franchie": True, "attente_s": 0.0}
+    assert lu(dossier)["porte_entree"]["franchie"] is True
+    assert sum(d == "/lab/vitrine/annonces" for d in pilote.demandes) == 1  # aucune nouvelle requête
+    assert pilote.relectures == 1 and p.horloge_factice.pauses == []  # un regard sur place, aucune attente
+    assert any("Porte d'entrée" in ligne for ligne in p.sortie_ecran)
+
+
+def test_sans_porte_entree_un_403_a_la_premiere_page_reste_une_alerte_sans_relecture(dossier, pilote):
+    vraie_liste = pilote.client.get("/lab/vitrine/annonces").text
+    pilote.reponses["=/lab/vitrine/annonces"] = (403, vraie_liste)
+    p = fabriquer(dossier, pilote)
+    bilan = p.lancer()
+    assert bilan.code == 3 and bilan.statut == "arretee" and bilan.arret["signe"] == "statut"
+    assert pilote.relectures == 0 and p.horloge_factice.pauses == []
+    assert lu(dossier)["porte_entree"] is None
+
+
+def test_porte_declaree_mais_l_etat_actuel_reste_403_sans_defi_alerte_sans_attente(dossier, pilote):
+    pilote.reponses["=/lab/vitrine/annonces"] = (403, "<html><body><p>accès refusé</p></body></html>")
+    pilote.statut_actuel = 403
+    p = fabriquer(dossier, pilote, texte=avec_porte())
+    bilan = p.lancer()
+    assert bilan.code == 3 and bilan.statut == "arretee" and bilan.arret["signe"] == "statut"
+    assert p.horloge_factice.pauses == []  # une page 403 sans défi n'est pas une porte : pas d'attente
+    assert lu(dossier)["porte_entree"] is None
+
+
+def test_en_cours_de_passe_un_403_perime_reste_une_alerte_de_statut(dossier, pilote):
+    vraie_page = pilote.client.get("/lab/vitrine/annonces").text
+    pilote.reponses["AN-000010"] = (403, vraie_page)  # l'état actuel est en 200, la sentinelle arrête quand même
+    p = fabriquer(dossier, pilote, texte=avec_porte())
+    bilan = p.lancer()
+    assert bilan.code == 3 and bilan.statut == "arretee" and bilan.arret["signe"] == "statut"
+    assert pilote.relectures == 0 and p.horloge_factice.pauses == []
 
 
 def test_la_porte_d_entree_n_attend_pas_avec_un_moteur_sans_javascript(dossier, site):

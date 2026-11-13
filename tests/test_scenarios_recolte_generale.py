@@ -129,6 +129,26 @@ def test_la_recette_du_passage_vise_l_entree_du_passage_et_ignore_le_jeton():
     assert "rallye-demo" in texte
 
 
+def test_la_recette_du_passage_declare_une_porte_d_entree_quand_le_fichier_n_en_a_pas():
+    from shadowlab.scenarios import recette_du_passage
+
+    recette, _ = recette_du_passage("vitrine", BASE_ARENA)
+    assert recette.porte_entree is not None and recette.porte_entree.attendre_s == 15
+
+
+def test_la_recette_du_passage_garde_la_porte_d_entree_du_fichier(tmp_path, monkeypatch):
+    from shadowlab import scenarios
+
+    (tmp_path / "configs" / "recettes").mkdir(parents=True)
+    source = (RACINE / "configs" / "recettes" / "vitrine.yaml").read_text(encoding="utf-8")
+    (tmp_path / "configs" / "recettes" / "avec-porte.yaml").write_text(
+        source + "\nporte_entree:\n  attendre_s: 7\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(scenarios, "RACINE", tmp_path)
+    recette, _ = scenarios.recette_du_passage("avec-porte", BASE_ARENA)
+    assert recette.porte_entree is not None and recette.porte_entree.attendre_s == 7
+
+
 @pytest.mark.parametrize("fichier", ["recolte-generale.yaml", "recolte-generale-essai.yaml"])
 def test_les_campagnes_sont_valides(reglages, fichier):
     from shadowlab.campaigns import lire
