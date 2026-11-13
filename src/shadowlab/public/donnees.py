@@ -6,6 +6,7 @@ autre expérience que les sessions publiques est refusée : une purge ne doit ja
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -171,6 +172,18 @@ def session_existe(cx: sqlite3.Connection, jeton: str) -> bool:
         (jeton, EXPERIENCE),
     ).fetchone()
     return ligne is not None
+
+
+def langue_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
+    """Langue notée avec l'accord de la session (`protection_config`), ou None (session absente, accord plus ancien
+    que les deux langues, valeur illisible). L'appelant la vérifie contre les langues servies."""
+    ligne = cx.execute("SELECT protection_config FROM runs WHERE session_token = ?", (jeton,)).fetchone()
+    try:
+        accord = json.loads(ligne[0]) if ligne and ligne[0] else None
+    except ValueError:
+        return None
+    langue = accord.get("langue") if isinstance(accord, dict) else None
+    return langue if isinstance(langue, str) else None
 
 
 def clore_session(cx: sqlite3.Connection, jeton: str) -> None:

@@ -72,11 +72,12 @@ def jeton_csrf(client: TestClient) -> str:
     return jeton
 
 
-def commencer(client: TestClient, adresse: str = IP) -> str:
-    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine."""
+def commencer(client: TestClient, adresse: str = IP, langue: str | None = None) -> str:
+    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine. `langue` : celle du formulaire
+    d'accord (champ caché), donc de la session ; sans elle, celle de la requête."""
     r = client.post(
         "/session/commencer",
-        data={"consentement": "oui", "csrf": jeton_csrf(client)},
+        data={"consentement": "oui", "csrf": jeton_csrf(client), **({"langue": langue} if langue else {})},
         headers={"Origin": ORIGINE, "X-Forwarded-For": adresse},
         follow_redirects=False,
     )
@@ -1670,7 +1671,7 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-12.7", "le texte a changé : nouvelle version du texte accepté"
+    assert VERSION_INFORMATION == "2026-11-14.1", "le texte a changé : nouvelle version du texte accepté"
     texte = client.get("/").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "

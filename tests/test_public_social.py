@@ -177,7 +177,7 @@ def test_social_redirige_vers_le_fil(client):
 @pytest.mark.parametrize("langue", list(LANGUES))
 @pytest.mark.parametrize("en_session", [False, True], ids=["hors-session", "en-session"])
 def test_parcours_de_toutes_les_pages(client, langue, en_session):
-    jeton = commencer(client) if en_session else None
+    jeton = commencer(client, langue=langue) if en_session else None  # la langue de la session prime (cadrage)
     pages = parcourir(client, langue)
     assert {type_de_page(c) for c in pages} == set(TYPES_DE_PAGE), "les cinq types de page sont atteints"
     assert sum(type_de_page(c) == "p" for c in pages) == TAILLE, "chaque publication a sa page"
