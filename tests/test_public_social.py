@@ -447,8 +447,11 @@ def test_manifeste_photos_chaque_fichier_existe_sans_metadonnees():
         assert re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", photo.id)
         for taille in (1080, 480):
             with Image.open(social.DOSSIER_PHOTOS / f"{photo.id}-{taille}.jpg") as image:
-                assert image.format == "JPEG" and image.width == taille
+                # `taille` borne le grand côté ; une photo source plus petite n'est jamais agrandie.
+                assert image.format == "JPEG" and max(image.size) <= taille
                 assert not image.getexif(), "aucune métadonnée EXIF"
+                if taille == 1080:  # le manifeste donne les dimensions de ce fichier (la page réserve la place)
+                    assert image.size == (photo.largeur, photo.hauteur)
         assert photo.licence and photo.auteur
 
 
