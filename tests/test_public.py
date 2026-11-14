@@ -65,9 +65,12 @@ def client(reglages_publics):
 
 
 def jeton_csrf(client: TestClient) -> str:
+    """Jeton anti-CSRF lu dans le formulaire de l'accueil ; jour plein (plus de formulaire, D-75), dans son cookie,
+    qui porte la même valeur (double soumission)."""
     r = client.get("/")
     assert r.status_code == 200
     jeton = Selector(r.text).css('input[name="csrf"]::attr(value)').get()
+    jeton = jeton or next((c.value for c in client.cookies.jar if c.name.endswith("slp-csrf")), None)
     assert jeton
     return jeton
 

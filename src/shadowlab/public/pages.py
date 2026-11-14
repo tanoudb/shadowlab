@@ -339,10 +339,19 @@ def _compteur(sessions: int, langue: str) -> str:
     return _t(langue, cle, n=f'<strong class="compteur-nombre">{nombre}</strong>')
 
 
-def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "", sessions: int | None = None) -> str:
+def accueil(
+    csrf: str,
+    langue: str,
+    *,
+    en_cours: bool = False,
+    erreur: str = "",
+    sessions: int | None = None,
+    complet: bool = False,
+) -> str:
     """Accueil de l'étude « Humain ou robot ? » (cadrage du 13/11/2026, « Textes de l'accueil »). Le nombre de sessions
     terminées (`sessions`, sans compteur si None), la case d'accord, la notice juste à côté, et la visite sans
-    participer ; pendant une session, « Reprendre la visite » à la place de l'accord."""
+    participer ; pendant une session, « Reprendre la visite » à la place de l'accord ; plafond du jour atteint
+    (`complet`), l'avis « l'étude a fait le plein pour aujourd'hui » à la place de la case."""
     langue = langue_sure(langue)
     resume = RESUME_RELEVE[langue]
     notice_href = f"/{langue}/information"
@@ -352,6 +361,13 @@ def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "",
         accord = f"""<div class="accord accord-en-cours" id="participer">
 <p><strong>{_t(langue, "deja_en_cours")}</strong></p>
 <p class="accord-actions"><a class="bouton-principal" href="{SOCIAL}">{_t(langue, "reprendre")}</a><a class="bouton-secondaire" href="/session">{_t(langue, "nav_ma_session")}</a></p>
+</div>"""
+    elif complet:
+        titre, message = ERREURS[langue]["complet_du_jour"]
+        accord = f"""<div class="accord accord-complet" id="participer">
+<p><strong>{escape(titre)}</strong></p>
+<p>{escape(message)}</p>
+<p class="accord-actions"><a class="visiter-sans-participer" href="{SOCIAL}">{_t(langue, "visiter_sans_participer")}</a></p>
 </div>"""
     else:
         alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>\n' if erreur else ""

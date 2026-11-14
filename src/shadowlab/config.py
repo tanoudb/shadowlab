@@ -60,6 +60,7 @@ class ReglagesPublics:
     vitrine_taille: int
     social_graine: int = 20261113  # graine du réseau social fictif « Mosaïk Démo » (public/social.py)
     social_taille: int = 120  # nombre de publications du réseau social fictif
+    sessions_par_jour: int = 40  # plafond de sessions ouvertes par jour UTC, toutes adresses (de 1 à 5 000)
 
 
 def _charger_env(chemin: Path | None = None, acceptes: tuple[str, ...] | None = None) -> None:
@@ -133,4 +134,7 @@ def charger_public() -> ReglagesPublics:
         vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
         social_graine=int(os.environ.get("SHADOWLAB_PUBLIC_SOCIAL_GRAINE", "20261113")),
         social_taille=max(1, int(os.environ.get("SHADOWLAB_PUBLIC_SOCIAL_TAILLE", "120"))),
+        # Borné : au moins une session par jour ; au plus 5 000 (la base de 2 Gio tient bien moins de sessions au
+        # volume maximal, voir docs/site-public.md, « Limites »).
+        sessions_par_jour=min(5000, max(1, int(os.environ.get("SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR", "40")))),
     )

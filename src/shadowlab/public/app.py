@@ -99,7 +99,9 @@ class Limites:
     de participants ; un humain qui parcourt 100 pages reste loin des quotas d'une session."""
 
     sessions_par_adresse: int = 6  # ouvertures par heure glissante et par adresse (en mémoire seulement)
-    sessions_par_jour: int = 40  # ouvertures par jour UTC, toutes adresses confondues
+    # Ouvertures par jour UTC, toutes adresses confondues. En service, le réglage SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR
+    # (`ReglagesPublics.sessions_par_jour`) remplace cette valeur, sauf si des `Limites` sont données (tests).
+    sessions_par_jour: int = 40
     envois_par_session: int = 300  # messages de l'observateur (deux par page)
     volume_par_session: int = 4 * 1024 * 1024  # octets de charges JavaScript (~10 Ko par empreinte)
     requetes_par_session: int = 3000  # requêtes HTTP notées (~17 par page, images comprises)
@@ -220,7 +222,7 @@ def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
 
 def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None) -> FastAPI:
     _verifier_reglages(reglages)
-    limites = limites or Limites()
+    limites = limites or Limites(sessions_par_jour=reglages.sessions_par_jour)
     messages.chemin(reglages.base_donnees)  # refuse une base qui porterait le nom du fichier des messages
     cx = donnees.ouvrir(reglages.base_donnees)  # refuse la base du laboratoire
     try:
@@ -385,6 +387,12 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with suppress(sqlite3.Error), base() as cx:
             donnees.compter(cx, compte)
 
+    def complet_aujourd_hui() -> bool:
+        """Plafond de sessions du jour atteint ; faux si la base ne répond pas (le formulaire le dira à l'envoi)."""
+        with suppress(sqlite3.Error), base() as cx:
+            return donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
+        return False
+
     def total_des_sessions() -> int | None:
         """Sessions terminées depuis le début, pour l'accueil ; None si la base ne répond pas (pas de compteur)."""
         with suppress(sqlite3.Error), base() as cx:
@@ -465,8 +473,11 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         en_cours, langue = request.state.session is not None, langue_de(request)
         if request.method == "GET":  # un chargement de la page ; une requête HEAD ne compte pas
             compter("accueil")
-        sessions = total_des_sessions()
-        return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions))
+        sessions, complet = total_des_sessions(), not en_cours and complet_aujourd_hui()
+        return avec_csrf(
+            request,
+            lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions, complet=complet),
+        )
 
     # La notice complète, sans formulaire ; « /information » suit la langue de la session ou du navigateur.
     @app.get("/information", response_class=HTMLResponse)
@@ -497,7 +508,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             trop = donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
         if plein():
             return refus(503, "complet", langue)
-        if trop or not limiteur.autoriser(adresse_de(request)):
+        if trop:  # avant la limite par adresse : un jour plein n'use pas le quota horaire du visiteur
+            return refus(429, "complet_du_jour", langue)
+        if not limiteur.autoriser(adresse_de(request)):
             return refus(429, "trop_de_sessions", langue)
         with base() as cx:
             accord = {

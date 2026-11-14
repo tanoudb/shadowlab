@@ -104,7 +104,11 @@ def commencer_depuis(client: TestClient, langue: str, navigateur: str | None = N
     entetes = {"Accept-Language": ACCEPT[navigateur]} if navigateur else {}
     page = client.get(accueil(langue), headers=entetes)
     assert page.status_code == 200, page.text[:200]
-    champs = champs_du_formulaire(page.text, "/session/commencer")
+    if Selector(page.text).css('form[action="/session/commencer"]'):
+        champs = champs_du_formulaire(page.text, "/session/commencer")
+    else:  # jour plein : plus de formulaire, le jeton anti-CSRF est dans son cookie (double soumission)
+        csrf = next(c.value for c in client.cookies.jar if c.name.endswith("slp-csrf"))
+        champs = {"csrf": csrf, "langue": langue}
     return client.post(
         "/session/commencer",
         data={**champs, "consentement": "oui"},

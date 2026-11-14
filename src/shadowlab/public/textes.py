@@ -300,6 +300,10 @@ ERREURS: dict[str, dict[str, tuple[str, str]]] = {
         ),
         "session_inconnue": ("Requête refusée", "Session inconnue."),
         "complet": ("Service complet", "Le site n'accepte plus de nouvelles sessions pour le moment."),
+        "complet_du_jour": (
+            "L'étude a fait le plein pour aujourd'hui",
+            "Merci de votre visite ! Le nombre de sessions prévu pour aujourd'hui est atteint. Revenez demain : de nouvelles places s'ouvrent chaque jour à minuit, heure universelle (1 h du matin à Paris en hiver).",
+        ),
         "trop_de_sessions": ("Trop de sessions", "Trop de sessions ont été ouvertes récemment. Réessayez plus tard."),
     },
     "en": {
@@ -313,6 +317,10 @@ ERREURS: dict[str, dict[str, tuple[str, str]]] = {
         "expire_ma_session": ("Request refused", "The form has expired. Reload the “My session” page and try again."),
         "session_inconnue": ("Request refused", "Unknown session."),
         "complet": ("Service full", "The site is not accepting new sessions at the moment."),
+        "complet_du_jour": (
+            "The study is full for today",
+            "Thank you for coming! Today's number of sessions has been reached. Please come back tomorrow: new places open every day at midnight, universal time (1 a.m. in Paris in winter).",
+        ),
         "trop_de_sessions": ("Too many sessions", "Too many sessions have been opened recently. Try again later."),
     },
 }
