@@ -4,6 +4,7 @@ et scripts propres au site public."""
 
 import re
 from collections import deque
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,12 +12,23 @@ import test_public
 from fastapi.testclient import TestClient
 from parsel import Selector
 from test_public import commencer, fabriquer
+from test_public_sans_annonces import ouvrir_session
 
 from shadowlab.public import app as application
 from shadowlab.public import textes
 
 reglages_publics = test_public.reglages_publics  # mêmes réglages et même application que les autres tests publics
 client = test_public.client
+
+
+@pytest.fixture(params=[True, False], ids=["annonces-visibles", "annonces-cachees"])
+def client_deux_modes(request, reglages_publics):
+    """Le site public avec le site d'annonces visible (réglage `vitrine`), puis caché (le défaut)."""
+    with fabriquer(replace(reglages_publics, vitrine=request.param)) as c:
+        c.vitrine = request.param
+        yield c
+
+
 NOMS_INTERDITS = ("noezia", "shadowlab", "shadow lab")
 STATIQUES = Path(textes.__file__).parent / "static"
 
@@ -81,7 +93,8 @@ def _demander_tout(client: TestClient) -> list[tuple[str, object]]:
                 if lien.startswith(("/lab/social/", "/lab/vitrine")) and lien not in vues and len(vues) < 400:
                     a_voir.append(lien)
     assert any("/lab/social/p/" in c for c in vues) and any("/lab/social/u/" in c for c in vues)
-    assert any("/lab/social/t/" in c for c in vues) and any("/lab/vitrine/annonces/" in c for c in vues)
+    assert any("/lab/social/t/" in c for c in vues)
+    assert any("/lab/vitrine/annonces/" in c for c in vues) is client.vitrine  # caché : jamais lié, donc jamais vu
     # 403 : formulaire d'accord d'une autre origine ; collecte sans session.
     vues["403 origine"] = client.post(
         "/session/commencer", data={"consentement": "oui"}, headers={"Origin": "https://autre.example"}
@@ -104,12 +117,16 @@ def _marques(client: TestClient) -> list[str]:
     return fautes
 
 
-def test_hors_session_le_site_public_ne_cite_jamais_le_projet(client):
-    assert _marques(client) == []
+def test_hors_session_le_site_public_ne_cite_jamais_le_projet(client_deux_modes):
+    assert _marques(client_deux_modes) == []
 
 
-def test_pendant_une_session_le_site_public_ne_cite_jamais_le_projet(client):
-    commencer(client)
+def test_pendant_une_session_le_site_public_ne_cite_jamais_le_projet(client_deux_modes):
+    client = client_deux_modes
+    if client.vitrine:
+        commencer(client)
+    else:
+        ouvrir_session(client)  # `commencer` lit son jeton sur une page du site d'annonces, caché ici
     assert any(c.name for c in client.cookies.jar)
     assert _marques(client) == []
 

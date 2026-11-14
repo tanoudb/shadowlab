@@ -51,6 +51,7 @@ def reglages_publics(tmp_path) -> ReglagesPublics:
         entete_ip="X-Forwarded-For",
         vitrine_graine=20261111,
         vitrine_taille=45,
+        vitrine=True,  # le site d'annonces visible : ces tests le parcourent
     )
 
 
@@ -1681,7 +1682,7 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-14.8", "le texte a changé : nouvelle version du texte accepté"
+    assert VERSION_INFORMATION == "2026-11-14.9", "le texte a changé : nouvelle version du texte accepté"
     texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "

@@ -44,8 +44,6 @@ INTERDITS_CACHE = (
     "two demonstration sites",
     "sites de démonstration",
     "demonstration sites",
-    "autre site",
-    "other site",
     "listing",
     "vraies annonces",
 )

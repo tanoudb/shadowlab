@@ -923,11 +923,15 @@ def _suite(chemin: str, page: int, total: int, langue: str) -> str:
     return f'<nav class="suite" aria-label="{_ui("pagination", langue)}">{lien}</nav>'
 
 
-def bandeau(langue: str, csrf: str | None) -> str:
+def bandeau(langue: str, csrf: str | None, *, vitrine: bool = False) -> str:
     """Bandeau de chaque page, dans la langue de la page. Avec un jeton anti-CSRF (session en cours) : « Ma session »
-    et le bouton pour terminer, seul formulaire du réseau social ; sans : invitation à participer. Toujours un lien
-    vers l'autre site de démonstration."""
-    autre = f'<a class="autre-site" href="/lab/vitrine">{_ui("autre_site", langue, nom=MARQUE_VITRINE)}</a>'
+    et le bouton pour terminer, seul formulaire du réseau social ; sans : invitation à participer. Un lien vers
+    l'autre site de démonstration si le site d'annonces est visible (`vitrine`), sinon aucun."""
+    autre = (
+        f'<a class="autre-site" href="/lab/vitrine">{_ui("autre_site", langue, nom=MARQUE_VITRINE)}</a>'
+        if vitrine
+        else ""
+    )
     if csrf is not None:
         return f"""<aside class="session-publique en-cours" aria-label="{_ui("session", langue)}"><div class="conteneur">
 <p><span class="pastille" aria-hidden="true"></span>{_ui("en_cours", langue)}</p>

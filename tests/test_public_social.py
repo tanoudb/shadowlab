@@ -115,6 +115,7 @@ def reglages_publics(tmp_path) -> ReglagesPublics:
         entete_ip="X-Forwarded-For",
         vitrine_graine=20261111,
         vitrine_taille=45,
+        vitrine=True,  # le site d'annonces visible : ces tests le parcourent
         social_graine=GRAINE,
         social_taille=TAILLE,
     )

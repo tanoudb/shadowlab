@@ -205,6 +205,7 @@ Le tunnel rapide suffit pour quelques proches. Avant un message public (Reddit�
 | `SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` | `20261111`, `500` | Contenu du site vitrine, comme dans le labo |
 | `SHADOWLAB_PUBLIC_SOCIAL_GRAINE`, `SHADOWLAB_PUBLIC_SOCIAL_TAILLE` | `20261113`, `120` | Contenu du réseau social fictif : graine et nombre de publications (au moins 1) |
 | `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` | `40` | Plafond de sessions ouvertes par jour UTC, toutes adresses (ramené entre 1 et 5 000). Atteint, l'accueil et le refus disent, dans les deux langues, que l'étude a fait le plein pour aujourd'hui et invitent à revenir demain. Voir « Limites » avant de l'élever |
+| `SHADOWLAB_PUBLIC_VITRINE` | absent (caché) | `1` rend visible le site d'annonces (`/lab/vitrine/…`, lien du bandeau du réseau social, notice qui décrit les deux sites). Absent ou `0`, ses adresses répondent 404 et plus aucune page ne le cite |
 
 L'application publique ne charge du fichier `.env` que `SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*` et
 `SHADOWLAB_SORTIES` : les clés propres au labo (jeton d'API, clés reCAPTCHA…) n'entrent pas dans son processus.

@@ -261,7 +261,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     limiteurs = (limiteur, limiteur_messages, limiteur_messages_jour)
     fichier_messages = messages.chemin(reglages.base_donnees)
     taille_formulaire_contact = limites.taille_message * OCTETS_PAR_CARACTERE + 1024
-    annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille)
+    annonces = vitrine.generer(reglages.vitrine_graine, reglages.vitrine_taille) if reglages.vitrine else []
     dossier_photos = social.DOSSIER_PHOTOS
     photos = social.charger_photos(dossier_photos)  # refuse un manifeste illisible, vide ou incomplet
     fichiers_photos = social.fichiers(photos)
@@ -399,7 +399,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         return reponse
 
     def refus(status_code: int, cle: str, langue: str, *, contact: bool = False) -> HTMLResponse:
-        return HTMLResponse(pages.erreur(cle, langue, contact=contact), status_code=status_code)
+        return HTMLResponse(
+            pages.erreur(cle, langue, contact=contact, vitrine=reglages.vitrine), status_code=status_code
+        )
 
     def plein() -> bool:
         """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte. Mesure l'espace réellement
@@ -533,7 +535,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         sessions, complet = etat_de_l_accueil(request.method == "GET", en_cours)
         return avec_csrf(
             request,
-            lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions, complet=complet),
+            lambda csrf: pages.accueil(
+                csrf, langue, en_cours=en_cours, sessions=sessions, complet=complet, vitrine=reglages.vitrine
+            ),
         )
 
     # La notice complète, sans formulaire ; « /information » suit la langue de la session ou du navigateur.
@@ -568,7 +572,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         if champs.get("consentement") != "oui":
             message, sessions = pages.texte(langue, "accord_manquant"), total_des_sessions()
             return avec_csrf(
-                request, lambda csrf: pages.accueil(csrf, langue, erreur=message, sessions=sessions), status_code=422
+                request,
+                lambda csrf: pages.accueil(csrf, langue, erreur=message, sessions=sessions, vitrine=reglages.vitrine),
+                status_code=422,
             )
         if request.state.session is not None:  # session déjà ouverte dans ce navigateur : on ne recrée rien
             return RedirectResponse(pages.SOCIAL, status_code=303)
@@ -619,7 +625,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         langue = langue_de(request)
         reponse = avec_csrf(
             request,
-            lambda csrf: pages.merci(jeton, suppression, csrf, reglages.conservation_jours, langue),
+            lambda csrf: pages.merci(
+                jeton, suppression, csrf, reglages.conservation_jours, langue, vitrine=reglages.vitrine
+            ),
         )
         effacer(reponse, cookie_session)  # le cookie de droits reste : « Ma session » sert encore à supprimer
         return reponse
@@ -640,14 +648,16 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                     jeton = None
         langue = langue_de(request)
         if jeton is None:
-            reponse = HTMLResponse(pages.aucune_session(langue))
+            reponse = HTMLResponse(pages.aucune_session(langue, vitrine=reglages.vitrine))
             if cookie_droits in request.cookies:
                 effacer(reponse, cookie_droits)
             return reponse
         suppression, en_cours = signer("supprimer", jeton), request.state.session == jeton
         return avec_csrf(
             request,
-            lambda csrf: pages.ma_session(jeton, suppression, csrf, reglages.conservation_jours, en_cours, langue),
+            lambda csrf: pages.ma_session(
+                jeton, suppression, csrf, reglages.conservation_jours, en_cours, langue, vitrine=reglages.vitrine
+            ),
         )
 
     @app.post("/session/supprimer", response_class=HTMLResponse)
@@ -663,7 +673,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with base() as cx:
             noter_langue_de(request, cx, jeton)
             existait = donnees.effacer_session(cx, jeton)
-        reponse = HTMLResponse(pages.supprimee(existait, langue_de(request)))
+        reponse = HTMLResponse(pages.supprimee(existait, langue_de(request), vitrine=reglages.vitrine))
         effacer(reponse, cookie_session)
         effacer(reponse, cookie_droits)
         return reponse
@@ -675,7 +685,11 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         jours, taille, langue = reglages.conservation_jours, limites.taille_message, langue_de(request)
         alerte = pages.texte(langue, erreur, taille=taille) if erreur else ""
         return avec_csrf(
-            request, lambda csrf: pages.contact(csrf, jours, taille, langue, erreur=alerte, texte=texte), status_code
+            request,
+            lambda csrf: pages.contact(
+                csrf, jours, taille, langue, erreur=alerte, texte=texte, vitrine=reglages.vitrine
+            ),
+            status_code,
         )
 
     @app.get("/contact", response_class=HTMLResponse)
@@ -684,7 +698,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     @app.get("/contact/envoye", response_class=HTMLResponse)
     def contact_envoye(request: Request) -> HTMLResponse:
-        return HTMLResponse(pages.contact_envoye(langue_de(request)))
+        return HTMLResponse(pages.contact_envoye(langue_de(request), vitrine=reglages.vitrine))
 
     @app.get("/contact/style.css")
     def contact_style() -> FileResponse:
@@ -719,63 +733,70 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         _avis_au_responsable("message de contact reçu")  # jamais son texte, jamais dans le journal
         return RedirectResponse("/contact/envoye", status_code=303)
 
-    # --- Site vitrine : mêmes chemins que dans le labo ---------------------------------------------
+    # --- Site vitrine : mêmes chemins que dans le labo ; cachées par défaut -------------------------------------
+    # Caché (`ReglagesPublics.vitrine` faux, le défaut), aucune de ces routes n'existe : leurs adresses répondent la
+    # 404 de n'importe quelle adresse inconnue, en session comme hors session.
+    if reglages.vitrine:
 
-    def page_vitrine(request: Request, rendre: Callable[[str, vitrine.Habillage], str]) -> HTMLResponse:
-        """Page vitrine ; pendant une session, observateur et bandeau (avec le bouton « Terminer », d'où le CSRF)."""
-        jeton, langue = request.state.session, langue_de(request)
-        if jeton is None:
-            return HTMLResponse(
-                rendre("", vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=pages.bandeau(langue, None)))
+        def page_vitrine(request: Request, rendre: Callable[[str, vitrine.Habillage], str]) -> HTMLResponse:
+            """Page vitrine ; en session, observateur et bandeau (avec le bouton « Terminer », d'où le CSRF)."""
+            jeton, langue = request.state.session, langue_de(request)
+            if jeton is None:
+                return HTMLResponse(
+                    rendre(
+                        "", vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=pages.bandeau(langue, None))
+                    )
+                )
+            return avec_csrf(
+                request,
+                lambda csrf: rendre(
+                    jeton, vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=pages.bandeau(langue, csrf))
+                ),
             )
-        return avec_csrf(
-            request,
-            lambda csrf: rendre(
-                jeton, vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=pages.bandeau(langue, csrf))
-            ),
-        )
 
-    def annonce_ou_404(reference: str) -> vitrine.Annonce:
-        annonce = vitrine.trouver(annonces, reference)
-        if annonce is None:
-            raise HTTPException(404, "annonce inconnue")
-        return annonce
+        def annonce_ou_404(reference: str) -> vitrine.Annonce:
+            annonce = vitrine.trouver(annonces, reference)
+            if annonce is None:
+                raise HTTPException(404, "annonce inconnue")
+            return annonce
 
-    @app.get("/lab/vitrine", response_class=HTMLResponse)
-    def vitrine_accueil(request: Request) -> HTMLResponse:
-        return page_vitrine(
-            request, lambda jeton, habillage: vitrine.page_accueil(jeton, annonces, habillage=habillage)
-        )
+        @app.get("/lab/vitrine", response_class=HTMLResponse)
+        def vitrine_accueil(request: Request) -> HTMLResponse:
+            return page_vitrine(
+                request, lambda jeton, habillage: vitrine.page_accueil(jeton, annonces, habillage=habillage)
+            )
 
-    @app.get("/lab/vitrine/annonces", response_class=HTMLResponse)
-    def vitrine_liste(request: Request, page: int = 1) -> HTMLResponse:
-        if not 1 <= page <= vitrine.nb_pages(len(annonces)):
-            raise HTTPException(404, "page inexistante")
-        return page_vitrine(
-            request, lambda jeton, habillage: vitrine.page_liste(jeton, annonces, page, habillage=habillage)
-        )
+        @app.get("/lab/vitrine/annonces", response_class=HTMLResponse)
+        def vitrine_liste(request: Request, page: int = 1) -> HTMLResponse:
+            if not 1 <= page <= vitrine.nb_pages(len(annonces)):
+                raise HTTPException(404, "page inexistante")
+            return page_vitrine(
+                request, lambda jeton, habillage: vitrine.page_liste(jeton, annonces, page, habillage=habillage)
+            )
 
-    @app.get("/lab/vitrine/annonces/{reference}", response_class=HTMLResponse)
-    def vitrine_fiche(request: Request, reference: str) -> HTMLResponse:
-        annonce = annonce_ou_404(reference)
-        return page_vitrine(request, lambda jeton, habillage: vitrine.page_fiche(jeton, annonce, habillage=habillage))
+        @app.get("/lab/vitrine/annonces/{reference}", response_class=HTMLResponse)
+        def vitrine_fiche(request: Request, reference: str) -> HTMLResponse:
+            annonce = annonce_ou_404(reference)
+            return page_vitrine(
+                request, lambda jeton, habillage: vitrine.page_fiche(jeton, annonce, habillage=habillage)
+            )
 
-    @app.get("/lab/vitrine/photos/{reference}/{fichier}")
-    def vitrine_photo(reference: str, fichier: str) -> Response:
-        annonce = annonce_ou_404(reference)
-        m = re.fullmatch(r"([1-9]\d?)\.svg", fichier)
-        if not m or int(m.group(1)) > annonce.nb_photos:
-            raise HTTPException(404, "photo inexistante")
-        return Response(
-            vitrine.photo_svg(annonce, int(m.group(1))),
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+        @app.get("/lab/vitrine/photos/{reference}/{fichier}")
+        def vitrine_photo(reference: str, fichier: str) -> Response:
+            annonce = annonce_ou_404(reference)
+            m = re.fullmatch(r"([1-9]\d?)\.svg", fichier)
+            if not m or int(m.group(1)) > annonce.nb_photos:
+                raise HTTPException(404, "photo inexistante")
+            return Response(
+                vitrine.photo_svg(annonce, int(m.group(1))),
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
 
-    @app.get("/lab/vitrine/api/annonces/{reference}/similaires")
-    def vitrine_similaires(reference: str) -> dict:
-        annonce = annonce_ou_404(reference)
-        return {"annonces": [vitrine.resume_json(a) for a in vitrine.similaires(annonces, annonce)]}
+        @app.get("/lab/vitrine/api/annonces/{reference}/similaires")
+        def vitrine_similaires(reference: str) -> dict:
+            annonce = annonce_ou_404(reference)
+            return {"annonces": [vitrine.resume_json(a) for a in vitrine.similaires(annonces, annonce)]}
 
     # Copie sans le nom du projet, fabriquée une fois ; l'application refuse de démarrer si elle n'y arrive pas.
     statiques_du_labo = script_public.preparer(STATIQUES, FICHIERS_STATIQUES)
@@ -795,14 +816,18 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         langue = langue_de(request)
         jeton = request.state.session
         if jeton is None:
-            habillage = vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=social.bandeau(langue, None))
+            habillage = vitrine.Habillage(
+                observateur=False, sans_tiers=True, bandeau=social.bandeau(langue, None, vitrine=reglages.vitrine)
+            )
             return HTMLResponse(rendre(langue, "", habillage))
         return avec_csrf(
             request,
             lambda csrf: rendre(
                 langue,
                 jeton,
-                vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=social.bandeau(langue, csrf)),
+                vitrine.Habillage(
+                    observateur=True, sans_tiers=True, bandeau=social.bandeau(langue, csrf, vitrine=reglages.vitrine)
+                ),
             ),
         )
 
