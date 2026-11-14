@@ -1,0 +1,36 @@
+# Un travail de plus d'une heure avec les réglages d'origine de l'Arena : le cookie de défi d'une heure expire en route.
+# Les campagnes 112 et 113 ont montré, avec un cookie raccourci à 600 s, que la récolte repasse la porte quand le défi
+# revient (D-83). Ici rien n'est raccourci : niveaux 04, 05 et 06 sans corrélation tels qu'ils sont, cookie de 3 600 s,
+# et un site de rallye plus grand (taille 40 : 683 pages, environ 80 minutes par passage). Le défi doit donc revenir
+# une fois, vers la soixantième minute, et la récolte doit finir les vingt minutes qui restent.
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus. Le nombre de passages de la
+# porte en cours de route est dans les détails du passage ; leur écart doit être proche de 3 600 s (un écart bien plus
+# court serait un soupçon de l'Arena, pas une expiration).
+# Niveau 06 sans le détecteur correlation-session (profil `06scorr`), comme les campagnes 97 à 113.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+# Une seule répétition par niveau : c'est une première mesure, pas une preuve statistique.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_RALLYE_TAILLE=40 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena-rallye-long.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# 1 moteur × 3 niveaux × 1 scénario × 1 répétition = 3 passages (environ 4 h, estimation).
+experiment:
+  name: recolte_arena_rallye_long
+  description: >-
+    La récolte générale du site de rallye à la taille 40 (683 pages dans une seule session, environ 80 minutes) aux
+    niveaux 04, 05 et 06 de l'Arena (06 sans corrélation), cookie de défi d'origine (une heure).
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["04", "05", "06scorr"]
+  scenarios:
+    - recolte_recette_rallye
+  repetitions: 1
+  seed: 20261114
+  output: [json, html]
