@@ -21,8 +21,8 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 14/11 à 4 h 14, après la fusion du site public, sans campagne : **1 598 verts** et 2 en échec
-  attendu (`uv run pytest` : 1 554 rapides et 44 d'intégration
+- Tests au 14/11 à 9 h 16, après D-78, sans campagne : **1 624 verts** (`uv run pytest` : 1 580 rapides et 44
+  d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
   passages orphelins), rien sur `master`.

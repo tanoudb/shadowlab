@@ -598,6 +598,18 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   corrélation, aucun humain en base, une machine, un Chrome sur macOS) ; la souris bouge plus qu'avant
   partout (médiane 0,94 au lieu de 0,72), et sans session humaine on ne sait pas si c'est plus proche d'une
   vraie main.
+- **D-78 et campagne 110 (14/11) : une photo n'est plus comptée comme une page.** Le détecteur de comportement
+  comptait les photos d'une page comme des pages (`rythme_soutenu`, navigation). Corrigé dans l'Arena, test vu
+  en échec avant ; les photos restent contrôlées par le gardien, les appels de données restent des pages.
+  Rejoué hors ligne : le faux signal apparaissait dans 37 passages de la campagne 108 et 35 de la 109, plus
+  aucun après. **Campagne 110** (`recolte-arena.yaml`, 9 h 17 à 9 h 56, 30 passages, 0 panne), non-régression
+  dans la vraie Arena : moteur navigateur 15 sur 15 du niveau 02 au niveau 06 sans corrélation (280 champs sur
+  280 à chacun), témoin `http` 0 sur 15 (empreinte aux niveaux 02 et 03, défi JavaScript ensuite), aucune
+  décision ne cite plus `rythme_soutenu` ni `pages_eclair`. 1 624 tests verts.
+  **Faiblesse du moteur trouvée au passage, non corrigée** : après le défi d'entrée, la récolte quitte la
+  première vraie page au bout de 55 ms environ (l'interaction humaine a eu lieu sur la page de défi, pas sur
+  la page lue). La règle `pages_eclair` ne le voit pas, parce qu'elle fait la moyenne avec la page de défi ;
+  une protection plus fine le verrait. À corriger dans le moteur (étape 1.9).
 
 ## 3. Pourquoi on a perdu du temps
 

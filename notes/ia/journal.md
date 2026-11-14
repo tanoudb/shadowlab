@@ -3287,3 +3287,24 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Écrit** : `docs/PLAN.md` § 2 et § 8 (étape 1.9), ajout daté à D-74, `AGENTS.md`. Arena remise, ports libres.
 - **Reste** : corriger dans l'Arena le compte des photos comme des pages (test d'abord), puis une courte campagne
   de non-régression avec le témoin HTTP ; site public : attend Ethan (nom d'hôte stable, limite de débit, nom).
+
+## 2026-11-14 (10h00) — Claude (Fable 5.2, coordination) — D-78 : une photo n'est plus comptée comme une page ; campagne 110
+
+- **D-78** (branche `arena-photos-pages`, sous-agent Sonnet, relu ; commits `a99e5ad` tests, `4709107` et `96bef30`
+  code, fusion `1a6955b`) : `detection.py`, `Observations.documents` ne compte plus les fichiers statiques ni les
+  photos ; `requetes_de_page` garde toutes les requêtes pour la règle des cookies ; `pages_eclair` ne conclut plus
+  sur une page de défi seule. Vu en échec avant (10 tests), vert après. Les deux tests en échec attendu du site
+  public sont redevenus des tests ordinaires.
+- **Deux constats d'une relecture automatique de sécurité, fondés, corrigés avant fusion** : l'appel de données
+  `/lab/vitrine/api/` était sorti du compte des pages (erreur de mon brief) : il y reste ; les photos avaient été
+  exemptées du gardien alors qu'elles portent du contenu : `gardien.protegee` est inchangée.
+- **Rejeu hors ligne** (sous-agent) : passages avec `rythme_soutenu` ou `pages_eclair`, avant → après : campagne 108,
+  37 → 0 ; campagne 109, 35 → 0 ; témoin `curl-cffi` de la 105 toujours arrêté par l'ensemble des détecteurs (15 sur 15).
+- **Suite complète** à 9 h 16 : 1 624 tests verts, aucun en échec attendu.
+- **Campagne 110** (`recolte-arena.yaml`, 9 h 17 à 9 h 56, 30 passages, 0 panne) : navigateur 15 sur 15 (niveaux 02 à
+  06 sans corrélation, 280 champs sur 280), témoin `http` 0 sur 15, aucune décision ne cite `rythme_soutenu` ni
+  `pages_eclair`. Arena remise, ports libres.
+- **Faiblesse du moteur trouvée, non corrigée** : après le défi d'entrée, la première vraie page est quittée en
+  55 ms environ (l'interaction a lieu sur la page de défi). À corriger dans le moteur.
+- **Reste** : cette faiblesse ; `ClientDisconnect` non rattrapé dans l'application publique ; site public : attend
+  Ethan (nom d'hôte stable, limite de débit, nom du réseau social).

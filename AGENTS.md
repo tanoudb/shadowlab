@@ -90,16 +90,18 @@ recommander des optimisations.
   site publiquement »). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Les pages du labo n'ont pas changé
   d'un octet (`tests/test_labo_inchange.py`). Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md`.
   Le labo lui-même ne se met jamais en ligne.
-- **Défaut connu de l'Arena, vu en vrai à la campagne 109 (1 passage sur 35 au niveau 04), à corriger** : `detection.Observations.documents`
-  compte les photos comme des pages, et `rythme_soutenu` divise par la durée depuis la première page ; sans défi
-  d'entrée (site public), un humain serait arrêté aux niveaux 06 et 07 dès la première page. Deux tests en échec
-  attendu le figent (`tests/test_public_social.py`).
+- **Arena, D-78 (14/11)** : une photo chargée par une page n'est plus comptée comme une page par les détecteurs
+  (`detection.RESSOURCES_DE_PAGE`, `Observations.documents`) ; les photos restent contrôlées par le gardien, les
+  appels de données restent des pages. Avant : 1 passage sur 35 bloqué à tort au niveau 04 (campagne 109), et un
+  humain arrêté aux niveaux 06 et 07 sur le site public. Campagne 110 (non-régression) : navigateur 15 sur 15,
+  témoin `http` 0 sur 15. **Faiblesse du moteur connue, non corrigée** : après le défi d'entrée, la récolte
+  quitte la première vraie page en 55 ms environ (`docs/PLAN.md` § 2).
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 598 tests verts** et 2 en échec attendu (`uv run pytest`, 14/11 à 4 h 14, après la fusion du site public,
-  hors campagne : 1 554 rapides et 44 d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `346f4b6`), rien sur
+- **1 624 tests verts** (`uv run pytest`, 14/11 à 9 h 16, après D-78, hors campagne : 1 580 rapides et 44
+  d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `1a6955b`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
