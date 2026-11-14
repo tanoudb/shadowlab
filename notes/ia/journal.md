@@ -3345,3 +3345,30 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   d'hôte stable sur un domaine d'Ethan (son compte Cloudflare). Non essayé : Safari, iPhone, Firefox.
 - **Fichiers** : `docs/site-public.md`, `docs/PLAN.md` (§ 8, ligne 1.6), `AGENTS.md`, `notes/ia/contexte.md`.
 - **Sous-agents en cours** : durée du cookie de l'Arena (rendu, à contrôler), porte repassée en cours de passe.
+
+## 2026-11-14 (11h35) — Claude (Fable 5.2, coordination) — Site public : plus aucun nom du projet, accueil court ; Arena : durée du cookie réglable
+
+- **Retour d'Ethan sur le site en ligne, ses mots** : « Trop long les requêtes les gens font jamais le faire tu mention
+  noezia faut pas du tout trop de truc ect ».
+- **D-81, le site ne cite plus le projet** : pied de page, notice, feuille de style (commit `edf3072`, test vu en échec
+  avant) ; script d'observation servi par copie dérivée (`public/script_public.py`, branche `public-sans-marque`,
+  sous-agent Sonnet, relu : rouge sur `26c1200`, vert en tête, fusion `b8280d2`).
+- **D-80, accueil court** (branche `public-accueil-court`, sous-agent Sonnet, relu : rouge sur `dbf44a1`, 19 échecs ;
+  fusion `f374e4e`) : une phrase, un seul bouton « J'accepte et je commence », « 2 minutes », détail replié, menu du
+  haut réduit. Captures regardées : `outputs/apercu-court/` (téléphone clair et sombre, ordinateur).
+- **D-82, durée du cookie de l'Arena par profil** (branche `arena-duree-cookie`, sous-agent Sonnet, relu : rouge sur
+  `4c7e999`, 10 échecs ; fusion `4dfcec0`) ; profils `04court`, `05court`, `06scorrcourt` à 600 s.
+- **Suite rapide** après les trois fusions : 1 650 verts, lint propre. Les 44 tests d'intégration ne sont pas relancés.
+- **En ligne, même adresse**, vérifié par l'adresse publique : aucune mention du projet (pages et script), plus de case
+  à cocher, plus de « 5 à 10 » ; session d'essai dans un Chromium piloté (bouton unique, 41 clés d'empreinte, relevé
+  reçu en 204, aucune erreur de console, suppression) ; base vide après. Le navigateur intégré, masqué, ne fait pas
+  tourner le script d'observation (pas d'images d'animation) : ne pas s'y fier pour ce contrôle.
+- **Comment le site tourne maintenant (à savoir pour l'arrêter)** : le tunnel `cloudflared` du premier lancement est
+  resté ouvert ; le script `site-public-tunnel.sh` est suspendu (signal STOP) pour qu'il ne ferme pas le tunnel ;
+  l'application est une tâche de fond à part de la session de coordination, relancée à chaque mise à jour avec les
+  mêmes réglages que le script. Pour tout arrêter : arrêter l'application (port 8771), puis `cloudflared`, puis le
+  script suspendu.
+- **Fréquentation du 14/11** : 18 chargements de l'accueil et 4 sessions commencées, presque tous des essais de la
+  coordination (toutes les sessions d'essai sont supprimées).
+- **Reste** : texte de franchise encore long sur téléphone (7 lignes) ; compteur public à « 0 session » ; Safari,
+  iPhone, Firefox non essayés ; nom d'hôte stable (domaine d'Ethan) ; sous-agent « porte en cours de passe » en cours.

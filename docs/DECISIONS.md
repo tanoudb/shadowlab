@@ -817,3 +817,45 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   passages par niveau. Moteur navigateur 15 sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280, témoin
   `http` 0 sur 15 : rien n'a régressé. Coût mesuré : session médiane de 164 à 177 s au niveau 05, de 163 à 168 s au niveau
   06 sans corrélation. Limite : aucun détecteur de l'Arena ne voyait ce défaut, donc aucun taux de passage ne change.
+- **D-80 — 14/11/2026 — Site public : accueil court, accord en un clic.** Constat : Ethan, en voyant le site en ligne
+  sur son téléphone : « Trop long […] les gens font jamais le faire […] trop de truc ». L'accueil faisait cinq sections,
+  demandait « 5 à 10 minutes », et le bouton de départ était tout en bas, derrière une case à cocher. Décision : un
+  titre, une phrase, puis le formulaire d'accord tout de suite : la phrase de franchise (ce qui est relevé, jamais ce
+  qui est tapé ni l'adresse IP, suppression en un clic), le lien vers la notice complète et un seul bouton « J'accepte
+  et je commence » (`name="consentement" value="oui"` : le serveur exige toujours ce champ, rien n'y change) ; le
+  consentement n'est plus une case mais ce clic. Le détail (ce qui est relevé, ce qui ne l'est jamais, à quoi ça sert)
+  est replié dans un `<details>` sous le formulaire ; les sections « étapes » et « sites » sont retirées ; « 2 minutes »
+  remplace « 5 à 10 minutes » partout ; le menu du haut ne garde que la marque et la langue, les liens (notice, « Ma
+  session », contact, crédits) passent au pied de page de chaque page. Notice en version 2026-11-14.8. Preuve :
+  `tests/test_public_accueil_court.py` (23 cas, 19 vus en échec avant le code), suite rapide verte, captures à 390 × 844
+  et 1 280 × 800 en clair et en sombre (`outputs/apercu-court/`), session d'essai complète par l'adresse publique dans
+  un Chromium piloté (bouton, relevé reçu en 204, suppression). Limites : code mort laissé en place (classes CSS des
+  sections retirées, `pages._vignettes_vedette`) ; non essayé sur Safari, iPhone, Firefox ; aucune mesure de l'effet
+  sur la participation. Décidé par : Ethan (la demande), coordination (la forme ; travail d'un sous-agent, relu).
+- **D-81 — 14/11/2026 — Le site public ne cite jamais le projet ni le laboratoire.** Constat : Ethan, le même jour :
+  « tu mention noezia faut pas du tout ». Le pied de page et la notice disaient « NOEZIA ShadowLab », une feuille de
+  style citait un chemin du dépôt, et le script d'observation servi pendant une session portait ces noms à 8 lignes
+  (texte dessiné sur le canvas, noms internes, sondes au nom du moteur). Décision : aucun de ces noms dans ce que le
+  site sert (corps, en-têtes, noms de cookie). Les textes et la feuille de style sont corrigés. Le script du laboratoire
+  ne change pas d'un octet : l'application publique en sert une copie dérivée, fabriquée au démarrage par six
+  remplacements exacts (`public/script_public.py`) ; elle refuse de démarrer si un remplacement ne trouve pas son
+  compte ou s'il reste un nom interdit dans un fichier servi sous `/lab/static/`. Les deux sondes au nom du moteur
+  (`noezia_enumerable`, `__NOEZIA_PROFIL__`) sont absentes de la copie : pour un humain elles étaient toujours vides, et
+  `detection.DetecteurAutomationGlobals` lit une clé absente comme une liste vide, donc `shadowlab rejeu --base` donne
+  le même verdict. Preuve : `tests/test_public_sans_marque.py` (textes, fichiers statiques, parcours de toutes les
+  pages hors session et pendant une session, copie du script, refus de démarrer ; vus en échec avant), `node --check`
+  sur la copie, session d'essai par l'adresse publique (41 clés d'empreinte, relevé reçu en 204, aucune erreur de
+  console). Conséquences acceptées : le canvas du site public porte un autre texte, donc son hachage n'est pas
+  comparable à celui du laboratoire ; un moteur NOEZIA lancé contre le site public ne serait plus vu par ces deux
+  sondes (ce n'est pas l'usage du site) ; les fichiers sous `/lab/static/` sont servis sans `ETag` ni `Last-Modified`.
+  Décidé par : Ethan (la règle), coordination (la forme ; travail d'un sous-agent, relu).
+- **D-82 — 14/11/2026 — Arena : la durée des cookies de réussite d'un défi est un réglage du profil.** Constat : le
+  cookie vivait 3 600 s par une constante ; une récolte plus longue que lui n'a jamais été mesurée (la campagne 107
+  dure 50 minutes par passage). Décision : `duree_cookie_s` au niveau du profil (30 à 86 400 s, 3 600 par défaut : rien
+  ne change pour les profils existants), pour les cookies `defi`, `captcha`, `turnstile` et `recaptcha` ; le cookie
+  `connexion` garde 3 600 s. Profils de mesure dans `configs/arena/profils-cookie-court.yaml` (`04court`, `05court`,
+  `06scorrcourt`, copies de 04, 05 et 06 sans corrélation avec 600 s), un seul fichier de profils supplémentaires.
+  Preuve : `tests/test_duree_cookie.py` (17 cas, 10 vus en échec avant ; à travers l'application, un cookie obtenu par
+  la vraie route est refusé à 601 s sous `04court` et accepté sous `04` au même instant). Limites : génération Nginx et
+  Coraza vérifiée sur le texte seulement, aucune campagne lancée, tests d'intégration pas relancés depuis. Décidé par :
+  coordination (travail d'un sous-agent, relu).

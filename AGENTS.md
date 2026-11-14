@@ -86,7 +86,10 @@ recommander des optimisations.
   `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` (40 par défaut). Quatre relectures indépendantes (D-65, D-67, D-77) ; la
   quatrième a trouvé 15 défauts, tous corrigés. **En ligne depuis le 14/11 à 11 h 06 par le tunnel rapide**, lancé par l'assistant à la demande d'Ethan : adresse
   temporaire dans `outputs/public/adresse-publique.txt`, plafond réglé à 150 sessions par jour ; le site s'arrête
-  avec le script, la session qui l'a lancé ou le Mac. Avant une annonce publique, à la charge
+  avec le tunnel, la session qui l'a lancé ou le Mac. **Accueil court** (D-80, 14/11) : une phrase, un seul bouton
+  « J'accepte et je commence » (plus de case à cocher), « 2 minutes », détail replié, menu du haut réduit à la marque
+  et à la langue. **Le site ne cite jamais le projet ni le laboratoire** (D-81), script d'observation compris :
+  copie dérivée par `public/script_public.py`, garde `tests/test_public_sans_marque.py`. Avant une annonce publique, à la charge
   d'Ethan : un nom d'hôte stable (tunnel nommé sur un domaine, pas le tunnel rapide), une règle de limitation de
   débit chez Cloudflare, le plafond de sessions réglé ; liste dans `docs/site-public.md` (« Avant d'annoncer le
   site publiquement »). Non essayé : Safari, iPhone, Firefox. Vrai tunnel
@@ -104,12 +107,16 @@ recommander des optimisations.
   sans un geste (campagne 110, niveaux 05 et 06 sans corrélation). Campagne 111 (même fichier) : 6,2 à 10,5 s
   avec souris et défilement, navigateur 15 sur 15, témoin `http` 0 sur 15. Aucun détecteur de l'Arena ne voyait
   ce défaut : aucun taux ne change. `pages_eclair` fait toujours la moyenne avec les pages de défi.
+- **Arena, D-82 (14/11)** : la durée des cookies de réussite d'un défi est un réglage du profil (`duree_cookie_s`,
+  3 600 s par défaut). Profils de mesure à 600 s : `04court`, `05court`, `06scorrcourt`
+  (`configs/arena/profils-cookie-court.yaml`, à passer par `SHADOWLAB_PROFILS_EXTRA`). Aucune campagne encore.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
 - **1 640 tests verts** (`uv run pytest`, 14/11 à 10 h 12, après D-79, hors campagne : 1 596 rapides et 44
   d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `d86aaff`), rien sur
+  l'interface (vitest), lint propre. Depuis, suite rapide seule : 1 650 verts le 14/11 à 11 h 30 (après D-80 à D-82) ;
+  les 44 tests d'intégration ne sont pas relancés. Branche `niveau-authentifie-perimetre` (dernière fusion `f374e4e`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
