@@ -413,8 +413,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   quoi une feuille de style sans page notée trahissait une page de contact ; l'avis au responsable passe par
   la sortie standard, seulement si c'est un terminal. (2) À 3 messages par heure, une adresse seule épuisait
   le plafond du jour en 10 heures et remplissait la boîte en 17 jours. Choix : 5 messages par adresse et par
-  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; toutes les limites par adresse comptent un
-  /64 IPv6 pour une adresse ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
+  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; ~~toutes les limites par adresse comptent un
+  /64 IPv6 pour une adresse~~ (remplacé par D-77 : un /56) ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
   `sl-sans-tiers`, `observateur.js` n'exécute plus `debugger` (elle arrêtait la page d'un visiteur aux outils
   de développement ouverts) et ne lit plus first-input : depuis D-62 aucun détecteur ne les lit ; le labo
   relève comme avant ; texte d'information en version 2026-11-12.5. (4) Nettoyage des messages : la liste
@@ -704,7 +704,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `/lab/collecte` du même site, tout relevé hors session. `rejeu.py` n'est pas modifié : il ignore les traces
   (test). **Notice** : elle décrit la trace clé par clé dans les deux langues (liste tirée du script, test) ;
   « jamais relevé » ne dit plus « ni la position de la souris », mais garde et renforce ni ce que vous tapez (ni le
-  texte, ni les touches), ni l'adresse IP, ni la localisation, rien qui demande une autorisation ; elle dit qu'une
+  texte, ni les touches), ni l'adresse IP, ~~ni la localisation~~ (remplacé par D-77 : aucune géolocalisation, le
+  fuseau horaire et les langues relevés), rien qui demande une autorisation ; elle dit qu'une
   façon de bouger la souris ou de taper peut aider à reconnaître une personne. Le résumé de l'accueil
   (`textes.RESUME_RELEVE`) prend le texte « Franchise » du cadrage. Le but annoncé ne change pas. Texte
   d'information en version 2026-11-14.5 ; aucune session publique n'existe encore, tout consentement se donne donc
@@ -714,3 +715,36 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   note du réseau social sur le commentaire (« jamais envoyé ni enregistré ») reste vraie pour le texte, pas pour
   son rythme (texte non changé, hors de ce travail) ; rien n'est mesuré sur un humain. Décidé par : coordination, à
   la demande d'Ethan le 13/11 : « il faut qu'on prenne un maximum d'infos […] pour faire le meilleur détecteur ».
+
+- **D-77 — 14/11/2026 — Site public, quatrième relecture indépendante avant l'annonce : quinze défauts prouvés par
+  des essais, corrigés (complète D-65, D-67, D-75 et D-76 ; remplace le /64 de D-65 et « ni la localisation » de
+  D-76).** Les quinze essais de `tests/test_public_relecture4.py`, en échec sur le code relu, passent sans avoir été
+  modifiés ; les corrections au-delà sont prouvées par `tests/test_public_corrections4.py`, chaque test vu en échec
+  avant. (B1) Une base pleine rouvre : le plafond mesure l'espace réellement occupé (pages utilisées plus journal
+  WAL), plus la taille du fichier, que SQLite ne réduit jamais ; commande `shadowlab public sessions` (la plus
+  grosse d'abord) pour repérer et supprimer une session abusive. (B2) Une session n'est comptée terminée que par la
+  requête qui l'a close, une seule fois. (B3) L'accueil et le pied des pages de l'étude, sauf le contact, mènent aux
+  crédits des photos ; `objets-03`, créditée au peintre d'une fresque et non au photographe, est retirée (93
+  photos) ; la page de crédits dit « sous licence libre ou dans le domaine public ». (B4) Une adresse IPv6 compte
+  pour son /56 (un abonné en reçoit souvent un entier). (B5) La documentation dit que le tunnel rapide perd
+  « Ma session » à chaque relance. (C1) Une demi-paire UTF-16 dans un envoi donne 400, plus 500. (C2) Un envoi en
+  vol n'écrit rien après une suppression (vérification dans l'écriture), et la purge et la suppression retirent
+  les lignes orphelines. (C3) Un double clic sur « Commencer » n'ouvre qu'une session ; la seconde requête reçoit
+  une redirection sans aucun cookie (une première version rendait les cookies de la session à qui présentait la
+  même valeur anti-CSRF : fixation de session, relevée par une relecture de sécurité et reprise) ; la valeur
+  anti-CSRF est renouvelée à l'ouverture. (C4) La notice ne dit plus « ni service de Cloudflare » et nomme
+  Cloudflare dans le paragraphe sur le transit. (C5) Elle ne dit plus « aucun détecteur ne tourne », mais
+  qu'aucune décision n'est prise pendant la visite. (C6) La limite par adresse lit la dernière ligne de l'en-tête.
+  (C7) Le script du tunnel impose `SHADOWLAB_PUBLIC_HTTPS=1`. (Textes) L'accueil et la notice disent qu'aucune
+  géolocalisation n'est relevée mais que le fuseau horaire et les langues le sont, et que le nombre de frappes dans
+  une zone de texte en dit la longueur, la trajectoire de la souris ce sur quoi le regard s'est attardé ; texte
+  d'information en version 2026-11-14.6. (Petites choses) Journal WAL remis à zéro après une suppression et une
+  purge ; `HEAD` répond comme `GET`, sans corps, sans compter l'accueil ni écrire au journal. **Reste à la charge
+  de l'exploitant avant une annonce** (`docs/site-public.md`, « Avant d'annoncer le site publiquement ») : un nom
+  d'hôte stable (tunnel nommé sur un domaine) ; une règle de limitation de débit chez Cloudflare ; régler
+  `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` ; surveiller `frequentation`, `sessions` et la taille de la base ; au premier
+  lancement réel, comparer une fois le HTML servi par le tunnel au HTML local et vérifier que les photos arrivent à
+  l'application (cache de Cloudflare). Limites : si le navigateur abandonne la première réponse d'un double clic, le
+  visiteur arrive sur le fil sans session ; la notice nomme Cloudflare, donc une autre voie de mise en ligne demande
+  de la changer ; rien n'a tourné avec un vrai tunnel. Décidé par : coordination, après la quatrième relecture
+  indépendante.
