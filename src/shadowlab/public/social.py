@@ -264,8 +264,10 @@ T: dict[str, Texte] = {
     "publier": ("Publier", "Post"),
     "vous": ("Vous", "You"),
     "commentaire_local": (
-        "Votre commentaire s'affiche ici seulement : il n'est jamais envoyé ni enregistré.",
-        "Your comment only shows up here: it is never sent or stored.",
+        "Votre commentaire s'affiche ici seulement : son texte n'est jamais envoyé ni enregistré. "
+        "Pendant une session, seul le rythme de la frappe est relevé (voir la notice).",
+        "Your comment only shows up here: its text is never sent or stored. "
+        "During a session, only the rhythm of your typing is recorded (see the notice).",
     ),
     "plus_de": ("Plus de {nom}", "More from {nom}"),
     "voisines": ("Publications voisines", "Nearby posts"),

@@ -1695,7 +1695,7 @@ def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
         assert phrase in texte, phrase
     assert "non réversible" not in texte and "24 heures au plus" not in texte, "promesses trop fortes retirées"
     bandeau = client.get("/lab/vitrine").text
-    assert "Vous visitez sans participer : rien n'est enregistré" in bandeau
+    assert "Vous visitez sans participer : rien n'est relevé sur vous" in bandeau
     assert "journal technique des erreurs" in bandeau, "la phrase du bandeau reste vraie : une erreur est journalisée"
 
 
