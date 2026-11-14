@@ -784,7 +784,7 @@ def supprimee(existait: bool, langue: str) -> str:
 def erreur(cle: str, langue: str, *, contact: bool = False) -> str:
     """Page d'erreur : titre et message de `textes.ERREURS`, dans la langue du visiteur."""
     titre, message = ERREURS[langue_sure(langue)][cle]
-    corps = f"""<article class="message">
+    corps = f"""<article class="message message-{escape(cle.replace("_", "-"))}">
 <h1>{escape(titre)}</h1>
 <p>{escape(message)}</p>
 <p class="message-suite"><a class="bouton-secondaire" href="/">{_t(langue, "revenir_information")}</a></p>

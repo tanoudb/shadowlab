@@ -829,6 +829,7 @@ strong {
   font-weight: 650;
 }
 .accord-case {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -874,8 +875,20 @@ strong {
 .accord-case input:checked::before {
   transform: translateY(-2px) rotate(-45deg) scale(1);
 }
+/* Toute la ligne coche la case (cible bien plus grande que 44 px) ; le lien de la notice reste au-dessus. */
 .accord-case label {
   cursor: pointer;
+}
+.accord-case label::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.accord-case label a,
+.accord-case input {
+  position: relative;
+  z-index: 1;
 }
 .accord-actions,
 .actions {
@@ -1236,6 +1249,10 @@ strong {
   border: 3px solid var(--grenat);
   border-radius: 6px;
   transform: rotate(-8deg);
+}
+/* « Complet pour aujourd'hui » n'est pas une faute du visiteur : la tesselle d'or de l'accueil, pas le grenat. */
+.page-erreur .message-complet-du-jour h1::before {
+  border-color: var(--or);
 }
 .formulaire-contact label {
   display: block;
