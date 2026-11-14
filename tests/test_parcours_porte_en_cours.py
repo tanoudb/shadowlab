@@ -470,6 +470,39 @@ def test_le_scenario_de_campagne_rend_le_compte_des_repassages(site, monkeypatch
     json.dumps(issue.details)  # la campagne l'enregistre en JSON
 
 
+def test_dans_le_rallye_une_page_rendue_par_la_porte_garde_ses_champs_lus_dans_l_adresse(reglages, monkeypatch):
+    """La page rendue par `relire()` porte l'adresse du navigateur, jeton `sl` compris ; le rallye lit des clés dans
+    l'adresse (`/speciales/(\\d+)$`) : elles doivent rester lues, sinon tout un tableau de temps serait ignoré."""
+    from shadowlab import scenarios
+    from shadowlab.engines.base import ResultatNavigation
+
+    class PilotePerime(PiloteNoezia):
+        """La première spéciale rend un 403 périmé : vrai contenu, défi déjà franchi pendant `navigate`."""
+
+        fait = False
+
+        def navigate(self, url):
+            resultat = super().navigate(url)
+            if self.fait or "/lab/rallye/speciales/" not in url:
+                return resultat
+            self.fait, self.adresse_perimee = True, url
+            self.statuts[-1] = self._courant = 403
+            self.apres_attente = [(200, self._texte)]
+            return ResultatNavigation(403, url, resultat.duration_ms)
+
+    monkeypatch.setattr(scenarios, "PORTE_ECART_MIN_PASSAGE_S", 0)
+    monkeypatch.setenv("SHADOWLAB_RALLYE_TAILLE", "3")
+    monkeypatch.setenv("SHADOWLAB_RALLYE_GRAINE", str(GRAINE))
+    with creer_client(monkeypatch) as client:
+        pilote = PilotePerime(client)
+        issue = scenarios.SCENARIOS["recolte_recette_rallye"].executer(pilote, BASE_SITE, JETON, random.Random(1))
+    assert pilote.fait and issue.details["porte_repassages"] == 1, issue.details
+    assert f"sl={JETON}" in pilote.adresse_perimee  # l'adresse relue porte bien le jeton du passage
+    note = issue.details["recolte"]
+    assert note["pages"] == 1.0 and note["enregistrements"] == 1.0 and note["champs"] == 1.0, note
+    assert issue.success is True
+
+
 # --- `shadowlab recolte etat` -----------------------------------------------------------------
 
 
