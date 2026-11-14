@@ -859,3 +859,26 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   la vraie route est refusé à 601 s sous `04court` et accepté sous `04` au même instant). Limites : génération Nginx et
   Coraza vérifiée sur le texte seulement, aucune campagne lancée, tests d'intégration pas relancés depuis. Décidé par :
   coordination (travail d'un sous-agent, relu).
+- **D-83 — 14/11/2026 — La récolte peut repasser la porte en cours de passe, sur option de la recette.** Constat : le
+  laissez-passer d'une protection expire (cookie de l'Arena : une heure, un cookie par défi). Une passe plus longue
+  était redéfiée en plein travail puis arrêtée par la sentinelle ; jamais mesuré au-delà de 50 minutes (campagne 107).
+  Décision : deux réglages de plus dans `porte_entree` : `repassages_max` (0 par défaut : rien ne change, un défi en
+  cours de passe arrête) et `ecart_min_s` (300 s par défaut). Quand l'option est active, un défi qui revient est traité
+  comme à l'entrée, sans aucune action de la récolte (ni clic, ni rechargement, ni résolution) : attente sur place
+  pendant `attendre_s`, ou statut d'alerte périmé d'un défi levé pendant la lecture. Bornes : au plus `repassages_max`
+  repassages ; un défi revenu moins de `ecart_min_s` après le passage précédent (entrée comprise) est un signe
+  d'alerte et arrête, avec la même alerte qu'avant. Une rafale (défis vus moins de 120 s après un passage, 4 au plus)
+  compte pour un seul passage : aux niveaux 05 à 07 de l'Arena, chaque défi a son propre cookie et ils expirent à
+  quelques secondes d'écart ; 120 s et 4 viennent de la lecture du code, pas d'une mesure. Tracé : événement
+  `porte_repassage` par défi vu (adresse, rang, défi, attente, écart, rafale, refus), bloc `porte_repassages` de
+  `resume.json`, ligne de `shadowlab recolte etat` ; le compte se relit à la reprise. Dans les campagnes, le scénario
+  active l'option (10 repassages au plus, 300 s) et rend le nombre et la liste dans les détails du passage. Règle
+  maintenue : la commande ne clique jamais sur un défi d'un site tiers et n'a aucun solveur de CAPTCHA. Preuve :
+  `tests/test_parcours_porte_en_cours.py` (doubles de moteur ; 16 cas vus en échec avant le code), 1 670 tests rapides
+  verts après fusion. **Conséquence pour la lecture des campagnes** : un défi né d'un soupçon de l'Arena en cours de
+  passe, levé par le pilote plus de 300 s après le passage précédent, ne fait plus échouer le passage ; il apparaît
+  dans `porte_repassages`. Tout bilan de campagne donne donc le nombre de repassages et compare leur écart à la durée
+  du cookie du niveau : un repassage bien avant l'expiration est un soupçon, pas une expiration. Limites : aucune
+  mesure dans un vrai Chrome à cette date ; une page de blocage de l'Arena est attendue `attendre_s` avant l'arrêt ;
+  les constantes de campagne dépendent de la durée du cookie (écart minimal au plus la moitié de cette durée).
+  Décidé par : coordination (conception d'un sous-agent Opus, relue).

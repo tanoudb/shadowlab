@@ -3372,3 +3372,18 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   coordination (toutes les sessions d'essai sont supprimées).
 - **Reste** : texte de franchise encore long sur téléphone (7 lignes) ; compteur public à « 0 session » ; Safari,
   iPhone, Firefox non essayés ; nom d'hôte stable (domaine d'Ethan) ; sous-agent « porte en cours de passe » en cours.
+
+## 2026-11-14 (11h55) — Claude (Fable 5.2, coordination) — D-83 : la récolte peut repasser la porte en cours de passe ; essai « cookie court » lancé
+
+- **D-83** (branche `recolte-porte-en-cours`, sous-agent Opus, relu : rouge sur `a8b13c9`, 16 échecs ; vert en tête ;
+  fusion `4907834`) : `engines/noezia/parcours.py` (`_porte_en_cours`), `recettes.py` (`repassages_max`,
+  `ecart_min_s`), `scenarios.py` (option active en campagne, détails `porte_repassages`), `commande_recolte.py`,
+  `docs/recolte.md`. Ajout du sous-agent par rapport au brief : une rafale de défis (120 s, 4 au plus) compte pour un
+  seul passage, parce que chaque défi de l'Arena a son propre cookie.
+- **Suite rapide** après fusion : 1 670 verts, lint propre.
+- **Fichiers de campagne** : `recolte-arena-cookie-court-essai.yaml` (vitrine à 150 annonces, environ 20 minutes par
+  passage) et `recolte-arena-cookie-court.yaml` (rallye, 427 pages), niveaux `04court`, `05court`, `06scorrcourt`.
+- **Lancé à 11 h 50** : suite complète, puis, si elle est verte, l'essai court (journal :
+  `outputs/campagne-cookie-court-essai.log`). Le site public tourne en même temps sur le port 8771.
+- **Reste** : lire l'essai (repassages, écarts, rafales, pages et champs), puis le rallye ; à lire aussi : la durée de
+  la page de liste au niveau 04 (campagne 111).

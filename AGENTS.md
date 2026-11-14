@@ -110,6 +110,10 @@ recommander des optimisations.
 - **Arena, D-82 (14/11)** : la durée des cookies de réussite d'un défi est un réglage du profil (`duree_cookie_s`,
   3 600 s par défaut). Profils de mesure à 600 s : `04court`, `05court`, `06scorrcourt`
   (`configs/arena/profils-cookie-court.yaml`, à passer par `SHADOWLAB_PROFILS_EXTRA`). Aucune campagne encore.
+- **Récolte, D-83 (14/11)** : la récolte peut repasser la porte en cours de passe quand le laissez-passer expire,
+  sur option de la recette (`porte_entree.repassages_max`, 0 par défaut ; `ecart_min_s`), sans aucune action, de
+  façon bornée et tracée (`resume.json`, `recolte etat`). Les campagnes l'activent : tout bilan donne le nombre de
+  repassages et compare leur écart à la durée du cookie (un repassage bien avant l'expiration est un soupçon).
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
