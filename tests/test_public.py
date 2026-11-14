@@ -1576,12 +1576,14 @@ def test_contact_limite_par_adresse_et_par_jour(reglages_publics):
 
 
 def test_bloc_d_adresse():
-    """Une adresse IPv6 compte pour son /64 ; une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
+    """Une adresse IPv6 compte pour son /56 (D-77 ; /64 avant) : un abonné reçoit souvent un /56 entier, donc 256
+    blocs /64. Une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
     from shadowlab.public.app import bloc_d_adresse
 
-    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:B:ffff::9") == "2001:db8:a:b::/64"
-    assert bloc_d_adresse("2001:db8:a:c::1") != bloc_d_adresse("2001:db8:a:b::1")
-    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/64"
+    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:FF:ffff::9") == "2001:db8:a::/56"
+    assert bloc_d_adresse("2001:db8:a:c::1") == bloc_d_adresse("2001:db8:a:b::1"), "deux /64 du même /56"
+    assert bloc_d_adresse("2001:db8:a:100::1") != bloc_d_adresse("2001:db8:a:b::1")
+    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/56"
     assert bloc_d_adresse(IP) == IP
     assert bloc_d_adresse("::ffff:203.0.113.57") == IP, "une IPv4 écrite en IPv6 reste cette IPv4"
     for valeur in ("", "testclient", "pas une adresse", "[2001:db8::1]:443", "2001:db8::1, 10.0.0.1", "x" * 10_000):
@@ -1589,10 +1591,11 @@ def test_bloc_d_adresse():
 
 
 def test_limites_par_adresse_comptent_un_bloc_ipv6(reglages_publics):
-    """Un abonné IPv6 reçoit au moins un /64 et y change d'adresse à volonté : les limites par adresse (sessions
-    et messages) le comptent comme une seule adresse. Deux /64 différents restent deux adresses ; IPv4 inchangé."""
-    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:b:ffff:ffff:ffff:fffe", "2001:DB8:A:B:0:0:0:9"]
-    autre_bloc = "2001:db8:a:c::1"
+    """Un abonné IPv6 reçoit souvent un /56 entier et y change d'adresse, et de /64, à volonté : les limites par
+    adresse (sessions et messages) le comptent comme une seule adresse (D-77). Deux /56 différents restent deux
+    adresses ; IPv4 inchangé."""
+    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:ff:ffff:ffff:ffff:fffe", "2001:DB8:A:C:0:0:0:9"]
+    autre_bloc = "2001:db8:a:100::1"
     with fabriquer(reglages_publics, sessions_par_adresse=2) as c:
         assert [essayer(c, adresse) for adresse in meme_bloc] == [303, 303, 429]
         assert essayer(c, autre_bloc) == 303

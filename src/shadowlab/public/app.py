@@ -134,9 +134,12 @@ class Limites:
 
 
 def bloc_d_adresse(adresse: str) -> str:
-    """Ce que comptent les limites par adresse. Une adresse IPv6 compte pour son bloc /64 : un abonné en reçoit au
-    moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6 (`::ffff:a.b.c.d`),
-    reste elle-même ; une valeur qui n'est pas une adresse reste telle quelle."""
+    """Ce que comptent les limites par adresse. Une adresse IPv6 compte pour son bloc /56 : un abonné reçoit souvent
+    un /56 entier (256 blocs /64 ; RIPE-690 conseille au moins un /56 pour un particulier) et peut y changer
+    d'adresse, et de /64, à volonté ; compter par /64 lui donnait jusqu'à 256 fois la limite (D-77, /64 avant). Prix
+    accepté : des abonnés d'un opérateur qui ne délègue qu'un /64 par client, voisins dans un même /56, comptent
+    ensemble. Une adresse IPv4, même écrite en IPv6 (`::ffff:a.b.c.d`), reste elle-même ; une valeur qui n'est pas
+    une adresse reste telle quelle."""
     try:
         ip = ipaddress.ip_address(adresse)
     except ValueError:
@@ -145,14 +148,14 @@ def bloc_d_adresse(adresse: str) -> str:
         return adresse
     if ip.ipv4_mapped is not None:
         return str(ip.ipv4_mapped)
-    return f"{ipaddress.IPv6Address(int(ip) >> 64 << 64)}/64"  # par l'entier : sans la zone (%eth0) éventuelle
+    return f"{ipaddress.IPv6Address(int(ip) >> 72 << 72)}/56"  # par l'entier : sans la zone (%eth0) éventuelle
 
 
 class Limiteur:
     """Actions par adresse (ouvertures de session, messages) sur une fenêtre glissante, une heure par défaut.
 
     L'adresse n'est jamais écrite : elle n'existe qu'en mémoire, sous forme d'empreinte salée par un sel tiré
-    au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /64 (`bloc_d_adresse`).
+    au démarrage, et disparaît au redémarrage. Une adresse IPv6 compte pour son /56 (`bloc_d_adresse`).
 
     Un balayage (`balayer`), au plus une fois par minute, retire toute empreinte dont la dernière action est sortie
     de la fenêtre. Il a lieu à chaque appel et à chaque requête reçue par l'application (`preparer`) : une empreinte
