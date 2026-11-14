@@ -951,6 +951,20 @@ a.auteur-nom:hover {
   color: var(--encre-2);
   font: italic 400 1rem/1.4 var(--serif);
 }
+/* La recherche garde un auteur ou une étiquette mais aucune vignette : la mosaïque vide le dit. Rien sans
+   recherche, et rien quand « Aucun résultat » s'affiche déjà (social.js ne fait que basculer `hidden`). */
+.mosaique-vide {
+  display: none;
+  padding: 28px 0 8px;
+  color: var(--encre-2);
+  font: italic 400 1rem/1.4 var(--serif);
+}
+.explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden]))) .mosaique-vide {
+  display: block;
+}
+.explorer:has([data-recherche-vide]:not([hidden])) .mosaique-vide {
+  display: none;
+}
 .listes {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

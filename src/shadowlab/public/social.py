@@ -126,6 +126,12 @@ ETIQUETTES: dict[str, Texte] = {
     "ciel": ("ciel", "sky"),
     "objets": ("objets", "objects"),
     "paysage": ("paysage", "landscape"),
+    # Sujets du manifeste qui ne passent pas par SUJETS (leur étiquette garde le nom du sujet).
+    "fleurs": ("fleurs", "flowers"),
+    "lacs": ("lacs", "lakes"),
+    "routes": ("routes", "roads"),
+    "sauvages": ("faune sauvage", "wildlife"),
+    "domestiques": ("animaux domestiques", "pets"),
     "lumiere": ("lumière", "light"),
     "matin": ("matin", "morning"),
     "soir": ("soir", "evening"),
@@ -269,6 +275,7 @@ T: dict[str, Texte] = {
     "rechercher": ("Rechercher un auteur ou une étiquette sur cette page", "Search this page for an author or a tag"),
     "exemple_recherche": ("mer, renard…", "sea, fox…"),
     "aucun_resultat": ("Aucun résultat sur cette page.", "No results on this page."),
+    "aucune_photo": ("Aucune photo de cette page ne correspond.", "No photo on this page matches."),
     "auteurs": ("Auteurs", "Authors"),
     "etiquettes": ("Étiquettes", "Tags"),
     "pied": (
@@ -284,9 +291,10 @@ T: dict[str, Texte] = {
     "ma_session": ("Ma session", "My session"),
     "terminer": ("Terminer ma session", "End my session"),
     "sans_participer": (
-        "Site fictif. Vous visitez sans participer : rien n'est enregistré, hors le journal technique des erreurs décrit sur la page d'information.",
-        "Fictional site. You are browsing without taking part: nothing is recorded, apart from the technical error log described on the information page.",
+        "Site fictif. Vous visitez sans participer : rien n'est relevé sur vous, hors le journal technique des erreurs décrit dans {notice}.",
+        "Fictional site. You are browsing without taking part: nothing is collected about you, apart from the technical error log described in {notice}.",
     ),
+    "la_notice": ("la notice", "the notice"),
     "participer": ("Participer à la recherche", "Take part in the study"),
     "autre_site": ("Autre site : {nom}", "Other site: {nom}"),
     # Dessin et crédits (14/11/2026).
@@ -925,8 +933,9 @@ def bandeau(langue: str, csrf: str | None) -> str:
 <button class="bouton-plein" type="submit">{_ui("terminer", langue)}</button>
 </form>{autre}</div>
 </div></aside>"""
+    notice = f'<a href="/{"en" if langue == "en" else "fr"}/information">{_ui("la_notice", langue)}</a>'
     return f"""<aside class="session-publique" aria-label="{_ui("recherche", langue)}"><div class="conteneur">
-<p>{_ui("sans_participer", langue)}</p>
+<p>{escape(_t(T["sans_participer"], langue)).format(notice=notice)}</p>
 <div class="actions"><a href="/">{_ui("participer", langue)}</a>{autre}</div>
 </div></aside>"""
 
@@ -1060,6 +1069,7 @@ def page_explorer(jeton: str, u: Univers, page: int, langue: str, habillage: Hab
 </div>
 <div class="explorer-mosaique">
 {_grille(u, morceau, langue, cherchable=True, pleine_largeur=True)}
+<p class="mosaique-vide">{_ui("aucune_photo", langue)}</p>
 {_suite("/lab/social/explorer", page, total, langue)}
 </div>
 </div>"""

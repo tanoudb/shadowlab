@@ -67,7 +67,7 @@ PREFIXES_PERMIS = (
     "/public/static/social.js",
     "/lab/static/observateur.js",
 )
-CHEMINS_PERMIS = {"/", "/session", "/session/terminer", "/contact"}
+CHEMINS_PERMIS = {"/", "/session", "/session/terminer", "/contact", "/fr/information", "/en/information"}
 MARQUES = (
     "instagram",
     "facebook",
@@ -792,6 +792,71 @@ def test_pages_traduites(client):
     assert "Voir plus" in fr and "Voir plus" not in en
     assert "See more" in en and "See more" not in fr
     assert '<html lang="fr">' in client.get("/lab/social/fil").text, "français par défaut"
+
+
+BANDEAU_HORS_SESSION = {
+    "fr": ("rien n'est relevé sur vous", "hors le journal technique des erreurs décrit dans la notice", "la notice"),
+    "en": (
+        "nothing is collected about you",
+        "apart from the technical error log described in the notice",
+        "the notice",
+    ),
+}
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+def test_bandeau_hors_session_renvoie_a_la_notice(client, langue):
+    """Hors session, le bandeau dit « rien n'est relevé sur vous » et renvoie à la notice dans la langue de la page
+    (plus de « page d'information » ni de « rien n'est enregistré »)."""
+    html = client.get("/lab/social/fil", headers={"Accept-Language": LANGUES[langue]}).text
+    bandeau = Selector(html).css("aside.session-publique")
+    texte = " ".join(" ".join(bandeau.css("p").xpath(".//text()").getall()).split())
+    rien, journal, lien = BANDEAU_HORS_SESSION[langue]
+    assert rien in texte and journal in texte, texte
+    assert bandeau.css(f'p a[href="/{langue}/information"]::text').getall() == [lien]
+    for ancien in ("page d'information", "information page", "rien n'est enregistré", "nothing is recorded"):
+        assert ancien not in texte, ancien
+
+
+def test_chaque_sujet_du_manifeste_a_ses_deux_libelles():
+    """Aucune étiquette tirée d'un sujet du manifeste ne retombe sur le nom brut du sujet (« fleurs » en anglais)."""
+    for sujet in sorted({p.sujet for p in social.charger_photos(social.DOSSIER_PHOTOS)}):
+        etiquette = social.etiquette_du_sujet(sujet)
+        assert etiquette in social.ETIQUETTES, f"{sujet} : pas de libellé"
+        francais, anglais = social.ETIQUETTES[etiquette]
+        assert francais.strip() and anglais.strip(), sujet
+    for etiquette, anglais in (
+        ("fleurs", "flowers"),
+        ("lacs", "lakes"),
+        ("routes", "roads"),
+        ("sauvages", "wildlife"),
+        ("domestiques", "pets"),
+    ):
+        assert social.ETIQUETTES[etiquette][1] == anglais, etiquette
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+def test_etiquettes_affichees_dans_la_langue_de_la_page(client, langue):
+    rang = 1 if langue == "en" else 0
+    attendus = {libelles[rang] for libelles in social.ETIQUETTES.values()}
+    for chemin, html in parcourir(client, langue).items():
+        for nom in Selector(html).css("a.etiquette").xpath("normalize-space(string())").getall():
+            assert nom in attendus, f"{chemin} : « {nom} » n'est pas un libellé {langue}"
+
+
+@pytest.mark.parametrize("langue", list(LANGUES))
+def test_explorer_dit_quand_aucune_photo_de_la_page_ne_correspond(client, langue):
+    """Une recherche qui garde un auteur ou une étiquette mais aucune vignette : la mosaïque vide a son message.
+    Sans JavaScript de plus : le message est dans la page, la feuille de style ne l'affiche que dans ce cas."""
+    html = client.get("/lab/social/explorer", headers={"Accept-Language": LANGUES[langue]}).text
+    message = Selector(html).css(".explorer-mosaique > p.mosaique-vide::text").getall()
+    assert message == [
+        "Aucune photo de cette page ne correspond." if langue == "fr" else "No photo on this page matches."
+    ]
+    css = SOCIAL_CSS.read_text(encoding="utf-8")
+    assert re.search(r"\.mosaique-vide \{\s*display: none;", css), "caché sans recherche"
+    assert ".explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden]))) .mosaique-vide" in css
+    assert ".explorer:has([data-recherche-vide]:not([hidden])) .mosaique-vide" in css, "pas avec « Aucun résultat »"
 
 
 @pytest.mark.parametrize(
