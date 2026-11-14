@@ -1,13 +1,14 @@
 """Site d'étude « Humain ou robot ? » : le fond de la nouvelle application publique (cadrage du 13/11/2026, v2).
 
 Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md` (« Règles », « Langue », « Textes de l'accueil »).
-Étape 1 : deux langues sans cookie de plus. Étape 2 : l'accueil de l'étude et la notice.
+Étape 1 : deux langues sans cookie de plus. Étape 2 : l'accueil de l'étude et la notice. Étape 3 : la fréquentation.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from html import escape
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ from test_public import (
     cles_collectees,
     fabriquer,
     ouvrir,
+    vieillir,
 )
 
 from shadowlab.config import ReglagesPublics
@@ -561,4 +563,210 @@ def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
 def test_version_du_texte_d_information_changee():
     from shadowlab.public.pages import VERSION_INFORMATION
 
-    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1")
+    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2")
+
+
+# === Étape 3 : la fréquentation, un compte par jour ===================================================
+
+COLONNES_FREQUENTATION = ["jour", "accueil", "commencees", "terminees"]
+COMPTEUR = {
+    "fr": {
+        0: "0 session enregistrée à ce jour",
+        1: "1 session enregistrée à ce jour",
+        2: "2 sessions enregistrées à ce jour",
+    },
+    "en": {0: "0 sessions recorded so far", 1: "1 session recorded so far", 2: "2 sessions recorded so far"},
+}
+# Ce que la notice dit de la fréquentation, dans les deux langues.
+FREQUENTATION = {
+    "fr": (
+        "l'application tient un compte par jour : le nombre de chargements de la page d'accueil, de sessions "
+        "commencées et de sessions terminées",
+        "ni adresse IP, ni identifiant, ni navigateur, ni heure",
+        "sans limite de durée",
+    ),
+    "en": (
+        "the application keeps one count per day: the number of home page loads, of sessions started and of "
+        "sessions ended",
+        "no IP address, no identifier, no browser, no time of day",
+        "with no time limit",
+    ),
+}
+# Phrases devenues fausses : une visite sans participer laisse le compte du jour.
+PHRASES_RETIREES = {
+    "fr": ("dans ce cas, rien n'est relevé.", "ni mesure d'audience,"),
+    "en": ("in that case, nothing is collected.", "no audience measurement,"),
+}
+
+
+def aujourd_hui() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+def frequentation(reglages: ReglagesPublics) -> list[tuple]:
+    cx = ouvrir(reglages)
+    try:
+        return [tuple(ligne) for ligne in cx.execute("SELECT * FROM frequentation ORDER BY jour")]
+    finally:
+        cx.close()
+
+
+def terminer_session(client: TestClient):
+    champs = champs_du_formulaire(client.get("/session").text, "/session/terminer")
+    r = client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE})
+    assert r.status_code == 200
+    return r
+
+
+def test_table_de_frequentation_trois_nombres_par_jour(client, reglages_publics):
+    client.get("/")
+    cx = ouvrir(reglages_publics)
+    try:
+        colonnes = [c[1] for c in cx.execute("PRAGMA table_info(frequentation)")]
+    finally:
+        cx.close()
+    assert colonnes == COLONNES_FREQUENTATION, "ni adresse, ni identifiant, ni navigateur, ni heure"
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 1, 0, 0)]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", frequentation(reglages_publics)[0][0]), "le jour, jamais l'heure"
+
+
+def test_comptes_du_jour(client, reglages_publics):
+    for chemin in ("/", "/fr", "/en", "/"):
+        assert client.get(chemin).status_code == 200
+    for chemin in ("/fr/information", "/information", "/lab/social/fil", "/lab/vitrine", "/session", "/contact"):
+        assert client.get(chemin).status_code == 200, chemin
+    assert client.head("/").status_code in (200, 405), "une requête HEAD ne compte pas"
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 4, 0, 0)], "seuls les chargements de l'accueil"
+    assert commencer_depuis(client, "fr").status_code == 303  # charge aussi l'accueil
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 5, 1, 0)]
+    double = client.post(
+        "/session/commencer",
+        data={**champs_du_formulaire(client.get("/session").text, "/session/terminer"), "consentement": "oui"},
+        headers={"Origin": ORIGINE},
+        follow_redirects=False,
+    )
+    assert double.status_code == 303
+    assert frequentation(reglages_publics)[0][2] == 1, "un double clic n'ouvre rien, donc ne compte rien"
+    terminer_session(client)
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 5, 1, 1)]
+    champs = champs_du_formulaire(client.get("/session").text, "/session/supprimer")
+    sans_session = client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}, follow_redirects=False)
+    assert sans_session.status_code == 303, "plus de session en cours : rien à terminer"
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 5, 1, 1)]
+
+
+def test_visite_hors_session_n_ecrit_que_le_compte_du_jour(client, reglages_publics):
+    for chemin in ("/", "/en", "/fr/information", "/lab/social/fil", "/lab/vitrine", "/lab/vitrine/annonces"):
+        assert client.get(chemin).status_code == 200, chemin
+    cx = ouvrir(reglages_publics)
+    try:
+        tables = [t for (t,) in cx.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+        remplies = {t for t in tables if t != "frequentation" and cx.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]}
+    finally:
+        cx.close()
+    assert remplies == set(), remplies
+    assert frequentation(reglages_publics) == [(aujourd_hui(), 2, 0, 0)]
+
+
+def test_comptes_survivent_a_la_purge_et_a_la_suppression(client, reglages_publics):
+    from shadowlab.public import purger
+
+    assert commencer_depuis(client, "fr").status_code == 303
+    terminer_session(client)
+    client.cookies.clear()
+    assert commencer_depuis(client, "en", adresse="198.51.100.9").status_code == 303
+    avant = frequentation(reglages_publics)
+    assert avant == [(aujourd_hui(), 2, 2, 1)]
+    champs = champs_du_formulaire(client.get("/session").text, "/session/supprimer")
+    assert client.post("/session/supprimer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
+    cx = ouvrir(reglages_publics)
+    try:
+        (jeton,) = cx.execute("SELECT session_token FROM runs").fetchone()
+        vieillir(cx, jeton, 120)
+        assert purger(cx, 90) == 1
+        assert cx.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+    finally:
+        cx.close()
+    assert frequentation(reglages_publics) == avant
+
+
+def test_base_pleine_ne_compte_plus(reglages_publics):
+    with fabriquer(reglages_publics, taille_max_base=1) as c:
+        assert c.get("/").status_code == 200, "la page reste servie"
+    assert frequentation(reglages_publics) == []
+
+
+def test_compte_perdu_si_la_base_tombe_mais_accueil_servi(client, monkeypatch):
+    import sqlite3
+
+    from shadowlab.public import donnees
+
+    def panne(*_args, **_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(donnees, "compter", panne)
+    monkeypatch.setattr(donnees, "sessions_terminees", panne)
+    r = client.get("/fr")
+    assert r.status_code == 200 and "locked" not in r.text
+    assert not Selector(r.text).css(".accueil-compteur"), "sans compte lisible, pas de compteur"
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_affiche_le_total_des_sessions_terminees(client, reglages_publics, langue):
+    assert texte_de(client.get(f"/{langue}").text, ".accueil-compteur") == COMPTEUR[langue][0]
+    for n, adresse in enumerate(("192.0.2.10", "192.0.2.11"), start=1):
+        client.cookies.clear()
+        assert commencer_depuis(client, langue, adresse=adresse).status_code == 303
+        terminer_session(client)
+        assert texte_de(client.get(f"/{langue}").text, ".accueil-compteur") == COMPTEUR[langue][n]
+    client.cookies.clear()
+    assert commencer_depuis(client, langue, adresse="192.0.2.12").status_code == 303
+    assert texte_de(client.get(f"/{langue}").text, ".accueil-compteur") == COMPTEUR[langue][2], "terminées seulement"
+
+
+def test_total_affiche_sur_tous_les_jours(client, reglages_publics):
+    client.get("/")
+    cx = ouvrir(reglages_publics)
+    try:
+        veille = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
+        cx.execute("INSERT INTO frequentation (jour, accueil, commencees, terminees) VALUES (?, 40, 9, 7)", (veille,))
+    finally:
+        cx.close()
+    assert texte_de(client.get("/fr").text, ".accueil-compteur") == "7 sessions enregistrées à ce jour"
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_notice_dit_exactement_le_compte_par_jour(client, langue):
+    texte = texte_de(notice(client, langue))
+    for phrase in FREQUENTATION[langue]:
+        assert phrase in texte, phrase
+    for phrase in PHRASES_RETIREES[langue]:
+        assert phrase not in texte, phrase
+    sans_session = texte_de(client.get(f"/{langue}").text, ".releve-sans-session")
+    assert ("un nombre par jour" if langue == "fr" else "one number per day") in sans_session
+
+
+def test_commande_frequentation(monkeypatch, reglages_publics, capsys):
+    from shadowlab import cli
+
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_BASE", str(reglages_publics.base_donnees))
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_HOTES", HOTE)
+    monkeypatch.setenv("SHADOWLAB_PUBLIC_CONTACT", CONTACT)
+    assert cli.main(["public", "frequentation"]) == 0
+    assert "Aucune visite" in capsys.readouterr().out
+    with fabriquer(reglages_publics) as c:
+        assert commencer_depuis(c, "fr").status_code == 303
+        terminer_session(c)
+        c.get("/en")
+    cx = ouvrir(reglages_publics)
+    try:
+        cx.execute("INSERT INTO frequentation (jour, accueil, commencees, terminees) VALUES ('2026-11-01', 30, 4, 3)")
+    finally:
+        cx.close()
+    assert cli.main(["public", "frequentation"]) == 0
+    lignes = capsys.readouterr().out.splitlines()
+    par_jour = {ligne.split()[0]: ligne.split()[1:] for ligne in lignes if ligne.split()}
+    assert par_jour["2026-11-01"] == ["30", "4", "3"]
+    assert par_jour[aujourd_hui()] == ["2", "1", "1"]
+    assert par_jour["total"] == ["32", "5", "4"]
+    assert [ligne.split()[0] for ligne in lignes if re.match(r"\d{4}-", ligne)] == ["2026-11-01", aujourd_hui()]
