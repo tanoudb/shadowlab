@@ -1103,22 +1103,12 @@ def test_rejeu_lit_une_session_du_reseau_social(sessions_rejouees):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Défaut connu, hors du périmètre de ce squelette (rejeu.py et detection.py ne se touchent pas ici) : "
-        "`Observations.documents` prend tout chemin `/lab/` hors CHEMINS_TECHNIQUES, donc chaque photo "
-        "`/lab/social/photos/…` (comme `/lab/vitrine/photos/…`) compte comme une page pour `rythme_soutenu` et "
-        "`navigation_lineaire`, n'est pas une ressource (`ressources` ne lit que `/lab/static`), et "
-        "`gardien.protegee` en fait un moment de contrôle de page au rejeu."
-    ),
-)
 def test_rejeu_prend_les_photos_pour_des_ressources(sessions_rejouees):
     sociale, _ = sessions_rejouees
     observations = Observations(http=sociale["http"], js=sociale["js"])
     photos = {r for r in sociale["ressources"] if "/photos/" in r}
     assert not photos & {o["path"] for o in observations.documents}, "une photo n'est pas une page"
-    assert photos <= {o["path"] for o in observations.ressources}, "une photo est une ressource"
+    assert photos <= {o["path"] for o in observations.ressources_de_page}, "une photo est une ressource de page"
     assert not any(gardien.protegee(p, "GET") for p in photos), "une photo n'est pas un moment de contrôle"
 
 
@@ -1148,16 +1138,6 @@ def test_rejeu_sans_photos_la_meme_personne_passe_partout(client, tmp_path):
     assert not any(arretee for arretee, _ in verdicts(session["resultat"]).values())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Défaut connu, mesuré le 13/11 et hors du périmètre de ce squelette : aux niveaux 06 et 07, la session est "
-        "arrêtée à la première empreinte par le score composite, signal `rythme_soutenu` seul (0,5 ≥ seuil 0,5 au "
-        "06 et 0,3 au 07). Les photos comptant comme des pages (`Observations.documents`), la page et ses photos "
-        "chargées dans la même seconde font plus de 4 « pages » par seconde. Deux photos par page suffisent ; une "
-        "seule, ou aucune, et la session passe partout. Le témoin vitrine (photos SVG) est arrêté de la même façon."
-    ),
-)
 def test_rejeu_aucun_niveau_n_arrete_la_session_sociale(sessions_rejouees):
     sociale, _ = sessions_rejouees
     arrets = {code: v for code, v in verdicts(sociale["resultat"]).items() if v[0]}
