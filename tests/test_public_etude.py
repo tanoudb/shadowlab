@@ -528,7 +528,8 @@ def test_notice_a_son_adresse(client, langue):
     sel = Selector(html)
     assert langue_html(html) == langue
     assert not sel.css('form[action="/session/commencer"]'), "l'accord se donne sur l'accueil"
-    assert sel.css(f'.notice-retour a[href="/{langue}"]'), "retour à l'accueil pour participer"
+    assert sel.css(f'.notice-retour a[href="/{langue}#participer"]'), "retour à l'accueil, droit sur l'accord"
+    assert Selector(client.get(f"/{langue}").text).css('form.accord#participer[action="/session/commencer"]')
     assert sel.css(f'.autre-langue a[href="/{AUTRE[langue]}/information"]')
     assert set(CLASSES_NOTICE) <= classes_de(html), set(CLASSES_NOTICE) - classes_de(html)
     assert sel.css('link[rel="stylesheet"]::attr(href)').getall() == ["/public/static/public.css"]
@@ -907,3 +908,73 @@ def test_notice_decrit_les_sous_champs_de_navigateur_et_apis():
         for cle, mots in par_cle.items():
             for mot in mots:
                 assert mot in descriptions[cle], (langue, cle, mot)
+
+
+# === Dessin (14/11/2026) : photos de l'accueil, sommaire de la notice ================================
+
+
+def references_chargees(html: str) -> list[str]:
+    """Ce qu'un navigateur charge pour afficher la page : images (src et srcset), feuilles, scripts."""
+    sel = Selector(html)
+    refs = sel.css("img::attr(src), link::attr(href), script::attr(src)").getall()
+    for jeu in sel.css("img::attr(srcset)").getall():
+        refs += [morceau.split()[0] for morceau in jeu.split(",")]
+    return refs
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_montre_de_vraies_photos_du_reseau_social(client, langue):
+    """Hors session : la mosaïque du haut (photos chargées tout de suite) et les vignettes de la carte du site
+    (chargées en différé), de vraies photos du manifeste, dimensions réelles et description dans la langue."""
+    from shadowlab.public import social
+    from shadowlab.public.pages import DESCRIPTIONS_PHOTOS, PHOTOS_VEDETTE, PLACES_MOSAIQUE
+
+    sel = Selector(client.get(f"/{langue}").text)
+    photos = {p.id: p for p in social.charger_photos(social.DOSSIER_PHOTOS)}
+    attendues = [i for _, i in PLACES_MOSAIQUE if i] + list(PHOTOS_VEDETTE)
+    images = sel.css("main img")
+    assert [img.attrib["src"] for img in images] == [f"/lab/social/photos/{i}-480.jpg" for i in attendues]
+    for img, ident in zip(images, attendues, strict=True):
+        assert (img.attrib["width"], img.attrib["height"]) == tuple(str(n) for n in photos[ident].dimensions(480))
+        assert img.attrib["alt"] == DESCRIPTIONS_PHOTOS[ident][1 if langue == "en" else 0] != ""
+        assert client.get(img.attrib["src"]).status_code == 200
+    haut, bas = sel.css(".accueil-mosaique img"), sel.css(".site-vedette img")
+    assert haut and all("loading" not in img.attrib for img in haut), "premier écran : chargées tout de suite"
+    assert bas and all(img.attrib.get("loading") == "lazy" for img in bas), "plus bas : chargées en différé"
+    for ref in references_chargees(sel.get()):
+        assert ref.startswith(("/lab/social/photos/", "/public/static/")), ref
+        assert client.get(ref).status_code == 200, ref
+
+
+def test_accueil_en_session_ne_charge_rien_sous_lab(client):
+    """Pendant une session, toute requête sous /lab/ est notée : l'accueil ne charge alors aucune photo (la notice ne
+    promet un relevé que sur les sites de démonstration). La mosaïque garde sa forme, en tesselles de couleur."""
+    assert commencer_depuis(client, "fr").status_code == 303
+    for chemin in ("/fr", "/en", "/"):
+        html = client.get(chemin).text
+        assert not [ref for ref in references_chargees(html) if ref.startswith("/lab/")], chemin
+        sel = Selector(html)
+        assert sel.css('.accueil-mosaique[aria-hidden="true"] .tesselle'), chemin
+        assert not sel.css("main img"), chemin
+
+
+def test_accueil_sans_les_photos_choisies(monkeypatch, tmp_path, reglages_publics):
+    """Un manifeste qui n'a pas les photos choisies (photos d'essai) : l'accueil se rend, sans image."""
+    from test_public_social import dossier_de_photos
+
+    from shadowlab.public import social
+
+    monkeypatch.setattr(social, "DOSSIER_PHOTOS", dossier_de_photos(tmp_path, 3))
+    with fabriquer(reglages_publics) as c:
+        r = c.get("/fr")
+    assert r.status_code == 200
+    assert not Selector(r.text).css("main img") and Selector(r.text).css(".accueil-mosaique .tesselle")
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_sommaire_de_la_notice_suit_ses_sections(client, langue):
+    sel = Selector(notice(client, langue))
+    sections = [(s.attrib["id"], texte_de(s.css("h2").get(), None)) for s in sel.css("main section.notice-section")]
+    liens = [(a.attrib["href"], texte_de(a.get(), None)) for a in sel.css("main nav.notice-sommaire ol a")]
+    assert len(sections) >= 9 and liens == [(f"#{ident}", titre) for ident, titre in sections]
+    assert sel.css(f'main nav.notice-sommaire .sommaire-retour a[href="/{langue}#participer"]'), "l'accord à un clic"

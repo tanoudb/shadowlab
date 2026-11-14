@@ -8,11 +8,16 @@ qu'elle couvre exactement ce que le script envoie. Aucune ressource extérieure,
 # ruff: noqa: E501  (gabarits HTML et textes : lignes longues voulues)
 from __future__ import annotations
 
+import re
+from functools import cache
 from html import escape
+from pathlib import Path
 
 from ..config import ReglagesPublics
 from ..site.vitrine import MARQUE
+from . import social as reseau_social
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
+from .social import EMBLEME
 from .social import MARQUE as MARQUE_SOCIAL
 from .textes import ERREURS, LANGUES, RESUME_RELEVE, T
 
@@ -230,6 +235,14 @@ def _t(langue: str, cle: str, **valeurs: object) -> str:
     return texte.format(**valeurs) if valeurs else texte
 
 
+def _insecable(texte: str) -> str:
+    """Espaces insécables de la typographie française, pour les titres : « Humain ou robot ? » ne laisse jamais son
+    point d'interrogation, ni un guillemet, seul en début de ligne."""
+    for avant, apres in (("« ", "«\u00a0"), (" »", "\u00a0»"), (" ?", "\u00a0?"), (" !", "\u00a0!"), (" :", "\u00a0:")):
+        texte = texte.replace(avant, apres)
+    return texte
+
+
 def texte(langue: str, cle: str, **valeurs: object) -> str:
     """Un texte de `textes.T` pour l'application (messages d'erreur d'un formulaire), sans balise."""
     return _t(langue, cle, **valeurs)
@@ -244,6 +257,148 @@ def _duree(secondes: int, langue: str) -> str:
 
 SOCIAL = "/lab/social/fil"  # le site vedette : « Commencer », « Reprendre la visite », « Revenir au site » y mènent
 NOM_LANGUE = {"fr": "Français", "en": "English"}
+
+# --- Dessin (14/11/2026) ---------------------------------------------------------------------------
+# De la même famille que Mosaïk Démo (static/social.css) : plâtre froid, lapis et or, titres en serif du système,
+# la tesselle comme seule audace. Tous les SVG de la page n'ont que des attributs de présentation (ni `style`, ni
+# adresse, ni `xmlns`) ; leurs couleurs viennent de public.css, qui suit le thème.
+
+# Marque de l'étude : une tesselle posée à la main (légèrement de travers) et une tesselle tracée à la règle.
+MARQUE_ETUDE = (
+    '<svg class="marque-etude" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" focusable="false">'
+    '<rect class="m-humain" x="2.5" y="8.5" width="13.5" height="13.5" rx="3" transform="rotate(-9 9.25 15.25)"/>'
+    '<rect class="m-robot" x="18.5" y="10" width="11" height="11" rx="1.2"/>'
+    "</svg>"
+)
+# Fragment de mosaïque de la page « Merci » : la session ajoute sa tesselle.
+FLEURON = (
+    '<svg class="fleuron" width="136" height="48" viewBox="0 0 136 48" aria-hidden="true" focusable="false">'
+    '<rect class="t-smalt" x="3" y="4" width="17" height="17" rx="3.5" transform="rotate(-5 11.5 12.5)"/>'
+    '<rect class="t-vert" x="24" y="3" width="16" height="16" rx="3.5"/>'
+    '<rect class="t-smalt" x="44" y="5" width="16" height="16" rx="3.5" transform="rotate(3 52 13)"/>'
+    '<rect class="t-grenat" x="64" y="3" width="17" height="17" rx="3.5"/>'
+    '<rect class="t-smalt" x="85" y="4" width="16" height="16" rx="3.5" transform="rotate(-4 93 12)"/>'
+    '<rect class="t-vert" x="105" y="2" width="17" height="17" rx="3.5" transform="rotate(6 113.5 10.5)"/>'
+    '<rect class="t-grenat" x="6" y="26" width="15" height="15" rx="3.5" transform="rotate(4 13.5 33.5)"/>'
+    '<rect class="t-smalt" x="25" y="24" width="17" height="17" rx="3.5"/>'
+    '<rect class="t-vert" x="46" y="26" width="15" height="15" rx="3.5" transform="rotate(-6 53.5 33.5)"/>'
+    '<rect class="t-or fleuron-nouvelle" x="64" y="23" width="19" height="19" rx="4" transform="rotate(9 73.5 32.5)"/>'
+    '<rect class="t-smalt" x="87" y="25" width="16" height="16" rx="3.5" transform="rotate(2 95 33)"/>'
+    '<rect class="t-grenat" x="107" y="24" width="16" height="16" rx="3.5" transform="rotate(-3 115 32)"/>'
+    "</svg>"
+)
+# Mosaïque de l'accueil : de vraies photos du réseau social (manifeste), posées comme des tesselles, et deux
+# tesselles de couleur. (place dans la mosaïque, identifiant de la photo ou None) ; la place donne la case.
+PLACES_MOSAIQUE: tuple[tuple[str, str | None], ...] = (
+    ("lac", "lacs-04"),
+    ("renard", "sauvages-06"),
+    ("or", None),
+    ("fleur", "fleurs-02"),
+    ("lapis", None),
+    ("brioche", "cuisine-01"),
+)
+# Grandes cases : le fichier de 1080 aussi (`srcset`), pour rester nettes sur un écran dense.
+TAILLES_GRANDES_CASES = {"lac": "(min-width: 1000px) 270px, 46vw", "renard": "(min-width: 1000px) 270px, 31vw"}
+# Vignettes de la carte du site de démonstration, plus bas dans la page : chargées en différé.
+PHOTOS_VEDETTE = ("sauvages-01", "mer-08", "domestiques-08", "ciel-04")
+# Textes du dessin, sans engagement envers les participants : description des photos (attribut `alt`) et titre du
+# sommaire de la notice.
+DESCRIPTIONS_PHOTOS: dict[str, tuple[str, str]] = {
+    "lacs-04": (
+        "Un sommet enneigé qui se reflète dans un lac de montagne",
+        "A snowy peak reflected in a mountain lake",
+    ),
+    "sauvages-06": ("Deux renardeaux qui jouent", "Two fox cubs playing"),
+    "fleurs-02": ("Un tournesol en pleine floraison", "A sunflower in full bloom"),
+    "cuisine-01": ("Des brioches à la cardamome dans une corbeille", "Cardamom buns in a basket"),
+    "sauvages-01": ("Une petite chouette aux yeux jaunes", "A small owl with yellow eyes"),
+    "mer-08": ("Un phare blanc au bord d'une falaise verte", "A white lighthouse on a green clifftop"),
+    "domestiques-08": ("Un chiot corgi debout sur ses pattes arrière", "A corgi puppy standing on its hind legs"),
+    "ciel-04": ("Une aurore rose et violette au-dessus des arbres", "Pink and purple northern lights above the trees"),
+}
+SOMMAIRE: dict[str, str] = {"fr": "Sommaire", "en": "Contents"}
+MARQUE_SOMMAIRE = "<!-- sommaire -->"
+RE_SECTION_NOTICE = re.compile(r'<section class="notice-section" id="([a-z0-9-]+)">\s*<h2>(.*?)</h2>', re.S)
+
+
+@cache
+def _photos_du_manifeste(dossier: Path) -> dict[str, reseau_social.Photo]:
+    """Photos du manifeste de `dossier`, par identifiant ; vide si le manifeste est illisible (l'accueil se passe
+    alors de photos plutôt que de tomber)."""
+    try:
+        return {p.id: p for p in reseau_social.charger_photos(dossier)}
+    except ValueError:
+        return {}
+
+
+def _image(photo: reseau_social.Photo, langue: str, classe: str, *, tailles: str | None, paresseuse: bool) -> str:
+    """Une photo du réseau social, servie sous /lab/social/photos/ : le fichier de 480 (avec celui de 1080 si
+    `tailles`), dimensions réelles du fichier (la place est réservée), description dans la langue de la page."""
+    largeur, hauteur = photo.dimensions(480)
+    attributs = f' width="{largeur}" height="{hauteur}"'
+    if tailles:
+        jeu = ", ".join(
+            f"/lab/social/photos/{escape(photo.fichier(t))} {photo.dimensions(t)[0]}w"
+            for t in sorted(reseau_social.TAILLES_PHOTO)
+        )
+        attributs += f' srcset="{jeu}" sizes="{tailles}"'
+    if paresseuse:
+        attributs += ' loading="lazy"'
+    francais, anglais = DESCRIPTIONS_PHOTOS.get(photo.id, ("", ""))
+    texte = anglais if langue == "en" else francais
+    return (
+        f'<img class="{classe}" src="/lab/social/photos/{escape(photo.fichier(480))}" alt="{escape(texte)}"'
+        f'{attributs} decoding="async">'
+    )
+
+
+def _mosaique(langue: str, avec_photos: bool) -> str:
+    """Mosaïque du haut de l'accueil. Sans photos (`avec_photos` faux, ou manifeste sans ces identifiants), les
+    mêmes cases en tesselles de couleur : pendant une session, l'accueil ne charge rien sous /lab/, où toute requête
+    serait notée alors que la notice ne promet un relevé que sur les sites de démonstration."""
+    photos = _photos_du_manifeste(reseau_social.DOSSIER_PHOTOS) if avec_photos else {}
+    tesselles, montrees = [], 0
+    for place, identifiant in PLACES_MOSAIQUE:
+        photo = photos.get(identifiant) if identifiant else None
+        if photo:
+            tesselles.append(
+                _image(
+                    photo,
+                    langue,
+                    f"tesselle tesselle-{place}",
+                    tailles=TAILLES_GRANDES_CASES.get(place),
+                    paresseuse=False,
+                )
+            )
+            montrees += 1
+        else:
+            vide = " tesselle-vide" if identifiant else ""
+            tesselles.append(f'<span class="tesselle tesselle-{place}{vide}" aria-hidden="true"></span>')
+    pose = f'<div class="tesselles">{"".join(tesselles)}</div>'
+    if not montrees:
+        return f'<div class="accueil-mosaique" aria-hidden="true">{pose}</div>'
+    legende = f'<figcaption class="mosaique-legende">{EMBLEME}<span>{escape(MARQUE_SOCIAL)}</span></figcaption>'
+    return f'<figure class="accueil-mosaique">{pose}{legende}</figure>'
+
+
+def _vignettes_vedette(langue: str) -> str:
+    photos = _photos_du_manifeste(reseau_social.DOSSIER_PHOTOS)
+    images = [
+        _image(photos[i], langue, "vedette-photo", tailles=None, paresseuse=True) for i in PHOTOS_VEDETTE if i in photos
+    ]
+    return f'\n<div class="vedette-photos">{"".join(images)}</div>' if images else ""
+
+
+def _sommaire(corps: str, langue: str) -> str:
+    """Sommaire de la notice : une entrée par section rendue, dans l'ordre, avec son identifiant et son titre ; sur un
+    grand écran, le retour à l'accord y reste en vue (sur un téléphone, `.notice-retour` suit la lecture)."""
+    langue = langue_sure(langue)
+    entrees = "".join(f'<li><a href="#{ident}">{titre}</a></li>' for ident, titre in RE_SECTION_NOTICE.findall(corps))
+    return f"""<nav class="notice-sommaire" aria-labelledby="titre-sommaire">
+<p class="sommaire-titre" id="titre-sommaire">{SOMMAIRE[langue]}</p>
+<ol>{entrees}</ol>
+<p class="sommaire-retour"><a href="/{langue}#participer">{_t(langue, "notice_retour")}</a></p>
+</nav>"""
 
 
 def _page(
@@ -287,13 +442,13 @@ def _page(
 </head>
 <body class="etude {classe}">
 <header class="etude-entete"><div class="conteneur">
-<a class="etude-marque" href="{accueil}">{marque}</a>
+<a class="etude-marque" href="{accueil}">{MARQUE_ETUDE}<span>{_insecable(marque)}</span></a>
 <nav class="etude-navigation" aria-label="{_t(langue, "nav_aria")}">{navigation}</nav>{lien_langue}
 </div></header>
 <main class="conteneur etude-principal">
 {corps}
 </main>
-<footer class="etude-pied"><div class="conteneur">{_t(langue, "pied")}</div></footer>
+<footer class="etude-pied"><div class="conteneur">{MARQUE_ETUDE}<p>{_t(langue, "pied")}</p></div></footer>
 </body>
 </html>"""
 
@@ -357,6 +512,14 @@ def accueil(
     notice_href = f"/{langue}/information"
     social = escape(MARQUE_SOCIAL)
     compteur = f'\n<p class="accueil-compteur">{_compteur(sessions, langue)}</p>' if sessions is not None else ""
+    # Appel du haut de page : mène à l'accord (la case et la notice restent à côté du bouton « Commencer ») ;
+    # pendant une session, reprend la visite.
+    if en_cours:
+        appel = f'<a class="bouton-principal" href="{SOCIAL}">{_t(langue, "reprendre")}</a>'
+    else:
+        appel = f'<a class="bouton-principal" href="#participer">{_t(langue, "participer")}</a>'
+    vignettes = "" if en_cours else _vignettes_vedette(langue)
+    nom_social, _, suffixe_social = MARQUE_SOCIAL.partition(" ")
     if en_cours:
         accord = f"""<div class="accord accord-en-cours" id="participer">
 <p><strong>{_t(langue, "deja_en_cours")}</strong></p>
@@ -384,9 +547,14 @@ def accueil(
 </form>"""
     corps = f"""<article class="accueil">
 <header class="accueil-entete">
-<h1 class="accueil-titre">{_t(langue, "accueil_titre")}</h1>
+<div class="accueil-texte">
+<h1 class="accueil-titre">{_insecable(_t(langue, "accueil_titre"))}</h1>
 <p class="accueil-sous-titre">{_t(langue, "accueil_sous_titre")}</p>
-<p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>{compteur}
+<p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>
+<div class="accueil-appel">{appel}{compteur}
+</div>
+</div>
+{_mosaique(langue, avec_photos=not en_cours)}
 </header>
 
 <section class="accueil-etapes" aria-labelledby="titre-etapes">
@@ -413,8 +581,8 @@ def accueil(
 <section class="accueil-sites" aria-labelledby="titre-sites">
 <h2 id="titre-sites">{_t(langue, "h_sites")}</h2>
 <div class="site-vedette">
-<h3 class="site-vedette-nom">{social}</h3>
-<p>{_t(langue, "vedette")}</p>
+<h3 class="site-vedette-nom">{EMBLEME}<span class="vedette-nom">{escape(nom_social)}</span> <span class="vedette-demo">{escape(suffixe_social)}</span></h3>
+<p>{_t(langue, "vedette")}</p>{vignettes}
 </div>
 <p class="site-second">{_t(langue, "site_second")}</p>
 <p class="fictif">{_t(langue, "fictif")}</p>
@@ -440,8 +608,9 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
     relevees, comportement = RELEVES[langue]
     social, habitat = escape(MARQUE_SOCIAL), escape(MARQUE)
     corps = f"""<article class="notice">
-<h1>{_t(langue, "notice_h1")}</h1>
+<h1>{_insecable(_t(langue, "notice_h1"))}</h1>
 <p class="notice-chapeau">{_t(langue, "notice_chapeau", social=social, vitrine=habitat)}</p>
+{MARQUE_SOMMAIRE}
 
 <section class="notice-section" id="deroulement">
 <h2>{_t(langue, "h_deroulement")}</h2>
@@ -523,8 +692,9 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
 </ul>
 </section>
 
-<p class="notice-retour"><a class="bouton-principal" href="/{langue}">{_t(langue, "notice_retour")}</a></p>
+<p class="notice-retour"><a class="bouton-principal" href="/{langue}#participer">{_t(langue, "notice_retour")}</a></p>
 </article>"""
+    corps = corps.replace(MARQUE_SOMMAIRE, _sommaire(corps, langue), 1)
     return _page(_t(langue, "titre_notice"), corps, langue, classe="page-notice", bascule="/information")
 
 
@@ -546,10 +716,11 @@ def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, en_cou
 
 def merci(jeton: str, suppression: str, csrf: str, jours: int, langue: str) -> str:
     corps = f"""<article class="message">
+<div class="merci-fleuron">{FLEURON}</div>
 <h1>{_t(langue, "merci_h1")}</h1>
 <p class="chapeau">{_t(langue, "merci_chapeau")}</p>
 {_encadre_session(jeton, suppression, csrf, jours, False, langue)}
-<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
+<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
     return _page(_t(langue, "titre_merci"), corps, langue, classe="page-merci")
 
@@ -558,7 +729,7 @@ def ma_session(jeton: str, suppression: str, csrf: str, jours: int, en_cours: bo
     corps = f"""<article class="message">
 <h1>{_t(langue, "titre_ma_session")}</h1>
 {_encadre_session(jeton, suppression, csrf, jours, en_cours, langue)}
-<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
+<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
     return _page(_t(langue, "titre_ma_session"), corps, langue, classe="page-session")
 
@@ -596,7 +767,7 @@ def contact_envoye(langue: str) -> str:
     corps = f"""<article class="message">
 <h1>{_t(langue, "titre_envoye")}</h1>
 <p>{_t(langue, "envoye")}</p>
-<p><a href="/">{_t(langue, "revenir_information")}</a></p>
+<p class="message-suite"><a class="bouton-secondaire" href="/">{_t(langue, "revenir_information")}</a></p>
 </article>"""
     return _page(_t(langue, "titre_envoye"), corps, langue, classe="page-contact", contact=True)
 
@@ -605,7 +776,7 @@ def supprimee(existait: bool, langue: str) -> str:
     corps = f"""<article class="message">
 <h1>{_t(langue, "titre_supprimee")}</h1>
 <p>{_t(langue, "supprimee" if existait else "deja_effacee")}</p>
-<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
+<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
     return _page(_t(langue, "titre_supprimee"), corps, langue, classe="page-session")
 
@@ -616,6 +787,6 @@ def erreur(cle: str, langue: str, *, contact: bool = False) -> str:
     corps = f"""<article class="message">
 <h1>{escape(titre)}</h1>
 <p>{escape(message)}</p>
-<p><a href="/">{_t(langue, "revenir_information")}</a></p>
+<p class="message-suite"><a class="bouton-secondaire" href="/">{_t(langue, "revenir_information")}</a></p>
 </article>"""
     return _page(titre, corps, langue, classe="page-erreur", contact=contact)
