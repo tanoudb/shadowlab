@@ -444,24 +444,41 @@ def test_accueil_de_l_etude(client, langue):
     assert sel.css('link[rel="stylesheet"]::attr(href)').getall() == ["/public/static/public.css"]
 
 
+# Texte « Franchise » du cadrage (« Textes de l'accueil »), mot pour mot, depuis le relevé enrichi (D-76).
+FRANCHISE = {
+    "fr": "Pendant la session, nous relevons les caractéristiques de votre navigateur et votre façon de naviguer : "
+    "mouvements de la souris, défilement, rythme des clics et des touches. Jamais ce que vous tapez, ni votre adresse "
+    "IP. Vous pouvez tout supprimer d'un clic.",
+    "en": "During the session we record your browser's characteristics and how you browse: mouse movements, "
+    "scrolling, the rhythm of your clicks and keystrokes. Never what you type, never your IP address. You can delete "
+    "everything with one click.",
+}
+
+
 @pytest.mark.parametrize("langue", ["fr", "en"])
 def test_accueil_resume_du_releve_exact_et_a_un_seul_endroit(client, langue):
-    """Le résumé dit ce que relève AUJOURD'HUI observateur.js : des nombres et des délais. Pas la position de la
-    souris, pas ce qui est tapé. La phrase du cadrage sur les « mouvements de la souris » attend le second script."""
+    """Le résumé dit ce que relèvent observateur.js et releve.js (D-76) : le texte « Franchise » du cadrage. Il ne
+    promet plus « ni la position de la souris » ; il garde : jamais ce que vous tapez, ni votre adresse IP, ni votre
+    localisation, rien qui demande une autorisation."""
     from shadowlab.public.pages import RESUME_RELEVE
 
     html = client.get(f"/{langue}").text
     resume = RESUME_RELEVE[langue]
     assert set(RESUME_RELEVE) == {"fr", "en"} and set(resume) == set(RESUME_RELEVE["fr"])
+    assert resume["franchise"] == FRANCHISE[langue]
     assert texte_de(html, ".releve-franchise") == resume["franchise"]
     assert [texte_de(li, None) for li in Selector(html).css(".releve-oui li").getall()] == resume["oui"]
     assert [texte_de(li, None) for li in Selector(html).css(".releve-non li").getall()] == resume["non"]
     annonce = " ".join([resume["franchise"], *resume["oui"]]).lower()
-    for futur in ("mouvements de la souris", "mouse movements", "trajectoire", "trajectory", "rythme des clics"):
-        assert futur not in annonce, futur
+    assert ("mouvements de la souris" if langue == "fr" else "mouse movements") in annonce
     jamais = " ".join(resume["non"]).lower()
-    assert "position" in jamais
-    assert ("ce que vous tapez" if langue == "fr" else "what you type") in jamais
+    assert "position" not in jamais, "la position de la souris est relevée"
+    attendus = {
+        "fr": ("ce que vous tapez", "les touches", "adresse ip", "localisation", "autorisation"),
+        "en": ("what you type", "the keys", "ip address", "location", "permission"),
+    }
+    for mot in attendus[langue]:
+        assert mot in jamais, mot
 
 
 @pytest.mark.parametrize("langue", ["fr", "en"])
@@ -572,7 +589,8 @@ def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
 def test_version_du_texte_d_information_changee():
     from shadowlab.public.pages import VERSION_INFORMATION
 
-    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3")
+    anciennes = ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3", "2026-11-14.4")
+    assert VERSION_INFORMATION not in anciennes, "le relevé enrichi (D-76) change le texte accepté"
 
 
 # === Étape 3 : la fréquentation, un compte par jour ===================================================
@@ -857,14 +875,21 @@ def test_plafond_de_la_base_en_sessions_au_pire():
     """Calcul (pas une mesure) repris dans docs/site-public.md : combien de sessions au volume maximal tient la base.
 
     Une requête notée occupe au pire une page SQLite de 4 Kio (mesuré le 12/11 : une ligne de ~2,3 Ko par page) ;
-    les envois d'une session font au plus `volume_par_session` octets de charges, plus ~300 octets par ligne."""
+    les envois d'une session font au plus `volume_par_session` octets de charges pour l'observateur et
+    `volume_trace_par_session` pour le relevé enrichi (D-76), plus ~300 octets par ligne."""
     from shadowlab.public import Limites
 
     limites = Limites()
-    pire_session = limites.requetes_par_session * 4096 + limites.volume_par_session + limites.envois_par_session * 300
-    assert 16_000_000 < pire_session < 17_000_000, pire_session
+    envois = limites.envois_par_session + limites.envois_trace_par_session
+    pire_session = (
+        limites.requetes_par_session * 4096
+        + limites.volume_par_session
+        + limites.volume_trace_par_session
+        + envois * 300
+    )
+    assert 25_000_000 < pire_session < 26_000_000, pire_session
     sessions = limites.taille_max_base // pire_session
-    assert 120 <= sessions <= 130, sessions
+    assert 80 <= sessions <= 90, sessions
     assert limites.sessions_par_jour == 40, "défaut inchangé"
 
 

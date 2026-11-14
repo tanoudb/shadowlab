@@ -66,6 +66,7 @@ PREFIXES_PERMIS = (
     "/public/static/social.css",
     "/public/static/social.js",
     "/lab/static/observateur.js",
+    "/public/static/releve.js",  # relevé enrichi, pendant une session (D-76)
 )
 CHEMINS_PERMIS = {"/", "/session", "/session/terminer", "/contact", "/fr/information", "/en/information"}
 MARQUES = (
@@ -902,17 +903,19 @@ def test_reglages_du_reseau_social(monkeypatch, tmp_path):
 
 def test_plafonds_laissent_parcourir_150_pages(client):
     """Calculé à partir du HTML, sans cache du navigateur (le pire cas) : la page, ses requêtes `/lab/` (photos,
-    observateur, BotD) et les deux envois de l'observateur à `/lab/collecte` (empreinte, comportement)."""
+    observateur, BotD), les deux envois de l'observateur à `/lab/collecte` (empreinte, comportement) et la trace du
+    relevé enrichi envoyée à la sortie (D-76 ; les morceaux d'une longue visite : tests/test_public_releve.py)."""
     limites = Limites()
     commencer(client)
     par_type: dict[str, int] = {}
     for chemin, html in parcourir(client).items():
-        n = 1 + len(requetes_notees(html)) + 2
+        n = 1 + len(requetes_notees(html)) + 2 + 1
         par_type[type_de_page(chemin)] = max(par_type.get(type_de_page(chemin), 0), n)
     assert set(par_type) == set(TYPES_DE_PAGE)
     pire = max(par_type.values())
     assert 150 * pire <= limites.requetes_par_session, par_type
     assert limites.envois_par_session // 2 >= 150, "deux envois de l'observateur par page"
+    assert limites.envois_trace_par_session >= 150, "une trace par page, comptée à part"
 
 
 # --- Le labo n'a pas changé -----------------------------------------------------------------------

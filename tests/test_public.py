@@ -1677,7 +1677,7 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-14.4", "le texte a changé : nouvelle version du texte accepté"
+    assert VERSION_INFORMATION == "2026-11-14.5", "le texte a changé : nouvelle version du texte accepté"
     texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
