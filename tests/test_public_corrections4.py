@@ -242,11 +242,16 @@ def test_pied_des_pages_de_l_etude_mene_aux_credits_sauf_le_contact(client, lang
         assert pied.css('a[href="/lab/social/credits"]::text').get() == libelle, chemin
     accueil = Selector(client.get(f"/{langue}").text)
     sous_les_photos = accueil.css('main a[href="/lab/social/credits"]::text').getall()
-    assert sous_les_photos == [libelle, libelle], "sous la mosaïque et sous les vignettes"
+    assert sous_les_photos == [libelle], "sous la mosaïque (l'accueil court n'a plus de vignettes)"
     for chemin in ("/contact", "/contact/envoye"):
         liens = Selector(client.get(chemin).text).css("a::attr(href)").getall()
         assert "/lab/social/credits" not in liens, chemin
-        assert all(lien == "/" or lien.startswith("/contact") for lien in liens), (chemin, liens)
+        assert all(
+            lien in ("/", "/session", f"/{langue}/information") or lien.startswith("/contact") for lien in liens
+        ), (
+            chemin,
+            liens,
+        )
 
 
 def test_aucun_texte_ne_compte_encore_94_photos():

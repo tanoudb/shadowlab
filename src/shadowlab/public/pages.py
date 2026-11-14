@@ -24,7 +24,7 @@ from .textes import ERREURS, LANGUES, RELEVES_TRACE, RESUME_RELEVE, T
 from .trace import BALISE as BALISE_RELEVE
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.7"
+VERSION_INFORMATION = "2026-11-14.8"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -425,18 +425,21 @@ def _page(
     l'ouverture du formulaire. Sa feuille de style, la même, est servie sous /contact/."""
     langue = langue_sure(langue)
     marque = _t(langue, "marque")
+    # En haut : la marque et la langue seulement. Les liens utiles sont au pied de chaque page (« Ma session » y est le
+    # droit de suppression du visiteur). Une page de contact ne mène qu'à « / », « /contact… » et aux pages de l'étude
+    # sans /lab/ ; elle n'a pas de lien vers les crédits (sous /lab/social/).
     if contact:
         feuille, accueil = "/contact/style.css", "/"
-        liens = [("/", _t(langue, "nav_accueil")), ("/contact", _t(langue, "nav_contact"))]
     else:
         feuille, accueil = "/public/static/public.css", f"/{langue}"
-        liens = [
-            (f"/{langue}/information", _t(langue, "nav_notice")),
-            (SOCIAL, escape(MARQUE_SOCIAL)),
-            ("/session", _t(langue, "nav_ma_session")),
-            ("/contact", _t(langue, "nav_contact")),
-        ]
-    navigation = "".join(f'<a href="{href}">{texte}</a>' for href, texte in liens)
+    liens = [
+        (f"/{langue}/information", _t(langue, "nav_notice")),
+        ("/session", _t(langue, "nav_ma_session")),
+        ("/contact", _t(langue, "nav_contact")),
+    ]
+    if not contact:
+        liens.append((CREDITS, _t(langue, "credits_photos")))
+    liens_du_pied = "".join(f'<a href="{href}">{texte}</a>' for href, texte in liens)
     autre = "en" if langue == "fr" else "fr"
     lien_langue = (
         f'\n<p class="autre-langue"><a href="/{autre}{bascule}" hreflang="{autre}" lang="{autre}">{NOM_LANGUE[autre]}</a></p>'
@@ -444,7 +447,6 @@ def _page(
         else ""
     )
     entete_titre = escape(titre) if titre == marque else f"{escape(titre)} — {marque}"
-    credits = "" if contact else f' <a href="{CREDITS}">{_t(langue, "credits_photos")}</a>'
     return f"""<!doctype html>
 <html lang="{langue}">
 <head>
@@ -457,12 +459,13 @@ def _page(
 <body class="etude {classe}">
 <header class="etude-entete"><div class="conteneur">
 <a class="etude-marque" href="{accueil}">{MARQUE_ETUDE}<span>{_insecable(marque)}</span></a>
-<nav class="etude-navigation" aria-label="{_t(langue, "nav_aria")}">{navigation}</nav>{lien_langue}
+{lien_langue}
 </div></header>
 <main class="conteneur etude-principal">
 {corps}
 </main>
-<footer class="etude-pied"><div class="conteneur">{MARQUE_ETUDE}<p>{_t(langue, "pied")}{credits}</p></div></footer>
+<footer class="etude-pied"><div class="conteneur">{MARQUE_ETUDE}<p>{_t(langue, "pied")}</p>
+<nav class="etude-pied-liens" aria-label="{_t(langue, "pied_aria")}">{liens_du_pied}</nav></div></footer>
 </body>
 </html>"""
 
@@ -518,23 +521,16 @@ def accueil(
     sessions: int | None = None,
     complet: bool = False,
 ) -> str:
-    """Accueil de l'étude « Humain ou robot ? » (cadrage du 13/11/2026, « Textes de l'accueil »). Le nombre de sessions
-    terminées (`sessions`, sans compteur si None), la case d'accord, la notice juste à côté, et la visite sans
-    participer ; pendant une session, « Reprendre la visite » à la place de l'accord ; plafond du jour atteint
-    (`complet`), l'avis « l'étude a fait le plein pour aujourd'hui » à la place de la case."""
+    """Accueil de l'étude « Humain ou robot ? », court (demande du client, 14/11/2026) : le titre, une phrase, la
+    franchise sur ce qui est relevé et un seul bouton « J'accepte et je commence » (plus de case à cocher : c'est le
+    bouton qui porte `consentement=oui`), la notice et la visite sans participer juste à côté, le nombre de sessions
+    terminées (`sessions`, sans compteur si None) en une petite ligne dessous. Le détail de ce qui est relevé se replie
+    dans un `<details>`. Pendant une session, « Reprendre la visite » à la place de l'accord ; plafond du jour atteint
+    (`complet`), l'avis « l'étude a fait le plein pour aujourd'hui » à la place du formulaire."""
     langue = langue_sure(langue)
     resume = RESUME_RELEVE[langue]
     notice_href = f"/{langue}/information"
-    social = escape(MARQUE_SOCIAL)
     compteur = f'\n<p class="accueil-compteur">{_compteur(sessions, langue)}</p>' if sessions is not None else ""
-    # Appel du haut de page : mène à l'accord (la case et la notice restent à côté du bouton « Commencer ») ;
-    # pendant une session, reprend la visite.
-    if en_cours:
-        appel = f'<a class="bouton-principal" href="{SOCIAL}">{_t(langue, "reprendre")}</a>'
-    else:
-        appel = f'<a class="bouton-principal" href="#participer">{_t(langue, "participer")}</a>'
-    vignettes = "" if en_cours else _vignettes_vedette(langue)
-    nom_social, _, suffixe_social = MARQUE_SOCIAL.partition(" ")
     if en_cours:
         accord = f"""<div class="accord accord-en-cours" id="participer">
 <p><strong>{_t(langue, "deja_en_cours")}</strong></p>
@@ -549,41 +545,25 @@ def accueil(
 </div>"""
     else:
         alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>\n' if erreur else ""
-        lien = f'<a class="lien-notice" href="{notice_href}">{_t(langue, "accord_notice_lien")}</a>'
         accord = f"""<form class="accord" id="participer" method="post" action="/session/commencer">
 {alerte}<input type="hidden" name="csrf" value="{escape(csrf)}">
 <input type="hidden" name="langue" value="{langue}">
-<p class="accord-notice">{_t(langue, "accord_notice", lien=lien)}</p>
-<div class="accord-case">
-<input type="checkbox" id="consentement" name="consentement" value="oui" required>
-<label for="consentement">{_t(langue, "accord_case", notice=notice_href)}</label>
-</div>
-<p class="accord-actions"><button class="bouton-principal" type="submit">{_t(langue, "commencer")}</button><a class="visiter-sans-participer" href="{SOCIAL}">{_t(langue, "visiter_sans_participer")}</a></p>
+<p class="releve-franchise">{escape(resume["franchise"])}</p>
+<p class="accord-notice"><a class="lien-notice" href="{notice_href}">{_t(langue, "nav_notice")}</a></p>
+<p class="accord-actions"><button class="bouton-principal" type="submit" name="consentement" value="oui">{_t(langue, "commencer")}</button><a class="visiter-sans-participer" href="{SOCIAL}">{_t(langue, "visiter_sans_participer")}</a></p>
 </form>"""
     corps = f"""<article class="accueil">
 <header class="accueil-entete">
 <div class="accueil-texte">
 <h1 class="accueil-titre">{_insecable(_t(langue, "accueil_titre"))}</h1>
-<p class="accueil-sous-titre">{_t(langue, "accueil_sous_titre")}</p>
 <p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>
-<div class="accueil-appel">{appel}{compteur}
-</div>
+{accord}{compteur}
 </div>
 {_mosaique(langue, avec_photos=not en_cours)}
 </header>
 
-<section class="accueil-etapes" aria-labelledby="titre-etapes">
-<h2 id="titre-etapes">{_t(langue, "h_etapes")}</h2>
-<ol class="etapes">
-<li class="etape"><h3>{_t(langue, "etape_1_titre")}</h3><p>{_t(langue, "etape_1")}</p></li>
-<li class="etape"><h3>{_t(langue, "etape_2_titre")}</h3><p>{_t(langue, "etape_2", social=social)}</p></li>
-<li class="etape"><h3>{_t(langue, "etape_3_titre")}</h3><p>{_t(langue, "etape_3")}</p></li>
-</ol>
-</section>
-
-<section class="accueil-releve" aria-labelledby="titre-releve">
-<h2 id="titre-releve">{_t(langue, "h_resume")}</h2>
-<p class="releve-franchise">{escape(resume["franchise"])}</p>
+<details class="accueil-releve">
+<summary>{_t(langue, "detail_titre")}</summary>
 <div class="releve-colonnes">
 <div class="releve-oui"><h3>{_t(langue, "resume_oui")}</h3><ul>{_puces(resume["oui"])}</ul></div>
 <div class="releve-non"><h3>{_t(langue, "resume_non")}</h3><ul>{_puces(resume["non"])}</ul></div>
@@ -591,22 +571,7 @@ def accueil(
 <p class="releve-sans-session">{escape(resume["sans_session"])}</p>
 <p class="releve-detail"><a href="{notice_href}">{_t(langue, "resume_detail")}</a></p>
 <p class="accueil-but">{_t(langue, "accueil_but")}</p>
-</section>
-
-<section class="accueil-sites" aria-labelledby="titre-sites">
-<h2 id="titre-sites">{_t(langue, "h_sites")}</h2>
-<div class="site-vedette">
-<h3 class="site-vedette-nom">{EMBLEME}<span class="vedette-nom">{escape(nom_social)}</span> <span class="vedette-demo">{escape(suffixe_social)}</span></h3>
-<p>{_t(langue, "vedette")}</p>{vignettes}
-</div>
-<p class="site-second">{_t(langue, "site_second")}</p>
-<p class="fictif">{_t(langue, "fictif")}</p>
-</section>
-
-<section class="accueil-participer" aria-labelledby="titre-participer">
-<h2 id="titre-participer">{_t(langue, "h_participer")}</h2>
-{accord}
-</section>
+</details>
 </article>"""
     return _page(_t(langue, "marque"), corps, langue, classe="page-accueil", bascule="")
 

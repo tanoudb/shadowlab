@@ -799,7 +799,8 @@ def test_page_d_information_complete(client):
     assert "observateur.js" not in texte
     sel = Selector(client.get("/").text)
     formulaire = sel.css('form[action="/session/commencer"][method="post"]')
-    assert formulaire.css('input[type="checkbox"][name="consentement"][value="oui"][required]')
+    assert formulaire.css('button[type="submit"][name="consentement"][value="oui"]'), "le bouton porte l'accord"
+    assert not sel.css('input[type="checkbox"]')
     assert formulaire.css('input[type="hidden"][name="csrf"]')
     assert sel.css('a[href="/lab/social/fil"]'), "visiter sans participer"
     assert sel.css('a[href="/fr/information"]'), "la notice complète à un clic"
@@ -1680,7 +1681,7 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-14.7", "le texte a changé : nouvelle version du texte accepté"
+    assert VERSION_INFORMATION == "2026-11-14.8", "le texte a changé : nouvelle version du texte accepté"
     texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
@@ -1761,7 +1762,10 @@ def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, f
         assert "/lab/" not in page.text, "aucune adresse sous /lab/ (ressource, lien, pied de page)"
         assert not Selector(page.text).css("script"), "aucun observateur ni script : rien n'est envoyé à /lab/collecte"
         for adresse in attributs_de_liens(page.text):
-            assert adresse == "/" or adresse.startswith("/contact"), adresse
+            # Les liens du pied (notice, « Ma session ») sont des pages de l'étude, jamais sous /lab/.
+            assert adresse in ("/", "/session", "/fr/information", "/en/information") or adresse.startswith(
+                "/contact"
+            ), adresse
 
     # Même contenu et mêmes en-têtes que la feuille des pages de l'étude (public.css), servie sous /contact/.
     css, ancienne = client.get("/contact/style.css"), client.get("/public/static/public.css")
