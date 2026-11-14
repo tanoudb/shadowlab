@@ -197,6 +197,10 @@ strong {
 }
 .etude-marque {
   order: 1;
+  /* Base courte : sur un très petit écran, la marque se plie plutôt que de chasser la langue sur une autre ligne,
+     et la navigation reste sur la sienne. */
+  flex: 1 1 10rem;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -234,8 +238,7 @@ strong {
   order: 3;
   flex: 1 0 100%;
   display: flex;
-  gap: 2px;
-  margin-inline: -9px;
+  margin-inline: -8px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -246,7 +249,7 @@ strong {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: 10px;
   color: var(--encre-2);
   font-size: 0.9375rem;
@@ -1292,14 +1295,15 @@ strong {
     padding-top: 0;
     padding-bottom: 0;
   }
+  .etude-marque {
+    flex: none;
+    white-space: nowrap;
+  }
   .etude-navigation {
     order: 2;
     flex: none;
     margin: 0 0 0 auto;
     overflow: visible;
-  }
-  .etude-navigation a[href="/lab/social/fil"] {
-    display: inline-flex;
   }
   .autre-langue {
     order: 3;
@@ -1382,6 +1386,11 @@ strong {
 }
 
 @media (min-width: 1000px) {
+  /* Sur une tablette, la marque, quatre liens et la langue ne tiennent pas sur une ligne : Mosaïk rejoint la barre
+     ici seulement. */
+  .etude-navigation a[href="/lab/social/fil"] {
+    display: inline-flex;
+  }
   .accueil-entete {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 34rem);
