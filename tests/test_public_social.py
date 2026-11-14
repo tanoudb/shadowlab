@@ -734,6 +734,7 @@ def test_mosaique_chaque_vignette_une_fois_dans_l_ordre():
         "p": "P",
     }
     assert set(attendus) == set(social.TAILLES_BANDE)
+    assert set(social.GRANDES_CASES) == set(social.TAILLES_BANDE), "chaque bande dit ses grandes cases"
     for n in range(1, 13):
         for code in range(2**n):
             portraits = [bool(code >> k & 1) for k in range(n)]

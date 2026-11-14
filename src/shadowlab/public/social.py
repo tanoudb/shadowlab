@@ -769,7 +769,9 @@ def _carte_fil(u: Univers, p: Publication, langue: str, rang: int) -> str:
 </article>"""
 
 
-def _vignette(u: Univers, p: Publication, langue: str, cherchable: bool = False) -> str:
+def _vignette(u: Univers, p: Publication, langue: str, cherchable: bool = False, tailles: str | None = None) -> str:
+    """Vignette d'une grille : le petit fichier ; avec `tailles` (grande case d'une mosaïque pleine largeur), un
+    `srcset` des deux fichiers, pour qu'elle reste nette sur un écran dense."""
     attributs = ""
     if cherchable:
         a = u.auteur(p.auteur)
@@ -777,7 +779,7 @@ def _vignette(u: Univers, p: Publication, langue: str, cherchable: bool = False)
         attributs = f' data-cherchable data-texte="{escape(_replier(cle))}"'
     return (
         f'<a class="vignette" href="/lab/social/p/{escape(p.identifiant)}"{attributs}>'
-        f"{_photo(p.photo, 480, _t(p.legende, langue), paresseuse=True)}"
+        f"{_photo(p.photo, 480, _t(p.legende, langue), paresseuse=True, tailles=tailles)}"
         f'<span class="vignette-info">{COEUR}{_nombre(p.aimes, langue)}</span></a>'
     )
 
@@ -850,11 +852,43 @@ def composer_bandes(portraits: Sequence[bool]) -> list[tuple[str, int]]:
     return bandes
 
 
-def _grille(u: Univers, publications: list[Publication], langue: str, cherchable: bool = False) -> str:
-    """Mosaïque de vignettes : des bandes composées selon le format des photos (voir `composer_bandes`)."""
+# Grandes cases de chaque bande (rang → genre) : au moins deux fois la petite case, donc trop grandes pour le seul
+# fichier de 480 pixels sur un écran dense. Les autres cases gardent le petit fichier.
+GRANDES_CASES: dict[str, dict[int, str]] = {
+    "solo": {0: "solo"},
+    "duo": {},
+    "trio-g": {0: "grande"},
+    "trio-d": {2: "grande"},
+    "l-p": {0: "grande", 1: "portrait"},
+    "p-l": {0: "portrait", 1: "grande"},
+    "ll-p": {2: "portrait"},
+    "p-ll": {0: "portrait"},
+    "l-pp": {0: "grande", 1: "portrait", 2: "portrait"},
+    "pp-l": {0: "portrait", 1: "portrait", 2: "grande"},
+    "p-l-p": {0: "portrait", 1: "grande", 2: "portrait"},
+    "pp": {0: "portrait", 1: "portrait"},
+    "ppp": {0: "portrait", 1: "portrait", 2: "portrait"},
+    "p": {0: "portrait"},
+}
+TAILLES_CASE = {
+    "solo": "(min-width: 1024px) 1000px, 100vw",
+    "grande": "(min-width: 1024px) 680px, 66vw",
+    "portrait": "(min-width: 1024px) 340px, 50vw",
+}
+
+
+def _grille(
+    u: Univers, publications: list[Publication], langue: str, cherchable: bool = False, pleine_largeur: bool = False
+) -> str:
+    """Mosaïque de vignettes : des bandes composées selon le format des photos (voir `composer_bandes`). En pleine
+    largeur (Explorer, profil, étiquette), les grandes cases reçoivent aussi le grand fichier (`srcset`)."""
     morceaux, i = [], 0
     for nom, nombre in composer_bandes([p.photo.portrait for p in publications]):
-        vignettes = "".join(_vignette(u, p, langue, cherchable) for p in publications[i : i + nombre])
+        grandes = GRANDES_CASES[nom] if pleine_largeur else {}
+        vignettes = "".join(
+            _vignette(u, p, langue, cherchable, TAILLES_CASE.get(grandes.get(rang, "")))
+            for rang, p in enumerate(publications[i : i + nombre])
+        )
         morceaux.append(f'<div class="bande bande-{nom}">{vignettes}</div>')
         i += nombre
     return f'<div class="mosaique">{"".join(morceaux)}</div>'
@@ -916,7 +950,7 @@ def _gabarit(
 <html lang="{"en" if langue == "en" else "fr"}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#edf0f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121a2b" media="(prefers-color-scheme: dark)">
@@ -1025,7 +1059,7 @@ def page_explorer(jeton: str, u: Univers, page: int, langue: str, habillage: Hab
 </section>
 </div>
 <div class="explorer-mosaique">
-{_grille(u, morceau, langue, cherchable=True)}
+{_grille(u, morceau, langue, cherchable=True, pleine_largeur=True)}
 {_suite("/lab/social/explorer", page, total, langue)}
 </div>
 </div>"""
@@ -1133,7 +1167,7 @@ def page_profil(jeton: str, u: Univers, a: Auteur, langue: str, habillage: Habil
 <p class="profil-chiffres"><span><strong>{_nombre(len(publications), langue)}</strong> {_ui(unite, langue)}</span> <span><strong>{_nombre(a.abonnes, langue)}</strong> {_ui("abonnes", langue)}</span></p>
 </section>
 <h2 class="titre-section">{_ui("recentes", langue)}</h2>
-{_grille(u, publications[:PAR_PAGE_GRILLE], langue)}"""
+{_grille(u, publications[:PAR_PAGE_GRILLE], langue, pleine_largeur=True)}"""
     return _gabarit(langue, f"{a.nom} (@{a.pseudonyme})", "page-profil", corps, jeton, habillage)
 
 
@@ -1149,7 +1183,7 @@ def page_etiquette(jeton: str, u: Univers, etiquette: str, langue: str, habillag
 <h1 class="titre-page"><span class="tesselle" aria-hidden="true"></span>{escape(libelle)}</h1>
 <p class="compteur">{_nombre(len(publications), langue)} {_ui(unite, langue)}</p>
 </section>
-{_grille(u, publications[:PAR_PAGE_GRILLE], langue)}"""
+{_grille(u, publications[:PAR_PAGE_GRILLE], langue, pleine_largeur=True)}"""
     return _gabarit(langue, f"#{libelle}", "page-etiquette", corps, jeton, habillage)
 
 

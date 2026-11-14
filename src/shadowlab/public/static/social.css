@@ -19,7 +19,7 @@
   --or: #c2912e;
   --vert: #2e8172;
   --grenat: #c2334d;
-  --scene: #161d2e;
+  --scene: #dde2e9;
   --capsule: #1b2440;
   --capsule-texte: #ffffff;
   --capsule-survol: #2b3658;
@@ -34,6 +34,7 @@
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --entete: 64px;
   --joint-mosaique: 4px;
+  --joint-banniere: #232b40;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,6 +63,7 @@
     --t3: #ff7189;
     --t4: #f08d5a;
     --t5: #b893f0;
+    --joint-banniere: #0d1322;
   }
 }
 
@@ -136,6 +138,7 @@ h2 {
   position: sticky;
   top: 0;
   z-index: 20;
+  background: var(--fond);
   background: color-mix(in srgb, var(--fond) 92%, transparent);
   -webkit-backdrop-filter: saturate(1.5) blur(16px);
   backdrop-filter: saturate(1.5) blur(16px);
@@ -1199,8 +1202,8 @@ a.auteur-nom:hover {
   aspect-ratio: 3 / 1;
   overflow: hidden;
   border-radius: 20px;
-  background: var(--fond-2);
-  color: var(--fond);
+  background: var(--joint-banniere);
+  color: var(--joint-banniere);
 }
 .banniere-motif {
   display: block;
