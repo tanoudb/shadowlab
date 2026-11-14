@@ -70,6 +70,12 @@ def jeton_de(request: Request) -> str:
     return candidat if JETON_VALIDE.match(candidat) else ""
 
 
+def duree_cookie_de(sceau: gardien.Sceau) -> int:
+    """Durée des cookies de défi du profil de la requête (3 600 s si le profil est inconnu)."""
+    profil = charger_profils().de(sceau.profil)
+    return profil.duree_cookie_s if profil else defis.DUREE_COOKIE_S
+
+
 def creer_app(reglages: Reglages | None = None) -> FastAPI:
     reglages = reglages or charger()
     app = FastAPI(title="NOEZIA ShadowLab", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -567,7 +573,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         lie = gardien.empreinte_liee(sceau)
         reponse.set_cookie(
             gardien.COOKIE_DEFI,
-            defis.creer_cookie(secret, "defi", jeton, lie),
+            defis.creer_cookie(secret, "defi", jeton, lie, duree_s=duree_cookie_de(sceau)),
             httponly=True,
             samesite="lax",
             path="/lab",
@@ -602,7 +608,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse = RedirectResponse(retour, status_code=303)
         reponse.set_cookie(
             gardien.COOKIE_CAPTCHA,
-            defis.creer_cookie(secret, "captcha", jeton, gardien.empreinte_liee(sceau)),
+            defis.creer_cookie(secret, "captcha", jeton, gardien.empreinte_liee(sceau), duree_s=duree_cookie_de(sceau)),
             httponly=True,
             samesite="lax",
             path="/lab",
@@ -631,7 +637,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse = RedirectResponse(retour, status_code=303)
         reponse.set_cookie(
             gardien.COOKIE_TURNSTILE,
-            defis.creer_cookie(secret, "turnstile", jeton, gardien.empreinte_liee(sceau)),
+            defis.creer_cookie(
+                secret, "turnstile", jeton, gardien.empreinte_liee(sceau), duree_s=duree_cookie_de(sceau)
+            ),
             httponly=True,
             samesite="lax",
             path="/lab",
@@ -660,7 +668,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse = RedirectResponse(retour, status_code=303)
         reponse.set_cookie(
             gardien.COOKIE_RECAPTCHA,
-            defis.creer_cookie(secret, "recaptcha", jeton, gardien.empreinte_liee(sceau)),
+            defis.creer_cookie(
+                secret, "recaptcha", jeton, gardien.empreinte_liee(sceau), duree_s=duree_cookie_de(sceau)
+            ),
             httponly=True,
             samesite="lax",
             path="/lab",

@@ -89,6 +89,10 @@ class Profil(_Strict):
     turnstile: Turnstile = Turnstile(actif=False)
     recaptcha: Recaptcha = Recaptcha(actif=False)
     connexion: Connexion = Connexion(actif=False)
+    # Durée de vie des cookies de réussite `defi`, `captcha`, `turnstile` et `recaptcha` (pas `connexion`, 3 600 s).
+    # Un profil « cookie court » sert à mesurer une récolte plus longue que le cookie
+    # (configs/arena/profils-cookie-court.yaml).
+    duree_cookie_s: int = Field(default=3600, ge=30, le=86_400)
 
 
 class Profils:
