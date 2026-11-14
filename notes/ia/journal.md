@@ -3184,3 +3184,28 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   (`public-fond`, dossier `../noezia-shadowlab-fond`).
 - **Reste** : relevé enrichi (second script, notice), dessin de l'accueil, quatrième relecture (vie privée,
   sécurité, licences), campagne de contrôle de D-74. Disque à 7,5 Go libres.
+
+## 2026-11-14 (3h10) — Claude (Fable 5.2, coordination) — Site public pour la communauté : dessin, fond et relevé enrichi assemblés ; quatrième relecture lancée
+
+- **Assemblé dans la branche `public-communaute`** (dossier `../noezia-shadowlab-public`, tête `c51c3d9`, rien de
+  fusionné dans la branche de travail) : dessin de « Mosaïk Démo » et page de crédits ; fond (deux langues sans
+  cookie de plus, accueil « Humain ou robot ? », notice à `/fr|en/information`, fréquentation par jour et commande
+  `shadowlab public frequentation`, plafond `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`, D-75) ; relevé enrichi
+  (`public/static/releve.js`, envoi `trace` validé par `public/trace.py`, notice réécrite, D-76) ; dessin des pages
+  de l'étude (`public.css`). Quatre sous-agents Opus, chacun relu. **1 513 tests rapides verts**, lint propre,
+  pages du labo inchangées (`tests/test_labo_inchange.py`).
+- **Vu par moi à l'écran** (téléphone et ordinateur, session d'essai complète) : accueil, accord, fil en session,
+  commentaire tapé, fin de session ; aucune erreur de politique de sécurité. Dans la base d'essai : envois
+  `empreinte`, `comportement` et `trace` ; la phrase témoin tapée n'est dans aucun fichier ; `shadowlab rejeu
+  --base` rejoue la session (les traces sont ignorées) ; la fréquentation compte 2 accueils, 1 session
+  commencée, 1 terminée.
+- **Corrigé à l'assemblage** : la note sous la zone de commentaire et le bandeau hors session disaient « jamais
+  envoyé ni enregistré » / « rien n'est enregistré » ; ils disent maintenant que le texte ne part jamais et que le
+  rythme de la frappe est relevé pendant une session.
+- **Chiffres du relevé enrichi** (rapport du sous-agent, calculs à relire) : session au pire 25,2 Mo, la base de
+  2 Gio en tient 85 ; session ordinaire de 10 minutes estimée à 1 à 1,2 Mo (aucun humain mesuré) ;
+  `requetes_par_session` porté de 3 000 à 4 000.
+- **En cours** : quatrième relecture indépendante (Opus, branche `public-relecture-4`, dossier
+  `../noezia-shadowlab-fond`) : sécurité, saturation, vérité de la notice dans les deux langues, licences.
+- **Reste** : corriger ce qu'elle trouve, fusionner dans la branche de travail, mettre à jour `AGENTS.md` ; puis la
+  campagne de contrôle de D-74. Non essayé : Safari, iPhone, Firefox. La mise en ligne reste à Ethan.
