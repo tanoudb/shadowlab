@@ -1109,7 +1109,7 @@ def test_rejeu_prend_les_photos_pour_des_ressources(sessions_rejouees):
     photos = {r for r in sociale["ressources"] if "/photos/" in r}
     assert not photos & {o["path"] for o in observations.documents}, "une photo n'est pas une page"
     assert photos <= {o["path"] for o in observations.ressources_de_page}, "une photo est une ressource de page"
-    assert not any(gardien.protegee(p, "GET") for p in photos), "une photo n'est pas un moment de contrôle"
+    assert all(gardien.protegee(p, "GET") for p in photos), "une photo reste un moment de contrôle (D-78)"
 
 
 def verdicts(resultat: dict) -> dict[str, tuple[bool, list[str]]]:

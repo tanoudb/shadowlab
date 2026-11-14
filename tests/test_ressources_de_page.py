@@ -184,44 +184,93 @@ def test_une_ressource_de_page_est_definie_a_un_seul_endroit():
         "/lab/static/lab.css",
         "/lab/vitrine/photos/AN-000001/1.svg",
         "/lab/social/photos/x/480.jpg",
-        "/lab/vitrine/api/annonces/AN-000001/similaires",
     ):
         assert detection.est_ressource_de_page(chemin), chemin
-    for chemin in ("/lab/vitrine/annonces", "/lab/vitrine/annonces/AN-000001", "/lab/social/fil", "/lab/rallye/"):
+    # l'appel de données d'une fiche rend du contenu : c'est une page pour les détecteurs
+    for chemin in (
+        "/lab/vitrine/annonces",
+        "/lab/vitrine/annonces/AN-000001",
+        "/lab/vitrine/api/annonces/AN-000001/similaires",
+        "/lab/social/fil",
+        "/lab/rallye/",
+    ):
         assert not detection.est_ressource_de_page(chemin), chemin
 
 
 def test_un_chemin_qui_remonte_n_est_pas_une_ressource_de_page():
     assert not detection.est_ressource_de_page("/lab/vitrine/photos/../annonces/AN-000001")
-    assert not detection.est_photo("/lab/social/photos/../fil")
+    assert not detection.est_ressource_de_page("/lab/social/photos/../fil")
 
 
 def test_liste_alignee_avec_la_limite_de_debit_de_nginx():
-    """Tout fichier que Nginx ne compte pas (D-71) est une ressource de page ; l'API, comptée par Nginx, l'est
-    aussi pour le détecteur (elle n'est pas une page) mais pas pour la limite de débit."""
+    """Tout fichier que Nginx ne compte pas (D-71) est une ressource de page pour le détecteur."""
     for morceau in profils.CHEMINS_STATIQUES:
         assert detection.est_ressource_de_page(f"/lab/{morceau}/exemple"), morceau
     assert not any("api" in morceau for morceau in profils.CHEMINS_STATIQUES)
 
 
-# --- `gardien.protegee` -------------------------------------------------------------------------------------
+def test_un_client_qui_moissonne_les_appels_de_donnees_vite_reste_vu():
+    """L'appel de données d'une fiche rend du contenu : il compte comme une page (`rythme_soutenu`)."""
+    http = [
+        h(f"10.{100 + 50 * i}", f"/lab/vitrine/api/annonces/AN-{i + 1:06d}/similaires", cookies=()) for i in range(6)
+    ]
+    assert len(Observations(http=http, js=[]).documents) == 6
+    assert "rythme_soutenu" in signaux_comportement(Observations(http=http, js=[empreinte()]))
 
 
-def test_une_photo_n_est_pas_un_moment_de_controle_de_page():
-    assert not gardien.protegee("/lab/vitrine/photos/AN-000001/1.svg", "GET")
-    assert not gardien.protegee("/lab/social/photos/x/480.jpg", "GET")
+# --- `gardien.protegee` : les photos restent un moment de contrôle ----------------------------------------
 
 
 @pytest.mark.parametrize(
     "chemin",
     [
+        "/lab/vitrine/photos/AN-000001/1.svg",
+        "/lab/social/photos/x/480.jpg",
         "/lab/vitrine/annonces",
         "/lab/vitrine/annonces/AN-000001",
-        "/lab/vitrine/api/annonces/AN-000001/similaires",  # contenu des fiches : reste contrôlé
-        "/lab/vitrine/photos/../annonces/AN-000001",  # remonter d'un dossier ne donne pas accès aux pages
-        "/lab/social/photos/../fil",
+        "/lab/vitrine/api/annonces/AN-000001/similaires",
         "/lab/rallye/",
     ],
 )
-def test_pages_et_donnees_restent_controlees(chemin):
+def test_photos_pages_et_donnees_restent_controlees(chemin):
     assert gardien.protegee(chemin, "GET")
+
+
+JETON = "0123456789abcdef0123456789abcdef"
+PHOTO = f"/lab/vitrine/photos/AN-000001/1.svg?sl={JETON}"
+
+
+def _frontal(reglages, profil):
+    from shadowlab.arena import secret as secrets_arena
+
+    secret = secrets_arena.charger(reglages.dossier_arena)
+    return {
+        "x-shadowlab-sceau": secrets_arena.signer(secret, "obs", profil, JETON, "ja4", ""),
+        "x-shadowlab-obs": "obs",
+        "x-shadowlab-profil": profil,
+        "x-shadowlab-session": JETON,
+        "x-shadowlab-ja4": "ja4",
+        "x-shadowlab-liaison": "",
+    }
+
+
+def test_une_photo_sans_defi_valide_recoit_un_refus(client, reglages):
+    r = client.get(PHOTO, headers=_frontal(reglages, "04"))
+    assert r.status_code == 403 and r.json()["bloque_par"] == "defi-js"
+
+
+def test_une_photo_demandee_par_une_session_bloquee_recoit_un_refus(client, reglages):
+    from shadowlab import database as db
+    from shadowlab.arena import defis
+    from shadowlab.arena import secret as secrets_arena
+
+    secret = secrets_arena.charger(reglages.dossier_arena)
+    client.cookies.set(gardien.COOKIE_DEFI, defis.creer_cookie(secret, "defi", JETON, ""))
+    ok = client.get(PHOTO, headers=_frontal(reglages, "04"))
+    assert ok.status_code == 200, "défi validé et session saine : la photo est servie"
+    cx = db.ouvrir(reglages.base_donnees)
+    db.enregistrer_decision(
+        cx, JETON, "fingerprinting-differe", "detecte", "/lab/collecte", [{"detecteur": "comportement"}]
+    )
+    r = client.get(PHOTO, headers=_frontal(reglages, "04"))
+    assert r.status_code == 403 and r.json()["bloque_par"] == "fingerprinting-differe"

@@ -21,13 +21,14 @@ SEUIL_DUREE_PAGE_MS = 500
 PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délais de souris d'une page
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
-# Ce qu'une page charge d'elle-même (D-78) : un navigateur les réclame sans que la personne ou le robot ne l'ait
-# demandé, par dizaines et dans la même seconde. Ce ne sont pas des pages : ni le rythme des pages, ni leur durée,
-# ni la navigation ne les comptent. Définition unique : la lire ici, ne pas la recopier. Alignée sur la limite de
-# débit de Nginx (`arena.profils.CHEMINS_STATIQUES`, D-71), que `tests/test_ressources_de_page.py` surveille.
+# Fichiers qu'une page charge d'elle-même (D-78) : un navigateur les réclame sans que la personne ou le robot ne
+# l'ait demandé, par dizaines et dans la même seconde. Ce ne sont pas des pages : ni le rythme des pages, ni leur
+# durée, ni la navigation ne les comptent (le gardien, lui, les contrôle toujours : `gardien.protegee`). L'appel de
+# données d'une fiche (`/lab/vitrine/api/`) n'en fait pas partie : il rend du contenu, il reste une page pour les
+# détecteurs. Définition unique : la lire ici, ne pas la recopier. Alignée sur la limite de débit de Nginx
+# (`arena.profils.CHEMINS_STATIQUES`, D-71), que `tests/test_ressources_de_page.py` surveille.
 PHOTOS = ("/lab/vitrine/photos/", "/lab/social/photos/")
-APPELS_DE_DONNEES = ("/lab/vitrine/api/",)  # données d'une fiche chargées par son JavaScript
-RESSOURCES_DE_PAGE = ("/lab/static",) + PHOTOS + APPELS_DE_DONNEES
+RESSOURCES_DE_PAGE = ("/lab/static",) + PHOTOS
 # Vérification d'un défi : la page qui la poste est une page intermédiaire, pas une page lue.
 VERIFICATIONS_DE_DEFI = (
     "/lab/defi/verifier",
@@ -43,12 +44,8 @@ def _sans_remontee(chemin: str) -> bool:
     return ".." not in chemin.split("/")
 
 
-def est_photo(chemin: str) -> bool:
-    return chemin.startswith(PHOTOS) and _sans_remontee(chemin)
-
-
 def est_ressource_de_page(chemin: str) -> bool:
-    """Fichier ou appel de données qu'une page charge d'elle-même : pas une page (D-78)."""
+    """Fichier statique ou photo qu'une page charge d'elle-même : pas une page (D-78)."""
     return chemin.startswith(RESSOURCES_DE_PAGE) and _sans_remontee(chemin)
 
 
@@ -95,7 +92,7 @@ class Observations:
 
     @property
     def requetes_de_page(self) -> list[dict[str, Any]]:
-        """Toutes les requêtes de navigation, photos et appels de données compris (hors échanges techniques).
+        """Toutes les requêtes de navigation, photos comprises (hors échanges techniques).
 
         Pour les règles qui regardent chaque requête (cookies renvoyés), pas pour compter des pages.
         """
@@ -108,7 +105,7 @@ class Observations:
 
     @property
     def ressources_de_page(self) -> list[dict[str, Any]]:
-        """Fichiers et appels de données chargés par les pages : CSS, JavaScript, photos, API de fiche."""
+        """Fichiers chargés par les pages : CSS, JavaScript, photos."""
         return [o for o in self.http if est_ressource_de_page(o["path"])]
 
     @property
@@ -662,16 +659,19 @@ class DetecteurComportement:
         total_moves = sum(e.get("mousemove", 0) for e in evenements)
         total_clicks = sum(e.get("click", 0) for e in evenements)
         interactions = sum(sum(e.values()) for e in evenements)
-        # Une page de défi (vérifiée en quelques ms, puis quittée) n'est pas une page lue : sa durée est écartée (D-78).
-        lues = [o["payload"] for o in releves_js if not _page_de_defi(o, obs.http)]
-        duree = sum(r.get("duree_page_ms") or 0 for r in lues)
+        # Une page de défi (vérifiée en quelques ms, puis quittée) n'est pas une page lue : sans aucune autre page
+        # lue, sa durée seule ne dit rien (D-78). Elle reste dans la moyenne dès qu'une page lue existe : l'en
+        # retirer ferait lire à la règle la première page lue, souvent quittée en quelques dizaines de ms par le
+        # moteur (campagnes 108 et 109, niveaux 05 et 06), et la règle changerait de portée.
+        lues = [o for o in releves_js if not _page_de_defi(o, obs.http)]
+        duree = sum(r.get("duree_page_ms") or 0 for r in releves)
 
         if interactions == 0:
             signaux.append(Signal("aucune_interaction", "aucun mouvement, clic, touche ni défilement", 0.5))
         elif total_moves == 0 and total_clicks > 0:
             signaux.append(Signal("clic_sans_souris", "des clics sans aucun mouvement de souris", 0.5))
 
-        if duree and duree < SEUIL_DUREE_PAGE_MS * len(lues):
+        if duree and lues and duree < SEUIL_DUREE_PAGE_MS * len(releves):
             signaux.append(Signal("pages_eclair", f"moins de {SEUIL_DUREE_PAGE_MS} ms par page en moyenne", 0.5))
 
         # --- Signaux de naturalité (v2) ---

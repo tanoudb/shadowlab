@@ -18,7 +18,7 @@ from .. import correlation, scoring
 from .. import database as db
 from ..arena import defis, profils
 from ..arena import secret as secrets_arena
-from ..detection import Detecteur, Observations, Signal, est_photo, registre
+from ..detection import Detecteur, Observations, Signal, registre
 from . import pages
 
 COOKIE_DEFI = "sl_defi"
@@ -201,17 +201,10 @@ def parametres(profil: profils.Profil) -> dict:
 def protegee(chemin: str, methode: str) -> bool:
     """Requête que `controler` examine : une page du site de test en GET, hors échanges techniques.
 
-    Une photo qu'une page charge n'est pas un moment de contrôle (D-78) : la page qui la porte a déjà été contrôlée,
-    et les dizaines de photos d'une liste arrivent dans la même seconde. Seules les photos sont exemptées, et
-    seulement par leur chemin exact : l'appel de données d'une fiche (`/lab/vitrine/api/`) donne le contenu des
-    annonces, il reste contrôlé comme une page.
+    Les photos en font partie (D-78) : une photo d'annonce porte du contenu (ville, titre), l'exempter laisserait un
+    client bloqué ou jamais contrôlé la lire. C'est le compte des pages du détecteur qui est corrigé, pas la protection.
     """
-    return (
-        chemin.startswith("/lab")
-        and not chemin.startswith(HORS_PROTECTION)
-        and not est_photo(chemin)
-        and methode == "GET"
-    )
+    return chemin.startswith("/lab") and not chemin.startswith(HORS_PROTECTION) and methode == "GET"
 
 
 def _signal(s: Signal) -> dict:
