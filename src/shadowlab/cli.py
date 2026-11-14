@@ -106,7 +106,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser(
         "public", help="application publique réduite : vitrine et sessions humaines (docs/site-public.md)"
     )
-    p.add_argument("action", choices=["servir", "purger", "supprimer", "messages", "effacer-message", "frequentation"])
+    p.add_argument(
+        "action",
+        choices=["servir", "purger", "supprimer", "sessions", "messages", "effacer-message", "frequentation"],
+    )
     p.add_argument(
         "identifiant",
         nargs="?",
@@ -539,6 +542,8 @@ def _public(args: argparse.Namespace) -> int:
         totaux = [sum(jour[c] for jour in jours) for c in donnees.COMPTES]
         print(f"{'total':<12}{totaux[0]:>10}{totaux[1]:>12}{totaux[2]:>11}")
         return 0
+    if args.action == "sessions":
+        return _sessions_publiques(cx, reglages.base_donnees)
     if args.action == "messages":
         recus = messages.lister(boite)
         if not recus:
@@ -571,6 +576,32 @@ def _public(args: argparse.Namespace) -> int:
         return 0
     print("Aucune session avec cet identifiant.", file=sys.stderr)
     return 1
+
+
+def _sessions_publiques(cx, base: Path) -> int:
+    """`shadowlab public sessions` : chaque session, la plus grosse d'abord, et la place occupée par la base, pour
+    repérer une session abusive et la supprimer (`shadowlab public supprimer <identifiant>`)."""
+    from .public import Limites, donnees
+
+    plafond = Limites().taille_max_base
+    print(
+        f"Base : {donnees.occupation(base) / 1e6:.1f} Mo occupés sur {plafond / 1e6:.0f} Mo permis"
+        f" (fichiers : {donnees.taille(base) / 1e6:.1f} Mo)."
+    )
+    liste = donnees.lister_sessions(cx, Limites().duree_session_s)
+    if not liste:
+        print("Aucune session.")
+        return 0
+    print(f"{len(liste)} session(s), la plus grosse d'abord (octets ; « total » : envois et requêtes notées).")
+    print("Supprimer une session : uv run shadowlab public supprimer <identifiant>\n")
+    print(f"{'identifiant':<34}{'début (UTC)':<18}{'état':<10}{'requêtes':>9}{'envois':>8}{'volume':>11}{'total':>11}")
+    for s in liste:
+        debut = f"{s['debut'][:10]} {s['debut'][11:16]}"
+        print(
+            f"{s['jeton']:<34}{debut:<18}{s['etat']:<10}{s['requetes']:>9}{s['envois']:>8}{s['volume']:>11}"
+            f"{s['total']:>11}"
+        )
+    return 0
 
 
 if __name__ == "__main__":

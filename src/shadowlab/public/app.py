@@ -387,24 +387,25 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         return HTMLResponse(pages.erreur(cle, langue, contact=contact), status_code=status_code)
 
     def plein() -> bool:
-        """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte."""
-        return donnees.taille(reglages.base_donnees) >= limites.taille_max_base
+        """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte. Mesure l'espace réellement
+        occupé (`donnees.au_plafond`) : une suppression ou la purge rouvre le service."""
+        return donnees.au_plafond(reglages.base_donnees, limites.taille_max_base)
 
     def compter(compte: str) -> None:
         """Compte du jour (fréquentation, D-75). Base pleine : rien ne s'écrit. Une panne de la base ne prive personne
         de sa page : le compte est perdu, rien d'autre."""
-        if plein():
-            return
-        with suppress(sqlite3.Error), base() as cx:
-            donnees.compter(cx, compte)
+        with suppress(sqlite3.Error):
+            if plein():
+                return
+            with base() as cx:
+                donnees.compter(cx, compte)
 
     def etat_de_l_accueil(chargement: bool, en_cours: bool) -> tuple[int | None, bool]:
         """En une connexion : compte le chargement de l'accueil (sauf base pleine), lit le total des sessions terminées
         et dit si le plafond du jour est atteint. Base en panne : ni compte ni compteur, et la case d'accord reste
         (l'envoi tranchera)."""
-        pleine = plein()
         with suppress(sqlite3.Error), base() as cx:
-            if chargement and not pleine:
+            if chargement and not plein():
                 donnees.compter(cx, "accueil")
             complet = not en_cours and donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
             return donnees.sessions_terminees(cx), complet
@@ -553,8 +554,12 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         if jeton is None:  # déjà terminée ou expirée : la page « Ma session » dit ce qu'il en reste
             return RedirectResponse("/session", status_code=303)
         with base() as cx:
-            donnees.clore_session(cx, jeton)
-        compter("terminees")
+            close = donnees.clore_session(cx, jeton)
+        if not close:  # un autre « Terminer » de la même session (double clic) l'a close entre-temps : rien à compter
+            reponse = RedirectResponse("/session", status_code=303)
+            effacer(reponse, cookie_session)
+            return reponse
+        compter("terminees")  # une fois par session : seule la requête qui l'a close arrive ici
         suppression = signer("supprimer", jeton)
         langue = langue_de(request)
         reponse = avec_csrf(
@@ -843,7 +848,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             envois, volume = donnees.usage(cx, jeton, trace=kind == "trace")
             if envois >= plafond_envois or volume + len(texte.encode()) > plafond_volume:
                 raise HTTPException(429, "quota de la session atteint")
-            donnees.noter_collecte(cx, jeton, kind, donnees.masquer_extensions(page[:200]), texte)
+            # La session a pu être supprimée ou terminée pendant la lecture du corps : l'écriture la revérifie.
+            page_notee = donnees.masquer_extensions(page[:200])
+            if not donnees.noter_collecte(cx, jeton, kind, page_notee, texte, limites.duree_session_s):
+                raise HTTPException(403, "collecte refusée")
         return Response(status_code=204)
 
     @app.exception_handler(sqlite3.Error)

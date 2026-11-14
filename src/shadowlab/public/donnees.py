@@ -122,8 +122,34 @@ def ouvrir(chemin: Path) -> sqlite3.Connection:
 
 
 def taille(chemin: Path) -> int:
-    """Octets occupés par la base et son journal WAL."""
+    """Taille sur le disque de la base et de son journal WAL. Elle ne baisse jamais : SQLite garde dans le fichier
+    les pages libérées par une suppression (ni VACUUM, ni auto_vacuum) et les réutilise."""
     return sum(p.stat().st_size for p in (chemin, chemin.with_name(chemin.name + "-wal")) if p.exists())
+
+
+def occupation(chemin: Path) -> int:
+    """Octets réellement occupés : pages utilisées de la base, `(page_count - freelist_count) × page_size`, plus la
+    taille du journal WAL. Les pages libérées par une suppression ou la purge n'y comptent plus."""
+    journal = chemin.with_name(chemin.name + "-wal")
+    octets_journal = journal.stat().st_size if journal.exists() else 0
+    cx = sqlite3.connect(chemin, timeout=30)  # connexion nue : trois lectures d'en-tête, sans migration
+    try:
+        pages, libres, taille_page = (cx.execute(f"PRAGMA {p}").fetchone()[0] for p in PRAGMAS_OCCUPATION)
+    finally:
+        cx.close()
+    return (pages - libres) * taille_page + octets_journal
+
+
+PRAGMAS_OCCUPATION = ("page_count", "freelist_count", "page_size")
+
+
+def au_plafond(chemin: Path, plafond: int) -> bool:
+    """Base pleine : le fichier et son journal atteignent `plafond` ET les pages réellement occupées aussi
+    (`occupation`). Appelée à chaque requête : tant que les fichiers tiennent sous le plafond, aucune connexion n'est
+    ouverte. Au-dessus, une suppression ou la purge rouvre le service dès que les pages libérées le permettent."""
+    if not chemin.exists() or taille(chemin) < plafond:
+        return False
+    return occupation(chemin) >= plafond
 
 
 # --- Sessions ----------------------------------------------------------------------------------
@@ -165,15 +191,21 @@ def creer_session(cx: sqlite3.Connection, accord: dict) -> str:
     return jeton
 
 
+# Une session en cours : publique, humaine, consentie, ni terminée ni plus vieille que la durée maximale. Paramètres :
+# jeton, nom de l'expérience, début au plus tôt.
+SESSION_EN_COURS = (
+    "SELECT 1 FROM runs r JOIN experiments e ON e.id = r.experiment_id WHERE r.session_token = ? AND e.name = ?"
+    " AND r.truth = 'humain' AND r.status = 'en_cours' AND r.consent_at IS NOT NULL AND r.started_at >= ?"
+)
+
+
+def _debut_au_plus_tot(duree_max_s: int) -> str:
+    return (datetime.now(UTC) - timedelta(seconds=duree_max_s)).isoformat(timespec="milliseconds")
+
+
 def session_en_cours(cx: sqlite3.Connection, jeton: str, duree_max_s: int) -> bool:
     """Vrai pour une session publique, humaine, consentie, ni terminée ni plus vieille que `duree_max_s`."""
-    debut_min = (datetime.now(UTC) - timedelta(seconds=duree_max_s)).isoformat(timespec="milliseconds")
-    ligne = cx.execute(
-        "SELECT 1 FROM runs r JOIN experiments e ON e.id = r.experiment_id WHERE r.session_token = ? AND e.name = ?"
-        " AND r.truth = 'humain' AND r.status = 'en_cours' AND r.consent_at IS NOT NULL AND r.started_at >= ?",
-        (jeton, EXPERIENCE, debut_min),
-    ).fetchone()
-    return ligne is not None
+    return cx.execute(SESSION_EN_COURS, (jeton, EXPERIENCE, _debut_au_plus_tot(duree_max_s))).fetchone() is not None
 
 
 def session_existe(cx: sqlite3.Connection, jeton: str) -> bool:
@@ -197,18 +229,23 @@ def langue_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
     return langue if isinstance(langue, str) else None
 
 
-def clore_session(cx: sqlite3.Connection, jeton: str) -> None:
+def clore_session(cx: sqlite3.Connection, jeton: str) -> bool:
+    """Passe la session de « en cours » à « terminée ». Vrai seulement pour la requête qui l'a fait : la condition
+    est dans la mise à jour elle-même, donc une session n'est close (et comptée) qu'une fois, même si plusieurs
+    « Terminer » arrivent ensemble."""
     ligne = cx.execute(
         "SELECT id, started_at FROM runs WHERE session_token = ? AND status = 'en_cours'", (jeton,)
     ).fetchone()
     if ligne is None:
-        return
+        return False
     fin = datetime.now(UTC)
     duree = (fin - datetime.fromisoformat(ligne["started_at"])).total_seconds() * 1000
-    cx.execute(
-        "UPDATE runs SET status = 'reussi', success = 1, completed_at = ?, duration_ms = ? WHERE id = ?",
+    curseur = cx.execute(
+        "UPDATE runs SET status = 'reussi', success = 1, completed_at = ?, duration_ms = ?"
+        " WHERE id = ? AND status = 'en_cours'",
         (fin.isoformat(timespec="milliseconds"), round(duree), ligne["id"]),
     )
+    return curseur.rowcount == 1
 
 
 def sessions_du_jour(cx: sqlite3.Connection) -> int:
@@ -284,20 +321,103 @@ def usage(cx: sqlite3.Connection, jeton: str, trace: bool = False) -> tuple[int,
     return int(n), int(volume)
 
 
-def noter_collecte(cx: sqlite3.Connection, jeton: str, kind: str, page: str, charge: str) -> None:
-    cx.execute(
-        "INSERT INTO observations_js (session_token, received_at, kind, page, payload) VALUES (?, ?, ?, ?, ?)",
-        (jeton, db.maintenant(), kind, page, charge),
+def noter_collecte(cx: sqlite3.Connection, jeton: str, kind: str, page: str, charge: str, duree_max_s: int) -> bool:
+    """Écrit un envoi, seulement si la session est encore en cours : la vérification est dans l'écriture elle-même
+    (`INSERT … SELECT … WHERE EXISTS`), sans attente possible entre les deux. Un envoi encore en vol pendant
+    « Supprimer ma session » ou « Terminer » n'écrit donc rien (faux)."""
+    curseur = cx.execute(
+        "INSERT INTO observations_js (session_token, received_at, kind, page, payload) SELECT ?, ?, ?, ?, ?"
+        f" WHERE EXISTS ({SESSION_EN_COURS})",
+        (jeton, db.maintenant(), kind, page, charge, jeton, EXPERIENCE, _debut_au_plus_tot(duree_max_s)),
     )
+    return curseur.rowcount == 1
+
+
+def lister_sessions(cx: sqlite3.Connection, duree_max_s: int) -> list[dict]:
+    """Chaque session, la plus grosse d'abord, pour repérer une session abusive (`shadowlab public sessions`) :
+    identifiant, début, état (ouverte, expirée, terminée), requêtes notées, nombre et volume des envois (octets),
+    et `total`, volume des envois plus celui des requêtes notées (en-têtes et chemin), qui donne l'ordre."""
+    debut_min = _debut_au_plus_tot(duree_max_s)
+    lignes = cx.execute(
+        "SELECT r.session_token AS jeton, r.started_at AS debut, r.status AS statut,"
+        " (SELECT COUNT(*) FROM observations_http h WHERE h.session_token = r.session_token) AS requetes,"
+        " (SELECT COALESCE(SUM(LENGTH(CAST(h.headers AS BLOB)) + LENGTH(CAST(h.path AS BLOB))), 0)"
+        "  FROM observations_http h WHERE h.session_token = r.session_token) AS volume_requetes,"
+        " (SELECT COUNT(*) FROM observations_js j WHERE j.session_token = r.session_token) AS envois,"
+        " (SELECT COALESCE(SUM(LENGTH(CAST(j.payload AS BLOB))), 0)"
+        "  FROM observations_js j WHERE j.session_token = r.session_token) AS volume"
+        " FROM runs r JOIN experiments e ON e.id = r.experiment_id WHERE e.name = ?",
+        (EXPERIENCE,),
+    ).fetchall()
+    resultat = []
+    for ligne in lignes:
+        if ligne["statut"] != "en_cours":
+            etat = "terminée"
+        else:
+            etat = "ouverte" if ligne["debut"] >= debut_min else "expirée"
+        resultat.append(
+            {
+                "jeton": ligne["jeton"],
+                "debut": ligne["debut"],
+                "etat": etat,
+                "requetes": ligne["requetes"],
+                "envois": ligne["envois"],
+                "volume": ligne["volume"],
+                "total": ligne["volume"] + ligne["volume_requetes"],
+            }
+        )
+    return sorted(resultat, key=lambda s: (-s["total"], -s["requetes"], s["debut"]))
 
 
 # --- Suppression et purge ----------------------------------------------------------------------
 
 
 def effacer_session(cx: sqlite3.Connection, jeton: str) -> bool:
-    """Efface la session dans toutes les tables du schéma. Faux si elle n'existait pas."""
+    """Efface la session dans toutes les tables du schéma, avec toute ligne orpheline, puis vide le journal WAL.
+    Faux si elle n'existait pas."""
     if not JETON.fullmatch(jeton):
         return False
+    existait = _effacer(cx, jeton)
+    retirer_orphelines(cx)
+    vider_journal(cx)
+    return existait
+
+
+# Tables où une ligne porte le jeton d'une session (`session_token`), sans clé étrangère vers `runs`.
+TABLES_PAR_JETON = ("observations_http", "observations_js", "decisions")
+
+
+def retirer_orphelines(cx: sqlite3.Connection) -> int:
+    """Retire toute ligne d'observation dont la session n'existe plus (envoi arrivé après une suppression, base
+    écrite par une version plus ancienne) : la purge part des sessions et ne la retrouverait jamais. Renvoie le
+    nombre de lignes retirées."""
+    sans_session = "NOT EXISTS (SELECT 1 FROM runs r WHERE r.session_token = {t}.session_token)"
+    retirees = 0
+    with db.transaction(cx):
+        cx.execute(
+            "DELETE FROM observations_tls WHERE id IN (SELECT h.tls_id FROM observations_http h WHERE h.tls_id IS NOT"
+            f" NULL AND {sans_session.format(t='h')})"
+        )
+        for table in TABLES_PAR_JETON:
+            retirees += cx.execute(f"DELETE FROM {table} WHERE {sans_session.format(t=table)}").rowcount
+    return retirees
+
+
+def vider_journal(cx: sqlite3.Connection) -> bool:
+    """Point de contrôle complet et journal WAL remis à zéro (`wal_checkpoint(TRUNCATE)`) : les versions des pages
+    d'avant une suppression ne restent pas lisibles dans le journal, et sa taille ne compte plus dans `occupation`.
+    Sans attendre : si un lecteur d'un autre processus le bloque, le journal sera vidé au point de contrôle suivant
+    (faux). Ne garantit rien pour le disque lui-même (voir docs/site-public.md, « Purge et suppression »)."""
+    attente = cx.execute("PRAGMA busy_timeout").fetchone()[0]
+    cx.execute("PRAGMA busy_timeout=0")
+    try:
+        bloque = cx.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]
+    finally:
+        cx.execute(f"PRAGMA busy_timeout={int(attente)}")
+    return not bloque
+
+
+def _effacer(cx: sqlite3.Connection, jeton: str) -> bool:
     with db.transaction(cx):
         runs = [(r["id"],) for r in cx.execute("SELECT id FROM runs WHERE session_token = ?", (jeton,))]
         cx.execute(
@@ -315,7 +435,8 @@ def effacer_session(cx: sqlite3.Connection, jeton: str) -> bool:
 
 
 def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = None) -> int:
-    """Efface les sessions publiques commencées il y a plus de `jours` jours. Renvoie leur nombre."""
+    """Efface les sessions publiques commencées il y a plus de `jours` jours, puis toute ligne orpheline, et vide le
+    journal WAL. Renvoie le nombre de sessions effacées."""
     limite = ((maintenant or datetime.now(UTC)) - timedelta(days=jours)).isoformat(timespec="milliseconds")
     jetons = [
         r["session_token"]
@@ -326,7 +447,9 @@ def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = Non
         )
     ]
     for jeton in jetons:
-        effacer_session(cx, jeton)
+        _effacer(cx, jeton)
+    retirer_orphelines(cx)
+    vider_journal(cx)
     return len(jetons)
 
 
