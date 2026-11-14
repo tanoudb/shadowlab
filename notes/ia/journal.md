@@ -3154,3 +3154,23 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   hors session, dans `outputs/apercu-dessin/captures/` (console sans erreur de politique de sécurité).
 - **Reste** : clavier virtuel d'un vrai téléphone non essayé ; cinq sujets du manifeste sans libellé anglais
   (`fleurs`, `lacs`, `routes`, `sauvages`, `domestiques`) ; relecture par la coordination.
+
+## 2026-11-14 — Claude (Opus 5.5, sous-agent de relecture) — Quatrième relecture du site public avant l'annonce
+
+- **Fait** (branche `public-relecture-4`, dossier `noezia-shadowlab-fond`) : relecture indépendante de
+  `src/shadowlab/public/` (sécurité, saturation, vérité de la notice FR/EN, licences des photos, exploitation),
+  essais dans le processus et contre un uvicorn local (port 8796, base jetable effacée après), un parcours dans
+  Chromium. **Rien corrigé dans `src/`** : 15 essais rouges dans `tests/test_public_relecture4.py`, un par défaut.
+- **Constats principaux** : compteur de l'accueil gonflé à volonté par des « Terminer » simultanés (300 affichés
+  pour une session, observé) ; base pleine qui ne rouvre jamais, même tout effacé (`plein()` lit la taille du
+  fichier, ni VACUUM ni auto_vacuum) ; photos CC BY et CC BY-SA de l'accueil sans crédit ni lien vers les crédits ;
+  `objets-03` créditée à Giulio Romano (1499–1546) sous CC BY-SA 4.0 ; 500 sans en-têtes de sécurité sur une
+  demi-paire UTF-16 ; envoi en vol écrit après « Supprimer ma session » (ligne orpheline jamais purgée) ; double
+  « Commencer » qui ouvre deux sessions ; limite par adresse lue sur la première ligne de l'en-tête ; notice
+  (« ni service de Cloudflare », « aucun détecteur ne tourne ») ; script du tunnel sans HTTPS imposé ; « Ma session »
+  perdue à chaque relance du tunnel rapide, non documenté.
+- **Sain** : aucune route du labo joignable (49 essayées), aucune requête vers un tiers, ni texte tapé ni touche
+  en base (Chromium : recherche, commentaire, sélection, copie), aucun EXIF dans les 188 fichiers, manifeste
+  complet, `site/` inchangé depuis `cb1ff99`.
+- **Reste** : corrections par un autre agent, essai par essai ; vérifier une fois avec un vrai tunnel ce que fait
+  Cloudflare (en-tête d'adresse, cache des photos, HTML inchangé).
