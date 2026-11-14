@@ -3400,3 +3400,25 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `outputs/campagne-cookie-court-rallye.log`. Le site public tourne en même temps (port 8771).
 - **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.
 - **Reste** : lire le rallye ; une passe de plus d'une heure avec le cookie d'une heure ; avis d'Ethan sur l'accueil.
+
+## 2026-11-14 (15h20) — Claude (Fable 5.2, coordination) — Site public : relancé dans tmux, indépendant de la session ; nouveau lien
+
+- **Demandes d'Ethan, ses mots** : « Pour le site masqué l'autre site annonce on s'en fou et mtn il est temps de le
+  partager je pense Reddit pas mal non ? », puis, à la remarque que le lien meurt si le Mac s'arrête : « Le Mac je le
+  débranche pas pendant un moment ». Il n'a pas répondu sur un nom de domaine : on reste sur le tunnel rapide.
+- **Script de mise en ligne** (`scripts/site-public-tunnel.sh`, commit `77f5992`) : trois modes, `tout` (comme avant),
+  `tunnel` (le tunnel seul) et `app` (l'application seule, pour l'adresse du tunnel déjà ouvert). 3 tests vus en échec
+  avant, avec de faux outils. Mettre le site à jour ne change plus l'adresse.
+- **Site relancé à 15 h 16 dans deux sessions tmux**, `site-public-tunnel` et `site-public-app` : il ne dépend plus de
+  la session de coordination. Nouvelle adresse dans `outputs/public/adresse-publique.txt` ; l'ancienne répond 400.
+  Plafond : 500 sessions par jour. Session d'essai par le nouveau lien : relevé reçu en 204, suppression, base vide.
+- **Mettre le site à jour sans changer l'adresse** : `tmux kill-session -t site-public-app`, puis
+  `tmux new-session -d -s site-public-app "zsh -lc 'cd <dépôt> && SHADOWLAB_PUBLIC_CONTACT=\"Labo Vitrine\"
+  SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR=500 scripts/site-public-tunnel.sh app'"`. **Tout arrêter** : tuer les deux sessions.
+- **Erreur de ma part** : le premier lancement des nouveaux tests (vus en échec) a vidé `outputs/public/tunnel.log` du
+  site en ligne, parce que le script n'avait pas encore de dossier réglable. Le site et le fichier d'adresse n'ont pas
+  été touchés. Les tests passent maintenant par `SHADOWLAB_PUBLIC_DOSSIER` (dossier temporaire).
+- **En cours** : sous-agent « masquer le site d'annonces » ; campagne 113 (dernier passage). Les tests du site public
+  ont tourné pendant ce passage : ses durées peuvent en être un peu faussées.
+- **Limites dites à Ethan** : adresse en `trycloudflare.com` (méfiance, filtrage possible par Reddit), aucune garantie
+  de Cloudflare, lien perdu si le Mac redémarre, « Ma session » perdue avec lui, iPhone et Safari non essayés.
