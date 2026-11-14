@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.routing import APIRoute
 
 from ..arena import secret as signature
 from ..config import ReglagesPublics
@@ -61,6 +62,9 @@ TAILLE_FORMULAIRE = 4096
 OCTETS_PAR_CARACTERE = 12  # un caractère de 4 octets, une fois encodé dans un formulaire (%F0%9F…)
 PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers envois du labo (12/11/2026)
 UNE_JOURNEE_S = 24 * 3600
+# Double clic sur « Commencer » : une session ouverte avec le même jeton anti-CSRF depuis moins de ce délai, et encore
+# en cours, est rendue à la seconde requête au lieu d'en ouvrir une autre.
+DOUBLE_CLIC_S = 60
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
 ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
 # Le journal ne garde que les réponses d'erreur (code 400 ou plus) : une requête réussie ou redirigée n'écrit rien.
@@ -258,6 +262,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     fichiers_photos = social.fichiers(photos)
     univers = social.generer(reglages.social_graine, reglages.social_taille, photos)
     derniere_purge = [time.monotonic()]
+    # Sessions ouvertes depuis moins de DOUBLE_CLIC_S, par empreinte salée du jeton anti-CSRF (jamais le jeton
+    # lui-même, jamais sur le disque) : {empreinte: (jeton de session, instant)}.
+    sel_csrf = secrets.token_bytes(16)
+    ouvertes_recemment: dict[bytes, tuple[str, float]] = {}
 
     # Sans redirection sur barre oblique finale : elle serait construite en http:// derrière le mandataire.
     app = FastAPI(title="Habitat Démo", docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=False)
@@ -320,7 +328,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         configuré mais absent : repli sur la connexion (celle du mandataire), donc une limite partagée par tous ;
         un avertissement, une fois par démarrage, sans adresse."""
         if reglages.entete_ip:
-            derniere = request.headers.get(reglages.entete_ip, "").split(",")[-1].strip()
+            # Dernière ligne de l'en-tête (un mandataire qui ajoute la sienne la met à la fin), puis sa dernière valeur.
+            lignes = request.headers.getlist(reglages.entete_ip)
+            derniere = lignes[-1].split(",")[-1].strip() if lignes else ""
             if derniere:
                 return derniere
             if not entete_absent_signale[0]:
@@ -419,11 +429,38 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     # --- Garde : hôte, observation, en-têtes de sécurité, journal ----------------------------------
 
+    def empreinte_csrf(csrf: str) -> bytes:
+        return hashlib.blake2b(csrf.encode(), key=sel_csrf, digest_size=16).digest()
+
+    def oublier_les_ouvertures_anciennes() -> None:
+        maintenant = time.monotonic()
+        for cle in [c for c, (_, instant) in ouvertes_recemment.items() if maintenant - instant >= DOUBLE_CLIC_S]:
+            del ouvertes_recemment[cle]
+
+    def session_du_double_clic(csrf: str) -> str | None:
+        """Session ouverte par ce navigateur (même jeton anti-CSRF) il y a moins de DOUBLE_CLIC_S, et encore en
+        cours : la seconde requête d'un double clic est partie sans le cookie que la première allait poser."""
+        oublier_les_ouvertures_anciennes()
+        recente = ouvertes_recemment.get(empreinte_csrf(csrf))
+        if recente is None:
+            return None
+        with base() as cx:
+            return recente[0] if donnees.session_en_cours(cx, recente[0], limites.duree_session_s) else None
+
+    def session_ouverte(jeton: str) -> RedirectResponse:
+        """Vers le site vedette, avec le cookie de la session et celui des droits (« Ma session »)."""
+        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
+        poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
+        # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
+        poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
+        return reponse
+
     def preparer(request: Request) -> None:
         """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée. Et le balayage
         des limiteurs : une empreinte d'adresse expirée sort de la mémoire dès la première requête qui suit."""
         for limite_en_memoire in limiteurs:
             limite_en_memoire.balayer()
+        oublier_les_ouvertures_anciennes()
         if time.monotonic() - derniere_purge[0] > UNE_JOURNEE_S:  # purge quotidienne, même sans tâche planifiée
             derniere_purge[0] = time.monotonic()
             with base() as cx:
@@ -450,6 +487,14 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                     limites.requetes_par_session,
                 )
 
+    async def sans_corps(reponse: Response) -> Response:
+        """Réponse à une requête HEAD : celle du GET, mêmes statut et en-têtes (Set-Cookie compris), sans le corps."""
+        async for _ in reponse.body_iterator:  # lu jusqu'au bout, puis jeté
+            pass
+        vide = Response(status_code=reponse.status_code)
+        vide.raw_headers = list(reponse.raw_headers)
+        return vide
+
     @app.middleware("http")
     async def garde(request: Request, call_next):
         hote = HOTE.fullmatch(request.headers.get("host", "").lower())
@@ -462,6 +507,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 reponse = refus(503, "indisponible", langue_de(request))
             else:
                 reponse = await call_next(request)
+                if request.method == "HEAD":
+                    reponse = await sans_corps(reponse)
         reponse.headers["Content-Security-Policy"] = CSP
         reponse.headers["X-Content-Type-Options"] = "nosniff"
         # Les pages de contact ne chargent rien sous /lab/ et ne mènent qu'à « / » ou « /contact… » (ni notés en
@@ -521,6 +568,12 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             )
         if request.state.session is not None:  # double clic, ou session déjà ouverte : on ne recrée rien
             return RedirectResponse(pages.SOCIAL, status_code=303)
+        # Double clic dont la seconde requête est partie avant la réponse à la première : la même session, mêmes
+        # cookies (le navigateur ne garde souvent que la dernière réponse), sans user aucun quota. Rien n'attend
+        # entre cette lecture et la création plus bas : deux requêtes simultanées n'ouvrent qu'une session.
+        deja = session_du_double_clic(champs["csrf"])
+        if deja is not None:
+            return session_ouverte(deja)
         with base() as cx:
             trop = donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
         if plein():
@@ -536,12 +589,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 "langue": langue,
             }
             jeton = donnees.creer_session(cx, accord)
-        compter("commencees")
-        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
-        poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
-        # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
-        poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
-        return reponse
+        ouvertes_recemment[empreinte_csrf(champs["csrf"])] = (jeton, time.monotonic())
+        compter("commencees")  # une fois par session créée : un double clic n'en crée qu'une
+        return session_ouverte(jeton)
 
     @app.post("/session/terminer", response_class=HTMLResponse)
     async def terminer(request: Request) -> Response:
@@ -842,17 +892,28 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             # Les identifiants d'extension (traces d'erreur) sont masqués avant le calcul du volume et l'écriture.
             texte = donnees.masquer_extensions(json.dumps(charge, ensure_ascii=False, sort_keys=True))
             plafond_envois, plafond_volume = limites.envois_par_session, limites.volume_par_session
+        try:
+            octets = len(texte.encode())
+            page.encode()
+        except UnicodeEncodeError as erreur:  # demi-paire UTF-16 (« \ud800 ») : JSON valide, mais impossible à écrire
+            raise HTTPException(400, "message illisible") from erreur
         if plein():
             raise HTTPException(503, "service complet")
         with base() as cx:
             envois, volume = donnees.usage(cx, jeton, trace=kind == "trace")
-            if envois >= plafond_envois or volume + len(texte.encode()) > plafond_volume:
+            if envois >= plafond_envois or volume + octets > plafond_volume:
                 raise HTTPException(429, "quota de la session atteint")
             # La session a pu être supprimée ou terminée pendant la lecture du corps : l'écriture la revérifie.
             page_notee = donnees.masquer_extensions(page[:200])
             if not donnees.noter_collecte(cx, jeton, kind, page_notee, texte, limites.duree_session_s):
                 raise HTTPException(403, "collecte refusée")
         return Response(status_code=204)
+
+    # Toute page servie en GET répond aussi à HEAD (outils de vérification de lien, surveillance), sans corps : la garde
+    # retire le corps (`sans_corps`). L'accueil ne compte que les GET. Sans cela, 405 et une ligne au journal.
+    for route in app.routes:
+        if isinstance(route, APIRoute) and "GET" in route.methods:
+            route.methods.add("HEAD")
 
     @app.exception_handler(sqlite3.Error)
     async def base_indisponible(_: Request, __: sqlite3.Error) -> JSONResponse:

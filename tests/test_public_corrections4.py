@@ -191,3 +191,36 @@ def test_purge_et_suppression_retirent_les_lignes_orphelines(client, reglages_pu
         assert cx.execute("SELECT COUNT(*) FROM observations_http WHERE session_token = ?", (garder,)).fetchone()[0]
     finally:
         cx.close()
+
+
+# --- HEAD : une page servie en GET répond aussi en HEAD, sans corps ----------------------------------
+
+PAGES_EN_GET = ("/", "/fr", "/en/information", "/session", "/contact", "/lab/vitrine", "/lab/social/fil")
+
+
+@pytest.mark.parametrize("chemin", PAGES_EN_GET)
+def test_head_repond_comme_get_sans_corps_ni_ligne_au_journal(client, fichier_de_journal, chemin):  # noqa: F811
+    """Un robot de vérification de lien ou un outil de surveillance envoie HEAD : avant, 405 et une ligne au journal
+    des erreurs. HEAD répond comme GET (statut, type, en-têtes de sécurité), sans corps."""
+    get, head = client.get(chemin), client.head(chemin)
+    assert head.status_code == get.status_code == 200, head.status_code
+    assert head.content == b""
+    for entete in ("content-type", "content-security-policy", "x-frame-options", "strict-transport-security"):
+        assert head.headers.get(entete) == get.headers.get(entete), entete
+    assert fichier_de_journal() == []
+
+
+def test_head_sur_l_accueil_ne_compte_aucun_chargement(client, reglages_publics):
+    for chemin in ("/", "/fr", "/en"):
+        assert client.head(chemin).status_code == 200
+    cx = ouvrir(reglages_publics)
+    try:
+        assert cx.execute("SELECT COALESCE(SUM(accueil), 0) FROM frequentation").fetchone()[0] == 0
+    finally:
+        cx.close()
+    assert client.get("/fr").status_code == 200
+    cx = ouvrir(reglages_publics)
+    try:
+        assert cx.execute("SELECT COALESCE(SUM(accueil), 0) FROM frequentation").fetchone()[0] == 1
+    finally:
+        cx.close()
