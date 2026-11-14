@@ -2015,12 +2015,12 @@ def test_journal_du_tunnel_filtre_chemins_requetes_et_jetons():
 def test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie():
     script = SCRIPT_TUNNEL.read_text(encoding="utf-8")
     assert subprocess.run(["bash", "-n", str(SCRIPT_TUNNEL)], capture_output=True).returncode == 0
-    lancement = re.search(r"^cloudflared tunnel .*$", script, re.M)
+    lancement = re.search(r"^\s*(cloudflared tunnel .*)$", script, re.M)  # dans la fonction `ouvrir_tunnel`
     assert lancement, "cloudflared est lancé en arrière-plan"
-    ligne = lancement.group(0)
+    ligne = lancement.group(1)
     assert "> >(sed -l -E" in ligne and "FILTRE_JOURNAL" in ligne and ligne.rstrip().endswith("&")
     assert "|" not in ligne.replace("> >(", ""), "pas de tube : `$!` resterait le PID de cloudflared, pas de sed"
-    assert re.search(r"^tunnel=\$!$", script, re.M) and 'kill "$tunnel"' in script
+    assert re.search(r"^\s*tunnel=\$!$", script, re.M) and 'kill "$tunnel"' in script
     assert "n'écrit aucune requête" not in script, "cette affirmation n'a jamais été vérifiée"
     assert "Non vérifié" in script or "jamais vérifié" in script
 
@@ -2040,3 +2040,59 @@ def test_une_requete_ordinaire_balaie_les_empreintes_expirees_de_chaque_limiteur
     with TestClient(app, base_url=ORIGINE) as c:
         assert c.get("/").status_code == 200
     assert [len(limiteur._vues) for limiteur in limiteurs] == [0, 0, 0]
+
+
+# --- Script de mise en ligne : tunnel et application séparés (14/11/2026) --------------------------
+
+
+def _lancer_script_tunnel(tmp_path: Path, *arguments: str, adresse: str | None = None) -> subprocess.CompletedProcess:
+    """Lance le script avec de faux `cloudflared`, `uv` et `caffeinate` (aucun vrai tunnel, aucun vrai serveur) : le
+    faux `cloudflared` laisse une marque, le faux `caffeinate` écrit les réglages qu'il reçoit."""
+    faux = tmp_path / "bin"
+    faux.mkdir()
+    (faux / "cloudflared").write_text(f'#!/bin/sh\ntouch "{tmp_path}/tunnel-lance"\nexit 0\n')
+    (faux / "uv").write_text("#!/bin/sh\nexit 0\n")
+    (faux / "caffeinate").write_text('#!/bin/sh\nenv | grep "^SHADOWLAB_PUBLIC_" | sort\necho "commande: $*"\n')
+    for outil in faux.iterdir():
+        outil.chmod(0o755)
+    dossier = tmp_path / "public"
+    if adresse is not None:
+        dossier.mkdir()
+        (dossier / "adresse-publique.txt").write_text(adresse + "\n")
+    environnement = {
+        "PATH": f"{faux}:/usr/bin:/bin",
+        "SHADOWLAB_PUBLIC_CONTACT": "Essai",
+        "SHADOWLAB_PUBLIC_DOSSIER": str(dossier),
+        "SHADOWLAB_PUBLIC_HTTPS": "0",  # une valeur restée dans le shell : le script doit imposer 1
+    }
+    return subprocess.run(
+        ["bash", str(SCRIPT_TUNNEL), *arguments], capture_output=True, text=True, env=environnement, timeout=30
+    )
+
+
+def test_script_du_tunnel_refuse_un_mode_inconnu(tmp_path):
+    """Un argument inconnu ne doit jamais ouvrir de tunnel : le script dit ses modes et s'arrête."""
+    sortie = _lancer_script_tunnel(tmp_path, "nimporte")
+    assert sortie.returncode == 2
+    assert "tout|tunnel|app" in sortie.stderr
+    assert not (tmp_path / "tunnel-lance").exists(), "aucun tunnel ne doit être ouvert"
+
+
+def test_script_du_tunnel_mode_app_sert_l_adresse_du_tunnel_deja_ouvert(tmp_path):
+    """`app` relance l'application seule, pour l'adresse du tunnel resté ouvert : l'adresse publique ne change pas
+    quand on met le site à jour. Le mode HTTPS reste imposé, et aucun tunnel n'est ouvert."""
+    sortie = _lancer_script_tunnel(tmp_path, "app", adresse=f"https://{HOTE_TUNNEL}")
+    assert sortie.returncode == 0, sortie.stderr
+    assert f"SHADOWLAB_PUBLIC_HOTES={HOTE_TUNNEL}" in sortie.stdout
+    assert "SHADOWLAB_PUBLIC_HTTPS=1" in sortie.stdout
+    assert "SHADOWLAB_PUBLIC_ENTETE_IP=CF-Connecting-IP" in sortie.stdout
+    assert "shadowlab public servir" in sortie.stdout
+    assert not (tmp_path / "tunnel-lance").exists(), "le mode app n'ouvre pas de tunnel"
+
+
+def test_script_du_tunnel_mode_app_refuse_sans_adresse(tmp_path):
+    """Sans tunnel ouvert (pas d'adresse notée), `app` s'arrête avec un message clair, sans rien servir."""
+    sortie = _lancer_script_tunnel(tmp_path, "app")
+    assert sortie.returncode == 2
+    assert "tunnel" in sortie.stderr.lower()
+    assert "shadowlab public servir" not in sortie.stdout
