@@ -789,3 +789,22 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   06 à seuil composite 0,5) ; cette quasi-fuite du moteur est un point faible latent, non corrigé ici ; la liste
   doit être complétée à tout nouveau fichier chargé par une page ; aucun humain mesuré. Décidé par : coordination
   (travail d'un sous-agent, relu).
+
+- **D-79 — 14/11/2026 — La page obtenue après un défi reçoit l'interaction humaine.** Constat (campagne 110, récolte de 21
+  pages par session) : au niveau 05 (passage 34531) et au niveau 06 sans corrélation (passage 34510), la vraie page de
+  liste vit 54 ms et 71 ms, sans mouvement ni défilement, alors que les pages de défi et les fiches durent 4 à 8 s ; au
+  niveau 04 (passage 34528) la liste vit 5 394 ms avec 43 mouvements et 46 défilements. Cause : `DriverNoezia.navigate`
+  faisait l'interaction (`_interaction_post_chargement`) sur la page arrivée, puis résolvait les défis ; l'interaction
+  tombait donc sur la page de défi et la page finale, arrivée après le dernier défi, n'en recevait aucune (au niveau 04, le
+  défi JavaScript recharge la page pendant l'interaction, d'où le bon résultat). `click()` avait le même défaut
+  (`_interaction_post_clic_navigation` avant `_resoudre_defis`). Décision : après `_resoudre_defis`, si au moins un défi a
+  été résolu pendant l'appel (`mesures.details["defis_resolus"]` a grandi), la page finale reçoit l'interaction
+  (`_interaction_post_chargement` pour `navigate`, `_interaction_post_clic_navigation` pour `click`), si
+  `interaction_post_page` est vrai. Sans défi : rien ne change, une seule interaction. Arena, `observateur.js`, parcours
+  de récolte inchangés. Preuve : 6 tests sans navigateur (doubles qui notent l'ordre des appels), 2 vus en échec avant le
+  code (navigation et clic à travers des défis), les 4 autres (sans défi, option coupée) verts avant et après ; suite
+  rapide et lint verts. Limites : pas encore mesuré dans un vrai Chrome (à confirmer par campagne : durée et gestes de la
+  page de liste aux niveaux 05 et 06) ; coût attendu de 5 à 8 s par session, une fois par traversée de défis, la
+  première page n'étant plus quittée en quelques millisecondes ; un défi résolu sans que le compteur grandisse (échec de
+  résolution) ne déclenche pas l'interaction ; `pages_eclair` n'est pas modifiée. Décidé par : coordination (travail d'un
+  sous-agent, relu).

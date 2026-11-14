@@ -68,7 +68,7 @@ def test_navigation_a_travers_des_defis_sans_interaction_si_option_coupee():
 def test_clic_vers_une_page_protegee_interagit_sur_la_page_finale():
     journal: list[str] = []
     _moteur(journal, defis=2).click("a.suite")
-    assert journal[-1] in ("interaction", "interaction_clic")
+    assert journal[-1] == "interaction_clic"
     assert journal.index("defis") < len(journal) - 1
 
 
