@@ -81,6 +81,7 @@ def reglages_publics(tmp_path) -> ReglagesPublics:
         entete_ip="X-Forwarded-For",
         vitrine_graine=20261111,
         vitrine_taille=45,
+        vitrine=True,  # le site d'annonces visible : ces tests le parcourent
         social_taille=12,
     )
 
@@ -577,6 +578,7 @@ def test_version_du_texte_d_information_changee():
         "2026-11-14.4",
         "2026-11-14.5",
         "2026-11-14.7",
+        "2026-11-14.8",
     )
     assert VERSION_INFORMATION not in anciennes, "le relevé enrichi (D-76), puis les textes de D-77, changent le texte"
 

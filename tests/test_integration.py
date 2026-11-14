@@ -321,6 +321,7 @@ def test_contact_s_envoie_depuis_un_vrai_navigateur(tmp_path):
         entete_ip="X-Forwarded-For",
         vitrine_graine=20261111,
         vitrine_taille=10,
+        vitrine=True,  # le test parcourt /lab/vitrine/annonces
     )
     serveur = uvicorn.Server(
         uvicorn.Config(creer_app_publique(reglages), host="127.0.0.1", port=port, log_level="warning")
