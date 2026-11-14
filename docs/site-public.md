@@ -157,6 +157,20 @@ Vercel et Netlify ne conviennent pas : pas de processus continu ni de disque dur
 Non vérifié au 12/11 : le script n'a jamais tourné avec un vrai tunnel (syntaxe, refus sans contact, lecture de
 l'adresse et filtre `sed` vérifiés à vide).
 
+**Premier lancement réel, le 14/11/2026 à 11 h 06**, par l'assistant, à la demande d'Ethan (« publie le vite stp » ;
+le garde-fou de l'application a laissé passer la commande cette fois), plafond à 150 sessions par jour. Vérifié par
+l'adresse publique : l'accueil, la notice, « Ma session », le contact et les crédits répondent 200 ; `/api`,
+`/api/docs`, `/labo`, `/tableau`, `/manuel`, `/lab/`, `/lab/connexion`, `/lab/defi`, `/docs` et `/openapi.json`
+répondent 404 ; la notice et la page de crédits sont identiques, octet pour octet, à la version servie en local
+(Cloudflare ne récrit rien) ; une photo demandée deux fois revient avec `cf-cache-status: DYNAMIC` (pas de cache
+chez Cloudflare, les photos atteignent l'application) ; une session d'essai dans un navigateur (accord, fil,
+explorer, envois du relevé reçus en 204, aucune erreur de console, « Ma session », suppression) ; en base, les
+en-têtes gardés ne contiennent ni `CF-Connecting-IP`, ni `X-Forwarded-For`, ni aucune valeur en forme d'adresse
+IP ; après la suppression, plus aucune ligne de la session. Le journal du tunnel ne contient aucun `sl=` ; il
+contient l'adresse du poste sur le réseau local (ligne `ICMP proxy` de `cloudflared`) : le garder hors de git et le
+supprimer à la fin de la mise en ligne. Les comptes de fréquentation du 14/11 incluent ces essais (4 chargements
+de l'accueil, 1 session commencée).
+
 ## Avant d'annoncer le site publiquement
 
 Le tunnel rapide suffit pour quelques proches. Avant un message public (Reddit…), à la charge de l'exploitant (D-77) :

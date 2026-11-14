@@ -3328,3 +3328,20 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Reste** : une passe de plus d'une heure sous protection (le cookie de défi vit une heure : arrêt puis reprise,
   jamais mesuré) ; l'identité native comme réglage de référence du moteur ; site public et sessions humaines : attend
   Ethan (`docs/PLAN.md` § 7).
+
+## 2026-11-14 (11h20) — Claude (Fable 5.2, coordination) — Site public mis en ligne par le tunnel rapide, à la demande d'Ethan
+
+- **Demande d'Ethan, ses mots** : « Ah on s'en fou de tout ça tqt publie le vite stp ». Jusqu'ici la mise en ligne
+  lui revenait (et le garde-fou de l'application refusait la commande à l'assistant) ; cette fois la commande est passée.
+- **Lancé à 11 h 06** : `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR=150
+  scripts/site-public-tunnel.sh`, en tâche de fond de la session de coordination. Adresse temporaire dans
+  `outputs/public/adresse-publique.txt`. Plafond à 150 sessions par jour : choix de la coordination (40 par défaut).
+- **Vérifié par l'adresse publique** : pages en 200, routes du labo en 404, pages identiques à la version locale,
+  photos non gardées en cache par Cloudflare, session d'essai complète dans un navigateur (relevé reçu en 204,
+  suppression), aucune adresse IP ni en-tête de Cloudflare en base ; session d'essai effacée (0 ligne). Détail :
+  `docs/site-public.md`, « Premier lancement réel ».
+- **Limites** : l'adresse change à chaque lancement ; le site s'arrête avec le script, la session ou le Mac ; aucune
+  limitation de débit devant le site ; « Ma session » ne survit pas à une relance. Pour un message public : nom
+  d'hôte stable sur un domaine d'Ethan (son compte Cloudflare). Non essayé : Safari, iPhone, Firefox.
+- **Fichiers** : `docs/site-public.md`, `docs/PLAN.md` (§ 8, ligne 1.6), `AGENTS.md`, `notes/ia/contexte.md`.
+- **Sous-agents en cours** : durée du cookie de l'Arena (rendu, à contrôler), porte repassée en cours de passe.

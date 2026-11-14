@@ -84,10 +84,14 @@ recommander des optimisations.
   **Fréquentation** : un compte par jour (accueil, sessions commencées, terminées), `shadowlab public
   frequentation` ; `shadowlab public sessions` liste les sessions par taille. Plafond réglable
   `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` (40 par défaut). Quatre relectures indépendantes (D-65, D-67, D-77) ; la
-  quatrième a trouvé 15 défauts, tous corrigés. **Pas encore en ligne.** Avant une annonce publique, à la charge
+  quatrième a trouvé 15 défauts, tous corrigés. **En ligne depuis le 14/11 à 11 h 06 par le tunnel rapide**, lancé par l'assistant à la demande d'Ethan : adresse
+  temporaire dans `outputs/public/adresse-publique.txt`, plafond réglé à 150 sessions par jour ; le site s'arrête
+  avec le script, la session qui l'a lancé ou le Mac. Avant une annonce publique, à la charge
   d'Ethan : un nom d'hôte stable (tunnel nommé sur un domaine, pas le tunnel rapide), une règle de limitation de
   débit chez Cloudflare, le plafond de sessions réglé ; liste dans `docs/site-public.md` (« Avant d'annoncer le
-  site publiquement »). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Les pages du labo n'ont pas changé
+  site publiquement »). Non essayé : Safari, iPhone, Firefox. Vrai tunnel
+  vérifié le 14/11 (pages identiques à la version locale, photos non gardées en cache par Cloudflare, aucune
+  adresse IP ni en-tête de Cloudflare en base, session d'essai commencée puis supprimée). Les pages du labo n'ont pas changé
   d'un octet (`tests/test_labo_inchange.py`). Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md`.
   Le labo lui-même ne se met jamais en ligne.
 - **Arena, D-78 (14/11)** : une photo chargée par une page n'est plus comptée comme une page par les détecteurs

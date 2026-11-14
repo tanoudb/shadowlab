@@ -109,7 +109,8 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    libres de Wikimedia Commons, créditées), relevé enrichi des gestes (jamais une touche ni un texte), fréquentation
    par jour (`shadowlab public frequentation`, `shadowlab public sessions`), plafond de sessions réglable. Quatrième
    relecture indépendante : 15 défauts, tous corrigés (D-75 à D-77). Fusionné dans la branche de travail (`346f4b6`).
-   **Pas en ligne.** À la charge d'Ethan avant une annonce : nom d'hôte stable (tunnel nommé sur un domaine), règle de
+   **En ligne depuis le 14/11 à 11 h 06 par le tunnel rapide** (adresse temporaire dans
+   `outputs/public/adresse-publique.txt`, lancé par l'assistant à la demande d'Ethan, plafond à 150 sessions par jour). À la charge d'Ethan avant une annonce : nom d'hôte stable (tunnel nommé sur un domaine), règle de
    limitation de débit chez Cloudflare, plafond de sessions ; liste dans `docs/site-public.md`. Lancement d'essai :
    `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh` (tunnel rapide : adresse qui change, à
    ne pas annoncer). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Défaut de l'Arena trouvé au passage :
