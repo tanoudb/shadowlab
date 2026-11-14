@@ -729,6 +729,8 @@ def test_mosaique_chaque_vignette_une_fois_dans_l_ordre():
         "l-pp": "LPP",
         "pp-l": "PPL",
         "pp": "PP",
+        "ppp": "PPP",
+        "p-l-p": "PLP",
         "p": "P",
     }
     assert set(attendus) == set(social.TAILLES_BANDE)
@@ -743,6 +745,7 @@ def test_mosaique_chaque_vignette_une_fois_dans_l_ordre():
                 assert nombre == social.TAILLES_BANDE[nom] == len(attendus[nom]), (formats, nom)
                 assert formats[debut : debut + nombre] == attendus[nom], (formats, bandes)
                 debut += nombre
+            assert formats == "P" or "p" not in [nom for nom, _ in bandes], ("portrait laissé seul", formats, bandes)
     assert social.composer_bandes([]) == []
     assert [b for b, _ in social.composer_bandes([False] * 12)] == ["trio-g", "duo", "trio-d", "duo", "duo"]
     assert [b for b, _ in social.composer_bandes([False] * 4)] == ["duo", "duo"]

@@ -298,13 +298,13 @@ T: dict[str, Texte] = {
     "a_l_instant": ("à l'instant", "just now"),
     "credits": ("Crédits des photos", "Photo credits"),
     "credits_intro": (
-        "Les photos de {marque} sont de vraies photos, publiées sous licence libre par leurs auteurs sur Wikimedia Commons. Les comptes qui les « publient » ici sont fictifs.",
+        "Les photos de {marque} sont de vraies photos, publiées sous licence libre par leurs auteurs sur Wikimedia Commons. Les comptes qui les «\u00a0publient\u00a0» ici sont fictifs.",
         "The photos on {marque} are real photos, shared under a free licence by their authors on Wikimedia Commons. The accounts that “post” them here are fictional.",
     ),
-    "credit_ligne": ("Photo : {auteur} · {licence} · ", "Photo: {auteur} · {licence} · "),
+    "credit_ligne": ("Photo\u00a0: {auteur} · {licence} · ", "Photo: {auteur} · {licence} · "),
     "credit_lien": ("crédits", "credits"),
-    "credit_auteur": ("Auteur : ", "Author: "),
-    "credit_licence": ("Licence : ", "Licence: "),
+    "credit_auteur": ("Auteur\u00a0: ", "Author: "),
+    "credit_licence": ("Licence\u00a0: ", "Licence: "),
     "credit_origine": ("Voir la page d'origine", "View the original page"),
     "pages_credits": ("Pages des crédits", "Credit pages"),
 }
@@ -651,12 +651,12 @@ def _ton(etiquette: str) -> int:
 
 
 def banniere(graine: str, teinte: int) -> str:
-    """Bandeau d'en-tête en tesselles (profil, étiquette) : 18 × 4 tesselles irrégulières dans une même teinte, une
+    """Bandeau d'en-tête en tesselles (profil, étiquette) : 22 × 5 tesselles irrégulières dans une même teinte, une
     onde de clarté, quelques tesselles d'or. Tiré d'un générateur à part, seedé par une chaîne (jamais `hash()`, salé
     à chaque processus) : la même page octet pour octet à chaque démarrage, sans toucher au tirage de l'univers. Le
     joint suit le thème (`currentColor`)."""
     alea = random.Random(f"banniere/{graine}")
-    largeur, hauteur, cote, joint = 720, 160, 40, 3.5
+    largeur, hauteur, cote, joint = 704, 160, 32, 3
     phase = alea.uniform(0, 2 * math.pi)
     colonnes, rangees = largeur // cote, hauteur // cote
     tesselles = []
@@ -665,7 +665,7 @@ def banniere(graine: str, teinte: int) -> str:
             x, y = c * cote, r * cote
             coins = ((joint, joint), (cote - joint, joint), (cote - joint, cote - joint), (joint, cote - joint))
             points = " ".join(
-                f"{x + dx + alea.uniform(-2.5, 2.5):.0f},{y + dy + alea.uniform(-2.5, 2.5):.0f}" for dx, dy in coins
+                f"{x + dx + alea.uniform(-2, 2):.0f},{y + dy + alea.uniform(-2, 2):.0f}" for dx, dy in coins
             )
             if alea.random() < 0.035:
                 couleur = f"hsl({40 + alea.randint(-4, 4)} 70% {alea.randint(55, 63)}%)"
@@ -784,7 +784,7 @@ def _vignette(u: Univers, p: Publication, langue: str, cherchable: bool = False)
 
 # Bandes de la mosaïque : nom → nombre de vignettes. La cellule de base est en 3:2 ; un paysage occupe 1×1 ou 2×2
 # cellules, un portrait 1×2 : chaque photo garde à peu près son format (recadrage faible) et aucune bande n'a de trou
-# (sauf `p`, un portrait seul en fin de liste). La feuille de style place les vignettes de chaque bande.
+# (sauf `p`, un portrait tout seul : une liste d'une seule photo). La feuille de style place les vignettes.
 TAILLES_BANDE: dict[str, int] = {
     "solo": 1,
     "duo": 2,
@@ -797,11 +797,15 @@ TAILLES_BANDE: dict[str, int] = {
     "l-pp": 3,
     "pp-l": 3,
     "pp": 2,
+    "ppp": 3,
+    "p-l-p": 3,
     "p": 1,
 }
 RYTHME_BANDES = ("trio-g", "duo", "trio-d", "duo")  # suite de paysages : grand à gauche, deux, grand à droite, deux
 # Début de la suite des formats (P : portrait, L : paysage) → bande qui le prend ; essayés dans l'ordre.
 MOTIFS_BANDE = (
+    ("PPP", "ppp"),
+    ("PLP", "p-l-p"),
     ("PLL", "p-ll"),
     ("PPL", "pp-l"),
     ("PP", "pp"),
@@ -810,6 +814,17 @@ MOTIFS_BANDE = (
     ("LPP", "l-pp"),
     ("LP", "l-p"),
 )
+# Bande d'une vignette de moins, quand la bande choisie laisserait un portrait tout seul en fin de liste.
+RACCOURCIS = {
+    "trio-g": "duo",
+    "trio-d": "duo",
+    "ll-p": "duo",
+    "p-ll": "p-l",
+    "pp-l": "pp",
+    "l-pp": "l-p",
+    "ppp": "pp",
+    "p-l-p": "p-l",
+}
 
 
 def composer_bandes(portraits: Sequence[bool]) -> list[tuple[str, int]]:
@@ -828,6 +843,8 @@ def composer_bandes(portraits: Sequence[bool]) -> list[tuple[str, int]]:
             else:  # trois paysages ou plus : le rythme
                 nom = RYTHME_BANDES[tour % len(RYTHME_BANDES)]
                 tour += 1
+        if len(portraits) - i - TAILLES_BANDE[nom] == 1 and portraits[-1] and nom in RACCOURCIS:
+            nom = RACCOURCIS[nom]  # jamais un portrait seul en bout de mosaïque
         bandes.append((nom, TAILLES_BANDE[nom]))
         i += TAILLES_BANDE[nom]
     return bandes
@@ -858,7 +875,7 @@ def _suite(chemin: str, page: int, total: int, langue: str) -> str:
             else ("/lab/social/explorer", "vers_explorer")
         )
         lien = f'<p class="fin">{_ui("fin", langue)}</p><a class="voir-plus" href="{ailleurs[0]}">{_ui(ailleurs[1], langue)}</a>'
-    return f'<nav class="suite" aria-label="{_ui("pagination", langue)}">{lien}{_etat_page(page, total, langue)}</nav>'
+    return f'<nav class="suite" aria-label="{_ui("pagination", langue)}">{lien}</nav>'
 
 
 def bandeau(langue: str, csrf: str | None) -> str:
@@ -941,11 +958,11 @@ def _liste_etiquettes(u: Univers, etiquettes: Sequence[str], langue: str, cherch
     return "".join(elements)
 
 
-def _liste_auteurs(u: Univers, auteurs: Sequence[Auteur], taille: int, cherchable: bool = False) -> str:
+def _liste_auteurs(auteurs: Sequence[Auteur], taille: int, classe: str = "auteur", cherchable: bool = False) -> str:
     elements = []
     for a in auteurs:
         cle = f' data-cherchable data-texte="{escape(_replier(a.pseudonyme + " " + a.nom))}"' if cherchable else ""
-        elements.append(f"<li{cle}>{_lien_auteur(a, taille, 'auteur auteur-tuile')}</li>")
+        elements.append(f"<li{cle}>{_lien_auteur(a, taille, classe)}</li>")
     return "".join(elements)
 
 
@@ -975,7 +992,7 @@ def page_fil(jeton: str, u: Univers, page: int, langue: str, habillage: Habillag
 <h2 class="titre-bloc">{_ui("etiquettes", langue)}</h2>
 <ul class="puces">{_liste_etiquettes(u, populaires, langue)}</ul>
 <h2 class="titre-bloc">{_ui("auteurs", langue)}</h2>
-<ul class="auteurs-liste auteurs-colonne">{_liste_auteurs(u, auteurs, 40)}</ul>
+<ul class="auteurs-liste auteurs-colonne">{_liste_auteurs(auteurs, 40)}</ul>
 </aside>
 </div>"""
     return _gabarit(langue, _titre_pagine("fil", page, langue), "page-fil", corps, jeton, habillage, "fil")
@@ -999,7 +1016,7 @@ def page_explorer(jeton: str, u: Univers, page: int, langue: str, habillage: Hab
 <section class="listes">
 <div class="liste-bloc">
 <h2 class="titre-bloc">{_ui("auteurs", langue)}</h2>
-<ul class="auteurs-liste auteurs-bande">{_liste_auteurs(u, auteurs, 52, cherchable=True)}</ul>
+<ul class="auteurs-liste auteurs-bande">{_liste_auteurs(auteurs, 52, "auteur auteur-tuile", cherchable=True)}</ul>
 </div>
 <div class="liste-bloc">
 <h2 class="titre-bloc">{_ui("etiquettes", langue)}</h2>
@@ -1070,7 +1087,7 @@ def page_publication(
         prioritaire=True,
     )
     corps = f"""<article class="publication publication-seule" data-publication="{ident}">
-<figure class="scene">{image}</figure>
+<figure class="scene scene-{"portrait" if photo.portrait else "paysage"}">{image}</figure>
 <div class="publication-mise">
 <div class="publication-principal">
 <header class="publication-entete">{_lien_auteur(a, 44)}{_aime(p, langue)}</header>
