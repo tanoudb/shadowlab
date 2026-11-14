@@ -32,7 +32,7 @@ from starlette.requests import ClientDisconnect
 from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
-from . import donnees, messages, pages, social, trace
+from . import donnees, messages, pages, script_public, social, trace
 from .textes import LANGUES
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
@@ -777,12 +777,15 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         annonce = annonce_ou_404(reference)
         return {"annonces": [vitrine.resume_json(a) for a in vitrine.similaires(annonces, annonce)]}
 
+    # Copie sans le nom du projet, fabriquée une fois ; l'application refuse de démarrer si elle n'y arrive pas.
+    statiques_du_labo = script_public.preparer(STATIQUES, FICHIERS_STATIQUES)
+
     @app.get("/lab/static/{chemin:path}")
-    def statique(chemin: str) -> FileResponse:
+    def statique(chemin: str) -> Response:
         type_media = FICHIERS_STATIQUES.get(chemin)
         if type_media is None:
             raise HTTPException(404, "fichier inconnu")
-        return FileResponse(STATIQUES / chemin, media_type=type_media)
+        return Response(statiques_du_labo[chemin], media_type=type_media)
 
     # --- Réseau social fictif « Mosaïk Démo » (public/social.py) : même traitement que la vitrine -----
 
