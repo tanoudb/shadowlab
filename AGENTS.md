@@ -85,8 +85,10 @@ recommander des optimisations.
   frequentation` ; `shadowlab public sessions` liste les sessions par taille. Plafond réglable
   `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` (40 par défaut). Quatre relectures indépendantes (D-65, D-67, D-77) ; la
   quatrième a trouvé 15 défauts, tous corrigés. **En ligne depuis le 14/11 à 11 h 06 par le tunnel rapide**, lancé par l'assistant à la demande d'Ethan : adresse
-  temporaire dans `outputs/public/adresse-publique.txt`, plafond réglé à 150 sessions par jour ; le site s'arrête
-  avec le tunnel, la session qui l'a lancé ou le Mac. **Accueil court** (D-80, 14/11) : une phrase, un seul bouton
+  temporaire dans `outputs/public/adresse-publique.txt`, plafond réglé à 150 sessions par jour ; relancé à 15 h 16 dans deux
+  sessions tmux (`site-public-tunnel`, `site-public-app`) : il ne dépend plus d'une session d'assistant, et
+  `scripts/site-public-tunnel.sh app` relance l'application sans changer l'adresse (D-84). Le site d'annonces y est
+  caché par défaut (`SHADOWLAB_PUBLIC_VITRINE=1` pour le rallumer). Plafond : 500 sessions par jour. **Accueil court** (D-80, 14/11) : une phrase, un seul bouton
   « J'accepte et je commence » (plus de case à cocher), « 2 minutes », détail replié, menu du haut réduit à la marque
   et à la langue. **Le site ne cite jamais le projet ni le laboratoire** (D-81), script d'observation compris :
   copie dérivée par `public/script_public.py`, garde `tests/test_public_sans_marque.py`. Avant une annonce publique, à la charge

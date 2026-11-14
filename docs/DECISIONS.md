@@ -888,3 +888,17 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   défis de rafale aux niveaux 05 et 06 (19, 23 et 36 s après un passage) : la règle de rafale était nécessaire. Limites :
   un passage par niveau ; les défis sont levés par le pilote sur notre Arena (CAPTCHA en clés de test aux niveaux 05 et
   06) ; le cookie d'une heure sur une passe de plus d'une heure reste à mesurer.
+- **D-84 — 14/11/2026 — Site public : le site d'annonces est caché par défaut, et le site tourne dans tmux.** Constat :
+  Ethan, avant de partager le site sur Reddit : « Pour le site masqué l'autre site annonce on s'en fou ». Décision : le
+  site d'annonces « Habitat Démo » n'apparaît plus sur le site public : ses cinq routes `/lab/vitrine/…` ne sont pas
+  enregistrées (404 comme toute adresse inconnue), le bandeau du réseau social n'a plus de lien « Autre site », et les
+  textes parlent d'un seul site de démonstration (notice 2026-11-14.9). Le réglage `SHADOWLAB_PUBLIC_VITRINE=1` le
+  rallume, avec les textes d'avant ; le laboratoire garde son site d'annonces. Exploitation : `site-public-tunnel.sh`
+  a trois modes (`tout`, `tunnel`, `app`) ; le site tourne dans deux sessions tmux (`site-public-tunnel`,
+  `site-public-app`), indépendantes de toute session d'assistant, et l'application se relance sans changer l'adresse.
+  Preuve : `tests/test_public_sans_annonces.py` (27 échecs et 13 erreurs avant le code), 3 tests du script vus en échec
+  avant, 1 715 tests rapides verts, vérification par l'adresse publique (annonces en 404, aucune mention, session
+  d'essai complète puis supprimée). Limites : `vitrine.css` et `vitrine.js` restent servis (partagés avec le réseau
+  social) ; le test d'intégration du site public n'est pas relancé ; l'adresse reste celle d'un tunnel rapide (perdue
+  si le Mac redémarre ou si le tunnel tombe, et avec elle « Ma session » pour les participants). Décidé par : Ethan (la
+  demande), coordination (la forme ; travail d'un sous-agent, relu).

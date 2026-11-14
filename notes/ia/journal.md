@@ -3422,3 +3422,16 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   ont tourné pendant ce passage : ses durées peuvent en être un peu faussées.
 - **Limites dites à Ethan** : adresse en `trycloudflare.com` (méfiance, filtrage possible par Reddit), aucune garantie
   de Cloudflare, lien perdu si le Mac redémarre, « Ma session » perdue avec lui, iPhone et Safari non essayés.
+
+## 2026-11-14 (15h25) — Claude (Fable 5.2, coordination) — Site public : annonces masquées (D-84), prêt à être partagé
+
+- **D-84** (branche `public-sans-annonces`, sous-agent Sonnet, relu : rouge sur `6d2d2e0`, 27 échecs et 13 erreurs ;
+  fusion `48f587a`) : réglage `vitrine` (`config.py`, `SHADOWLAB_PUBLIC_VITRINE`), routes `/lab/vitrine/…` non
+  enregistrées quand il est faux, bandeau sans « Autre site », textes au singulier, notice 2026-11-14.9.
+- **Suite rapide** après fusion : 1 715 verts, lint propre. Tests d'intégration pas relancés (campagne 113 en cours).
+- **En ligne, même adresse** (application seule relancée dans tmux à 15 h 20) : `/lab/vitrine` et
+  `/lab/vitrine/annonces` en 404, aucune mention d'« Habitat » ni du projet, session d'essai complète puis supprimée.
+- **Fréquentation au moment de dire à Ethan qu'il peut partager** : voir la ligne du jour de
+  `shadowlab public frequentation` ; tout ce qui précède 15 h 25 vient des essais de la coordination et d'Ethan.
+- **Fichiers** : `docs/DECISIONS.md` (D-84), `AGENTS.md`.
+- **Reste** : campagne 113 à lire ; nom d'hôte stable ; iPhone et Safari ; texte de franchise encore long.
