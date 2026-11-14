@@ -1,0 +1,34 @@
+# Essai court : une récolte qui dure plus longtemps que le cookie de défi de l'Arena.
+# Le cookie de réussite d'un défi vit une heure par défaut ; avec les profils « cookie court » (D-82) il vit
+# 600 s. La vitrine à 150 annonces fait environ 158 pages, soit une vingtaine de minutes par passage : le défi
+# revient donc une ou deux fois en plein travail. La question : la récolte repasse-t-elle la porte toute seule
+# (option de la recette activée par le scénario), sans perdre ni relire une page ?
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus. Le nombre de passages
+# de la porte en cours de route est dans les détails du passage.
+# Niveau 06 sans le détecteur correlation-session (`06scorrcourt`), comme les campagnes 97 à 111.
+# Aux niveaux 05 et 06, un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-cookie-court.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-cookie-court.yaml SHADOWLAB_VITRINE_TAILLE=150 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena-cookie-court-essai.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# 1 moteur × 3 niveaux × 1 scénario × 1 répétition = 3 passages (environ 1 h, estimation).
+experiment:
+  name: recolte_arena_cookie_court_essai
+  description: >-
+    La récolte générale de la vitrine (150 annonces, environ 158 pages par passage) aux niveaux 04, 05 et 06 de
+    l'Arena (06 sans corrélation) avec un cookie de défi de 600 s : le défi revient en cours de passe.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["04court", "05court", "06scorrcourt"]
+  scenarios:
+    - recolte_recette_vitrine
+  repetitions: 1
+  seed: 20261114
+  output: [json, html]
