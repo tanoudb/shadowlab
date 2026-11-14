@@ -342,6 +342,8 @@ n'écrit **rien** (`test_journal_ne_garde_que_les_erreurs`) ; une requête `HEAD
 pas la purge à 90 jours (il tourne par taille), il ne doit pas dater chaque visite, ce qui contredirait « rien
 n'est enregistré » pour qui visite sans participer (hormis le compte du jour, voir « Fréquentation »). La notice
 le dit (« Un journal technique ne garde que les erreurs… »).
+Un client qui coupe pendant l'envoi du corps d'une requête n'écrit rien non plus, ni trace d'uvicorn, ni ligne (D-77,
+`tests/test_public_deconnexion.py`).
 
 **Aucune ligne**, même en erreur, pour les pages de contact (`/contact…`, feuille de style `/contact/style.css`
 comprise) ni pour ce qu'un navigateur charge avec chaque page (fichiers `/lab/static/…` et `/public/static/…`,
@@ -575,6 +577,7 @@ avant correction, inchangés ; corrections : `tests/test_public_corrections4.py`
 | C6. Dernière ligne de l'en-tête d'adresse | `test_limite_par_adresse_lit_la_derniere_ligne_de_l_en_tete` |
 | C7. Le tunnel impose HTTPS | `test_script_du_tunnel_impose_le_mode_https` |
 | Journal vidé après suppression ; HEAD | `test_suppression_ne_laisse_rien_dans_le_journal_de_la_base`, `test_head_repond_comme_get_sans_corps_ni_ligne_au_journal`, `test_head_sur_l_accueil_ne_compte_aucun_chargement` |
+| Client qui coupe pendant l'envoi du corps (14/11, D-77) : ni trace, ni écriture, ni quota entamé | `tests/test_public_deconnexion.py` (cinq points d'entrée, avec ou sans début de corps) |
 
 ## Les huit conditions du § 5 du plan
 
