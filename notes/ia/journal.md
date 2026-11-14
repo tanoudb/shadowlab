@@ -3451,3 +3451,22 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   journal `outputs/campagne-rallye-long.log`.
 - **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.
 - **Reste** : lire le long parcours ; le site public attend ses premiers vrais visiteurs (Ethan partage le lien).
+
+## 2026-11-14 (18h30) — Claude (Fable 5.2, coordination) — Première session humaine du site public (Safari sur iPhone) et son rejeu
+
+- **Site public** : à 18 h 21, première session terminée par un visiteur : Safari 26 sur iPhone, 26 requêtes, 7 envois
+  (3 empreintes, 2 comportements, 2 traces ; défilement et toucher relevés). C'est aussi la première preuve que le
+  site marche sur iPhone et Safari. Fréquentation du jour à 18 h 25 : 40 visites de l'accueil, 7 sessions commencées
+  (dont 6 essais de la coordination), 1 terminée. On ne sait pas qui c'est (peut-être Ethan sur son téléphone).
+- **Rejeu** (`uv run shadowlab rejeu --base outputs/public/public.sqlite3`) : cette session passe les niveaux 01 à 03
+  et serait arrêtée aux niveaux 04 à 07 par un seul détecteur, `deep-proxy` (signaux `getter_non_natif` et
+  `illegal_invoc_absent`). Dans son relevé, tous les `*_natif` et `*_illegal_invoc` sont faux : la sonde de
+  `observateur.js` ne reconnaît que la forme de Chrome (texte d'une fonction native, message « Illegal invocation »).
+  Tout Safari serait donc classé « automatisé » : défaut de l'Arena, pas un robot. Une seule session (intervalle 21 à
+  100 %), mais la cause est de structure.
+- **Campagne 114 en cours** (dernier passage) : pas de correction ni de test avant sa fin. À faire ensuite, test vu en
+  échec d'abord, puis campagne de contrôle : ces deux signaux ne doivent valoir que pour un navigateur de la famille
+  Chromium, ou la sonde doit reconnaître les formes de WebKit et de Gecko.
+- **Campagne 114, deux passages lus** : niveau 04, 683 pages et 59 257 champs sur 59 257 en 4 515 s, le défi revenu
+  une fois à 3 607 s ; niveau 05, 683 pages et 59 257 champs en 4 867 s, le défi revenu à 3 590 s plus un défi de
+  rafale 35 s après. Niveau 06 sans corrélation en cours.
