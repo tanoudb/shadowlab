@@ -752,6 +752,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   visiteur arrive sur le fil sans session ; la notice nomme Cloudflare, donc une autre voie de mise en ligne demande
   de la changer ; rien n'a tourné avec un vrai tunnel. Décidé par : coordination, après la quatrième relecture
   indépendante.
+  *Ajout du 14/11 :* un client qui coupe la connexion pendant l'envoi d'un corps (`ClientDisconnect`) ne laisse plus de
+  trace d'erreur d'uvicorn : la garde arrête la requête sans réponse, sans écrire en base, sans compter ni user de
+  quota, sans ligne au journal (`tests/test_public_deconnexion.py`).
 
 - **D-78 — 14/11/2026 — Le détecteur de comportement ne compte plus les photos comme des pages.** Constat : campagne
   109, passage 34409, niveau 04 : le défi d'entrée se résout en 6 ms, la liste et ses 18 photos arrivent dans la même

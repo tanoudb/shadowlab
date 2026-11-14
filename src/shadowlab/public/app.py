@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.routing import APIRoute
+from starlette.requests import ClientDisconnect
 
 from ..arena import secret as signature
 from ..config import ReglagesPublics
@@ -492,7 +493,13 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             except sqlite3.Error:
                 reponse = refus(503, "indisponible", langue_de(request))
             else:
-                reponse = await call_next(request)
+                try:
+                    reponse = await call_next(request)
+                except ClientDisconnect:
+                    # Le client a coupé pendant l'envoi du corps (onglet fermé, double clic, réseau mobile, script qui
+                    # abandonne) : plus personne à qui répondre. Aucune trace d'uvicorn, aucune ligne au journal ; les
+                    # gestionnaires n'ont rien écrit ni compté, car ils n'agissent qu'après la lecture du corps.
+                    return Response(status_code=499)
                 if request.method == "HEAD":
                     reponse = await sans_corps(reponse)
         reponse.headers["Content-Security-Policy"] = CSP
