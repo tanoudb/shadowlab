@@ -777,7 +777,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   dès qu'une page lue existe, la moyenne reste faite sur tous les relevés, comme avant. (5) `gardien.protegee` est
   inchangée : une photo reste un moment de contrôle (défi, session bloquée), car une photo d'annonce porte du contenu
   (ville, titre) ; c'est le compte des pages qui est corrigé, pas la protection (essai d'abord fait, puis annulé après
-  relecture). Seuils (4 pages par seconde, 500 ms), profils, moteur, `observateur.js` inchangés. Preuve : 12 tests
+  relecture). Seuils (4 pages par seconde, 500 ms), profils, moteur, `observateur.js` inchangés. Preuve : 10 tests
   vus en échec avant (cas mesuré aux instants réels du passage 34409, `documents`, `navigation_lineaire`,
   `proprietes`, définition unique, alignement D-71, les deux tests du réseau social sortis de `xfail`), témoins et
   contrôle des pages verts avant et après ; rejeu hors ligne après : 0 passage signalé sur 105 en 108, 0 sur 105 en
