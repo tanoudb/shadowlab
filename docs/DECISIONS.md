@@ -667,5 +667,49 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   qu'elles taisaient (cookies permis, lecteur PDF, types de fichiers, mobile ou non, objet propre à Chrome,
   périphériques HID). Texte d'information en version 2026-11-14.4. Limites : le total affiché compte aussi une session
   terminée puis supprimée ; tout chargement de l'accueil compte, robots et rechargements compris ; le bandeau du
-  réseau social (`social.T`, hors de ce travail) parle encore de « la page d'information ». Décidé par :
-  coordination.
+  réseau social (`social.T`, hors de ce travail) parle encore de « la page d'information ». Le plafond de sessions
+  ouvertes par jour, d'abord une constante de `Limites`, est devenu le réglage `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`
+  (40 par défaut, ramené entre 1 et 5 000) : il fixe le jour où un abus peut remplir la base, c'est le plafond de
+  2 Gio qui protège le disque (`docs/site-public.md`, « Limites »). Décidé par : coordination.
+
+- **D-76 — 14/11/2026 — Site public : relevé enrichi des gestes (`public/static/releve.js`, envoi `trace`), la
+  promesse « ni la position de la souris » retirée (cadrage `docs/recherche/site-public-communaute-2026-11-13.md`,
+  section « Relevé enrichi » ; complète D-75 et remplace sa phrase sur le résumé de l'accueil).** Pour faire le
+  meilleur détecteur, l'étude relève désormais la façon de bouger et de taper, pas seulement des comptes et des
+  délais. **Ajouté** : un second script, `releve.js`, servi par la seule application publique sous
+  `/public/static/` (l'`observateur.js` du labo n'est pas modifié, son empreinte est verrouillée par un test),
+  chargé seulement pendant une session, sur les pages des deux sites de démonstration (rendu du réseau social,
+  bandeau de la vitrine), par une balise `<script defer>`, sans script dans la page. Il envoie à `/lab/collecte`
+  (même jeton, même forme) une nature nouvelle, `trace`, faite seulement de nombres entiers (millisecondes depuis
+  l'arrivée sur la page, écarts d'une ligne à la suivante) : trajectoire de la souris (30 points par seconde au
+  plus, 9 000 par page), clics et appuis (position, instant, bouton, sorte d'élément dans une liste fermée : lien,
+  bouton, image, zone de texte, autre ; jamais son texte, son adresse ni son identifiant ; 600 par page),
+  défilement et molette (4 500 par page chacun), rythme du clavier (instant d'appui puis de relâche, dans une zone
+  de texte ou non ; jamais la touche, son code ni le caractère ; 3 000 par page), gestes tactiles (position,
+  instant, nombre de doigts, rayon et pression si le navigateur les donne ; 4 500 par page), passages au premier
+  plan, focus de la fenêtre et redimensionnements (200 par page chacun), et le cadre (taille de la fenêtre et de
+  la page, défilement, densité de pixels, sorte de pointeur). L'envoi part au départ de la page ou à son passage
+  en arrière-plan (`sendBeacon`), et par morceaux quand une liste est pleine (60 envois par page au plus) ; ce qui
+  dépasse un plafond est compté (`ecartes`), pas envoyé. Le serveur valide chaque trace strictement
+  (`public/trace.py` : clés connues seulement, entiers bornés, listes bornées, page d'un des deux sites), la
+  récrit en JSON compact et la compte à part de l'observateur (`envois_trace_par_session` = 1 000,
+  `volume_trace_par_session` = 4 Mio) : elle n'use jamais les envois dont le rejeu a besoin. `requetes_par_session`
+  passe de 3 000 à 4 000 (chaque morceau est une requête `/lab/collecte` notée). Une session au pire passe de
+  16,9 Mo (mesuré le 12/11) à 25,2 Mo (calcul) ; la base de 2 Gio en tient 85 au lieu de 127 ; une session
+  ordinaire de 10 minutes fait environ 1 Mo (estimation, aucun humain en base). **Reste exclu**, verrouillé par des
+  tests qui lisent le script et par un banc sous Node qui piège ces lectures : la touche, son code et le texte
+  tapé, le contenu, l'adresse ou l'identifiant d'un élément, le presse-papiers et la sélection, toute fonction qui
+  demande une autorisation, tout cookie et tout stockage dans le navigateur, tout envoi ailleurs qu'à
+  `/lab/collecte` du même site, tout relevé hors session. `rejeu.py` n'est pas modifié : il ignore les traces
+  (test). **Notice** : elle décrit la trace clé par clé dans les deux langues (liste tirée du script, test) ;
+  « jamais relevé » ne dit plus « ni la position de la souris », mais garde et renforce ni ce que vous tapez (ni le
+  texte, ni les touches), ni l'adresse IP, ni la localisation, rien qui demande une autorisation ; elle dit qu'une
+  façon de bouger la souris ou de taper peut aider à reconnaître une personne. Le résumé de l'accueil
+  (`textes.RESUME_RELEVE`) prend le texte « Franchise » du cadrage. Le but annoncé ne change pas. Texte
+  d'information en version 2026-11-14.5 ; aucune session publique n'existe encore, tout consentement se donne donc
+  sous cette notice. Limites : la durée d'appui d'une touche n'est exacte que sans chevauchement de touches (deux
+  listes, sans identité de touche) ; le rythme des touches peut, en théorie, renseigner sur ce qui est tapé ; la
+  trace de la dernière page part au clic sur « Terminer », sans garantie d'arriver avant la fin de la session ; la
+  note du réseau social sur le commentaire (« jamais envoyé ni enregistré ») reste vraie pour le texte, pas pour
+  son rythme (texte non changé, hors de ce travail) ; rien n'est mesuré sur un humain. Décidé par : coordination, à
+  la demande d'Ethan le 13/11 : « il faut qu'on prenne un maximum d'infos […] pour faire le meilleur détecteur ».

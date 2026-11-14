@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
-from . import donnees, messages, pages, social
+from . import donnees, messages, pages, social, trace
 from .textes import LANGUES
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
@@ -41,10 +41,15 @@ FICHIERS_STATIQUES = {
     "vitrine.css": "text/css",
     "vitrine.js": "text/javascript",
 }
-# Fichiers propres à l'application publique (pages de l'étude, réseau social), servis sous /public/static/ : liste
-# fermée aussi.
+# Fichiers propres à l'application publique (pages de l'étude, réseau social, relevé enrichi de D-76), servis sous
+# /public/static/ : liste fermée aussi.
 STATIQUES_PUBLICS = Path(__file__).resolve().parent / "static"
-FICHIERS_PUBLICS = {"public.css": "text/css", "social.css": "text/css", "social.js": "text/javascript"}
+FICHIERS_PUBLICS = {
+    "public.css": "text/css",
+    "social.css": "text/css",
+    "social.js": "text/javascript",
+    "releve.js": "text/javascript",
+}
 PREFIXE_LANGUE = re.compile(r"/(fr|en)(?:/|$)")  # « /fr », « /en/information » ; pas « /english »
 CSP = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
@@ -104,7 +109,13 @@ class Limites:
     sessions_par_jour: int = 40
     envois_par_session: int = 300  # messages de l'observateur (deux par page)
     volume_par_session: int = 4 * 1024 * 1024  # octets de charges JavaScript (~10 Ko par empreinte)
-    requetes_par_session: int = 3000  # requêtes HTTP notées (~17 par page, images comprises)
+    # Relevé enrichi (`trace`, D-76), compté à part : plein, il ne prive jamais l'observateur de ses envois, que le
+    # rejeu lit. Une page ordinaire en envoie un ; 150 pages et 20 minutes d'activité continue (souris, défilement,
+    # molette, frappe), simulées par tests/test_public_releve.py : 150 envois et ~470 Ko. Calcul : docs/site-public.md.
+    envois_trace_par_session: int = 1000
+    volume_trace_par_session: int = 4 * 1024 * 1024
+    # Requêtes HTTP notées : ~17 par page (images, scripts, deux envois de l'observateur), plus les traces.
+    requetes_par_session: int = 4000
     taille_corps: int = 64 * 1024  # un message de l'observateur
     duree_session_s: int = 2 * 3600  # au-delà, la session n'est plus « en cours »
     taille_max_base: int = 2 * 1024**3  # au-delà, plus aucune session ne s'ouvre et plus rien ne s'écrit
@@ -811,17 +822,26 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             kind, page, charge = message["kind"], message.get("page", ""), message["payload"]
         except (ValueError, KeyError, TypeError, AttributeError, RecursionError) as erreur:
             raise HTTPException(400, "message illisible") from erreur
-        if kind not in ("empreinte", "comportement") or not isinstance(charge, dict) or not isinstance(page, str):
-            raise HTTPException(400, "message invalide")
-        if _trop_profond(charge):
-            raise HTTPException(400, "message trop imbriqué")
-        # Les identifiants d'extension (traces d'erreur) sont masqués avant le calcul du volume et l'écriture.
-        texte = donnees.masquer_extensions(json.dumps(charge, ensure_ascii=False, sort_keys=True))
+        if kind == "trace":
+            # Relevé enrichi (D-76) : validé strictement, puis réécrit à partir des seules clés connues, sans espace.
+            propre = trace.valider(charge) if trace.page_valide(page) else None
+            if propre is None:
+                raise HTTPException(400, "trace invalide")
+            texte = json.dumps(propre, separators=(",", ":"), sort_keys=True)
+            plafond_envois, plafond_volume = limites.envois_trace_par_session, limites.volume_trace_par_session
+        else:
+            if kind not in ("empreinte", "comportement") or not isinstance(charge, dict) or not isinstance(page, str):
+                raise HTTPException(400, "message invalide")
+            if _trop_profond(charge):
+                raise HTTPException(400, "message trop imbriqué")
+            # Les identifiants d'extension (traces d'erreur) sont masqués avant le calcul du volume et l'écriture.
+            texte = donnees.masquer_extensions(json.dumps(charge, ensure_ascii=False, sort_keys=True))
+            plafond_envois, plafond_volume = limites.envois_par_session, limites.volume_par_session
         if plein():
             raise HTTPException(503, "service complet")
         with base() as cx:
-            envois, volume = donnees.usage(cx, jeton)
-            if envois >= limites.envois_par_session or volume + len(texte.encode()) > limites.volume_par_session:
+            envois, volume = donnees.usage(cx, jeton, trace=kind == "trace")
+            if envois >= plafond_envois or volume + len(texte.encode()) > plafond_volume:
                 raise HTTPException(429, "quota de la session atteint")
             donnees.noter_collecte(cx, jeton, kind, donnees.masquer_extensions(page[:200]), texte)
         return Response(status_code=204)

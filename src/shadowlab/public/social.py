@@ -31,6 +31,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from ..site.vitrine import MARQUE as MARQUE_VITRINE
 from ..site.vitrine import Habillage
+from .trace import BALISE as BALISE_RELEVE
 
 MARQUE = "Mosaïk Démo"  # nom de travail, manifestement fictif ; à changer ici seulement
 DOSSIER_PHOTOS = Path(__file__).resolve().parent / "static" / "social" / "photos"
@@ -940,6 +941,7 @@ def _gabarit(
     metas = f'<meta name="sl-session" content="{escape(jeton)}">\n' if habillage.observateur else ""
     metas += '<meta name="sl-sans-tiers" content="1">\n' if habillage.sans_tiers else ""
     observateur = '<script type="module" src="/lab/static/observateur.js"></script>\n' if habillage.observateur else ""
+    observateur += f"{BALISE_RELEVE}\n" if habillage.observateur else ""  # relevé enrichi, pendant la session (D-76)
     bandeau_page = f"{habillage.bandeau}\n" if habillage.bandeau else ""
     nom, _, suffixe = MARQUE.partition(" ")
     rubriques = "".join(

@@ -13,7 +13,8 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
 - les sessions humaines de référence (`POST /session/commencer`, qui mène au fil du réseau social,
   `POST /session/terminer`, `POST /session/supprimer`, tous protégés contre le CSRF) et la page « Ma session »
   (`GET /session`) ;
-- la collecte de l'observateur (`POST /lab/collecte`), seulement pendant une session consentie ;
+- la collecte de l'observateur et du relevé enrichi (`POST /lab/collecte`), seulement pendant une session
+  consentie ;
 - le formulaire de contact (`GET /contact`, `POST /contact`, `GET /contact/envoye`, D-57) : écrire au
   responsable sans qu'une adresse soit affichée ; sa feuille de style est servie sous `/contact/style.css` ;
 - quatre fichiers statiques, en liste fermée : `observateur.js`, `vendor/botd-2.0.0.esm.js`, `vitrine.css`, `vitrine.js` ;
@@ -25,7 +26,9 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
   pendant une session seulement. Sa feuille et son script, `social.css` et `social.js`, sont servis sous
   `/public/static/` (liste fermée) ; le script ne fait aucune requête et n'écrit rien dans le navigateur ;
 - la feuille des pages de l'étude, `public.css`, sous `/public/static/` (même liste fermée) et sous
-  `/contact/style.css` pour les pages de contact.
+  `/contact/style.css` pour les pages de contact ;
+- le relevé enrichi, `releve.js` (D-76), sous `/public/static/` (même liste fermée), chargé seulement pendant une
+  session sur les pages des deux sites de démonstration : voir « Relevé enrichi ».
 
 **Deux langues** (D-75), français et anglais, sans cookie de plus : la langue d'une page est celle du préfixe de
 l'adresse (`/fr`, `/en`), sinon celle notée avec l'accord de la session en cours, sinon celle préférée par le
@@ -184,43 +187,64 @@ journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_a
 | Sessions ouvertes par adresse | 6 par heure glissante (IPv6 : par /64) | Disque, en mémoire seulement |
 | Sessions ouvertes par jour | réglage `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`, 40 par défaut, toutes adresses ; un jour plein n'use pas la limite par adresse | Afflux et abus ; compté en base, survit au redémarrage. Le disque, lui, est protégé par le plafond de taille (ci-dessous) |
 | Taille de la base (+ WAL) | 2 Gio ; au-delà, plus aucune session ne s'ouvre et **plus rien ne s'écrit** (requêtes servies sans être notées, collecte en 503) | Disque |
-| Envois de l'observateur par session | 300 (deux par page) | Disque |
-| Volume des envois par session | 4 Mio (~10 Ko par empreinte) | Disque |
+| Envois de l'observateur par session (`envois_par_session`) | 300 (deux par page) | Disque |
+| Volume des envois de l'observateur par session (`volume_par_session`) | 4 Mio (~10 Ko par empreinte) | Disque |
+| Envois du relevé enrichi par session (`envois_trace_par_session`, D-76) | 1 000, comptés à part : une trace n'use jamais les envois de l'observateur | Disque ; le rejeu a besoin des envois de l'observateur |
+| Volume des traces par session (`volume_trace_par_session`, D-76) | 4 Mio, compté à part | Disque |
+| Une trace | clés et bornes fermées (`public/trace.py`) ; 60 envois par page au plus, plafonds par page dans le script (voir « Relevé enrichi ») | Disque, mémoire |
 | Imbrication d'un envoi | 32 niveaux (l'observateur en a 5 au plus) ; au-delà, 400 | Mémoire, pile |
-| Requêtes HTTP notées par session | 3 000 (~17 par page) ; au-delà, servies mais plus notées | Disque |
+| Requêtes HTTP notées par session (`requetes_par_session`) | 4 000 (3 000 avant D-76 ; ~18 par page avec la trace) ; au-delà, servies mais plus notées | Disque |
 | Une requête notée | en-têtes : 40 au plus, nom ≤ 64 car., valeur ≤ 512 car., JSON ≤ 2 048 octets ; méthode ≤ 16, chemin ≤ 200 | Disque |
 | Corps d'un envoi | 64 Kio, annoncé ou réel | Mémoire, disque |
 | Durée d'une session | 2 heures (cookie et contrôle serveur) | Un cookie volé ne sert pas longtemps |
 | Messages de contact | 2 000 caractères ; par adresse (en mémoire, IPv6 par /64) : 3 par heure glissante et 5 par 24 h glissantes ; 30 par jour pour tout le monde, 500 gardés (au-delà, 503 jusqu'à la purge ou un effacement à la main) ; formulaire borné à 12 octets par caractère permis, plus 1 Kio | Disque : quelques Mo au pire (500 messages de 8 Ko, non mesuré). 5 par adresse et par jour : un visiteur écrit une ou deux fois, et une adresse seule n'épuise ni le plafond du jour (30) ni la boîte avant la purge (5 × 90 jours = 450 < 500) |
 
-**Pire cas, mesuré** (12/11/2026, base temporaire, ces bornes atteintes) : une session occupe 16,9 Mo —
-12,6 Mo pour 3 000 requêtes aux en-têtes de 2 Ko (une ligne de ~2,3 Ko prend une page SQLite de 4 Kio) et
-4,3 Mo d'envois. À 40 sessions par jour (le défaut) : **environ 680 Mo par jour**. Le plafond de 2 Gio est contrôlé à
-chaque écriture ; il ne peut être dépassé que des lignes déjà en cours d'écriture (une par requête
-simultanée, 64 Kio au plus chacune). Sous abus soutenu, il est donc atteint en 3 jours environ : le site
-reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppression à la main (voir
-« Limites connues »). Une purge ne réduit pas le fichier, mais ses pages libérées sont réutilisées.
+**Pire cas, avant le relevé enrichi, mesuré** (12/11/2026, base temporaire, ces bornes atteintes) : une session
+occupait 16,9 Mo — 12,6 Mo pour 3 000 requêtes aux en-têtes de 2 Ko (une ligne de ~2,3 Ko prend une page SQLite
+de 4 Kio) et 4,3 Mo d'envois. **Depuis D-76, par le calcul (non mesuré)** : 25,2 Mo (ci-dessous). À 40 sessions par
+jour (le défaut) : **environ 1 Go par jour** au pire. Le plafond de 2 Gio est contrôlé à chaque écriture ; il ne
+peut être dépassé que des lignes déjà en cours d'écriture (une par requête simultanée, 64 Kio au plus chacune).
+Sous abus soutenu, il est donc atteint le 3ᵉ jour : le site reste visitable mais n'ouvre plus de session jusqu'à
+la purge ou une suppression à la main (voir « Limites connues »). Une purge ne réduit pas le fichier, mais ses
+pages libérées sont réutilisées.
 
-**Ce que tient la base, et ce que cela veut dire pour le réglage** (calcul du 14/11/2026, verrouillé par
-`test_plafond_de_la_base_en_sessions_au_pire`) :
+**Ce que tient la base, et ce que cela veut dire pour le réglage** (calcul du 14/11/2026 refait pour D-76,
+verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
 
-- Une session au volume maximal : 3 000 requêtes notées × 4 Kio (une ligne par page SQLite, mesuré le 12/11)
-  = 12,3 Mo, plus 4 Mio d'envois et environ 300 octets par envoi (300 envois) = 4,3 Mo, soit **16,6 Mo par le
-  calcul** (16,9 Mo mesurés le 12/11 ; l'écart de 0,3 Mo n'est pas expliqué).
-- 2 Gio (2 147 483 648 octets) / 16,9 Mo = **127 sessions** (129 par le calcul). C'est un **total**, pas un
-  nombre par jour : une session reste en base 90 jours.
-- Le plafond par jour ne protège donc pas le disque ; c'est le plafond de 2 Gio qui le fait. C'est un nombre
-  par jour UTC, pas un débit : il fixe le jour où un abus peut remplir la base, au plus tôt le
-  `ceil(127 / plafond)`-ième jour : le 4ᵉ jour à 40 sessions par jour, le 2ᵉ à 100, **le jour même dès 127**.
-  Au-delà de 127 environ, il ne retarde plus rien. Base pleine, plus aucune session ne s'ouvre (503) jusqu'à la
-  purge (jusqu'à 90 jours) ou à une suppression à la main : l'étude serait bloquée, pas le disque.
-- Une session humaine ordinaire est bien plus petite que ce pire cas : non mesuré (aucune session humaine en
-  base au 14/11). La première vraie session donnera le chiffre (taille de la base avant et après).
+- **Une session au pire** (toutes les bornes atteintes) : 4 000 requêtes notées × 4 Kio (une ligne par page
+  SQLite, mesuré le 12/11) = 16,4 Mo, plus 4 Mio d'envois de l'observateur et 4 Mio de traces (8,4 Mo), plus
+  environ 300 octets par ligne d'envoi (300 + 1 000 envois : 0,4 Mo), soit **25 162 608 octets, 25,2 Mo par le
+  calcul** (avant D-76 : 16,6 Mo par le calcul, 16,9 Mo mesurés ; l'écart de 0,3 Mo n'a pas été expliqué).
+- **Une session ordinaire de 10 minutes** (estimation à partir d'unités mesurées dans Chromium sans tête le
+  14/11, aucun humain en base) : une quarantaine de pages ; par page, une empreinte de ~9,8 Ko, un envoi
+  « comportement » de ~0,8 Ko, une dizaine de requêtes notées de ~0,8 Ko (en-têtes de ~680 octets en moyenne) ;
+  et la trace, ~0,7 Ko pour une page de 3 secondes, ~3 Ko par 8 secondes de souris en mouvement continu, soit
+  0,1 à 0,25 Mo pour 10 minutes. Total : **environ 1 à 1,2 Mo**, dont 0,4 Mo d'empreintes. Le relevé enrichi
+  ajoute donc 10 à 25 % à une session ordinaire.
+- **Une session très active** (150 pages de 8 secondes, 20 minutes de souris en mouvement continu, défilement,
+  deux clics par page, frappe une page sur cinq ; rejouée sous Node par
+  `test_promenade_de_150_pages_et_20_minutes_tient_largement`) : 150 traces, 466 538 octets. Elle tient sous un
+  tiers des envois de traces permis (1 000), sous un quart de leur volume (4 Mio), et avec un quart de marge sur
+  les requêtes notées (au pire 17 par page avec les deux envois de l'observateur, plus les traces : 2 700 sur
+  4 000). Une page où la souris ne s'arrête pas pendant 20 minutes atteint le plafond de 9 000 points : 16
+  envois de 5 Ko au plus, le reste compté dans `ecartes`.
+- **Ce que tient la base** : 2 Gio (2 147 483 648 octets) / 25,2 Mo = **85 sessions au pire** (127 avant D-76),
+  et environ **1 800 à 2 000 sessions ordinaires**. C'est un **total**, pas un nombre par jour : une session reste
+  en base 90 jours.
+- **Conséquence pour `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`** : le plafond par jour ne protège pas le disque ;
+  c'est le plafond de 2 Gio qui le fait. C'est un nombre par jour UTC, pas un débit : il fixe le jour où un abus
+  peut remplir la base, au plus tôt le `ceil(85 / plafond)`-ième jour : le 3ᵉ jour à 40 sessions par jour (le
+  4ᵉ avant D-76), le 2ᵉ à 50, **le jour même dès 85** (127 avant). Au-delà de 85, il ne retarde plus rien. Base
+  pleine, plus aucune session ne s'ouvre (503) jusqu'à la purge (jusqu'à 90 jours) ou à une suppression à la
+  main : l'étude serait bloquée, pas le disque. Avec des sessions ordinaires, 40 par jour pendant 90 jours
+  (3 600 sessions, environ 4 Go) rempliraient la base entre le 45ᵉ et le 55ᵉ jour : à surveiller si la
+  participation dure.
 - Conséquence pour le réglage : le fixer sur la participation attendue le jour d'un message (quelques centaines,
   pas plus), surveiller `shadowlab public frequentation` et la taille de `public.sqlite3`, supprimer les sessions
   abusives (`shadowlab public supprimer`), et demander une limitation de débit au mandataire (voir « Ce qui reste
   à la charge de l'hébergement »). Élever `taille_max_base` (constante de `Limites`) demande d'abord de mesurer
-  une vraie session et la place libre du disque.
+  une vraie session et la place libre du disque. La première vraie session donnera le chiffre ordinaire (taille de
+  la base avant et après).
 
 ## Purge et suppression
 
@@ -303,7 +327,11 @@ Base publique, tables du schéma du labo (aucune migration ajoutée), plus une t
 - `observations_js` : les envois de l'observateur (empreinte et comportement), tels quels, sauf les
   identifiants d'extension de navigateur (`chrome-extension://<id>`, `moz-extension://`,
   `safari-web-extension://`… dans les traces d'erreur), remplacés par `masque` avant le calcul du volume et
-  l'écriture : un identifiant d'extension peu répandue peut désigner une personne.
+  l'écriture : un identifiant d'extension peu répandue peut désigner une personne. Et les envois `trace` du
+  relevé enrichi (D-76), **récrits** par le serveur après validation (`trace.valider` : seules les clés du
+  schéma, des nombres entiers), en JSON compact ; ce qui ne passe pas la validation est refusé (400) et rien
+  n'est écrit. La suppression et la purge les effacent avec le reste
+  (`test_suppression_et_purge_effacent_les_traces`).
 - `frequentation` (D-75), créée par l'application (`donnees.SCHEMA_FREQUENTATION`, pas une migration du labo) :
   une ligne par jour UTC, `jour` (AAAA-MM-JJ) et trois nombres, `accueil` (chargements de la page d'accueil, en
   GET), `commencees`, `terminees` (« Terminer ma session »). Ni adresse, ni identifiant, ni navigateur, ni heure.
@@ -336,8 +364,58 @@ Base publique, tables du schéma du labo (aucune migration ajoutée), plus une t
   ignoré par git. Un fichier `secret` vide est refusé (erreur claire au démarrage, labo compris) : sinon
   n'importe qui pourrait forger les cookies signés. Le supprimer pour qu'il soit recréé.
 
-La liste lisible des données, dans la notice, est tirée de `observateur.js` clé par clé, dans chaque langue ; un
-test échoue si le script envoie un champ qu'elle ne décrit pas.
+La liste lisible des données, dans la notice, est tirée de `observateur.js` et de `releve.js` clé par clé, dans
+chaque langue ; un test échoue si l'un des deux scripts envoie un champ qu'elle ne décrit pas
+(`test_liste_des_donnees_dans_les_deux_langues_tiree_de_l_observateur`, `test_cles_du_script_du_serveur_et_de_la_notice`).
+
+## Relevé enrichi (D-76)
+
+`public/static/releve.js`, servi par la seule application publique (l'`observateur.js` du labo n'est pas modifié).
+Chargé seulement pendant une session, sur les pages des deux sites de démonstration : par le rendu du réseau
+social, et par le bandeau de session pour la vitrine (balise `<script src="/public/static/releve.js" defer>`, aucun
+script dans la page). Sans jeton de session dans la page, il ne pose aucun écouteur et n'envoie rien. Il envoie à
+`POST /lab/collecte?sl=<jeton>` (même jeton et même forme `{kind, page, payload}` que l'observateur) la nature
+`trace` : au départ de la page (`pagehide`) ou à son passage en arrière-plan, par `sendBeacon` ; à la soumission
+d'un formulaire (« Terminer ma session ») ; et par morceaux, quand une liste atteint son plafond par envoi. Rien
+d'autre que des nombres entiers ; les instants sont en millisecondes depuis l'arrivée sur la page, et chaque
+liste est écrite à plat, la première ligne en valeurs, les suivantes en écarts à la précédente (colonnes
+d'instant et de position).
+
+Les clés, déclarées à un seul endroit (`CLES` dans le script, `trace.SCHEMA` côté serveur, même ordre ; un test
+compare les deux et la notice) :
+
+| Clé | Contenu (une ligne) | Par envoi | Par page |
+|-----|---------------------|-----------|----------|
+| `version`, `morceau`, `raison` | version du format (1) ; numéro de l'envoi dans la page (0 à 59) ; tampon plein, arrière-plan ou départ | — | 60 envois |
+| `instant_ms` | instant de l'envoi | — | — |
+| `cadre` | largeur et hauteur de la fenêtre, de la page, défilement vertical, densité de pixels × 100, sorte de pointeur (fin, grossier, aucun) | — | — |
+| `ecartes` | nombre de lignes non relevées faute de place | — | — |
+| `souris` | instant, x, y dans la fenêtre ; 30 points par seconde au plus | 600 | 9 000 |
+| `clics` | instant, x, y, bouton, sorte d'élément (autre, lien, bouton, image, zone de texte), sorte de pointeur | 100 | 600 |
+| `defilement` | instant, position verticale ; 30 par seconde au plus | 300 | 4 500 |
+| `molette` | instant, pas horizontal et vertical, unité (pixel, ligne, page), cumulés par trentième de seconde | 300 | 4 500 |
+| `clavier_appuis` | instant de l'appui, dans une zone de texte ou non (répétitions automatiques ignorées) | 200 | 3 000 |
+| `clavier_relaches` | instant de la relâche | 200 | 3 000 |
+| `tactile` | instant, x, y, nombre de doigts, rayon et pression si le navigateur les donne (−1 sinon), phase | 300 | 4 500 |
+| `premier_plan`, `focus` | instant, visible ou non ; fenêtre active ou non | 50 | 200 |
+| `redimensionnements` | instant, largeur, hauteur de la fenêtre | 50 | 200 |
+
+**Jamais lu** (tests qui lisent le script sans ses commentaires, et banc sous Node `tests/banc_releve.js` où ces
+propriétés lèvent une erreur si elles sont lues) : `key`, `code`, `keyCode`, `which`, `value`, `textContent`,
+`innerText`, `innerHTML`, `clipboardData`, `getSelection`, ni l'adresse, l'identifiant ou le texte d'un élément ;
+aucun écouteur de saisie, de copie ou de sélection ; aucune fonction à autorisation ; ni cookie ni stockage dans le
+navigateur ; aucun envoi ailleurs qu'à `/lab/collecte` du même site. **Le serveur** refuse toute trace qui n'a pas
+exactement les clés du schéma, un nombre non entier (booléen, décimal, infini compris), une liste trop longue ou de
+mauvaise largeur, une valeur hors bornes, ou une page qui n'est pas l'un des deux sites (`/lab/social…`,
+`/lab/vitrine…`). Les traces sont comptées à part de l'observateur (`envois_trace_par_session`,
+`volume_trace_par_session`). `rejeu.py` les ignore : une session avec traces se rejoue exactement comme sans
+(`test_rejeu_ignore_les_traces`).
+
+**Vu dans un vrai navigateur** (14/11/2026, Chromium sans tête, application publique de ce dossier sur une base
+jetable) : aucune erreur de politique de sécurité ni de console ; une publication où le visiteur a tapé seize
+caractères dans la zone de commentaire donne une trace de 663 octets, avec 17 appuis et 17 relâches dans une zone
+de texte et aucun caractère ; les octets de la base et de son journal ne contiennent ni le texte tapé, ni le nom
+d'une touche.
 
 ## Fréquentation
 
@@ -411,6 +489,18 @@ Version « étude » (14/11/2026, D-75, `tests/test_public_etude.py`) :
 | Plafond de sessions par jour réglable | `test_reglage_sessions_par_jour`, `test_reglage_applique_sans_limites_explicites`, `test_plafond_du_jour_atteint_la_page_le_dit`, `test_plafond_du_jour_n_use_pas_la_limite_par_adresse`, `test_plafond_de_la_base_en_sessions_au_pire` (calcul) |
 | Fréquentation | `test_table_de_frequentation_trois_nombres_par_jour`, `test_comptes_du_jour`, `test_visite_hors_session_n_ecrit_que_le_compte_du_jour`, `test_comptes_survivent_a_la_purge_et_a_la_suppression`, `test_base_pleine_ne_compte_plus`, `test_compte_perdu_si_la_base_tombe_mais_accueil_servi`, `test_accueil_affiche_le_total_des_sessions_terminees`, `test_notice_dit_exactement_le_compte_par_jour`, `test_commande_frequentation` |
 
+Relevé enrichi (14/11/2026, D-76, `tests/test_public_releve.py`, banc sous Node `tests/banc_releve.js`) :
+
+| Point | Tests |
+|-------|-------|
+| Servi et chargé seulement par l'application publique, pendant une session, sur les deux sites ; observateur du labo inchangé | `test_releve_servi_sous_public_static_seulement`, `test_observateur_du_labo_inchange`, `test_releve_charge_en_session_sur_les_deux_sites`, `test_releve_absent_hors_session`, `test_balise_du_bandeau_de_la_vitrine_et_pages_du_labo`, `test_releve_sans_session_ne_fait_rien` |
+| Jamais la touche, le texte, un élément ; ni autorisation, ni stockage, ni envoi ailleurs | `test_releve_ne_lit_ni_touche_ni_texte_ni_element`, `test_releve_ni_autorisation_ni_stockage_ni_ailleurs`, `test_releve_sous_node_ne_lit_rien_d_interdit_et_n_envoie_que_des_nombres`, `test_trace_stockee_ne_contient_que_des_nombres` |
+| Contenu, échantillonnage, plafonds, morceaux, envoi avant « Terminer » | `test_releve_contenu_d_une_trace`, `test_releve_echantillonne_30_par_seconde_au_plus`, `test_releve_plafonds_par_page_et_morceaux`, `test_releve_une_trace_par_page_ordinaire`, `test_releve_terminer_envoie_avant_la_fin_de_la_session` |
+| Validation stricte au serveur | `test_collecte_accepte_une_trace_valide_et_la_stocke_compacte`, `test_collecte_refuse_toute_trace_invalide`, `test_collecte_refuse_les_nombres_non_entiers_ou_infinis`, `test_collecte_refuse_une_trace_hors_des_deux_sites`, `test_collecte_refuse_une_trace_sans_session`, `test_ce_que_le_script_envoie_passe_au_serveur` |
+| Quotas à part, 150 pages et 20 minutes, taille d'un envoi, base au pire | `test_quotas_des_traces_a_part_de_l_observateur`, `test_promenade_de_150_pages_et_20_minutes_tient_largement`, `test_un_envoi_au_pire_tient_dans_le_corps_permis`, `test_plafonds_laissent_parcourir_150_pages`, `test_plafond_de_la_base_en_sessions_au_pire` (calcul) |
+| Suppression, purge, rejeu | `test_suppression_et_purge_effacent_les_traces`, `test_rejeu_ignore_les_traces` |
+| Notice clé par clé, plafonds, promesse retirée, D-76 | `test_cles_du_script_du_serveur_et_de_la_notice`, `test_notice_decrit_la_trace_cle_par_cle`, `test_notice_dit_les_plafonds_par_page`, `test_notice_jamais_releve_sans_la_position_de_la_souris`, `test_rien_de_l_ancienne_promesse_ailleurs`, `test_accueil_resume_du_releve_exact_et_a_un_seul_endroit`, `test_decision_d76_et_documentation` |
+
 ## Les huit conditions du § 5 du plan
 
 | Condition | Couverture |
@@ -455,9 +545,19 @@ Version « étude » (14/11/2026, D-75, `tests/test_public_etude.py`) :
   quelques unités (une par requête simultanée). Sans conséquence sur le disque à cette échelle.
 - **Plafond quotidien épuisable.** `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` sessions par jour pour tout le monde
   (40 par défaut) : un script qui change d'adresse peut les consommer et priver les vrais participants de la
-  journée, et remplir la base (127 sessions au pire : le 4ᵉ jour à 40 par jour, le jour même avec un plafond de
-  127 ou plus ; voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
+  journée, et remplir la base (85 sessions au pire depuis D-76 : le 3ᵉ jour à 40 par jour, le jour même avec un
+  plafond de 85 ou plus ; voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
   main des sessions abusives (`shadowlab public supprimer`).
+- **Relevé enrichi (D-76).** La durée d'appui d'une touche n'est exacte que sans chevauchement de touches (deux
+  listes, appuis et relâches, sans identité de touche). La fin d'une trajectoire peut perdre jusqu'à un
+  trentième de seconde (échantillonnage). La trace de la dernière page part au clic sur « Terminer ma session »
+  (soumission du formulaire), avant la requête qui termine la session : c'est une course, pas une garantie ; si
+  elle arrive après, elle est refusée comme le dernier envoi « comportement ». Le rythme des touches et les
+  gestes de la souris sont des données proches de la biométrie, et le rythme des touches peut, en théorie,
+  renseigner sur ce qui est tapé (la notice dit qu'une façon de bouger ou de taper peut aider à reconnaître une
+  personne ; elle ne parle pas de ce second point). La note du réseau social sous la zone de commentaire
+  (« jamais envoyé ni enregistré ») reste vraie pour le texte, pas pour le rythme de sa frappe : texte de
+  `public/social.py`, non changé.
 - **Formulaire de contact blocable.** Une adresse seule ne le peut plus (5 messages par jour ; un /64 IPv6
   compte pour une adresse). Mais six adresses IPv4, ou six /64, épuisent les 30 messages du jour en deux
   heures (dix en quelques minutes), chaque jour, et remplissent la boîte (500 messages) en 17 jours : le
@@ -495,6 +595,8 @@ Version « étude » (14/11/2026, D-75, `tests/test_public_etude.py`) :
   servir à revalider ces deux mesures ; il faudrait des sessions `/manuel` du labo.
 - Le dernier envoi « comportement » (au départ de la dernière page) peut arriver après « terminer » et être
   refusé.
+- Les envois `trace` (D-76) et les requêtes `POST /lab/collecte` qui les portent sont dans la base, mais le rejeu
+  les ignore (`test_rejeu_ignore_les_traces` : même résultat avec et sans) ; aucun détecteur ne les lit encore.
 
 ## Message à envoyer avec le lien
 
@@ -507,8 +609,9 @@ Version courte :
 > LIEN
 > C'est un faux réseau social de photos. Tu coches la case, « Commencer la session », tu te balades comme sur
 > un vrai (quelques publications, quelques profils), puis « Terminer ma session » en haut. Ça m'aide à vérifier
-> qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Rien de personnel n'est relevé
-> (ni nom, ni e-mail, ni adresse IP), et tu peux tout effacer d'un clic.
+> qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Le site relève ton navigateur et
+> ta façon de naviguer (souris, clics, défilement, rythme des touches), mais jamais ce que tu tapes, ni ton nom,
+> ni ton e-mail, ni ton adresse IP, et tu peux tout effacer d'un clic.
 
 Version détaillée, pour quelqu'un qui veut savoir avant de cliquer :
 
@@ -519,7 +622,7 @@ Version détaillée, pour quelqu'un qui veut savoir avant de cliquer :
 > - Coche la case, clique sur « Commencer la session », puis navigue 5 à 10 minutes comme tu le ferais
 >   vraiment : ouvre des publications, des profils, fais défiler, change de page. Garde l'onglet au premier plan.
 > - Clique sur « Terminer ma session » dans le bandeau du haut.
-> Ce qui est relevé : les caractéristiques techniques de ton navigateur et ta façon de naviguer, en
-> chiffres (nombre de clics, délais entre deux gestes). Jamais ce que tu tapes, ni ton nom, ni ton e-mail,
-> ni ton adresse IP. Tout est effacé au bout de 90 jours, et la page « Ma session » permet de tout
+> Ce qui est relevé : les caractéristiques techniques de ton navigateur et ta façon de naviguer, sous forme
+> de nombres (mouvements de la souris, clics, défilement, l'instant où une touche est enfoncée puis relâchée).
+> Jamais ce que tu tapes (ni le texte, ni les touches), ni ton nom, ni ton e-mail, ni ton adresse IP. Tout est effacé au bout de 90 jours, et la page « Ma session » permet de tout
 > supprimer tout de suite.

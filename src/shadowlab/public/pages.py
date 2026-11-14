@@ -1,8 +1,9 @@
 """Pages de l'application publique : accueil de l'étude, notice, session, contact, erreurs, bandeau de la vitrine.
 
 Deux langues (français, anglais) : la structure HTML est écrite une fois ici, les textes sont dans `textes.py`.
-La liste des données relevées suit `site/static/observateur.js` clé par clé, dans chaque langue : un test vérifie
-qu'elle couvre exactement ce que le script envoie. Aucune ressource extérieure, aucun script en ligne.
+La liste des données relevées suit `site/static/observateur.js` et `public/static/releve.js` (D-76) clé par clé, dans
+chaque langue : des tests vérifient qu'elle couvre exactement ce que les scripts envoient. Aucune ressource
+extérieure, aucun script en ligne.
 """
 
 # ruff: noqa: E501  (gabarits HTML et textes : lignes longues voulues)
@@ -14,10 +15,11 @@ from ..config import ReglagesPublics
 from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 from .social import MARQUE as MARQUE_SOCIAL
-from .textes import ERREURS, LANGUES, RESUME_RELEVE, T
+from .textes import ERREURS, LANGUES, RELEVES_TRACE, RESUME_RELEVE, T
+from .trace import BALISE as BALISE_RELEVE
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.4"
+VERSION_INFORMATION = "2026-11-14.5"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -307,16 +309,17 @@ def _bouton_terminer(csrf: str, langue: str, classe: str = "bouton-plein") -> st
 
 
 def bandeau(langue: str, csrf: str | None) -> str:
-    """Bandeau des pages vitrine, dans la langue du visiteur. Avec un jeton anti-CSRF (session en cours) : « Ma session »
-    et un bouton pour terminer ; sans : invitation à participer. Toujours un lien vers l'autre site, le réseau social
-    fictif."""
+    """Bandeau des pages vitrine, dans la langue du visiteur. Avec un jeton anti-CSRF (session en cours) : « Ma session »,
+    un bouton pour terminer et la balise du relevé enrichi (`releve.js`, D-76) ; sans : invitation à participer.
+    Toujours un lien vers l'autre site, le réseau social fictif."""
     langue = langue_sure(langue)
     autre = f'<a class="autre-site" href="/lab/social/fil">{_t(langue, "autre_site", nom=escape(MARQUE_SOCIAL))}</a>'
     if csrf is not None:
         return f"""<aside class="session-publique en-cours" aria-label="{_t(langue, "bandeau_session")}"><div class="conteneur">
 <p><span class="pastille" aria-hidden="true"></span>{_t(langue, "bandeau_en_cours")}</p>
 <div class="actions"><a href="/session">{_t(langue, "nav_ma_session")}</a>{_bouton_terminer(csrf, langue)}{autre}</div>
-</div></aside>"""
+</div></aside>
+{BALISE_RELEVE}"""
     return f"""<aside class="session-publique" aria-label="{_t(langue, "bandeau_recherche")}"><div class="conteneur">
 <p>{_t(langue, "bandeau_sans_participer")}</p>
 <div class="actions"><a href="/">{_t(langue, "bandeau_participer")}</a>{autre}</div>
@@ -438,6 +441,7 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
     jours = reglages.conservation_jours
     duree = _duree(duree_session_s, langue)
     relevees, comportement = RELEVES[langue]
+    gestes = RELEVES_TRACE[langue]
     social, habitat = escape(MARQUE_SOCIAL), escape(MARQUE)
     corps = f"""<article class="notice">
 <h1>{_t(langue, "notice_h1")}</h1>
@@ -469,6 +473,9 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
 <dl class="donnees">{_liste(relevees)}</dl>
 <h3>{_t(langue, "h_liste_comportement")}</h3>
 <dl class="donnees">{_liste(comportement)}</dl>
+<h3>{_t(langue, "h_liste_trace")}</h3>
+<p>{_t(langue, "liste_trace")}</p>
+<dl class="donnees">{_liste(gestes)}</dl>
 <p>{_t(langue, "liste_envoi")}</p>
 </details>
 </section>

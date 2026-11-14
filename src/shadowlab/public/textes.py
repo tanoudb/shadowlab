@@ -46,19 +46,21 @@ T: dict[str, dict[str, str]] = {
         "h_releve": "Ce qui est relevé",
         "releve_intro": "Seulement pendant la session, et seulement sur les pages des deux sites de démonstration :",
         "releve_appareil": "<strong>Les caractéristiques de votre navigateur et de votre appareil</strong> : navigateur et système, langues, écran et fenêtre, fuseau horaire, carte graphique, polices installées (parmi 25), quelques empreintes calculées (dessin, son, textes) et des contrôles techniques qui servent à repérer les robots.",
-        "releve_navigation": "<strong>Votre façon de naviguer, en chiffres seulement</strong> : nombre de clics, de touches et de défilements, délais entre deux gestes, changements de direction de la souris, temps passé sur chaque page. Jamais ce que vous tapez, ni la position de la souris.",
+        "releve_navigation": "<strong>Votre façon de naviguer</strong> : les mouvements de la souris (positions dans la fenêtre et instants), les clics (position, bouton, sorte d'élément visé), le défilement et la molette, le rythme des touches (l'instant où une touche est enfoncée puis relâchée), les gestes sur un écran tactile, les passages à un autre onglet ou à une autre fenêtre, la taille de la fenêtre ; et, pour chaque page, des nombres et des délais (nombre de clics, temps passé…). Jamais ce que vous tapez : ni le texte, ni les touches.",
         "releve_pages": "<strong>Les pages ouvertes sur ces sites</strong> et les fichiers qu'elles chargent (images, styles, scripts), avec l'heure, la méthode, le chemin sans paramètres, la version du protocole, et une partie des en-têtes que votre navigateur envoie : {entetes}, ainsi que les en-têtes {prefixes}. Un référent de ce site est réduit à son chemin ; un référent venu d'un autre site est remplacé par le mot « externe ».",
         "releve_session": "<strong>La session elle-même</strong> : un identifiant tiré au hasard, l'heure de votre accord, de début et de fin, la version de cette notice que vous avez acceptée, la durée de conservation et la langue choisie (français ou anglais).",
         "et": " et ",
         "liste_complete": "Liste complète, champ par champ",
         "h_liste_appareil": "Navigateur et appareil (une fois par page)",
         "h_liste_comportement": "Comportement (à la sortie de chaque page)",
-        "liste_envoi": "Chaque envoi indique aussi la page concernée (son chemin sur ce site) et sa nature (<code>empreinte</code> ou <code>comportement</code>).",
+        "h_liste_trace": "Gestes (pendant chaque page)",
+        "liste_trace": "Des nombres entiers seulement. Les instants sont en millisecondes depuis l'ouverture de la page ; dans chaque liste, l'instant (et, pour la souris, le défilement et le toucher, la position) est écrit en différence avec la ligne précédente, pour rester petit. Ces gestes partent quand vous quittez la page ou passez à un autre onglet, et par morceaux pendant une longue visite (60 envois par page au plus).",
+        "liste_envoi": "Chaque envoi indique aussi la page concernée (son chemin sur ce site) et sa nature (<code>empreinte</code>, <code>comportement</code> ou <code>trace</code>).",
         "h_non_releve": "Ce qui n'est pas relevé",
-        "non_releve": "Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez, ni la position de la souris, ni votre localisation. Aucune autorisation ne vous est demandée (caméra, micro, position). La page ne fait appel à aucun autre site : ni publicité, ni outil de mesure d'audience venu d'ailleurs, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré. Seule exception : ce que vous écrivez vous-même dans le formulaire de contact.",
+        "non_releve": "Ni votre adresse IP, ni les cookies que votre navigateur envoie, ni votre nom, ni votre adresse e-mail, ni ce que vous tapez (ni le texte, ni les touches : seulement l'instant où une touche est enfoncée puis relâchée), ni ce que vous copiez ou sélectionnez, ni votre localisation. Rien qui demande une autorisation : ni caméra, ni micro, ni position, ni capteurs de mouvement, ni notifications ; aucune autorisation ne vous est demandée. La page ne fait appel à aucun autre site : ni publicité, ni outil de mesure d'audience venu d'ailleurs, ni service de Google ou de Cloudflare. Dans les traces d'erreur, l'identifiant d'une extension de votre navigateur est masqué avant d'être enregistré. Seule exception : ce que vous écrivez vous-même dans le formulaire de contact.",
         "transit": "Comme pour tout site web, l'hébergement (le serveur) et le service placé devant le site pour le protéger voient passer toutes les données en transit pour les acheminer : votre adresse IP, les pages demandées et ce que la page envoie. L'application de recherche, elle, n'enregistre pas votre adresse IP. Pour compter les ouvertures de session et les messages d'un même visiteur, une empreinte de votre adresse (pas l'adresse elle-même) est gardée en mémoire vive le temps de limiter les abus : une journée, un peu plus si personne ne visite le site entre-temps. Elle n'est jamais écrite sur le disque et disparaît à l'arrêt du serveur.",
         "journal": "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, le code de réponse et l'heure, sans adresse IP ni identifiant de session. Une requête réussie n'y laisse rien.",
-        "donnees_personnelles": "Ces données ne disent pas qui vous êtes. Mais une empreinte de navigateur peut, rapprochée d'autres sources, permettre de reconnaître un appareil : c'est pourquoi elles sont traitées comme des données personnelles.",
+        "donnees_personnelles": "Ces données ne disent pas qui vous êtes. Mais une empreinte de navigateur, comme une façon de bouger la souris ou de taper, peut, rapprochée d'autres sources, permettre de reconnaître un appareil ou une personne : c'est pourquoi elles sont traitées comme des données personnelles.",
         "h_frequentation": "Fréquentation",
         "frequentation": "Pour savoir combien de personnes viennent, l'application tient un compte par jour : le nombre de chargements de la page d'accueil, de sessions commencées et de sessions terminées. Ce sont trois nombres par jour, rien d'autre : ni adresse IP, ni identifiant, ni navigateur, ni heure. Un chargement de la page d'accueil est compté même si vous ne participez pas. Ces comptes ne désignent personne : ni la suppression d'une session ni l'effacement automatique n'y touchent, et ils sont gardés sans limite de durée. La page d'accueil affiche le total des sessions terminées.",
         "h_cookies": "Cookies",
@@ -181,19 +183,21 @@ T: dict[str, dict[str, str]] = {
         "h_releve": "What is collected",
         "releve_intro": "Only during the session, and only on the pages of the two demonstration sites:",
         "releve_appareil": "<strong>Your browser's and device's characteristics</strong>: browser and operating system, languages, screen and window, time zone, graphics card, installed fonts (out of 25), a few computed fingerprints (drawing, sound, text) and technical checks used to spot bots.",
-        "releve_navigation": "<strong>How you browse, as numbers only</strong>: number of clicks, keystrokes and scrolls, delays between two actions, changes in the mouse's direction, time spent on each page. Never what you type, never the mouse's position.",
+        "releve_navigation": "<strong>How you browse</strong>: mouse movements (positions in the window and times), clicks (position, button, kind of element targeted), scrolling and the mouse wheel, the rhythm of your keystrokes (when a key is pressed and then released), gestures on a touch screen, switches to another tab or window, the window's size; and, for each page, counts and delays (number of clicks, time spent…). Never what you type: neither the text nor the keys.",
         "releve_pages": "<strong>The pages you open on these sites</strong> and the files they load (images, styles, scripts), with the time, the method, the path without parameters, the protocol version, and some of the headers your browser sends: {entetes}, as well as the {prefixes} headers. A referrer from this site is reduced to its path; a referrer from another site is replaced by the word “externe” (external).",
         "releve_session": "<strong>The session itself</strong>: a randomly drawn identifier, the time of your consent, of its start and of its end, the version of this notice that you accepted, the retention period and the language you chose (French or English).",
         "et": " and ",
         "liste_complete": "Full list, field by field",
         "h_liste_appareil": "Browser and device (once per page)",
         "h_liste_comportement": "Behaviour (when you leave each page)",
-        "liste_envoi": "Each submission also states the page concerned (its path on this site) and its type (<code>empreinte</code>, fingerprint, or <code>comportement</code>, behaviour).",
+        "h_liste_trace": "Gestures (during each page)",
+        "liste_trace": "Whole numbers only. Times are in milliseconds since the page was opened; in each list, the time (and, for the mouse, scrolling and touch, the position) is written as a difference from the previous line, to keep it small. These gestures are sent when you leave the page or switch to another tab, and in chunks during a long visit (60 submissions per page at most).",
+        "liste_envoi": "Each submission also states the page concerned (its path on this site) and its type (<code>empreinte</code>, fingerprint, <code>comportement</code>, behaviour, or <code>trace</code>, gestures).",
         "h_non_releve": "What is not collected",
-        "non_releve": "Not your IP address, not the cookies your browser sends, not your name, not your email address, not what you type, not the mouse's position, not your location. No permission is requested from you (camera, microphone, location). The page calls on no other site: no advertising, no audience-measurement tool from elsewhere, no Google or Cloudflare service. In error traces, the identifier of a browser extension is masked before being stored. The only exception: what you write yourself in the contact form.",
+        "non_releve": "Not your IP address, not the cookies your browser sends, not your name, not your email address, not what you type (neither the text nor the keys: only when a key is pressed and then released), not what you copy or select, not your location. Nothing that needs your permission: no camera, no microphone, no location, no motion sensors, no notifications; no permission is requested from you. The page calls on no other site: no advertising, no audience-measurement tool from elsewhere, no Google or Cloudflare service. In error traces, the identifier of a browser extension is masked before being stored. The only exception: what you write yourself in the contact form.",
         "transit": "As with any website, the hosting (the server) and the service placed in front of the site to protect it see all data in transit in order to route it: your IP address, the pages requested and what the page sends. The research application itself does not store your IP address. To count the sessions opened and the messages sent by the same visitor, a fingerprint of your address (not the address itself) is kept in memory for as long as it takes to limit abuse: one day, a little longer if nobody visits the site in the meantime. It is never written to disk and disappears when the server stops.",
         "journal": "A technical log keeps errors only (responses with code 400 or above): the page requested, the response code and the time, with no IP address and no session identifier. A successful request leaves nothing in it.",
-        "donnees_personnelles": "This data does not say who you are. But a browser fingerprint, combined with other sources, can make it possible to recognise a device: that is why this data is treated as personal data.",
+        "donnees_personnelles": "This data does not say who you are. But a browser fingerprint, like a way of moving the mouse or typing, can, combined with other sources, make it possible to recognise a device or a person: that is why this data is treated as personal data.",
         "h_frequentation": "Visitor numbers",
         "frequentation": "To know how many people come, the application keeps one count per day: the number of home page loads, of sessions started and of sessions ended. These are three numbers per day, nothing else: no IP address, no identifier, no browser, no time of day. A home page load is counted even if you do not take part. These counts do not point to anyone: neither deleting a session nor the automatic deletion touches them, and they are kept with no time limit. The home page shows the total number of sessions ended.",
         "h_cookies": "Cookies",
@@ -325,39 +329,147 @@ ERREURS: dict[str, dict[str, tuple[str, str]]] = {
     },
 }
 
-# Résumé de ce qui est relevé, sur l'accueil : UN seul endroit, facile à modifier. Il dit ce que relève AUJOURD'HUI
-# `site/static/observateur.js` : des nombres et des délais, ni la position de la souris ni ce qui est tapé. La phrase
-# du cadrage sur les « mouvements de la souris » vaudra quand le second script de relevé existera (cadrage du
-# 13/11/2026, « Relevé enrichi ») : la notice, ce résumé et `pages.VERSION_INFORMATION` changeront alors ensemble.
+# Résumé de ce qui est relevé, sur l'accueil : UN seul endroit, facile à modifier. Il dit ce que relèvent
+# `site/static/observateur.js` et `public/static/releve.js` (D-76) : le texte « Franchise » du cadrage du 13/11/2026
+# (« Textes de l'accueil »), mot pour mot. La position de la souris est relevée depuis D-76 : la liste « Jamais » ne la
+# nomme plus ; elle garde ce que vous tapez (ni le texte, ni les touches), l'adresse IP, la localisation et tout ce
+# qui demande une autorisation.
 RESUME_RELEVE: dict[str, dict] = {
     "fr": {
-        "franchise": "Pendant la session, nous relevons les caractéristiques de votre navigateur et votre façon de naviguer, en nombres et en délais : combien de clics, de touches et de défilements, le temps entre deux gestes, les changements de direction de la souris. Jamais ce que vous tapez, ni la position de la souris, ni votre adresse IP. Vous pouvez tout supprimer d'un clic.",
+        "franchise": "Pendant la session, nous relevons les caractéristiques de votre navigateur et votre façon de naviguer : mouvements de la souris, défilement, rythme des clics et des touches. Jamais ce que vous tapez, ni votre adresse IP. Vous pouvez tout supprimer d'un clic.",
         "oui": [
             "Les caractéristiques de votre navigateur et de votre appareil : écran, langues, fuseau horaire, carte graphique, polices…",
-            "Votre façon de naviguer, en nombres et en délais : clics, touches, défilements, temps passé sur chaque page",
+            "Votre façon de naviguer : mouvements de la souris, clics, défilement, rythme des touches, gestes tactiles, temps passé sur chaque page",
             "Les pages que vous ouvrez sur les sites de démonstration",
         ],
         "non": [
-            "Ce que vous tapez",
-            "La position de la souris",
+            "Ce que vous tapez : ni le texte, ni les touches",
             "Votre adresse IP",
             "Votre localisation",
+            "Rien qui demande une autorisation : caméra, micro, capteurs",
         ],
         "sans_session": "Sans session, rien de tout cela n'est relevé : cette page compte seulement ses chargements, un nombre par jour.",
     },
     "en": {
-        "franchise": "During the session we record your browser's characteristics and how you browse, as counts and timings: how many clicks, keystrokes and scrolls, the time between two actions, the changes in the mouse's direction. Never what you type, never the mouse's position, never your IP address. You can delete everything with one click.",
+        "franchise": "During the session we record your browser's characteristics and how you browse: mouse movements, scrolling, the rhythm of your clicks and keystrokes. Never what you type, never your IP address. You can delete everything with one click.",
         "oui": [
             "Your browser's and device's characteristics: screen, languages, time zone, graphics card, fonts…",
-            "How you browse, as counts and timings: clicks, keystrokes, scrolls, time spent on each page",
+            "How you browse: mouse movements, clicks, scrolling, the rhythm of your keystrokes, touch gestures, time spent on each page",
             "The pages you open on the demonstration sites",
         ],
         "non": [
-            "What you type",
-            "The mouse's position",
+            "What you type: neither the text nor the keys",
             "Your IP address",
             "Your location",
+            "Anything that needs your permission: camera, microphone, sensors",
         ],
         "sans_session": "Without a session, none of this is collected: this page only counts how many times it is loaded, one number per day.",
     },
 }
+
+# Relevé enrichi (`public/static/releve.js`, nature d'envoi `trace`, D-76) : une entrée par clé de la table `CLES` du
+# script, dans son ordre (le schéma du serveur, `trace.SCHEMA`, a les mêmes). Les plafonds par page sont ceux du
+# script ; les deux langues se répondent phrase pour phrase.
+DONNEES_TRACE: list[tuple[str, str]] = [
+    ("version", "Numéro de version du format de ce relevé."),
+    ("morceau", "Numéro de l'envoi pour la page (0 pour le premier) : une longue visite part en plusieurs morceaux."),
+    (
+        "raison",
+        "Pourquoi l'envoi part : tampon plein, onglet passé à l'arrière-plan, ou sortie de la page (un code de 0 à 2).",
+    ),
+    ("instant_ms", "Moment de l'envoi, en millisecondes depuis l'ouverture de la page."),
+    (
+        "cadre",
+        "Au moment de l'envoi : taille de la fenêtre et de la page, position de défilement, densité de pixels de l'écran, sorte de pointeur (souris, tactile ou aucun).",
+    ),
+    ("ecartes", "Nombre de gestes non relevés parce que la page avait atteint son plafond."),
+    (
+        "souris",
+        "Trajectoire de la souris : positions dans la fenêtre et instants, 30 par seconde au plus, 9\u202f000 par page au plus.",
+    ),
+    (
+        "clics",
+        "Clics et appuis : position, instant, bouton, sorte de pointeur (souris, stylet ou doigt) et sorte d'élément visé, parmi cinq (lien, bouton, image, zone de texte, autre). Jamais son texte, son adresse ni son identifiant. 600 par page au plus.",
+    ),
+    (
+        "defilement",
+        "Défilement de la page : position verticale et instants, 30 par seconde au plus, 4\u202f500 par page au plus.",
+    ),
+    (
+        "molette",
+        "Molette ou pavé tactile : pas horizontal et vertical, cumulés sur un trentième de seconde au plus, leur unité (pixel, ligne ou page) et instants. 4\u202f500 par page au plus.",
+    ),
+    (
+        "clavier_appuis",
+        "Instant où une touche est enfoncée, et si le curseur était dans une zone de texte (oui ou non). Jamais la touche ni le caractère. 3\u202f000 par page au plus.",
+    ),
+    ("clavier_relaches", "Instant où une touche est relâchée. Jamais la touche. 3\u202f000 par page au plus."),
+    (
+        "tactile",
+        "Gestes sur un écran tactile : position et instant du toucher (début, mouvement, fin ou annulation), nombre de doigts posés, rayon et pression du contact quand le navigateur les donne. Mouvements : 30 par seconde au plus ; 4\u202f500 par page au plus.",
+    ),
+    (
+        "premier_plan",
+        "Passages de la page au premier plan ou à l'arrière-plan (autre onglet, fenêtre réduite), avec l'instant. 200 par page au plus.",
+    ),
+    (
+        "focus",
+        "Prises et pertes de focus de la fenêtre (quand vous cliquez dans une autre application, par exemple), avec l'instant. 200 par page au plus.",
+    ),
+    (
+        "redimensionnements",
+        "Changements de taille de la fenêtre : largeur, hauteur et instant, 30 par seconde au plus, 200 par page au plus.",
+    ),
+]
+
+DONNEES_TRACE_EN: list[tuple[str, str]] = [
+    ("version", "Version number of this record's format."),
+    ("morceau", "Number of the submission for the page (0 for the first): a long visit is sent in several chunks."),
+    (
+        "raison",
+        "Why the submission is sent: buffer full, tab moved to the background, or leaving the page (a code from 0 to 2).",
+    ),
+    ("instant_ms", "Time of the submission, in milliseconds since the page was opened."),
+    (
+        "cadre",
+        "At the time of the submission: size of the window and of the page, scroll position, the screen's pixel density, kind of pointer (mouse, touch or none).",
+    ),
+    ("ecartes", "Number of gestures not recorded because the page had reached its cap."),
+    (
+        "souris",
+        "Mouse trajectory: positions in the window and times, 30 per second at most, 9,000 per page at most.",
+    ),
+    (
+        "clics",
+        "Clicks and presses: position, time, button, kind of pointer (mouse, pen or finger) and kind of element targeted, out of five (link, button, image, text field, other). Never its text, its address or its identifier. 600 per page at most.",
+    ),
+    ("defilement", "Page scrolling: vertical position and times, 30 per second at most, 4,500 per page at most."),
+    (
+        "molette",
+        "Mouse wheel or touchpad: horizontal and vertical steps, added up over a thirtieth of a second at most, their unit (pixel, line or page) and times. 4,500 per page at most.",
+    ),
+    (
+        "clavier_appuis",
+        "Time when a key is pressed, and whether the cursor was in a text field (yes or no). Never the key or the character. 3,000 per page at most.",
+    ),
+    ("clavier_relaches", "Time when a key is released. Never the key. 3,000 per page at most."),
+    (
+        "tactile",
+        "Gestures on a touch screen: position and time of the touch (start, movement, end or cancellation), number of fingers down, radius and pressure of the contact when the browser provides them. Movements: 30 per second at most; 4,500 per page at most.",
+    ),
+    (
+        "premier_plan",
+        "Moves of the page to the foreground or the background (another tab, minimised window), with the time. 200 per page at most.",
+    ),
+    (
+        "focus",
+        "The window gaining and losing focus (when you click in another application, for example), with the time. 200 per page at most.",
+    ),
+    (
+        "redimensionnements",
+        "Changes in the window's size: width, height and time, 30 per second at most, 200 per page at most.",
+    ),
+]
+
+# Listes de la notice pour le relevé enrichi, par langue.
+RELEVES_TRACE: dict[str, list[tuple[str, str]]] = {"fr": DONNEES_TRACE, "en": DONNEES_TRACE_EN}

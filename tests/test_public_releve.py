@@ -836,7 +836,7 @@ def test_rejeu_ignore_les_traces(client, tmp_path):
 JAMAIS = {
     "fr": (
         "ni ce que vous tapez (ni le texte, ni les touches",
-        "ni votre adresse IP",
+        "Ni votre adresse IP",
         "ni votre localisation",
         "ni ce que vous copiez ou sélectionnez",
         "Rien qui demande une autorisation",

@@ -103,6 +103,8 @@ function fabriquer(options) {
     'XMLHttpRequest', 'WebSocket', 'EventSource', 'Notification', 'DeviceMotionEvent', 'DeviceOrientationEvent',
     'name', 'opener', 'history', 'cookieStore', 'showOpenFilePicker']);
   const contexte = vm.createContext(env);
+  // `window` tel que le script le voit (Node rend le global du contexte, pas l'objet `env`) : cible du focus.
+  const fenetre = vm.runInContext('window', contexte);
 
   function emettre(cible, type, props) {
     const e = pieger({ type, timeStamp: etat.maintenant, ...props }, INTERDITES);
@@ -151,7 +153,7 @@ function fabriquer(options) {
         doc.visibilityState = 'visible';
         return emettre('document', 'visibilitychange', {});
       case 'focus':
-        return emettre('window', a[0] ? 'focus' : 'blur', { target: env });
+        return emettre('window', a[0] ? 'focus' : 'blur', { target: fenetre });
       case 'taille':
         env.innerWidth = a[0];
         env.innerHeight = a[1];

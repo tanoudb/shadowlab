@@ -273,11 +273,13 @@ def masquer_extensions(texte: str) -> str:
     return EXTENSION.sub(lambda m: f"{m.group(1)}://masque", texte)
 
 
-def usage(cx: sqlite3.Connection, jeton: str) -> tuple[int, int]:
-    """Nombre d'envois JavaScript de la session et leur volume en octets."""
+def usage(cx: sqlite3.Connection, jeton: str, trace: bool = False) -> tuple[int, int]:
+    """Nombre d'envois JavaScript de la session et leur volume en octets : ceux de l'observateur (empreinte,
+    comportement), ou, avec `trace`, ceux du relevé enrichi (D-76), comptés à part."""
     n, volume = cx.execute(
-        "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM observations_js WHERE session_token = ?",
-        (jeton,),
+        "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM observations_js"
+        " WHERE session_token = ? AND (kind = 'trace') = ?",
+        (jeton, trace),
     ).fetchone()
     return int(n), int(volume)
 
