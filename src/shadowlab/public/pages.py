@@ -17,7 +17,7 @@ from .social import MARQUE as MARQUE_SOCIAL
 from .textes import ERREURS, LANGUES, RESUME_RELEVE, T
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.2"
+VERSION_INFORMATION = "2026-11-14.3"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -331,13 +331,23 @@ def _puces(elements: list[str]) -> str:
     return "".join(f"<li>{escape(e)}</li>" for e in elements)
 
 
-def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "") -> str:
-    """Accueil de l'étude « Humain ou robot ? » (cadrage du 13/11/2026, « Textes de l'accueil »). La case d'accord, la
-    notice juste à côté, et la visite sans participer ; pendant une session, « Reprendre la visite » à la place."""
+def _compteur(sessions: int, langue: str) -> str:
+    """« N sessions enregistrées à ce jour » : singulier pour 0 et 1 en français, pour 1 seulement en anglais."""
+    singulier = sessions <= 1 if langue == "fr" else sessions == 1
+    nombre = f"{sessions:,}".replace(",", "\u202f" if langue == "fr" else ",")
+    cle = "compteur_singulier" if singulier else "compteur"
+    return _t(langue, cle, n=f'<strong class="compteur-nombre">{nombre}</strong>')
+
+
+def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "", sessions: int | None = None) -> str:
+    """Accueil de l'étude « Humain ou robot ? » (cadrage du 13/11/2026, « Textes de l'accueil »). Le nombre de sessions
+    terminées (`sessions`, sans compteur si None), la case d'accord, la notice juste à côté, et la visite sans
+    participer ; pendant une session, « Reprendre la visite » à la place de l'accord."""
     langue = langue_sure(langue)
     resume = RESUME_RELEVE[langue]
     notice_href = f"/{langue}/information"
     social = escape(MARQUE_SOCIAL)
+    compteur = f'\n<p class="accueil-compteur">{_compteur(sessions, langue)}</p>' if sessions is not None else ""
     if en_cours:
         accord = f"""<div class="accord accord-en-cours" id="participer">
 <p><strong>{_t(langue, "deja_en_cours")}</strong></p>
@@ -360,7 +370,7 @@ def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "")
 <header class="accueil-entete">
 <h1 class="accueil-titre">{_t(langue, "accueil_titre")}</h1>
 <p class="accueil-sous-titre">{_t(langue, "accueil_sous_titre")}</p>
-<p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>
+<p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>{compteur}
 </header>
 
 <section class="accueil-etapes" aria-labelledby="titre-etapes">
@@ -453,6 +463,11 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
 <p>{_t(langue, "transit")}</p>
 <p>{_t(langue, "journal")}</p>
 <p>{_t(langue, "donnees_personnelles")}</p>
+</section>
+
+<section class="notice-section" id="frequentation">
+<h2>{_t(langue, "h_frequentation")}</h2>
+<p>{_t(langue, "frequentation")}</p>
 </section>
 
 <section class="notice-section" id="cookies">

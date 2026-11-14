@@ -377,6 +377,20 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte."""
         return donnees.taille(reglages.base_donnees) >= limites.taille_max_base
 
+    def compter(compte: str) -> None:
+        """Compte du jour (fréquentation, D-75). Base pleine : rien ne s'écrit. Une panne de la base ne prive personne
+        de sa page : le compte est perdu, rien d'autre."""
+        if plein():
+            return
+        with suppress(sqlite3.Error), base() as cx:
+            donnees.compter(cx, compte)
+
+    def total_des_sessions() -> int | None:
+        """Sessions terminées depuis le début, pour l'accueil ; None si la base ne répond pas (pas de compteur)."""
+        with suppress(sqlite3.Error), base() as cx:
+            return donnees.sessions_terminees(cx)
+        return None
+
     # --- Garde : hôte, observation, en-têtes de sécurité, journal ----------------------------------
 
     def preparer(request: Request) -> None:
@@ -449,7 +463,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     @app.get("/en", response_class=HTMLResponse)
     def accueil(request: Request) -> HTMLResponse:
         en_cours, langue = request.state.session is not None, langue_de(request)
-        return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours))
+        if request.method == "GET":  # un chargement de la page ; une requête HEAD ne compte pas
+            compter("accueil")
+        sessions = total_des_sessions()
+        return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions))
 
     # La notice complète, sans formulaire ; « /information » suit la langue de la session ou du navigateur.
     @app.get("/information", response_class=HTMLResponse)
@@ -470,8 +487,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         if not csrf_valide(request, champs):
             return refus(403, "expire_accueil", langue)
         if champs.get("consentement") != "oui":
-            message = pages.texte(langue, "accord_manquant")
-            return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, erreur=message), status_code=422)
+            message, sessions = pages.texte(langue, "accord_manquant"), total_des_sessions()
+            return avec_csrf(
+                request, lambda csrf: pages.accueil(csrf, langue, erreur=message, sessions=sessions), status_code=422
+            )
         if request.state.session is not None:  # double clic, ou session déjà ouverte : on ne recrée rien
             return RedirectResponse(pages.SOCIAL, status_code=303)
         with base() as cx:
@@ -487,6 +506,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 "langue": langue,
             }
             jeton = donnees.creer_session(cx, accord)
+        compter("commencees")
         reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
         poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
         # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
@@ -505,6 +525,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return RedirectResponse("/session", status_code=303)
         with base() as cx:
             donnees.clore_session(cx, jeton)
+        compter("terminees")
         suppression = signer("supprimer", jeton)
         langue = langue_de(request)
         reponse = avec_csrf(

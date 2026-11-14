@@ -639,3 +639,31 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   aucune session humaine pour dire si c'est plus proche d'une vraie main ; le banc ne reproduit ni la cadence
   d'images de Chrome ni les gestes vers un élément. Décidé par : coordination (travail d'un sous-agent Opus,
   coupé avant son rapport, relu et remesuré).
+
+- **D-75 — 14/11/2026 — Site public, version « étude » : deux langues, accueil « Humain ou robot ? », but élargi,
+  fréquentation (cadrage `docs/recherche/site-public-communaute-2026-11-13.md`, v2 ; complète D-55, D-57, D-65 et
+  D-67).** Ethan veut mettre le site en ligne lui-même pour une communauté, en français et en anglais, et voir
+  combien de gens viennent. Choix : (1) **Langues**, sans cookie de plus (toujours trois) : préfixe de l'adresse
+  (`/fr`, `/en`), sinon langue notée avec l'accord de la session (champ caché du formulaire, gardé dans
+  `protection_config` avec la version du texte), sinon `Accept-Language`, sinon français. Un dictionnaire de
+  textes par langue (`public/textes.py`), la structure HTML écrite une seule fois (`public/pages.py`) : la notice
+  est la même phrase pour phrase, et la liste des données reste tirée d'`observateur.js` clé par clé, dans les
+  deux langues. Seuls l'accueil et la notice ont une adresse par langue ; les autres pages suivent la session,
+  puis le navigateur. (2) **Accueil** sous `/`, `/fr`, `/en` (textes du cadrage, trois étapes, résumé de ce qui est
+  relevé, Mosaïk Démo en grand, Habitat Démo en lien discret, case d'accord avec la notice juste à côté) ; notice
+  complète sous `/fr/information`, `/en/information` et `/information`, sans formulaire ; « Commencer » mène au fil
+  du réseau social. Le résumé de l'accueil est à un seul endroit (`textes.RESUME_RELEVE`) et dit ce que relève
+  aujourd'hui `observateur.js` (des nombres et des délais, ni la position de la souris ni ce qui est tapé) ; la
+  phrase du cadrage sur les « mouvements de la souris » attend le second script de relevé. Feuille minimale
+  `public/static/public.css`, politique de sécurité inchangée. (3) **But annoncé** : mesurer et améliorer nos
+  détecteurs de robots (avant : mesurer) ; les données ne servent à rien d'autre. (4) **Fréquentation** : une table
+  `frequentation` dans la base publique, créée par l'application (pas une migration du labo) : le jour UTC et
+  trois nombres, chargements de l'accueil (GET), sessions commencées, sessions terminées ; ni adresse, ni
+  identifiant, ni navigateur, ni heure. Hors des sessions : ni la suppression ni la purge n'y touchent, gardée sans
+  limite de durée. Base pleine, rien ne s'écrit ; base en panne, l'accueil reste servi sans compteur. Commande
+  `shadowlab public frequentation` ; l'accueil affiche le total des sessions terminées. La notice dit ce compte
+  (section « Fréquentation ») et ne dit plus « rien n'est relevé » pour une visite sans participer, ni « ni mesure
+  d'audience ». Texte d'information en version 2026-11-14.3. Limites : le total affiché compte aussi une session
+  terminée puis supprimée ; tout chargement de l'accueil compte, robots et rechargements compris ; le bandeau du
+  réseau social (`social.T`, hors de ce travail) parle encore de « la page d'information ». Décidé par :
+  coordination.
