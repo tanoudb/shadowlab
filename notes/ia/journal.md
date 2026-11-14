@@ -3471,7 +3471,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   une fois à 3 607 s ; niveau 05, 683 pages et 59 257 champs en 4 867 s, le défi revenu à 3 590 s plus un défi de
   rafale 35 s après. Niveau 06 sans corrélation en cours.
 
-## 2026-11-14 (19h35) — Claude (Fable 5.2, coordination) — Campagne 114 : plus d'une heure sous protection, cookie d'origine
+## 2026-11-14 (19h28) — Claude (Fable 5.2, coordination) — Campagne 114 : plus d'une heure sous protection, cookie d'origine
 
 - **Suite complète** à 15 h 33 : 1 759 tests verts (1 715 rapides, 44 d'intégration), après D-84.
 - **Campagne 114** (`recolte-arena-rallye-long.yaml`, 15 h 34 à 19 h 27, 3 passages, 0 panne, niveaux et cookie
