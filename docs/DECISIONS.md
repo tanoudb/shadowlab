@@ -652,9 +652,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   puis le navigateur. (2) **Accueil** sous `/`, `/fr`, `/en` (textes du cadrage, trois étapes, résumé de ce qui est
   relevé, Mosaïk Démo en grand, Habitat Démo en lien discret, case d'accord avec la notice juste à côté) ; notice
   complète sous `/fr/information`, `/en/information` et `/information`, sans formulaire ; « Commencer » mène au fil
-  du réseau social. Le résumé de l'accueil est à un seul endroit (`textes.RESUME_RELEVE`) et dit ce que relève
+  du réseau social. Le résumé de l'accueil est à un seul endroit (`textes.RESUME_RELEVE`) ~~et dit ce que relève
   aujourd'hui `observateur.js` (des nombres et des délais, ni la position de la souris ni ce qui est tapé) ; la
-  phrase du cadrage sur les « mouvements de la souris » attend le second script de relevé. Feuille minimale
+  phrase du cadrage sur les « mouvements de la souris » attend le second script de relevé.~~ Fin de phrase
+  remplacée par D-76. Feuille minimale
   `public/static/public.css`, politique de sécurité inchangée. (3) **But annoncé** : mesurer et améliorer nos
   détecteurs de robots (avant : mesurer) ; les données ne servent à rien d'autre. (4) **Fréquentation** : une table
   `frequentation` dans la base publique, créée par l'application (pas une migration du labo) : le jour UTC et
