@@ -3209,3 +3209,42 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `../noezia-shadowlab-fond`) : sécurité, saturation, vérité de la notice dans les deux langues, licences.
 - **Reste** : corriger ce qu'elle trouve, fusionner dans la branche de travail, mettre à jour `AGENTS.md` ; puis la
   campagne de contrôle de D-74. Non essayé : Safari, iPhone, Firefox. La mise en ligne reste à Ethan.
+## 2026-11-14 — Claude (Opus 5.5, sous-agent du dessin) — Dessin de « Mosaïk Démo » et crédits des photos
+
+- **Fait** (branche `public-communaute`, dossier `noezia-shadowlab-public`) : tests des crédits d'abord
+  (`9f8c47c`, rouges), puis crédits et structure (`7b0664b`), puis le dessin (`8e71c5b`).
+- **Crédits** : `Photo` lit `titre`, `licence_url`, `modifie` ; page `/lab/social/credits` (12 photos par page,
+  plafond de requêtes d'une session, pages numérotées) ; ligne « Photo : auteur · licence · crédits » sur chaque
+  publication, vers l'ancre de la photo. Seuls liens sortants du site, sur ces pages : https vers
+  `commons.wikimedia.org` et `creativecommons.org` exactement, `rel="noopener noreferrer"`, vérifiés au rendu
+  (`lien_de_credit`).
+- **Dessin** : identité en tesselles (emblème, avatars, puces d'étiquette, bandeaux générés, éclat du « j'aime »),
+  palette lapis et or, serif du système pour les titres ; mosaïque composée selon le format des photos
+  (`composer_bandes`, fonction pure testée) ; thèmes clair et sombre ; bouton « Terminer ma session » flottant
+  (CSS seule, `pages.py` et `social.bandeau` non touchés). Contenu généré inchangé (instantané comparé).
+- **Tests adaptés** : `TYPES_DE_PAGE` (+ `credits`), `parcourir` ignore l'ancre, exceptions explicites pour les
+  pages de crédits dans la politique de sécurité (deux hôtes) et le test des marques (titres d'origine).
+- **Vérifié** : 1 354 tests rapides verts, lint propre ; captures 390 et 1 280 px, clair et sombre, en session et
+  hors session, dans `outputs/apercu-dessin/captures/` (console sans erreur de politique de sécurité).
+- **Reste** : clavier virtuel d'un vrai téléphone non essayé ; cinq sujets du manifeste sans libellé anglais
+  (`fleurs`, `lacs`, `routes`, `sauvages`, `domestiques`) ; relecture par la coordination.
+
+## 2026-11-14 — Claude (Opus 5.5, sous-agent de relecture) — Quatrième relecture du site public avant l'annonce
+
+- **Fait** (branche `public-relecture-4`, dossier `noezia-shadowlab-fond`) : relecture indépendante de
+  `src/shadowlab/public/` (sécurité, saturation, vérité de la notice FR/EN, licences des photos, exploitation),
+  essais dans le processus et contre un uvicorn local (port 8796, base jetable effacée après), un parcours dans
+  Chromium. **Rien corrigé dans `src/`** : 15 essais rouges dans `tests/test_public_relecture4.py`, un par défaut.
+- **Constats principaux** : compteur de l'accueil gonflé à volonté par des « Terminer » simultanés (300 affichés
+  pour une session, observé) ; base pleine qui ne rouvre jamais, même tout effacé (`plein()` lit la taille du
+  fichier, ni VACUUM ni auto_vacuum) ; photos CC BY et CC BY-SA de l'accueil sans crédit ni lien vers les crédits ;
+  `objets-03` créditée à Giulio Romano (1499–1546) sous CC BY-SA 4.0 ; 500 sans en-têtes de sécurité sur une
+  demi-paire UTF-16 ; envoi en vol écrit après « Supprimer ma session » (ligne orpheline jamais purgée) ; double
+  « Commencer » qui ouvre deux sessions ; limite par adresse lue sur la première ligne de l'en-tête ; notice
+  (« ni service de Cloudflare », « aucun détecteur ne tourne ») ; script du tunnel sans HTTPS imposé ; « Ma session »
+  perdue à chaque relance du tunnel rapide, non documenté.
+- **Sain** : aucune route du labo joignable (49 essayées), aucune requête vers un tiers, ni texte tapé ni touche
+  en base (Chromium : recherche, commentaire, sélection, copie), aucun EXIF dans les 188 fichiers, manifeste
+  complet, `site/` inchangé depuis `cb1ff99`.
+- **Reste** : corrections par un autre agent, essai par essai ; vérifier une fois avec un vrai tunnel ce que fait
+  Cloudflare (en-tête d'adresse, cache des photos, HTML inchangé).

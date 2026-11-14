@@ -413,8 +413,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   quoi une feuille de style sans page notée trahissait une page de contact ; l'avis au responsable passe par
   la sortie standard, seulement si c'est un terminal. (2) À 3 messages par heure, une adresse seule épuisait
   le plafond du jour en 10 heures et remplissait la boîte en 17 jours. Choix : 5 messages par adresse et par
-  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; toutes les limites par adresse comptent un
-  /64 IPv6 pour une adresse ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
+  24 heures glissantes, en mémoire (5 < 30 ; 5 × 90 = 450 < 500) ; ~~toutes les limites par adresse comptent un
+  /64 IPv6 pour une adresse~~ (remplacé par D-77 : un /56) ; commande `shadowlab public effacer-message tous`. (3) Sur une page qui porte
   `sl-sans-tiers`, `observateur.js` n'exécute plus `debugger` (elle arrêtait la page d'un visiteur aux outils
   de développement ouverts) et ne lit plus first-input : depuis D-62 aucun détecteur ne les lit ; le labo
   relève comme avant ; texte d'information en version 2026-11-12.5. (4) Nettoyage des messages : la liste
@@ -639,3 +639,112 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   aucune session humaine pour dire si c'est plus proche d'une vraie main ; le banc ne reproduit ni la cadence
   d'images de Chrome ni les gestes vers un élément. Décidé par : coordination (travail d'un sous-agent Opus,
   coupé avant son rapport, relu et remesuré).
+
+- **D-75 — 14/11/2026 — Site public, version « étude » : deux langues, accueil « Humain ou robot ? », but élargi,
+  fréquentation (cadrage `docs/recherche/site-public-communaute-2026-11-13.md`, v2 ; complète D-55, D-57, D-65 et
+  D-67).** Ethan veut mettre le site en ligne lui-même pour une communauté, en français et en anglais, et voir
+  combien de gens viennent. Choix : (1) **Langues**, sans cookie de plus (toujours trois) : préfixe de l'adresse
+  (`/fr`, `/en`), sinon langue notée avec l'accord de la session (champ caché du formulaire, gardé dans
+  `protection_config` avec la version du texte), sinon `Accept-Language`, sinon français. Un dictionnaire de
+  textes par langue (`public/textes.py`), la structure HTML écrite une seule fois (`public/pages.py`) : la notice
+  est la même phrase pour phrase, et la liste des données reste tirée d'`observateur.js` clé par clé, dans les
+  deux langues. Seuls l'accueil et la notice ont une adresse par langue ; les autres pages suivent la session,
+  puis le navigateur. (2) **Accueil** sous `/`, `/fr`, `/en` (textes du cadrage, trois étapes, résumé de ce qui est
+  relevé, Mosaïk Démo en grand, Habitat Démo en lien discret, case d'accord avec la notice juste à côté) ; notice
+  complète sous `/fr/information`, `/en/information` et `/information`, sans formulaire ; « Commencer » mène au fil
+  du réseau social. Le résumé de l'accueil est à un seul endroit (`textes.RESUME_RELEVE`) ~~et dit ce que relève
+  aujourd'hui `observateur.js` (des nombres et des délais, ni la position de la souris ni ce qui est tapé) ; la
+  phrase du cadrage sur les « mouvements de la souris » attend le second script de relevé.~~ Fin de phrase
+  remplacée par D-76. Feuille minimale
+  `public/static/public.css`, politique de sécurité inchangée. (3) **But annoncé** : mesurer et améliorer nos
+  détecteurs de robots (avant : mesurer) ; les données ne servent à rien d'autre. (4) **Fréquentation** : une table
+  `frequentation` dans la base publique, créée par l'application (pas une migration du labo) : le jour UTC et
+  trois nombres, chargements de l'accueil (GET), sessions commencées, sessions terminées ; ni adresse, ni
+  identifiant, ni navigateur, ni heure. Hors des sessions : ni la suppression ni la purge n'y touchent, gardée sans
+  limite de durée. Base pleine, rien ne s'écrit ; base en panne, l'accueil reste servi sans compteur. Commande
+  `shadowlab public frequentation` ; l'accueil affiche le total des sessions terminées. La notice dit ce compte
+  (section « Fréquentation ») et ne dit plus « rien n'est relevé » pour une visite sans participer, ni « ni mesure
+  d'audience ». Au passage, les lignes `navigateur` et `apis` de la liste des données nomment les sous-champs
+  qu'elles taisaient (cookies permis, lecteur PDF, types de fichiers, mobile ou non, objet propre à Chrome,
+  périphériques HID). Texte d'information en version 2026-11-14.4. Limites : le total affiché compte aussi une session
+  terminée puis supprimée ; tout chargement de l'accueil compte, robots et rechargements compris ; le bandeau du
+  réseau social (`social.T`, hors de ce travail) parle encore de « la page d'information ». Le plafond de sessions
+  ouvertes par jour, d'abord une constante de `Limites`, est devenu le réglage `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`
+  (40 par défaut, ramené entre 1 et 5 000) : il fixe le jour où un abus peut remplir la base, c'est le plafond de
+  2 Gio qui protège le disque (`docs/site-public.md`, « Limites »). Décidé par : coordination.
+
+- **D-76 — 14/11/2026 — Site public : relevé enrichi des gestes (`public/static/releve.js`, envoi `trace`), la
+  promesse « ni la position de la souris » retirée (cadrage `docs/recherche/site-public-communaute-2026-11-13.md`,
+  section « Relevé enrichi » ; complète D-75 et remplace sa phrase sur le résumé de l'accueil).** Pour faire le
+  meilleur détecteur, l'étude relève désormais la façon de bouger et de taper, pas seulement des comptes et des
+  délais. **Ajouté** : un second script, `releve.js`, servi par la seule application publique sous
+  `/public/static/` (l'`observateur.js` du labo n'est pas modifié, son empreinte est verrouillée par un test),
+  chargé seulement pendant une session, sur les pages des deux sites de démonstration (rendu du réseau social,
+  bandeau de la vitrine), par une balise `<script defer>`, sans script dans la page. Il envoie à `/lab/collecte`
+  (même jeton, même forme) une nature nouvelle, `trace`, faite seulement de nombres entiers (millisecondes depuis
+  l'arrivée sur la page, écarts d'une ligne à la suivante) : trajectoire de la souris (30 points par seconde au
+  plus, 9 000 par page), clics et appuis (position, instant, bouton, sorte d'élément dans une liste fermée : lien,
+  bouton, image, zone de texte, autre ; jamais son texte, son adresse ni son identifiant ; 600 par page),
+  défilement et molette (4 500 par page chacun), rythme du clavier (instant d'appui puis de relâche, dans une zone
+  de texte ou non ; jamais la touche, son code ni le caractère ; 3 000 par page), gestes tactiles (position,
+  instant, nombre de doigts, rayon et pression si le navigateur les donne ; 4 500 par page), passages au premier
+  plan, focus de la fenêtre et redimensionnements (200 par page chacun), et le cadre (taille de la fenêtre et de
+  la page, défilement, densité de pixels, sorte de pointeur). L'envoi part au départ de la page ou à son passage
+  en arrière-plan (`sendBeacon`), et par morceaux quand une liste est pleine (60 envois par page au plus) ; ce qui
+  dépasse un plafond est compté (`ecartes`), pas envoyé. Le serveur valide chaque trace strictement
+  (`public/trace.py` : clés connues seulement, entiers bornés, listes bornées, page d'un des deux sites), la
+  récrit en JSON compact et la compte à part de l'observateur (`envois_trace_par_session` = 1 000,
+  `volume_trace_par_session` = 4 Mio) : elle n'use jamais les envois dont le rejeu a besoin. `requetes_par_session`
+  passe de 3 000 à 4 000 (chaque morceau est une requête `/lab/collecte` notée). Une session au pire passe de
+  16,9 Mo (mesuré le 12/11) à 25,2 Mo (calcul) ; la base de 2 Gio en tient 85 au lieu de 127 ; une session
+  ordinaire de 10 minutes fait environ 1 Mo (estimation, aucun humain en base). **Reste exclu**, verrouillé par des
+  tests qui lisent le script et par un banc sous Node qui piège ces lectures : la touche, son code et le texte
+  tapé, le contenu, l'adresse ou l'identifiant d'un élément, le presse-papiers et la sélection, toute fonction qui
+  demande une autorisation, tout cookie et tout stockage dans le navigateur, tout envoi ailleurs qu'à
+  `/lab/collecte` du même site, tout relevé hors session. `rejeu.py` n'est pas modifié : il ignore les traces
+  (test). **Notice** : elle décrit la trace clé par clé dans les deux langues (liste tirée du script, test) ;
+  « jamais relevé » ne dit plus « ni la position de la souris », mais garde et renforce ni ce que vous tapez (ni le
+  texte, ni les touches), ni l'adresse IP, ~~ni la localisation~~ (remplacé par D-77 : aucune géolocalisation, le
+  fuseau horaire et les langues relevés), rien qui demande une autorisation ; elle dit qu'une
+  façon de bouger la souris ou de taper peut aider à reconnaître une personne. Le résumé de l'accueil
+  (`textes.RESUME_RELEVE`) prend le texte « Franchise » du cadrage. Le but annoncé ne change pas. Texte
+  d'information en version 2026-11-14.5 ; aucune session publique n'existe encore, tout consentement se donne donc
+  sous cette notice. Limites : la durée d'appui d'une touche n'est exacte que sans chevauchement de touches (deux
+  listes, sans identité de touche) ; le rythme des touches peut, en théorie, renseigner sur ce qui est tapé ; la
+  trace de la dernière page part au clic sur « Terminer », sans garantie d'arriver avant la fin de la session ; la
+  note du réseau social sur le commentaire (« jamais envoyé ni enregistré ») reste vraie pour le texte, pas pour
+  son rythme (texte non changé, hors de ce travail) ; rien n'est mesuré sur un humain. Décidé par : coordination, à
+  la demande d'Ethan le 13/11 : « il faut qu'on prenne un maximum d'infos […] pour faire le meilleur détecteur ».
+
+- **D-77 — 14/11/2026 — Site public, quatrième relecture indépendante avant l'annonce : quinze défauts prouvés par
+  des essais, corrigés (complète D-65, D-67, D-75 et D-76 ; remplace le /64 de D-65 et « ni la localisation » de
+  D-76).** Les quinze essais de `tests/test_public_relecture4.py`, en échec sur le code relu, passent sans avoir été
+  modifiés ; les corrections au-delà sont prouvées par `tests/test_public_corrections4.py`, chaque test vu en échec
+  avant. (B1) Une base pleine rouvre : le plafond mesure l'espace réellement occupé (pages utilisées plus journal
+  WAL), plus la taille du fichier, que SQLite ne réduit jamais ; commande `shadowlab public sessions` (la plus
+  grosse d'abord) pour repérer et supprimer une session abusive. (B2) Une session n'est comptée terminée que par la
+  requête qui l'a close, une seule fois. (B3) L'accueil et le pied des pages de l'étude, sauf le contact, mènent aux
+  crédits des photos ; `objets-03`, créditée au peintre d'une fresque et non au photographe, est retirée (93
+  photos) ; la page de crédits dit « sous licence libre ou dans le domaine public ». (B4) Une adresse IPv6 compte
+  pour son /56 (un abonné en reçoit souvent un entier). (B5) La documentation dit que le tunnel rapide perd
+  « Ma session » à chaque relance. (C1) Une demi-paire UTF-16 dans un envoi donne 400, plus 500. (C2) Un envoi en
+  vol n'écrit rien après une suppression (vérification dans l'écriture), et la purge et la suppression retirent
+  les lignes orphelines. (C3) Un double clic sur « Commencer » n'ouvre qu'une session ; la seconde requête reçoit
+  une redirection sans aucun cookie (une première version rendait les cookies de la session à qui présentait la
+  même valeur anti-CSRF : fixation de session, relevée par une relecture de sécurité et reprise) ; la valeur
+  anti-CSRF est renouvelée à l'ouverture. (C4) La notice ne dit plus « ni service de Cloudflare » et nomme
+  Cloudflare dans le paragraphe sur le transit. (C5) Elle ne dit plus « aucun détecteur ne tourne », mais
+  qu'aucune décision n'est prise pendant la visite. (C6) La limite par adresse lit la dernière ligne de l'en-tête.
+  (C7) Le script du tunnel impose `SHADOWLAB_PUBLIC_HTTPS=1`. (Textes) L'accueil et la notice disent qu'aucune
+  géolocalisation n'est relevée mais que le fuseau horaire et les langues le sont, et que le nombre de frappes dans
+  une zone de texte en dit la longueur, la trajectoire de la souris ce sur quoi le regard s'est attardé ; texte
+  d'information en version 2026-11-14.6. (Petites choses) Journal WAL remis à zéro après une suppression et une
+  purge ; `HEAD` répond comme `GET`, sans corps, sans compter l'accueil ni écrire au journal. **Reste à la charge
+  de l'exploitant avant une annonce** (`docs/site-public.md`, « Avant d'annoncer le site publiquement ») : un nom
+  d'hôte stable (tunnel nommé sur un domaine) ; une règle de limitation de débit chez Cloudflare ; régler
+  `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` ; surveiller `frequentation`, `sessions` et la taille de la base ; au premier
+  lancement réel, comparer une fois le HTML servi par le tunnel au HTML local et vérifier que les photos arrivent à
+  l'application (cache de Cloudflare). Limites : si le navigateur abandonne la première réponse d'un double clic, le
+  visiteur arrive sur le fil sans session ; la notice nomme Cloudflare, donc une autre voie de mise en ligne demande
+  de la changer ; rien n'a tourné avec un vrai tunnel. Décidé par : coordination, après la quatrième relecture
+  indépendante.

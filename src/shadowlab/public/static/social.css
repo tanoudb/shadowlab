@@ -1,0 +1,1584 @@
+/* Réseau social fictif « Mosaïk Démo ».
+   Une seule audace : la tesselle (emblème, mosaïque des grilles, bandeaux, éclat du « j'aime »). Le reste se tait :
+   les photos sont la vedette. Palette des mosaïques anciennes : lapis (smalt), or, vert-de-gris, grenat, sur un
+   plâtre froid ; nuit bleue en thème sombre. Polices du système seulement (politique de sécurité). */
+
+:root {
+  color-scheme: light dark;
+  --fond: #edf0f3;
+  --fond-2: #e2e6ec;
+  --carte: #ffffff;
+  --encre: #1b2440;
+  --encre-2: #434d68;
+  --discret: #5b657e;
+  --trait: #dbe0e8;
+  --joint: #d3d9e2;
+  --smalt: #2b3fa6;
+  --smalt-texte: #ffffff;
+  --smalt-doux: #e2e7fb;
+  --or: #c2912e;
+  --vert: #2e8172;
+  --grenat: #c2334d;
+  --scene: #dde2e9;
+  --capsule: #1b2440;
+  --capsule-texte: #ffffff;
+  --capsule-survol: #2b3658;
+  --enregistre: #ff4d5e;
+  --t0: #2b3fa6;
+  --t1: #c2912e;
+  --t2: #2e8172;
+  --t3: #c2334d;
+  --t4: #c4622b;
+  --t5: #7a4fb3;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", P052, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --entete: 64px;
+  --joint-mosaique: 4px;
+  --joint-banniere: #232b40;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #121a2b;
+    --fond-2: #1a2337;
+    --carte: #19223a;
+    --encre: #e8ecf6;
+    --encre-2: #c0c7da;
+    --discret: #9ba5bf;
+    --trait: #29334c;
+    --joint: #263049;
+    --smalt: #9eadff;
+    --smalt-texte: #10173a;
+    --smalt-doux: #26305c;
+    --or: #e2b65a;
+    --vert: #5cc2ae;
+    --grenat: #ff7189;
+    --scene: #0b1120;
+    --capsule: #eef1f8;
+    --capsule-texte: #141b30;
+    --capsule-survol: #ffffff;
+    --t0: #8f9fff;
+    --t1: #e2b65a;
+    --t2: #5cc2ae;
+    --t3: #ff7189;
+    --t4: #f08d5a;
+    --t5: #b893f0;
+    --joint-banniere: #0d1322;
+  }
+}
+
+/* --- Base ----------------------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--entete) + 16px);
+}
+body.social {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font: 400 1rem/1.5 var(--sans);
+  color: var(--encre);
+  background: var(--fond);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+a {
+  color: var(--smalt);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+:focus-visible {
+  outline: 3px solid var(--smalt);
+  outline-offset: 3px;
+}
+p,
+h1,
+h2 {
+  margin: 0;
+}
+.conteneur {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+.principal {
+  flex: 1 0 auto;
+  padding-top: 20px;
+  padding-bottom: 56px;
+}
+.icone {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- En-tête : emblème, marque, rubriques ------------------------------------------------------- */
+
+.entete {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--fond);
+  background: color-mix(in srgb, var(--fond) 92%, transparent);
+  -webkit-backdrop-filter: saturate(1.5) blur(16px);
+  backdrop-filter: saturate(1.5) blur(16px);
+  border-bottom: 1px solid var(--trait);
+}
+.entete .conteneur {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--entete);
+}
+.marque {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  color: var(--encre);
+  text-decoration: none;
+}
+.embleme {
+  flex: none;
+  overflow: visible;
+}
+.t-smalt {
+  fill: var(--t0);
+}
+.t-or {
+  fill: var(--t1);
+}
+.t-vert {
+  fill: var(--t2);
+}
+.t-grenat {
+  fill: var(--t3);
+}
+.marque-nom {
+  font: 700 1.45rem/1 var(--serif);
+  letter-spacing: -0.01em;
+}
+.marque-demo {
+  align-self: center;
+  padding: 3px 7px 4px;
+  border-radius: 6px;
+  background: var(--smalt-doux);
+  color: var(--smalt);
+  font: 650 0.6875rem/1 var(--sans);
+  letter-spacing: 0.02em;
+}
+.navigation {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--fond-2);
+}
+.navigation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 15px;
+  border-radius: 11px;
+  color: var(--encre-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s, background-color 0.15s;
+}
+.navigation a:hover {
+  color: var(--encre);
+}
+.navigation a[aria-current="page"] {
+  background: var(--carte);
+  color: var(--encre);
+  box-shadow: 0 1px 2px rgb(20 28 50 / 0.1), 0 0 0 1px var(--trait);
+}
+
+/* --- Bandeau de l'étude (rendu ailleurs : stylé ici seulement) ---------------------------------------
+   Barre fine sous l'en-tête. Pendant une session, le bouton « Terminer ma session » quitte le bandeau et flotte en
+   bas de l'écran, toujours visible. Aucun transform, filtre ni contain sur le bandeau ou ses parents : le bouton
+   serait fixé au bandeau au lieu de l'écran. */
+
+.session-publique {
+  background: var(--fond-2);
+  border-bottom: 1px solid var(--trait);
+  color: var(--encre-2);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.session-publique .conteneur {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 24px;
+  padding-top: 10px;
+  padding-bottom: 4px;
+}
+.session-publique p {
+  max-width: 78ch;
+}
+.session-publique .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 18px;
+}
+.session-publique .actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--smalt);
+  font-weight: 650;
+  text-decoration: none;
+}
+.session-publique .actions a:hover {
+  text-decoration: underline;
+}
+.session-publique .pastille {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--enregistre);
+  vertical-align: 0.05em;
+}
+.session-publique form {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  margin: 0;
+}
+.session-publique button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 22px 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--capsule);
+  color: var(--capsule-texte);
+  font: 650 0.9375rem/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 12px 32px -10px rgb(8 12 28 / 0.6), 0 2px 6px rgb(8 12 28 / 0.18);
+}
+.session-publique button::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--enregistre);
+  animation: enregistre 2s ease-out infinite;
+}
+.session-publique button:hover {
+  background: var(--capsule-survol);
+}
+.session-publique button:focus-visible {
+  outline-offset: 4px;
+}
+@keyframes enregistre {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 77 94 / 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 9px rgb(255 77 94 / 0);
+  }
+}
+body:has(.session-publique form) .pied {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+/* --- Titres et éléments communs ------------------------------------------------------------------ */
+
+.titre-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 18px;
+}
+.titre-page {
+  font: 400 2.125rem/1.1 var(--serif);
+  letter-spacing: -0.015em;
+}
+.page-n {
+  color: var(--discret);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.titre-section {
+  margin: 40px 0 14px;
+  font: 400 1.375rem/1.2 var(--serif);
+}
+.titre-section a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+.titre-section a:hover {
+  text-decoration: underline;
+}
+.titre-bloc {
+  margin: 0 0 10px;
+  color: var(--encre-2);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+/* Avatars : des tesselles aux coins arrondis, pas des ronds. */
+.avatar {
+  display: block;
+  flex: none;
+  border-radius: 30%;
+  overflow: hidden;
+}
+.auteur {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  color: var(--encre);
+  font-weight: 650;
+  text-decoration: none;
+}
+.auteur-nom {
+  color: var(--encre);
+  font-weight: 650;
+  text-decoration: none;
+}
+a.auteur:hover .auteur-nom,
+a.auteur-nom:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+/* Étiquettes : une tesselle de couleur et le nom (pas de croisillon). */
+.etiquettes,
+.puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.etiquette {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px 0 10px;
+  border-radius: 10px;
+  background: var(--carte);
+  box-shadow: inset 0 0 0 1px var(--trait);
+  color: var(--encre-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.carte .etiquette {
+  background: var(--fond);
+  box-shadow: none;
+}
+.etiquette::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.etiquette:hover {
+  color: var(--encre);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ton) 60%, var(--trait));
+}
+.carte .etiquette:hover {
+  background: var(--fond-2);
+  box-shadow: none;
+}
+.tesselle {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2.5px;
+  background: var(--ton, var(--t0));
+  transform: rotate(-8deg);
+}
+.ton-0 {
+  --ton: var(--t0);
+}
+.ton-1 {
+  --ton: var(--t1);
+}
+.ton-2 {
+  --ton: var(--t2);
+}
+.ton-3 {
+  --ton: var(--t3);
+}
+.ton-4 {
+  --ton: var(--t4);
+}
+.ton-5 {
+  --ton: var(--t5);
+}
+.date {
+  color: var(--discret);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+/* « J'aime » : le cœur se remplit, six tesselles éclatent, le compte passe en grenat. Rien n'est envoyé. */
+.aime {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 15px 0 12px;
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  background: var(--carte);
+  color: var(--encre);
+  font: 650 0.9375rem/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.aime:hover {
+  border-color: color-mix(in srgb, var(--grenat) 45%, var(--trait));
+}
+.aime-icone {
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+.coeur {
+  display: block;
+  overflow: visible;
+}
+.coeur path {
+  fill: transparent;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linejoin: round;
+  transition: fill 0.2s, stroke 0.2s;
+}
+.aime[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--grenat) 50%, var(--trait));
+  background: color-mix(in srgb, var(--grenat) 9%, var(--carte));
+}
+.aime[aria-pressed="true"] .coeur path {
+  fill: var(--grenat);
+  stroke: var(--grenat);
+}
+.aime[aria-pressed="true"] .coeur {
+  animation: battement 0.5s cubic-bezier(0.3, 1.7, 0.5, 1);
+}
+.aime[aria-pressed="true"] .aime-compte {
+  color: var(--grenat);
+}
+.eclats i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 1.5px;
+  opacity: 0;
+  pointer-events: none;
+}
+.aime[aria-pressed="true"] .eclats i {
+  animation: eclat 0.65s cubic-bezier(0.15, 0.8, 0.3, 1) forwards;
+}
+.eclats i:nth-child(1) {
+  --dx: 0px;
+  --dy: -23px;
+  --rot: 25deg;
+  background: var(--t3);
+}
+.eclats i:nth-child(2) {
+  --dx: 20px;
+  --dy: -12px;
+  --rot: -30deg;
+  background: var(--t1);
+}
+.eclats i:nth-child(3) {
+  --dx: 20px;
+  --dy: 12px;
+  --rot: 40deg;
+  background: var(--t0);
+}
+.eclats i:nth-child(4) {
+  --dx: 0px;
+  --dy: 23px;
+  --rot: -15deg;
+  background: var(--t2);
+}
+.eclats i:nth-child(5) {
+  --dx: -20px;
+  --dy: 12px;
+  --rot: 35deg;
+  background: var(--t1);
+}
+.eclats i:nth-child(6) {
+  --dx: -20px;
+  --dy: -12px;
+  --rot: -40deg;
+  background: var(--t3);
+}
+@keyframes eclat {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(0.4);
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+  }
+}
+@keyframes battement {
+  0% {
+    transform: scale(0.65);
+  }
+  55% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Boutons et suite de pages */
+.bouton-plein {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--smalt);
+  color: var(--smalt-texte);
+  font: 650 0.9375rem/1 var(--sans);
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+.bouton-plein:hover {
+  background: color-mix(in srgb, var(--smalt) 86%, var(--encre));
+}
+.bouton-plein:disabled {
+  background: var(--fond-2);
+  color: var(--discret);
+  cursor: default;
+}
+.suite {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 32px;
+}
+.voir-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  padding: 0 30px;
+  border-radius: 999px;
+  background: var(--encre);
+  color: var(--fond);
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+.voir-plus:hover {
+  transform: translateY(-1px);
+}
+.fin {
+  color: var(--encre-2);
+  font: italic 400 1.0625rem/1.4 var(--serif);
+}
+
+/* --- Fil -------------------------------------------------------------------------------------------- */
+
+.fil-mise,
+.explorer,
+.publication-mise {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.fil-mise {
+  gap: 40px;
+}
+.fil {
+  display: grid;
+  gap: 18px;
+}
+.a-cote {
+  display: none;
+}
+.carte {
+  background: var(--carte);
+  border: 1px solid var(--trait);
+  border-radius: 22px;
+  overflow: hidden;
+}
+.carte .publication-photo {
+  display: block;
+  margin: 8px 8px 0;
+  border-radius: 15px;
+  overflow: hidden;
+  background: var(--fond-2);
+}
+.carte .publication-photo img {
+  width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  transition: opacity 0.2s;
+}
+.carte .publication-photo:hover img {
+  opacity: 0.94;
+}
+.carte .publication-photo:focus-visible {
+  outline-offset: -3px;
+}
+.publication-corps {
+  padding: 10px 16px 12px;
+}
+.publication-ligne,
+.publication-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.publication-ligne .auteur-nom,
+.publication-entete .auteur-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legende {
+  font: 400 1.1875rem/1.42 var(--serif);
+  color: var(--encre);
+  text-wrap: pretty;
+}
+.carte .legende {
+  margin: 6px 0 12px;
+}
+.publication-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.commentaires-lien {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--encre-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.commentaires-lien:hover span {
+  text-decoration: underline;
+}
+.carte .aime-libelle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- Mosaïque ---------------------------------------------------------------------------------------
+   Cellule de base 3:2. Chaque bande a son rapport et place ses vignettes ; la photo remplit sa case (object-fit). */
+
+.mosaique,
+.bande {
+  display: grid;
+  gap: var(--joint-mosaique);
+}
+.bande {
+  grid-template-columns: repeat(var(--colonnes, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rangees, 1), minmax(0, 1fr));
+}
+.vignette {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--joint);
+}
+.vignette img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.vignette:focus-visible {
+  outline-offset: 2px;
+  z-index: 1;
+}
+.vignette-info {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px 5px 7px;
+  border-radius: 8px;
+  background: rgb(10 14 28 / 0.62);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.vignette-info .coeur {
+  width: 13px;
+  height: 13px;
+}
+.vignette-info .coeur path {
+  fill: #fff;
+  stroke: none;
+}
+@media (hover: hover) {
+  .vignette:hover img {
+    transform: scale(1.045);
+  }
+  .vignette:hover .vignette-info,
+  .vignette:focus-visible .vignette-info {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bande-solo {
+  aspect-ratio: 3 / 2;
+}
+.bande-duo {
+  --colonnes: 2;
+  aspect-ratio: 3 / 1;
+}
+.bande-trio-g,
+.bande-trio-d,
+.bande-l-p,
+.bande-p-l {
+  --colonnes: 3;
+  --rangees: 2;
+  aspect-ratio: 9 / 4;
+}
+.bande-ll-p,
+.bande-p-ll,
+.bande-pp {
+  --colonnes: 2;
+  --rangees: 2;
+  aspect-ratio: 3 / 2;
+}
+.bande-ppp {
+  --colonnes: 3;
+  --rangees: 2;
+  aspect-ratio: 9 / 4;
+}
+.bande-l-pp,
+.bande-pp-l,
+.bande-p-l-p {
+  --colonnes: 4;
+  --rangees: 2;
+  aspect-ratio: 3 / 1;
+}
+.bande-p {
+  --colonnes: 2;
+  aspect-ratio: 3 / 2;
+}
+.bande-trio-g > :nth-child(1),
+.bande-l-p > :nth-child(1),
+.bande-l-pp > :nth-child(1) {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+}
+.bande-trio-d > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.bande-trio-d > :nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.bande-trio-d > :nth-child(3) {
+  grid-column: 2 / 4;
+  grid-row: 1 / 3;
+}
+.bande-p-l > :nth-child(1),
+.bande-p-ll > :nth-child(1),
+.bande-pp > *,
+.bande-ppp > *,
+.bande-p-l-p > *,
+.bande-pp-l > :nth-child(-n + 2),
+.bande-l-pp > :nth-child(n + 2),
+.bande-l-p > :nth-child(2) {
+  grid-row: 1 / 3;
+}
+.bande-p-l > :nth-child(2),
+.bande-p-l-p > :nth-child(2),
+.bande-pp-l > :nth-child(3) {
+  grid-column: span 2;
+  grid-row: 1 / 3;
+}
+.bande-ll-p > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.bande-ll-p > :nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.bande-ll-p > :nth-child(3) {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+/* Pendant une recherche, la mosaïque devient une grille régulière : les bandes s'effacent. */
+.mosaique.en-recherche {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+}
+.mosaique.en-recherche .bande {
+  display: contents;
+}
+.mosaique.en-recherche .vignette {
+  grid-column: auto;
+  grid-row: auto;
+  aspect-ratio: 1;
+}
+
+/* --- Explorer ----------------------------------------------------------------------------------- */
+
+.explorer {
+  gap: 8px;
+}
+.recherche {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.recherche label {
+  color: var(--encre-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.recherche-champ {
+  position: relative;
+}
+.recherche-champ .icone {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  color: var(--discret);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.recherche input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px 0 46px;
+  border: 1.5px solid var(--trait);
+  border-radius: 14px;
+  background: var(--carte);
+  color: var(--encre);
+  font: inherit;
+  font-size: 1rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.recherche input::placeholder {
+  color: var(--discret);
+}
+.recherche input:focus {
+  outline: none;
+  border-color: var(--smalt);
+  box-shadow: 0 0 0 4px var(--smalt-doux);
+}
+.recherche-vide {
+  color: var(--encre-2);
+  font: italic 400 1rem/1.4 var(--serif);
+}
+/* La recherche garde un auteur ou une étiquette mais aucune vignette : la mosaïque vide le dit. Rien sans
+   recherche, et rien quand « Aucun résultat » s'affiche déjà (social.js ne fait que basculer `hidden`). */
+.mosaique-vide {
+  display: none;
+  padding: 28px 0 8px;
+  color: var(--encre-2);
+  font: italic 400 1rem/1.4 var(--serif);
+}
+.explorer:not(:has([data-recherche-vide]:not([hidden])))
+  .explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden])))
+  .mosaique-vide {
+  display: block;
+}
+.listes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 26px;
+}
+.liste-bloc:not(:has(li:not([hidden]))) {
+  display: none;
+}
+.auteurs-liste {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.auteurs-bande,
+.puces-bande {
+  margin-inline: -16px;
+  padding: 2px 16px 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 16px;
+  scrollbar-width: none;
+}
+.auteurs-bande::-webkit-scrollbar,
+.puces-bande::-webkit-scrollbar {
+  display: none;
+}
+.auteurs-bande {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 74px;
+  gap: 6px;
+}
+.auteur-tuile {
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 2px 0 4px;
+  text-align: center;
+}
+.auteur-tuile .auteur-nom {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.puces-bande {
+  flex-wrap: nowrap;
+  padding-block: 4px 8px;
+}
+
+
+/* --- Publication ------------------------------------------------------------------------------------ */
+
+.publication-seule {
+  margin-top: -20px;
+}
+.scene {
+  margin: 0 -16px;
+  background: var(--scene);
+}
+.scene img {
+  width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+}
+.publication-mise {
+  gap: 8px;
+  margin-top: 14px;
+}
+.publication-seule .legende {
+  margin: 10px 0 4px;
+  font-size: 1.5rem;
+  line-height: 1.32;
+}
+.publication-meta {
+  margin-bottom: 14px;
+}
+.credit {
+  margin-top: 14px;
+  color: var(--discret);
+  font-size: 0.8125rem;
+}
+.credit a {
+  color: inherit;
+}
+.credit a:hover {
+  color: var(--smalt);
+}
+.commentaires {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid var(--trait);
+  scroll-margin-top: calc(var(--entete) + 12px);
+}
+.commentaires h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font: 400 1.375rem/1.2 var(--serif);
+}
+.compte {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--fond-2);
+  color: var(--encre-2);
+  font: 700 0.75rem/1.1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+.commentaires-liste {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+.commentaire {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.commentaire-corps {
+  justify-self: start;
+  max-width: 100%;
+  padding: 9px 14px 10px;
+  border-radius: 4px 18px 18px 18px;
+  background: var(--carte);
+  border: 1px solid var(--trait);
+}
+.commentaire-corps .auteur-nom {
+  position: relative;
+  font-size: 0.875rem;
+}
+.commentaire-corps a.auteur-nom::after {
+  content: "";
+  position: absolute;
+  inset: -14px -6px;
+}
+.commentaire-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.commentaire-quand {
+  color: var(--discret);
+  font-size: 0.75rem;
+}
+.commentaire-texte {
+  margin-top: 1px;
+  overflow-wrap: anywhere;
+}
+.commentaire-local .commentaire-corps {
+  border-color: color-mix(in srgb, var(--smalt) 35%, var(--trait));
+  animation: arrivee 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes arrivee {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    background: var(--smalt-doux);
+  }
+  40% {
+    opacity: 1;
+    transform: none;
+    background: var(--smalt-doux);
+  }
+  100% {
+    background: var(--carte);
+  }
+}
+.aucun-commentaire {
+  margin-bottom: 18px;
+  color: var(--encre-2);
+  font: italic 400 1.0625rem/1.4 var(--serif);
+}
+.avatar-vous {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed color-mix(in srgb, var(--smalt) 55%, var(--trait));
+  background: var(--smalt-doux);
+  color: var(--smalt);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.zone-commentaire {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.zone-champ {
+  display: grid;
+  gap: 8px;
+}
+.zone-champ label {
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+.zone-champ textarea {
+  width: 100%;
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--trait);
+  border-radius: 4px 18px 18px 18px;
+  background: var(--carte);
+  color: var(--encre);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+  resize: vertical;
+  field-sizing: content;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.zone-champ textarea::placeholder {
+  color: var(--discret);
+}
+.zone-champ textarea:focus {
+  outline: none;
+  border-color: var(--smalt);
+  box-shadow: 0 0 0 4px var(--smalt-doux);
+}
+.zone-pied {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.zone-pied .discret {
+  color: var(--discret);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.publication-cote .titre-section {
+  margin-top: 36px;
+  font-size: 1.25rem;
+}
+
+/* --- Profil et étiquette ------------------------------------------------------------------------- */
+
+.banniere {
+  aspect-ratio: 3 / 1;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--joint-banniere);
+  color: var(--joint-banniere);
+}
+.banniere-motif {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.profil-tete {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 12px;
+  padding-left: 14px;
+}
+.profil-tete .avatar {
+  width: 96px;
+  height: 96px;
+  margin-top: -66px;
+  border-radius: 28px;
+  box-shadow: 0 0 0 5px var(--fond);
+}
+.profil-texte {
+  min-width: 0;
+  padding-bottom: 2px;
+}
+.profil-nom {
+  font: 400 1.875rem/1.1 var(--serif);
+  letter-spacing: -0.015em;
+}
+.profil-pseudo {
+  margin-top: 3px;
+  color: var(--discret);
+  font-size: 0.9375rem;
+}
+.profil-bio {
+  max-width: 60ch;
+  margin-top: 16px;
+  font: 400 1.1875rem/1.45 var(--serif);
+}
+.profil-chiffres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin-top: 12px;
+  color: var(--encre-2);
+  font-size: 0.9375rem;
+}
+.profil-chiffres strong {
+  color: var(--encre);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.etiquette-entete .titre-page {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+  font-size: 2.5rem;
+}
+.etiquette-entete .tesselle {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+}
+.etiquette-entete .compteur {
+  margin: 6px 0 24px;
+  color: var(--discret);
+  font-size: 0.9375rem;
+}
+
+/* --- Crédits ---------------------------------------------------------------------------------------- */
+
+.credits-intro {
+  max-width: 62ch;
+  margin-bottom: 24px;
+  color: var(--encre-2);
+  font: 400 1.125rem/1.5 var(--serif);
+}
+.credits-liste {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.credit-photo {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--trait);
+  border-radius: 18px;
+  background: var(--carte);
+  scroll-margin-top: calc(var(--entete) + 16px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.credit-photo:target {
+  border-color: var(--smalt);
+  box-shadow: 0 0 0 4px var(--smalt-doux);
+}
+.credit-vignette {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--joint);
+}
+.credit-vignette img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.credit-titre {
+  margin-bottom: 4px;
+  font: 400 1.0625rem/1.3 var(--serif);
+  overflow-wrap: anywhere;
+}
+.credit-details {
+  display: grid;
+  gap: 1px;
+  color: var(--encre-2);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.credit-details a {
+  position: relative;
+}
+.credit-details a::after {
+  content: "";
+  position: absolute;
+  inset: -14px -10px;
+}
+.credit-origine {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.pages {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  margin: 28px auto 0;
+  padding: 3px;
+  border-radius: 15px;
+  background: var(--fond-2);
+}
+.pages a {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  color: var(--encre-2);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.pages a:hover {
+  color: var(--encre);
+}
+.pages a[aria-current="page"] {
+  background: var(--carte);
+  color: var(--encre);
+  box-shadow: 0 1px 2px rgb(20 28 50 / 0.1), 0 0 0 1px var(--trait);
+}
+
+/* --- Pied de page --------------------------------------------------------------------------------- */
+
+.pied {
+  padding: 30px 0 34px;
+  border-top: 1px solid var(--trait);
+  color: var(--discret);
+  font-size: 0.875rem;
+}
+.pied .conteneur {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.pied-marque {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--encre);
+  font: 700 1.0625rem/1 var(--serif);
+}
+.pied-marque .embleme {
+  width: 20px;
+  height: 20px;
+}
+.pied a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+/* --- Grands écrans -------------------------------------------------------------------------------- */
+
+@media (min-width: 720px) {
+  .titre-page {
+    font-size: 2.5rem;
+  }
+  .fil {
+    gap: 28px;
+  }
+  .carte .publication-photo {
+    margin: 10px 10px 0;
+  }
+  .publication-corps {
+    padding: 12px 20px 14px;
+  }
+  .publication-seule {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .scene {
+    margin: 0;
+    overflow: hidden;
+    border-radius: 22px;
+  }
+  .scene-portrait {
+    padding: clamp(12px, 2vw, 28px);
+  }
+  .scene-portrait img {
+    max-height: min(76vh, 860px);
+  }
+  /* Un paysage remplit sa scène, sans bandes : largeur bornée pour que la photo tienne dans l'écran, et jamais
+     plus large que son fichier (960 px). */
+  .scene-paysage {
+    width: 100%;
+    max-width: min(100%, 108vh, 960px);
+    margin-inline: auto;
+  }
+  .scene-paysage img {
+    max-height: none;
+  }
+  .banniere {
+    aspect-ratio: 5 / 1;
+    border-radius: 26px;
+  }
+  .profil-tete {
+    margin-top: 14px;
+    padding-left: 28px;
+    gap: 22px;
+  }
+  .profil-tete .avatar {
+    width: 112px;
+    height: 112px;
+    margin-top: -80px;
+    border-radius: 32px;
+    box-shadow: 0 0 0 6px var(--fond);
+  }
+  .profil-nom {
+    font-size: 2.375rem;
+  }
+  .profil-bio,
+  .profil-chiffres {
+    padding-left: 28px;
+  }
+  .credits-liste {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  :root {
+    --joint-mosaique: 6px;
+  }
+  .vignette {
+    border-radius: 9px;
+  }
+}
+
+@media (min-width: 900px) {
+  .session-publique form {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    transform: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .fil-mise {
+    grid-template-columns: minmax(0, 620px) 280px;
+    justify-content: center;
+    gap: 64px;
+  }
+  .a-cote {
+    display: block;
+    position: sticky;
+    top: calc(var(--entete) + 24px);
+    align-self: start;
+    padding-top: 64px;
+  }
+  .a-cote .puces {
+    margin-bottom: 30px;
+  }
+  .auteurs-colonne {
+    display: grid;
+    gap: 0;
+  }
+  .auteurs-colonne .auteur {
+    width: 100%;
+    padding: 4px 0;
+  }
+  .explorer {
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+  }
+  .auteurs-bande,
+  .puces-bande {
+    margin-inline: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  .auteurs-bande {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-columns: auto;
+    gap: 4px;
+  }
+  .puces-bande {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .explorer-mosaique {
+    padding-top: 74px;
+  }
+  .publication-mise {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 56px;
+    margin-top: 28px;
+  }
+  .publication-cote > section:first-child .titre-section {
+    margin-top: 0;
+  }
+  .page-profil .principal,
+  .page-etiquette .principal {
+    max-width: 1040px;
+  }
+}
+
+/* --- Mouvement réduit : plus rien ne bouge tout seul, l'état reste visible ------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .eclats {
+    display: none;
+  }
+}

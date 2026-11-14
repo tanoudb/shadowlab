@@ -63,8 +63,11 @@ echo "  Site public : https://$hote"
 echo "  (adresse aussi écrite dans $dossier/adresse-publique.txt ; Ctrl+C pour tout arrêter)"
 echo
 
-# Cloudflare pose CF-Connecting-IP ; personne ne joint l'application sans passer par le tunnel.
+# Cloudflare pose CF-Connecting-IP ; personne ne joint l'application sans passer par le tunnel. Le mode HTTPS est imposé
+# (cookies `Secure` et `__Host-`, HSTS) : une valeur `0` restée dans le shell ou dans `.env` après un essai local ne
+# doit jamais mettre le site en ligne sans eux.
 SHADOWLAB_PUBLIC_HOTES="$hote" \
+SHADOWLAB_PUBLIC_HTTPS=1 \
 SHADOWLAB_PUBLIC_ENTETE_IP="CF-Connecting-IP" \
 SHADOWLAB_PUBLIC_PORT="$port" \
     caffeinate -is uv run shadowlab public servir

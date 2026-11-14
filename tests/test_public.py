@@ -65,23 +65,27 @@ def client(reglages_publics):
 
 
 def jeton_csrf(client: TestClient) -> str:
+    """Jeton anti-CSRF lu dans le formulaire de l'accueil ; jour plein (plus de formulaire, D-75), dans son cookie,
+    qui porte la même valeur (double soumission)."""
     r = client.get("/")
     assert r.status_code == 200
     jeton = Selector(r.text).css('input[name="csrf"]::attr(value)').get()
+    jeton = jeton or next((c.value for c in client.cookies.jar if c.name.endswith("slp-csrf")), None)
     assert jeton
     return jeton
 
 
-def commencer(client: TestClient, adresse: str = IP) -> str:
-    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine."""
+def commencer(client: TestClient, adresse: str = IP, langue: str | None = None) -> str:
+    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine. `langue` : celle du formulaire
+    d'accord (champ caché), donc de la session ; sans elle, celle de la requête."""
     r = client.post(
         "/session/commencer",
-        data={"consentement": "oui", "csrf": jeton_csrf(client)},
+        data={"consentement": "oui", "csrf": jeton_csrf(client), **({"langue": langue} if langue else {})},
         headers={"Origin": ORIGINE, "X-Forwarded-For": adresse},
         follow_redirects=False,
     )
     assert r.status_code == 303, r.text
-    assert r.headers["location"] == "/lab/vitrine"
+    assert r.headers["location"] == "/lab/social/fil"
     jeton = Selector(client.get("/lab/vitrine").text).css('meta[name="sl-session"]::attr(content)').get()
     assert jeton and re.fullmatch(r"[0-9a-f]{32}", jeton)
     return jeton
@@ -170,6 +174,21 @@ ROUTES_INTERDITES = [
     "/lab/static/vendor/fingerprintjs-5.3.0.esm.js",
     "/lab/static/vendor/botd-LICENSE.txt",
     "/lab/static/%2e%2e/app.py",
+    # Réseau social (cadrage du 13/11, v2) : rien du labo sous ses préfixes, ni sous les fichiers statiques publics.
+    # Le parcours de toutes ses pages, lui, est dans test_public_social.py (aucun lien vers ces routes).
+    "/lab/social/",
+    "/lab/social/api/publications",
+    "/lab/social/photos/",
+    "/lab/social/photos/manifeste.json",
+    "/lab/social/photos/%2e%2e/%2e%2e/app.py",
+    "/lab/social/static/observateur.js",
+    "/lab/social/connexion",
+    "/public/static/",
+    "/public/static/observateur.js",
+    "/public/static/vitrine.css",
+    "/public/static/lab.css",
+    "/public/static/%2e%2e/app.py",
+    "/public/static/social/photos/manifeste.json",
 ]
 
 
@@ -256,7 +275,7 @@ def test_parcours_complet(client, reglages_publics):
         headers={"Origin": ORIGINE},
         follow_redirects=False,
     )
-    assert r.status_code == 303 and r.headers["location"] == "/lab/vitrine"
+    assert r.status_code == 303 and r.headers["location"] == "/lab/social/fil"
     cookie = cookie_pose(r, "slp-session").lower()
     assert cookie.startswith("__host-slp-session=")
     for attribut in ("httponly", "samesite=lax", "secure", "path=/"):
@@ -376,11 +395,26 @@ def test_messages_invalides(client):
 
 
 def pages_servies(client: TestClient) -> list[str]:
-    pages = [client.get("/").text]
+    pages = [client.get(chemin).text for chemin in ("/", "/en", "/fr/information", "/en/information")]
+    pages.append(client.get("/public/static/public.css").text)
     jeton = commencer(client)
     pages += [client.get(chemin).text for chemin in PAGES_VITRINE]
     pages.append(client.get("/lab/static/vitrine.css").text)
     pages.append(client.get("/lab/static/vitrine.js").text)
+    # Réseau social : un fil, une publication, un profil, une étiquette, l'explorateur, et ses deux fichiers.
+    fil = client.get("/lab/social/fil")
+    assert fil.status_code == 200
+    pages.append(fil.text)
+    publication = client.get(Selector(fil.text).css('a[href^="/lab/social/p/"]::attr(href)').get())
+    assert publication.status_code == 200
+    pages.append(publication.text)
+    for prefixe in ("/lab/social/u/", "/lab/social/t/"):
+        lien = Selector(publication.text).css(f'a[href^="{prefixe}"]::attr(href)').get()
+        pages.append(client.get(lien).text)
+    for chemin in ("/lab/social/explorer", "/public/static/social.css", "/public/static/social.js"):
+        r = client.get(chemin)
+        assert r.status_code == 200, chemin
+        pages.append(r.text)
     pages.append(client.get("/session").text)
     pages += [client.get("/contact").text, client.get("/contact/envoye").text]
     merci = terminer(client)
@@ -689,11 +723,18 @@ def cles_collectees(source: str) -> tuple[set[str], set[str]]:
 
 
 def test_liste_des_donnees_tiree_de_l_observateur():
-    """La liste affichée couvre exactement ce que le script envoie : un champ ajouté sans elle fait échouer ce test."""
+    """La liste affichée couvre exactement ce que le script envoie, dans chaque langue de la notice : un champ ajouté
+    sans elle fait échouer ce test."""
+    from shadowlab.public.pages import RELEVES
+
     empreinte, comportement = cles_collectees(OBSERVATEUR.read_text(encoding="utf-8"))
     assert len(empreinte) > 30 and "webrtc_test" in empreinte
     assert {cle for cle, _ in DONNEES_RELEVEES} == empreinte
     assert {cle for cle, _ in DONNEES_COMPORTEMENT} == comportement
+    assert set(RELEVES) == {"fr", "en"}
+    for langue, (relevees, comport) in RELEVES.items():
+        assert {cle for cle, _ in relevees} == empreinte, langue
+        assert {cle for cle, _ in comport} == comportement, langue
 
 
 def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
@@ -743,7 +784,8 @@ def test_collecte_accepte_le_releve_de_comportement_complet(client, reglages_pub
 
 
 def test_page_d_information_complete(client):
-    r = client.get("/")
+    """La notice complète (/fr/information, D-75) ; l'accord se donne sur l'accueil (« / »)."""
+    r = client.get("/fr/information")
     texte = r.text
     for cle, description in DONNEES_RELEVEES + DONNEES_COMPORTEMENT:
         assert f"<code>{cle}</code>" in texte and escape(description) in texte, cle
@@ -753,13 +795,14 @@ def test_page_d_information_complete(client):
     assert escape(CONTACT) in texte
     for mention in ("adresse IP", "Supprimer ma session", "consentement", "CNIL", "Pourquoi", "Vos droits"):
         assert mention in texte, mention
-    sel = Selector(texte)
+    assert Selector(texte).css('meta[name="sl-sans-tiers"][content="1"]')
+    assert "observateur.js" not in texte
+    sel = Selector(client.get("/").text)
     formulaire = sel.css('form[action="/session/commencer"][method="post"]')
     assert formulaire.css('input[type="checkbox"][name="consentement"][value="oui"][required]')
     assert formulaire.css('input[type="hidden"][name="csrf"]')
-    assert sel.css('a[href="/lab/vitrine"]'), "visiter sans participer"
-    assert sel.css('meta[name="sl-sans-tiers"][content="1"]')
-    assert "observateur.js" not in texte
+    assert sel.css('a[href="/lab/social/fil"]'), "visiter sans participer"
+    assert sel.css('a[href="/fr/information"]'), "la notice complète à un clic"
 
 
 @pytest.mark.parametrize("contact", ["", "   "])
@@ -1079,7 +1122,7 @@ def test_terminer_exige_post_et_csrf(client, reglages_publics):
 
 
 def test_page_d_information_decrit_cookies_et_transit(client):
-    texte = client.get("/").text
+    texte = client.get("/fr/information").text
     for cookie in ("slp-csrf", "slp-session", "slp-droits"):
         assert f"<code>{cookie}</code>" in texte, cookie
     assert "ni vos cookies" not in texte
@@ -1212,7 +1255,7 @@ def test_contact_remplace_l_adresse_dans_les_pages(client):
     assert formulaire.css('input[type="hidden"][name="csrf"]')
     assert "90 jours" in client.get("/contact").text, "la durée de conservation du message est annoncée"
 
-    information = client.get("/").text
+    information = client.get("/fr/information").text
     assert Selector(information).css('a[href="/contact"]'), "la page d'information mène au formulaire"
     assert escape(CONTACT) in information, "le responsable reste nommé"
     sans_session = client.get("/session").text
@@ -1225,7 +1268,7 @@ def test_contact_remplace_l_adresse_dans_les_pages(client):
 
 
 def test_contact_textes_exacts(client):
-    information = client.get("/").text
+    information = client.get("/fr/information").text
     assert "ce que vous écrivez vous-même dans le formulaire de contact" in information
     for texte in (information, client.get("/contact").text):
         assert "jour de sa réception" in texte and "tel quel" not in texte and "ni lien avec" not in texte
@@ -1533,12 +1576,14 @@ def test_contact_limite_par_adresse_et_par_jour(reglages_publics):
 
 
 def test_bloc_d_adresse():
-    """Une adresse IPv6 compte pour son /64 ; une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
+    """Une adresse IPv6 compte pour son /56 (D-77 ; /64 avant) : un abonné reçoit souvent un /56 entier, donc 256
+    blocs /64. Une IPv4 reste elle-même ; le reste est gardé tel quel, sans erreur."""
     from shadowlab.public.app import bloc_d_adresse
 
-    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:B:ffff::9") == "2001:db8:a:b::/64"
-    assert bloc_d_adresse("2001:db8:a:c::1") != bloc_d_adresse("2001:db8:a:b::1")
-    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/64"
+    assert bloc_d_adresse("2001:db8:a:b::1") == bloc_d_adresse("2001:DB8:A:FF:ffff::9") == "2001:db8:a::/56"
+    assert bloc_d_adresse("2001:db8:a:c::1") == bloc_d_adresse("2001:db8:a:b::1"), "deux /64 du même /56"
+    assert bloc_d_adresse("2001:db8:a:100::1") != bloc_d_adresse("2001:db8:a:b::1")
+    assert bloc_d_adresse("fe80::1%eth0") == "fe80::/56"
     assert bloc_d_adresse(IP) == IP
     assert bloc_d_adresse("::ffff:203.0.113.57") == IP, "une IPv4 écrite en IPv6 reste cette IPv4"
     for valeur in ("", "testclient", "pas une adresse", "[2001:db8::1]:443", "2001:db8::1, 10.0.0.1", "x" * 10_000):
@@ -1546,10 +1591,11 @@ def test_bloc_d_adresse():
 
 
 def test_limites_par_adresse_comptent_un_bloc_ipv6(reglages_publics):
-    """Un abonné IPv6 reçoit au moins un /64 et y change d'adresse à volonté : les limites par adresse (sessions
-    et messages) le comptent comme une seule adresse. Deux /64 différents restent deux adresses ; IPv4 inchangé."""
-    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:b:ffff:ffff:ffff:fffe", "2001:DB8:A:B:0:0:0:9"]
-    autre_bloc = "2001:db8:a:c::1"
+    """Un abonné IPv6 reçoit souvent un /56 entier et y change d'adresse, et de /64, à volonté : les limites par
+    adresse (sessions et messages) le comptent comme une seule adresse (D-77). Deux /56 différents restent deux
+    adresses ; IPv4 inchangé."""
+    meme_bloc = ["2001:db8:a:b::1", "2001:db8:a:ff:ffff:ffff:ffff:fffe", "2001:DB8:A:C:0:0:0:9"]
+    autre_bloc = "2001:db8:a:100::1"
     with fabriquer(reglages_publics, sessions_par_adresse=2) as c:
         assert [essayer(c, adresse) for adresse in meme_bloc] == [303, 303, 429]
         assert essayer(c, autre_bloc) == 303
@@ -1634,8 +1680,8 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-12.7", "le texte a changé : nouvelle version du texte accepté"
-    texte = client.get("/").text
+    assert VERSION_INFORMATION == "2026-11-14.6", "le texte a changé : nouvelle version du texte accepté"
+    texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
         "le code de réponse et l'heure, sans adresse IP ni identifiant de session.",
@@ -1652,7 +1698,7 @@ def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
         assert phrase in texte, phrase
     assert "non réversible" not in texte and "24 heures au plus" not in texte, "promesses trop fortes retirées"
     bandeau = client.get("/lab/vitrine").text
-    assert "Vous visitez sans participer : rien n'est enregistré" in bandeau
+    assert "Vous visitez sans participer : rien n'est relevé sur vous" in bandeau
     assert "journal technique des erreurs" in bandeau, "la phrase du bandeau reste vraie : une erreur est journalisée"
 
 
@@ -1717,8 +1763,8 @@ def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, f
         for adresse in attributs_de_liens(page.text):
             assert adresse == "/" or adresse.startswith("/contact"), adresse
 
-    # Même contenu et mêmes en-têtes que la feuille du site, servie sous /contact/.
-    css, ancienne = client.get("/contact/style.css"), client.get("/lab/static/vitrine.css")
+    # Même contenu et mêmes en-têtes que la feuille des pages de l'étude (public.css), servie sous /contact/.
+    css, ancienne = client.get("/contact/style.css"), client.get("/public/static/public.css")
     assert css.text == ancienne.text and css.headers["content-type"] == ancienne.headers["content-type"]
     assert css.headers["content-type"].startswith("text/css")
     assert css.headers["cache-control"] == ancienne.headers["cache-control"]
