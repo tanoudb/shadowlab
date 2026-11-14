@@ -625,7 +625,11 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   Rien n'a régressé : moteur navigateur 15 sur 15 du niveau 02 au niveau 06 sans corrélation (280 champs sur
   280 à chacun), témoin `http` 0 sur 15, aucune décision ne cite `rythme_soutenu`, `pages_eclair` ni
   `trajectoire_lineaire`. Coût : la session médiane passe de 164 à 177 s au niveau 05 et de 163 à 168 s au
-  niveau 06 sans corrélation. 1 640 tests verts (10 h 12, avant la campagne). Réserves : 3 passages par
+  niveau 06 sans corrélation. 1 640 tests verts (10 h 12, avant la campagne). **À relire à la prochaine
+  campagne** : au niveau 04, qui résout lui aussi un défi, la page de liste dure 2 026, 3 047 et 12 496 ms à
+  la campagne 111, contre 4 084 à 5 610 ms à la 110 ; deux pages sont donc plus courtes qu'avant (20 et 32
+  mouvements de souris, loin du seuil de 500 ms de `pages_eclair`), cause non cherchée, 3 passages seulement.
+  Réserves : 3 passages par
   niveau ; le défaut n'était vu par aucun détecteur de l'Arena, donc la correction ne change aucun taux de
   passage ici, elle retire un signe qu'une protection plus fine pourrait lire ; `pages_eclair` fait toujours
   la moyenne avec les pages de défi ; aucun humain en base pour dire ce qu'est une durée « humaine ».
