@@ -1,11 +1,13 @@
-"""Base de l'application publique : sessions humaines consenties, observations, suppression et purge.
+"""Base de l'application publique : sessions humaines consenties, observations, suppression et purge, fréquentation.
 
-Même schéma que le laboratoire (`database.MIGRATIONS`), dans un autre fichier. Une base qui contient une
-autre expérience que les sessions publiques est refusée : une purge ne doit jamais toucher une campagne.
+Même schéma que le laboratoire (`database.MIGRATIONS`), dans un autre fichier, plus une seule table à elle,
+`frequentation` (trois nombres par jour, D-75), créée ici et non par une migration du labo. Une base qui contient
+une autre expérience que les sessions publiques est refusée : une purge ne doit jamais toucher une campagne.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -53,6 +55,15 @@ TAILLE_MAX_METHODE = 16
 TAILLE_MAX_CHEMIN = 200
 # Adresse interne d'une extension de navigateur (traces d'erreur) : son identifiant peut désigner une personne.
 EXTENSION = re.compile(r"\b([a-z][a-z0-9+.-]*-extension)://[^/\s\"'\\)]+", re.I)
+# Fréquentation (D-75) : le jour et trois nombres, rien d'autre. Ni adresse, ni identifiant, ni navigateur, ni heure.
+# Hors des sessions : ni la suppression d'une session ni la purge n'y touchent.
+SCHEMA_FREQUENTATION = """CREATE TABLE IF NOT EXISTS frequentation (
+    jour TEXT PRIMARY KEY,  -- jour UTC, AAAA-MM-JJ
+    accueil INTEGER NOT NULL DEFAULT 0,  -- chargements de la page d'accueil (GET)
+    commencees INTEGER NOT NULL DEFAULT 0,  -- sessions commencées
+    terminees INTEGER NOT NULL DEFAULT 0  -- sessions terminées par « Terminer ma session »
+)"""
+COMPTES = ("accueil", "commencees", "terminees")
 
 
 def _resserrer(chemin: Path, mode: int) -> None:
@@ -86,6 +97,7 @@ def connexion(chemin: Path) -> sqlite3.Connection:
     creer_prive(chemin)
     cx = db.ouvrir(chemin)
     cx.execute("PRAGMA secure_delete=ON")
+    cx.execute(SCHEMA_FREQUENTATION)
     return cx
 
 
@@ -171,6 +183,18 @@ def session_existe(cx: sqlite3.Connection, jeton: str) -> bool:
         (jeton, EXPERIENCE),
     ).fetchone()
     return ligne is not None
+
+
+def langue_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
+    """Langue notée avec l'accord de la session (`protection_config`), ou None (session absente, accord plus ancien
+    que les deux langues, valeur illisible). L'appelant la vérifie contre les langues servies."""
+    ligne = cx.execute("SELECT protection_config FROM runs WHERE session_token = ?", (jeton,)).fetchone()
+    try:
+        accord = json.loads(ligne[0]) if ligne and ligne[0] else None
+    except ValueError:
+        return None
+    langue = accord.get("langue") if isinstance(accord, dict) else None
+    return langue if isinstance(langue, str) else None
 
 
 def clore_session(cx: sqlite3.Connection, jeton: str) -> None:
@@ -302,3 +326,28 @@ def purger(cx: sqlite3.Connection, jours: int, maintenant: datetime | None = Non
     for jeton in jetons:
         effacer_session(cx, jeton)
     return len(jetons)
+
+
+# --- Fréquentation (D-75) ------------------------------------------------------------------------
+
+
+def compter(cx: sqlite3.Connection, compte: str, moment: datetime | None = None) -> None:
+    """Ajoute 1 au compte `compte` du jour UTC (`accueil`, `commencees` ou `terminees`)."""
+    if compte not in COMPTES:
+        raise ValueError(f"compte inconnu : {compte}")
+    jour = (moment or datetime.now(UTC)).date().isoformat()
+    cx.execute(
+        f"INSERT INTO frequentation (jour, {compte}) VALUES (?, 1)"
+        f" ON CONFLICT (jour) DO UPDATE SET {compte} = {compte} + 1",
+        (jour,),
+    )
+
+
+def frequentation(cx: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Les comptes, jour par jour, du plus ancien au plus récent."""
+    return cx.execute("SELECT jour, accueil, commencees, terminees FROM frequentation ORDER BY jour").fetchall()
+
+
+def sessions_terminees(cx: sqlite3.Connection) -> int:
+    """Total des sessions terminées depuis le début, tous jours confondus (affiché sur l'accueil)."""
+    return int(cx.execute("SELECT COALESCE(SUM(terminees), 0) FROM frequentation").fetchone()[0])

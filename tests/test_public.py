@@ -65,23 +65,27 @@ def client(reglages_publics):
 
 
 def jeton_csrf(client: TestClient) -> str:
+    """Jeton anti-CSRF lu dans le formulaire de l'accueil ; jour plein (plus de formulaire, D-75), dans son cookie,
+    qui porte la même valeur (double soumission)."""
     r = client.get("/")
     assert r.status_code == 200
     jeton = Selector(r.text).css('input[name="csrf"]::attr(value)').get()
+    jeton = jeton or next((c.value for c in client.cookies.jar if c.name.endswith("slp-csrf")), None)
     assert jeton
     return jeton
 
 
-def commencer(client: TestClient, adresse: str = IP) -> str:
-    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine."""
+def commencer(client: TestClient, adresse: str = IP, langue: str | None = None) -> str:
+    """Ouvre une session consentie et renvoie son jeton, lu dans une page vitrine. `langue` : celle du formulaire
+    d'accord (champ caché), donc de la session ; sans elle, celle de la requête."""
     r = client.post(
         "/session/commencer",
-        data={"consentement": "oui", "csrf": jeton_csrf(client)},
+        data={"consentement": "oui", "csrf": jeton_csrf(client), **({"langue": langue} if langue else {})},
         headers={"Origin": ORIGINE, "X-Forwarded-For": adresse},
         follow_redirects=False,
     )
     assert r.status_code == 303, r.text
-    assert r.headers["location"] == "/lab/vitrine"
+    assert r.headers["location"] == "/lab/social/fil"
     jeton = Selector(client.get("/lab/vitrine").text).css('meta[name="sl-session"]::attr(content)').get()
     assert jeton and re.fullmatch(r"[0-9a-f]{32}", jeton)
     return jeton
@@ -271,7 +275,7 @@ def test_parcours_complet(client, reglages_publics):
         headers={"Origin": ORIGINE},
         follow_redirects=False,
     )
-    assert r.status_code == 303 and r.headers["location"] == "/lab/vitrine"
+    assert r.status_code == 303 and r.headers["location"] == "/lab/social/fil"
     cookie = cookie_pose(r, "slp-session").lower()
     assert cookie.startswith("__host-slp-session=")
     for attribut in ("httponly", "samesite=lax", "secure", "path=/"):
@@ -391,7 +395,8 @@ def test_messages_invalides(client):
 
 
 def pages_servies(client: TestClient) -> list[str]:
-    pages = [client.get("/").text]
+    pages = [client.get(chemin).text for chemin in ("/", "/en", "/fr/information", "/en/information")]
+    pages.append(client.get("/public/static/public.css").text)
     jeton = commencer(client)
     pages += [client.get(chemin).text for chemin in PAGES_VITRINE]
     pages.append(client.get("/lab/static/vitrine.css").text)
@@ -718,11 +723,18 @@ def cles_collectees(source: str) -> tuple[set[str], set[str]]:
 
 
 def test_liste_des_donnees_tiree_de_l_observateur():
-    """La liste affichée couvre exactement ce que le script envoie : un champ ajouté sans elle fait échouer ce test."""
+    """La liste affichée couvre exactement ce que le script envoie, dans chaque langue de la notice : un champ ajouté
+    sans elle fait échouer ce test."""
+    from shadowlab.public.pages import RELEVES
+
     empreinte, comportement = cles_collectees(OBSERVATEUR.read_text(encoding="utf-8"))
     assert len(empreinte) > 30 and "webrtc_test" in empreinte
     assert {cle for cle, _ in DONNEES_RELEVEES} == empreinte
     assert {cle for cle, _ in DONNEES_COMPORTEMENT} == comportement
+    assert set(RELEVES) == {"fr", "en"}
+    for langue, (relevees, comport) in RELEVES.items():
+        assert {cle for cle, _ in relevees} == empreinte, langue
+        assert {cle for cle, _ in comport} == comportement, langue
 
 
 def test_observateur_dit_si_la_page_defile_et_sa_plus_longue_pause():
@@ -772,7 +784,8 @@ def test_collecte_accepte_le_releve_de_comportement_complet(client, reglages_pub
 
 
 def test_page_d_information_complete(client):
-    r = client.get("/")
+    """La notice complète (/fr/information, D-75) ; l'accord se donne sur l'accueil (« / »)."""
+    r = client.get("/fr/information")
     texte = r.text
     for cle, description in DONNEES_RELEVEES + DONNEES_COMPORTEMENT:
         assert f"<code>{cle}</code>" in texte and escape(description) in texte, cle
@@ -782,13 +795,14 @@ def test_page_d_information_complete(client):
     assert escape(CONTACT) in texte
     for mention in ("adresse IP", "Supprimer ma session", "consentement", "CNIL", "Pourquoi", "Vos droits"):
         assert mention in texte, mention
-    sel = Selector(texte)
+    assert Selector(texte).css('meta[name="sl-sans-tiers"][content="1"]')
+    assert "observateur.js" not in texte
+    sel = Selector(client.get("/").text)
     formulaire = sel.css('form[action="/session/commencer"][method="post"]')
     assert formulaire.css('input[type="checkbox"][name="consentement"][value="oui"][required]')
     assert formulaire.css('input[type="hidden"][name="csrf"]')
-    assert sel.css('a[href="/lab/vitrine"]'), "visiter sans participer"
-    assert sel.css('meta[name="sl-sans-tiers"][content="1"]')
-    assert "observateur.js" not in texte
+    assert sel.css('a[href="/lab/social/fil"]'), "visiter sans participer"
+    assert sel.css('a[href="/fr/information"]'), "la notice complète à un clic"
 
 
 @pytest.mark.parametrize("contact", ["", "   "])
@@ -1108,7 +1122,7 @@ def test_terminer_exige_post_et_csrf(client, reglages_publics):
 
 
 def test_page_d_information_decrit_cookies_et_transit(client):
-    texte = client.get("/").text
+    texte = client.get("/fr/information").text
     for cookie in ("slp-csrf", "slp-session", "slp-droits"):
         assert f"<code>{cookie}</code>" in texte, cookie
     assert "ni vos cookies" not in texte
@@ -1241,7 +1255,7 @@ def test_contact_remplace_l_adresse_dans_les_pages(client):
     assert formulaire.css('input[type="hidden"][name="csrf"]')
     assert "90 jours" in client.get("/contact").text, "la durée de conservation du message est annoncée"
 
-    information = client.get("/").text
+    information = client.get("/fr/information").text
     assert Selector(information).css('a[href="/contact"]'), "la page d'information mène au formulaire"
     assert escape(CONTACT) in information, "le responsable reste nommé"
     sans_session = client.get("/session").text
@@ -1254,7 +1268,7 @@ def test_contact_remplace_l_adresse_dans_les_pages(client):
 
 
 def test_contact_textes_exacts(client):
-    information = client.get("/").text
+    information = client.get("/fr/information").text
     assert "ce que vous écrivez vous-même dans le formulaire de contact" in information
     for texte in (information, client.get("/contact").text):
         assert "jour de sa réception" in texte and "tel quel" not in texte and "ni lien avec" not in texte
@@ -1663,8 +1677,8 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-12.7", "le texte a changé : nouvelle version du texte accepté"
-    texte = client.get("/").text
+    assert VERSION_INFORMATION == "2026-11-14.4", "le texte a changé : nouvelle version du texte accepté"
+    texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
         "le code de réponse et l'heure, sans adresse IP ni identifiant de session.",
@@ -1746,8 +1760,8 @@ def test_pages_de_contact_sans_trace_dans_la_session(client, reglages_publics, f
         for adresse in attributs_de_liens(page.text):
             assert adresse == "/" or adresse.startswith("/contact"), adresse
 
-    # Même contenu et mêmes en-têtes que la feuille du site, servie sous /contact/.
-    css, ancienne = client.get("/contact/style.css"), client.get("/lab/static/vitrine.css")
+    # Même contenu et mêmes en-têtes que la feuille des pages de l'étude (public.css), servie sous /contact/.
+    css, ancienne = client.get("/contact/style.css"), client.get("/public/static/public.css")
     assert css.text == ancienne.text and css.headers["content-type"] == ancienne.headers["content-type"]
     assert css.headers["content-type"].startswith("text/css")
     assert css.headers["cache-control"] == ancienne.headers["cache-control"]

@@ -1,15 +1,18 @@
 # Site public — application réduite (étape 1.6)
 
-Mis à jour : 12/11/2026. Code : `src/shadowlab/public/`. Tests : `tests/test_public.py`.
+Mis à jour : 14/11/2026 (version « étude », D-75). Code : `src/shadowlab/public/`. Tests : `tests/test_public.py`,
+`tests/test_public_social.py`, `tests/test_public_etude.py`.
 
 ## Ce que c'est
 
 Une petite application Python, **à part du laboratoire**, faite pour être mise en ligne. Elle sert :
 
-- la page d'information et de consentement (`/`) ;
+- l'accueil de l'étude « Humain ou robot ? » et l'accord (`/`, `/fr`, `/en`) ; la notice complète, sans formulaire
+  (`/fr/information`, `/en/information`, et `/information` dans la langue de la session ou du navigateur) ;
 - le site vitrine (`/lab/vitrine…`, mêmes chemins et même code que dans le labo : `site/vitrine.py`) ;
-- les sessions humaines de référence (`POST /session/commencer`, `POST /session/terminer`,
-  `POST /session/supprimer`, tous protégés contre le CSRF) et la page « Ma session » (`GET /session`) ;
+- les sessions humaines de référence (`POST /session/commencer`, qui mène au fil du réseau social,
+  `POST /session/terminer`, `POST /session/supprimer`, tous protégés contre le CSRF) et la page « Ma session »
+  (`GET /session`) ;
 - la collecte de l'observateur (`POST /lab/collecte`), seulement pendant une session consentie ;
 - le formulaire de contact (`GET /contact`, `POST /contact`, `GET /contact/envoye`, D-57) : écrire au
   responsable sans qu'une adresse soit affichée ; sa feuille de style est servie sous `/contact/style.css` ;
@@ -20,7 +23,18 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
   `/lab/social/t/{etiquette}`, et les photos `/lab/social/photos/{fichier}` (seulement les fichiers du manifeste
   `public/static/social/photos/manifeste.json`). Même traitement que la vitrine : observateur et requêtes notées
   pendant une session seulement. Sa feuille et son script, `social.css` et `social.js`, sont servis sous
-  `/public/static/` (liste fermée) ; le script ne fait aucune requête et n'écrit rien dans le navigateur.
+  `/public/static/` (liste fermée) ; le script ne fait aucune requête et n'écrit rien dans le navigateur ;
+- la feuille des pages de l'étude, `public.css`, sous `/public/static/` (même liste fermée) et sous
+  `/contact/style.css` pour les pages de contact.
+
+**Deux langues** (D-75), français et anglais, sans cookie de plus : la langue d'une page est celle du préfixe de
+l'adresse (`/fr`, `/en`), sinon celle notée avec l'accord de la session en cours, sinon celle préférée par le
+navigateur (`Accept-Language`), sinon le français. Le formulaire de l'accueil porte sa langue dans un champ caché :
+elle est notée dans `protection_config` avec la version du texte accepté. Seuls l'accueil et la notice ont une
+adresse par langue ; « Ma session », le contact, les erreurs et le bandeau des deux sites suivent la session, puis
+le navigateur. Les textes sont dans `public/textes.py` (un dictionnaire par langue, mêmes clés), la structure HTML
+une seule fois dans `public/pages.py`. Le résumé de ce qui est relevé, sur l'accueil, est à un seul endroit
+(`textes.RESUME_RELEVE`).
 
 Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
 test, la démo reCAPTCHA, `/lab/verdict` et les autres pages du labo. Ces modules ne sont même pas importés
@@ -109,7 +123,7 @@ Limites de cette voie, à connaître avant de partager le lien :
 - **L'adresse change à chaque lancement** : un lien déjà partagé meurt si le script, le Mac ou la connexion
   s'arrête. Cloudflare donne ces tunnels sans garantie de disponibilité.
 - **Aucune limitation de débit** devant l'application (pas de règles Cloudflare sans domaine) : le plafond
-  de 40 sessions par jour peut être vidé par un script (voir « Limites connues »).
+  de sessions par jour (40 par défaut) peut être vidé par un script (voir « Limites connues »).
 - **Le site tourne sur le poste de travail**, qui porte d'autres projets. L'application n'écoute que sur
   `127.0.0.1` et le tunnel ne relaie que son port.
 - Le journal du tunnel (`outputs/public/tunnel.log`, niveau `info`) est **filtré avant d'être écrit** : toute
@@ -138,6 +152,7 @@ l'adresse et filtre `sed` vérifiés à vide).
 | `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (dernière valeur lue). Vide = adresse de la connexion |
 | `SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` | `20261111`, `500` | Contenu du site vitrine, comme dans le labo |
 | `SHADOWLAB_PUBLIC_SOCIAL_GRAINE`, `SHADOWLAB_PUBLIC_SOCIAL_TAILLE` | `20261113`, `120` | Contenu du réseau social fictif : graine et nombre de publications (au moins 1) |
+| `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` | `40` | Plafond de sessions ouvertes par jour UTC, toutes adresses (ramené entre 1 et 5 000). Atteint, l'accueil et le refus disent, dans les deux langues, que l'étude a fait le plein pour aujourd'hui et invitent à revenir demain. Voir « Limites » avant de l'élever |
 
 L'application publique ne charge du fichier `.env` que `SHADOWLAB_PUBLIC_*`, `SHADOWLAB_VITRINE_*` et
 `SHADOWLAB_SORTIES` : les clés propres au labo (jeton d'API, clés reCAPTCHA…) n'entrent pas dans son processus.
@@ -162,12 +177,12 @@ Cloudflare) et ces limites deviennent globales : 6 sessions et 3 messages par he
 pour tout le monde. Si l'en-tête configuré manque à une requête, l'application écrit **un avertissement au
 journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_adresse_absent_avertit_une_seule_fois_sans_adresse`).
 
-### Limites (constantes, `public/app.py`, classe `Limites`)
+### Limites (`public/app.py`, classe `Limites` ; le plafond par jour est un réglage)
 
 | Limite | Valeur | Pourquoi |
 |--------|--------|----------|
 | Sessions ouvertes par adresse | 6 par heure glissante (IPv6 : par /64) | Disque, en mémoire seulement |
-| Sessions ouvertes par jour | 40, toutes adresses | Disque ; compté en base, survit au redémarrage |
+| Sessions ouvertes par jour | réglage `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`, 40 par défaut, toutes adresses ; un jour plein n'use pas la limite par adresse | Afflux et abus ; compté en base, survit au redémarrage. Le disque, lui, est protégé par le plafond de taille (ci-dessous) |
 | Taille de la base (+ WAL) | 2 Gio ; au-delà, plus aucune session ne s'ouvre et **plus rien ne s'écrit** (requêtes servies sans être notées, collecte en 503) | Disque |
 | Envois de l'observateur par session | 300 (deux par page) | Disque |
 | Volume des envois par session | 4 Mio (~10 Ko par empreinte) | Disque |
@@ -180,11 +195,32 @@ journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_a
 
 **Pire cas, mesuré** (12/11/2026, base temporaire, ces bornes atteintes) : une session occupe 16,9 Mo —
 12,6 Mo pour 3 000 requêtes aux en-têtes de 2 Ko (une ligne de ~2,3 Ko prend une page SQLite de 4 Kio) et
-4,3 Mo d'envois. À 40 sessions par jour : **environ 680 Mo par jour**. Le plafond de 2 Gio est contrôlé à
+4,3 Mo d'envois. À 40 sessions par jour (le défaut) : **environ 680 Mo par jour**. Le plafond de 2 Gio est contrôlé à
 chaque écriture ; il ne peut être dépassé que des lignes déjà en cours d'écriture (une par requête
 simultanée, 64 Kio au plus chacune). Sous abus soutenu, il est donc atteint en 3 jours environ : le site
 reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppression à la main (voir
 « Limites connues »). Une purge ne réduit pas le fichier, mais ses pages libérées sont réutilisées.
+
+**Ce que tient la base, et ce que cela veut dire pour le réglage** (calcul du 14/11/2026, verrouillé par
+`test_plafond_de_la_base_en_sessions_au_pire`) :
+
+- Une session au volume maximal : 3 000 requêtes notées × 4 Kio (une ligne par page SQLite, mesuré le 12/11)
+  = 12,3 Mo, plus 4 Mio d'envois et environ 300 octets par envoi (300 envois) = 4,3 Mo, soit **16,6 Mo par le
+  calcul** (16,9 Mo mesurés le 12/11 ; l'écart de 0,3 Mo n'est pas expliqué).
+- 2 Gio (2 147 483 648 octets) / 16,9 Mo = **127 sessions** (129 par le calcul). C'est un **total**, pas un
+  nombre par jour : une session reste en base 90 jours.
+- Le plafond par jour ne protège donc pas le disque ; c'est le plafond de 2 Gio qui le fait. C'est un nombre
+  par jour UTC, pas un débit : il fixe le jour où un abus peut remplir la base, au plus tôt le
+  `ceil(127 / plafond)`-ième jour : le 4ᵉ jour à 40 sessions par jour, le 2ᵉ à 100, **le jour même dès 127**.
+  Au-delà de 127 environ, il ne retarde plus rien. Base pleine, plus aucune session ne s'ouvre (503) jusqu'à la
+  purge (jusqu'à 90 jours) ou à une suppression à la main : l'étude serait bloquée, pas le disque.
+- Une session humaine ordinaire est bien plus petite que ce pire cas : non mesuré (aucune session humaine en
+  base au 14/11). La première vraie session donnera le chiffre (taille de la base avant et après).
+- Conséquence pour le réglage : le fixer sur la participation attendue le jour d'un message (quelques centaines,
+  pas plus), surveiller `shadowlab public frequentation` et la taille de `public.sqlite3`, supprimer les sessions
+  abusives (`shadowlab public supprimer`), et demander une limitation de débit au mandataire (voir « Ce qui reste
+  à la charge de l'hébergement »). Élever `taille_max_base` (constante de `Limites`) demande d'abord de mesurer
+  une vraie session et la place libre du disque.
 
 ## Purge et suppression
 
@@ -225,8 +261,8 @@ niveau DEBUG) dans `<dossier de la base>/logs/shadowlab.jsonl` (à l'écran seul
 adresse, ni chaîne de requête, ni en-tête, ni jeton, ni identifiant de session. Une requête réussie ou redirigée
 n'écrit **rien** (`test_journal_ne_garde_que_les_erreurs`) : ce journal est horodaté à la milliseconde et ne suit
 pas la purge à 90 jours (il tourne par taille), il ne doit pas dater chaque visite, ce qui contredirait « rien
-n'est enregistré » pour qui visite sans participer. La page d'information le dit (« Un journal technique ne garde
-que les erreurs… »).
+n'est enregistré » pour qui visite sans participer (hormis le compte du jour, voir « Fréquentation »). La notice
+le dit (« Un journal technique ne garde que les erreurs… »).
 
 **Aucune ligne**, même en erreur, pour les pages de contact (`/contact…`, feuille de style `/contact/style.css`
 comprise) ni pour ce qu'un navigateur charge avec chaque page (fichiers `/lab/static/…` et `/public/static/…`,
@@ -251,11 +287,12 @@ clé `secret`) sauf `slp-csrf`, qui n'est qu'une valeur au hasard.
 | `slp-session` | à « Commencer » | 2 h, effacé à « Terminer » | Relie les pages à la session en cours |
 | `slp-droits` | à « Commencer » | durée de conservation (90 j), effacé à la suppression | Retrouver et supprimer sa session depuis « Ma session » |
 
-La page d'information les décrit tous les trois (`test_page_d_information_decrit_cookies_et_transit`).
+La notice les décrit tous les trois (`test_page_d_information_decrit_cookies_et_transit`). Il n'y en a jamais
+d'autre, dans aucune langue (`test_toujours_exactement_trois_cookies`).
 
 ## Ce qui est stocké
 
-Base publique, tables du schéma du labo (aucune migration ajoutée) :
+Base publique, tables du schéma du labo (aucune migration ajoutée), plus une table à elle, `frequentation` :
 
 - `experiments` : une seule ligne, `sessions-publiques` ; `engines`, `scenarios` : une ligne chacune.
 - `runs` : une ligne par session (`truth='humain'`, `consent_at`, `protection_config` garde la version du
@@ -267,6 +304,12 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   identifiants d'extension de navigateur (`chrome-extension://<id>`, `moz-extension://`,
   `safari-web-extension://`… dans les traces d'erreur), remplacés par `masque` avant le calcul du volume et
   l'écriture : un identifiant d'extension peu répandue peut désigner une personne.
+- `frequentation` (D-75), créée par l'application (`donnees.SCHEMA_FREQUENTATION`, pas une migration du labo) :
+  une ligne par jour UTC, `jour` (AAAA-MM-JJ) et trois nombres, `accueil` (chargements de la page d'accueil, en
+  GET), `commencees`, `terminees` (« Terminer ma session »). Ni adresse, ni identifiant, ni navigateur, ni heure.
+  Une visite hors session n'écrit rien d'autre que ce compte. Ni la suppression d'une session ni la purge n'y
+  touchent : les comptes sont gardés sans limite de durée, et la notice le dit. Base pleine, rien ne s'y écrit ;
+  base en panne, l'accueil reste servi, sans compteur (le compte est perdu).
 - Aucune autre table n'est écrite : ni `empreintes_vues` (pas de hash de corrélation entre visites), ni
   `decisions`, `detections`, `fingerprints` (aucun détecteur ne tourne). La suppression les couvre quand même.
 - `<dossier de la base>/messages.sqlite3` (droits 600 dès la création, `secure_delete`) : les messages du formulaire de
@@ -293,8 +336,16 @@ Base publique, tables du schéma du labo (aucune migration ajoutée) :
   ignoré par git. Un fichier `secret` vide est refusé (erreur claire au démarrage, labo compris) : sinon
   n'importe qui pourrait forger les cookies signés. Le supprimer pour qu'il soit recréé.
 
-La liste lisible des données, sur la page d'information, est tirée de `observateur.js` clé par clé ; un test
-échoue si le script envoie un champ qu'elle ne décrit pas.
+La liste lisible des données, dans la notice, est tirée de `observateur.js` clé par clé, dans chaque langue ; un
+test échoue si le script envoie un champ qu'elle ne décrit pas.
+
+## Fréquentation
+
+`uv run shadowlab public frequentation` affiche, jour par jour (UTC), les chargements de l'accueil, les sessions
+commencées et les sessions terminées, puis les totaux. L'accueil affiche le total des sessions terminées
+(« N sessions enregistrées à ce jour »). Limites : tout chargement de l'accueil compte (rechargements, robots,
+aperçus de lien) ; une session terminée puis supprimée reste comptée ; une session abandonnée sans « Terminer »
+compte comme commencée seulement.
 
 ## Les dix règles de l'étape 1.6 et leurs preuves
 
@@ -349,6 +400,17 @@ Troisième relecture indépendante (12/11/2026) :
 | O. Journal de cloudflared filtré | `test_journal_du_tunnel_filtre_chemins_requetes_et_jetons`, `test_script_du_tunnel_garde_le_pid_de_cloudflared_et_filtre_sa_sortie` |
 | P. Purge des messages au jour limite | `test_purge_des_messages_au_jour_limite` |
 
+Version « étude » (14/11/2026, D-75, `tests/test_public_etude.py`) :
+
+| Point | Tests |
+|-------|-------|
+| Deux langues, ordre du cadrage | `test_langue_par_le_prefixe_puis_le_navigateur`, `test_langue_de_suit_l_ordre_du_cadrage`, `test_langue_notee_avec_l_accord`, `test_langue_de_l_accord_sans_champ_valide`, `test_langue_de_la_session_avant_celle_du_navigateur`, `test_pages_publiques_dans_les_deux_langues`, `test_bandeau_de_la_vitrine_dans_les_deux_langues` |
+| Notice phrase pour phrase, clé par clé | `test_liste_des_donnees_dans_les_deux_langues_tiree_de_l_observateur`, `test_notice_complete_dans_chaque_langue`, `test_notices_de_meme_structure` |
+| Trois cookies, jamais plus | `test_toujours_exactement_trois_cookies` |
+| Accueil et notice | `test_accueil_de_l_etude`, `test_accueil_resume_du_releve_exact_et_a_un_seul_endroit`, `test_accueil_presente_mosaik_en_grand_et_habitat_en_lien_discret`, `test_accueil_accord_notice_a_cote_et_visite_sans_participer`, `test_accueil_et_notice_disent_le_but`, `test_commencer_mene_au_reseau_social`, `test_notice_a_son_adresse`, `test_ancien_chemin_de_la_notice`, `test_feuille_de_style_de_l_etude`, `test_pages_de_l_etude_sans_style_ni_script_dans_la_page` |
+| Plafond de sessions par jour réglable | `test_reglage_sessions_par_jour`, `test_reglage_applique_sans_limites_explicites`, `test_plafond_du_jour_atteint_la_page_le_dit`, `test_plafond_du_jour_n_use_pas_la_limite_par_adresse`, `test_plafond_de_la_base_en_sessions_au_pire` (calcul) |
+| Fréquentation | `test_table_de_frequentation_trois_nombres_par_jour`, `test_comptes_du_jour`, `test_visite_hors_session_n_ecrit_que_le_compte_du_jour`, `test_comptes_survivent_a_la_purge_et_a_la_suppression`, `test_base_pleine_ne_compte_plus`, `test_compte_perdu_si_la_base_tombe_mais_accueil_servi`, `test_accueil_affiche_le_total_des_sessions_terminees`, `test_notice_dit_exactement_le_compte_par_jour`, `test_commande_frequentation` |
+
 ## Les huit conditions du § 5 du plan
 
 | Condition | Couverture |
@@ -391,9 +453,10 @@ Troisième relecture indépendante (12/11/2026) :
 - **Quotas non atomiques.** Le quota d'une session (envois, volume, requêtes notées), le plafond quotidien et
   le plafond de taille sont lus puis écrits sans verrou : des envois parallèles peuvent les dépasser de
   quelques unités (une par requête simultanée). Sans conséquence sur le disque à cette échelle.
-- **Plafond quotidien épuisable.** 40 sessions par jour pour tout le monde : un script qui change d'adresse
-  peut les consommer et priver les vrais participants de la journée (et remplir la base en 3 jours environ,
-  voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
+- **Plafond quotidien épuisable.** `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` sessions par jour pour tout le monde
+  (40 par défaut) : un script qui change d'adresse peut les consommer et priver les vrais participants de la
+  journée, et remplir la base (127 sessions au pire : le 4ᵉ jour à 40 par jour, le jour même avec un plafond de
+  127 ou plus ; voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
   main des sessions abusives (`shadowlab public supprimer`).
 - **Formulaire de contact blocable.** Une adresse seule ne le peut plus (5 messages par jour ; un /64 IPv6
   compte pour une adresse). Mais six adresses IPv4, ou six /64, épuisent les 30 messages du jour en deux
@@ -442,18 +505,19 @@ Version courte :
 
 > Tu peux me rendre un service de 5 minutes ? Depuis un ordinateur (pas le téléphone), ouvre ce lien :
 > LIEN
-> C'est un faux site d'annonces immobilières. Tu cliques sur « Commencer la session », tu te balades comme
-> sur un vrai site (quelques annonces, quelques pages), puis « Terminer ma session » en haut. Ça m'aide à
-> vérifier qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Rien de personnel
-> n'est relevé (ni nom, ni e-mail, ni adresse IP), et tu peux tout effacer d'un clic.
+> C'est un faux réseau social de photos. Tu coches la case, « Commencer la session », tu te balades comme sur
+> un vrai (quelques publications, quelques profils), puis « Terminer ma session » en haut. Ça m'aide à vérifier
+> qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Rien de personnel n'est relevé
+> (ni nom, ni e-mail, ni adresse IP), et tu peux tout effacer d'un clic.
 
 Version détaillée, pour quelqu'un qui veut savoir avant de cliquer :
 
 > Je travaille sur un projet de recherche autour de la détection des robots sur le Web. Pour le calibrer,
-> j'ai besoin de quelques visites de vraies personnes sur un faux site d'annonces immobilières.
-> - Depuis un ordinateur, ouvre LIEN et lis la page d'accueil : elle dit exactement ce qui est relevé.
+> j'ai besoin de quelques visites de vraies personnes sur un faux réseau social de photos.
+> - Depuis un ordinateur, ouvre LIEN et lis la page d'accueil (et la notice complète, à un clic) : elles disent
+>   exactement ce qui est relevé.
 > - Coche la case, clique sur « Commencer la session », puis navigue 5 à 10 minutes comme tu le ferais
->   vraiment : ouvre des annonces, fais défiler, change de page. Garde l'onglet au premier plan.
+>   vraiment : ouvre des publications, des profils, fais défiler, change de page. Garde l'onglet au premier plan.
 > - Clique sur « Terminer ma session » dans le bandeau du haut.
 > Ce qui est relevé : les caractéristiques techniques de ton navigateur et ta façon de naviguer, en
 > chiffres (nombre de clics, délais entre deux gestes). Jamais ce que tu tapes, ni ton nom, ni ton e-mail,

@@ -31,6 +31,7 @@ from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
 from . import donnees, messages, pages, social
+from .textes import LANGUES
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
 # Liste fermée : rien d'autre du dossier statique du laboratoire n'est servi.
@@ -40,10 +41,11 @@ FICHIERS_STATIQUES = {
     "vitrine.css": "text/css",
     "vitrine.js": "text/javascript",
 }
-# Fichiers propres à l'application publique (réseau social), servis sous /public/static/ : liste fermée aussi.
+# Fichiers propres à l'application publique (pages de l'étude, réseau social), servis sous /public/static/ : liste
+# fermée aussi.
 STATIQUES_PUBLICS = Path(__file__).resolve().parent / "static"
-FICHIERS_PUBLICS = {"social.css": "text/css", "social.js": "text/javascript"}
-LANGUES = ("fr", "en")
+FICHIERS_PUBLICS = {"public.css": "text/css", "social.css": "text/css", "social.js": "text/javascript"}
+PREFIXE_LANGUE = re.compile(r"/(fr|en)(?:/|$)")  # « /fr », « /en/information » ; pas « /english »
 CSP = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
     "style-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
@@ -65,9 +67,15 @@ journal = logging.getLogger("shadowlab.public")
 
 
 def langue_de(request: Request) -> str:
-    """Langue d'une page du réseau social : la langue préférée d'`Accept-Language` parmi `LANGUES`, français par
-    défaut. Première version : le préfixe d'adresse (`/fr`, `/en`) et la langue notée avec l'accord de la session
-    viendront avant elle (cadrage du 13/11/2026, « Langue »)."""
+    """Langue d'une page, dans l'ordre du cadrage du 13/11/2026 (« Langue ») : le préfixe de l'adresse (`/fr`, `/en`) ;
+    sinon la langue notée avec l'accord de la session en cours (`request.state.langue_session`, posée par la garde) ;
+    sinon la langue préférée d'`Accept-Language` parmi `LANGUES` ; sinon le français. Aucun cookie de plus."""
+    prefixe = PREFIXE_LANGUE.match(getattr(getattr(request, "url", None), "path", "") or "")
+    if prefixe:
+        return prefixe.group(1)
+    session = getattr(getattr(request, "state", None), "langue_session", None)
+    if session in LANGUES:
+        return session
     choix: list[tuple[float, int, str]] = []
     for rang, morceau in enumerate(request.headers.get("accept-language", "").split(",")):
         etiquette, *parametres = (p.strip() for p in morceau.split(";"))
@@ -91,7 +99,9 @@ class Limites:
     de participants ; un humain qui parcourt 100 pages reste loin des quotas d'une session."""
 
     sessions_par_adresse: int = 6  # ouvertures par heure glissante et par adresse (en mémoire seulement)
-    sessions_par_jour: int = 40  # ouvertures par jour UTC, toutes adresses confondues
+    # Ouvertures par jour UTC, toutes adresses confondues. En service, le réglage SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR
+    # (`ReglagesPublics.sessions_par_jour`) remplace cette valeur, sauf si des `Limites` sont données (tests).
+    sessions_par_jour: int = 40
     envois_par_session: int = 300  # messages de l'observateur (deux par page)
     volume_par_session: int = 4 * 1024 * 1024  # octets de charges JavaScript (~10 Ko par empreinte)
     requetes_par_session: int = 3000  # requêtes HTTP notées (~17 par page, images comprises)
@@ -212,7 +222,7 @@ def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
 
 def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None) -> FastAPI:
     _verifier_reglages(reglages)
-    limites = limites or Limites()
+    limites = limites or Limites(sessions_par_jour=reglages.sessions_par_jour)
     messages.chemin(reglages.base_donnees)  # refuse une base qui porterait le nom du fichier des messages
     cx = donnees.ouvrir(reglages.base_donnees)  # refuse la base du laboratoire
     try:
@@ -362,12 +372,38 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             poser(reponse, cookie_csrf, csrf)
         return reponse
 
-    def refus(status_code: int, titre: str, message: str, *, contact: bool = False) -> HTMLResponse:
-        return HTMLResponse(pages.erreur(titre, message, contact=contact), status_code=status_code)
+    def refus(status_code: int, cle: str, langue: str, *, contact: bool = False) -> HTMLResponse:
+        return HTMLResponse(pages.erreur(cle, langue, contact=contact), status_code=status_code)
 
     def plein() -> bool:
         """Base au plafond : plus rien ne s'y écrit, même pour une session déjà ouverte."""
         return donnees.taille(reglages.base_donnees) >= limites.taille_max_base
+
+    def compter(compte: str) -> None:
+        """Compte du jour (fréquentation, D-75). Base pleine : rien ne s'écrit. Une panne de la base ne prive personne
+        de sa page : le compte est perdu, rien d'autre."""
+        if plein():
+            return
+        with suppress(sqlite3.Error), base() as cx:
+            donnees.compter(cx, compte)
+
+    def etat_de_l_accueil(chargement: bool, en_cours: bool) -> tuple[int | None, bool]:
+        """En une connexion : compte le chargement de l'accueil (sauf base pleine), lit le total des sessions terminées
+        et dit si le plafond du jour est atteint. Base en panne : ni compte ni compteur, et la case d'accord reste
+        (l'envoi tranchera)."""
+        pleine = plein()
+        with suppress(sqlite3.Error), base() as cx:
+            if chargement and not pleine:
+                donnees.compter(cx, "accueil")
+            complet = not en_cours and donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
+            return donnees.sessions_terminees(cx), complet
+        return None, False
+
+    def total_des_sessions() -> int | None:
+        """Sessions terminées depuis le début, pour l'accueil ; None si la base ne répond pas (pas de compteur)."""
+        with suppress(sqlite3.Error), base() as cx:
+            return donnees.sessions_terminees(cx)
+        return None
 
     # --- Garde : hôte, observation, en-têtes de sécurité, journal ----------------------------------
 
@@ -384,6 +420,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 messages.purger(cx, reglages.conservation_jours)
         jeton = session_de(request)
         request.state.session = jeton
+        request.state.langue_session = None
+        if jeton:
+            with base() as cx:
+                request.state.langue_session = donnees.langue_de_session(cx, jeton)
         if jeton and request.url.path.startswith("/lab/") and not plein():
             paires = [(n.decode("latin-1"), v.decode("latin-1")) for n, v in request.scope["headers"]]
             entetes = donnees.entetes_gardes(paires, request.headers.get("host", ""))
@@ -407,7 +447,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             try:
                 preparer(request)
             except sqlite3.Error:
-                reponse = refus(503, "Service indisponible", "Le site est momentanément indisponible. Réessayez.")
+                reponse = refus(503, "indisponible", langue_de(request))
             else:
                 reponse = await call_next(request)
         reponse.headers["Content-Security-Policy"] = CSP
@@ -431,41 +471,61 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     # --- Information et consentement ---------------------------------------------------------------
 
+    # L'accueil de l'étude sous « / » (langue de la session ou du navigateur) et sous chaque préfixe de langue.
     @app.get("/", response_class=HTMLResponse)
-    def information(request: Request) -> HTMLResponse:
-        en_cours = request.state.session is not None
+    @app.get("/fr", response_class=HTMLResponse)
+    @app.get("/en", response_class=HTMLResponse)
+    def accueil(request: Request) -> HTMLResponse:
+        en_cours, langue = request.state.session is not None, langue_de(request)
+        # Un chargement de la page compte ; une requête HEAD, non.
+        sessions, complet = etat_de_l_accueil(request.method == "GET", en_cours)
         return avec_csrf(
-            request, lambda csrf: pages.information(reglages, csrf, limites.duree_session_s, en_cours=en_cours)
+            request,
+            lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions, complet=complet),
         )
+
+    # La notice complète, sans formulaire ; « /information » suit la langue de la session ou du navigateur.
+    @app.get("/information", response_class=HTMLResponse)
+    @app.get("/fr/information", response_class=HTMLResponse)
+    @app.get("/en/information", response_class=HTMLResponse)
+    def notice(request: Request) -> HTMLResponse:
+        return HTMLResponse(pages.notice(reglages, limites.duree_session_s, langue_de(request)))
 
     @app.post("/session/commencer")
     async def commencer(request: Request) -> Response:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis la page d'information du site.")
+            return refus(403, "origine_accueil", langue_de(request))
         champs = await formulaire(request)
         if champs is None:
-            return refus(400, "Requête refusée", "Formulaire illisible.")
+            return refus(400, "illisible", langue_de(request))
+        # La langue de la page où l'accord est donné (champ caché du formulaire), sinon celle de la requête.
+        langue = champs["langue"] if champs.get("langue") in LANGUES else langue_de(request)
         if not csrf_valide(request, champs):
-            return refus(403, "Requête refusée", "Le formulaire a expiré : rechargez la page d'information.")
+            return refus(403, "expire_accueil", langue)
         if champs.get("consentement") != "oui":
-            message = "Cochez la case pour donner votre accord, ou visitez le site sans participer."
+            message, sessions = pages.texte(langue, "accord_manquant"), total_des_sessions()
             return avec_csrf(
-                request,
-                lambda csrf: pages.information(reglages, csrf, limites.duree_session_s, erreur=message),
-                status_code=422,
+                request, lambda csrf: pages.accueil(csrf, langue, erreur=message, sessions=sessions), status_code=422
             )
         if request.state.session is not None:  # double clic, ou session déjà ouverte : on ne recrée rien
-            return RedirectResponse("/lab/vitrine", status_code=303)
+            return RedirectResponse(pages.SOCIAL, status_code=303)
         with base() as cx:
             trop = donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
         if plein():
-            return refus(503, "Service complet", "Le site n'accepte plus de nouvelles sessions pour le moment.")
-        if trop or not limiteur.autoriser(adresse_de(request)):
-            return refus(429, "Trop de sessions", "Trop de sessions ont été ouvertes récemment. Réessayez plus tard.")
+            return refus(503, "complet", langue)
+        if trop:  # avant la limite par adresse : un jour plein n'use pas le quota horaire du visiteur
+            return refus(429, "complet_du_jour", langue)
+        if not limiteur.autoriser(adresse_de(request)):
+            return refus(429, "trop_de_sessions", langue)
         with base() as cx:
-            accord = {"texte_information": pages.VERSION_INFORMATION, "conservation_jours": reglages.conservation_jours}
+            accord = {
+                "texte_information": pages.VERSION_INFORMATION,
+                "conservation_jours": reglages.conservation_jours,
+                "langue": langue,
+            }
             jeton = donnees.creer_session(cx, accord)
-        reponse = RedirectResponse("/lab/vitrine", status_code=303)
+        compter("commencees")
+        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
         poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
         # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
         poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
@@ -474,56 +534,65 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     @app.post("/session/terminer", response_class=HTMLResponse)
     async def terminer(request: Request) -> Response:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
+            return refus(403, "origine", langue_de(request))
         champs = await formulaire(request)
         if champs is None or not csrf_valide(request, champs):
-            return refus(403, "Requête refusée", "Le formulaire a expiré : rechargez la page puis réessayez.")
+            return refus(403, "expire", langue_de(request))
         jeton = request.state.session
         if jeton is None:  # déjà terminée ou expirée : la page « Ma session » dit ce qu'il en reste
             return RedirectResponse("/session", status_code=303)
         with base() as cx:
             donnees.clore_session(cx, jeton)
+        compter("terminees")
         suppression = signer("supprimer", jeton)
+        langue = langue_de(request)
         reponse = avec_csrf(
             request,
-            lambda csrf: pages.merci(jeton, suppression, csrf, reglages.conservation_jours),
+            lambda csrf: pages.merci(jeton, suppression, csrf, reglages.conservation_jours, langue),
         )
         effacer(reponse, cookie_session)  # le cookie de droits reste : « Ma session » sert encore à supprimer
         return reponse
+
+    def noter_langue_de(request: Request, cx: sqlite3.Connection, jeton: str) -> None:
+        """Une session terminée garde sa langue pour « Ma session » et la suppression, si aucune n'est en cours."""
+        if request.state.langue_session is None:
+            request.state.langue_session = donnees.langue_de_session(cx, jeton)
 
     @app.get("/session", response_class=HTMLResponse)
     def ma_session(request: Request) -> HTMLResponse:
         jeton = lire_signe("supprimer", request.cookies.get(cookie_droits, ""))
         if jeton is not None:
             with base() as cx:
-                if not donnees.session_existe(cx, jeton):
+                if donnees.session_existe(cx, jeton):
+                    noter_langue_de(request, cx, jeton)
+                else:
                     jeton = None
+        langue = langue_de(request)
         if jeton is None:
-            reponse = HTMLResponse(pages.aucune_session())
+            reponse = HTMLResponse(pages.aucune_session(langue))
             if cookie_droits in request.cookies:
                 effacer(reponse, cookie_droits)
             return reponse
         suppression, en_cours = signer("supprimer", jeton), request.state.session == jeton
         return avec_csrf(
             request,
-            lambda csrf: pages.ma_session(jeton, suppression, csrf, reglages.conservation_jours, en_cours),
+            lambda csrf: pages.ma_session(jeton, suppression, csrf, reglages.conservation_jours, en_cours, langue),
         )
 
     @app.post("/session/supprimer", response_class=HTMLResponse)
     async def supprimer(request: Request) -> HTMLResponse:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.")
+            return refus(403, "origine", langue_de(request))
         champs = await formulaire(request)
         if champs is None or not csrf_valide(request, champs):
-            return refus(
-                403, "Requête refusée", "Le formulaire a expiré. Rechargez la page « Ma session » puis réessayez."
-            )
+            return refus(403, "expire_ma_session", langue_de(request))
         jeton = lire_signe("supprimer", champs.get("session", ""))
         if jeton is None:
-            return refus(400, "Requête refusée", "Session inconnue.")
+            return refus(400, "session_inconnue", langue_de(request))
         with base() as cx:
+            noter_langue_de(request, cx, jeton)
             existait = donnees.effacer_session(cx, jeton)
-        reponse = HTMLResponse(pages.supprimee(existait))
+        reponse = HTMLResponse(pages.supprimee(existait, langue_de(request)))
         effacer(reponse, cookie_session)
         effacer(reponse, cookie_droits)
         return reponse
@@ -531,9 +600,11 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     # --- Contact : écrire au responsable sans qu'une adresse soit affichée (D-57) -------------------
 
     def page_contact(request: Request, erreur: str = "", texte: str = "", status_code: int = 200) -> HTMLResponse:
-        jours, taille = reglages.conservation_jours, limites.taille_message
+        """Formulaire de contact ; `erreur` est une clé de `textes.T` (« » : aucune)."""
+        jours, taille, langue = reglages.conservation_jours, limites.taille_message, langue_de(request)
+        alerte = pages.texte(langue, erreur, taille=taille) if erreur else ""
         return avec_csrf(
-            request, lambda csrf: pages.contact(csrf, jours, taille, erreur=erreur, texte=texte), status_code
+            request, lambda csrf: pages.contact(csrf, jours, taille, langue, erreur=alerte, texte=texte), status_code
         )
 
     @app.get("/contact", response_class=HTMLResponse)
@@ -541,43 +612,38 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         return page_contact(request)
 
     @app.get("/contact/envoye", response_class=HTMLResponse)
-    def contact_envoye() -> HTMLResponse:
-        return HTMLResponse(pages.contact_envoye())
+    def contact_envoye(request: Request) -> HTMLResponse:
+        return HTMLResponse(pages.contact_envoye(langue_de(request)))
 
     @app.get("/contact/style.css")
     def contact_style() -> FileResponse:
-        """La feuille du site, servie sous /contact/ : une page de contact ne charge rien sous /lab/, que la base
-        d'une session en cours noterait (un référent « / », à la milliseconde)."""
-        return FileResponse(STATIQUES / "vitrine.css", media_type="text/css")
+        """La feuille des pages de l'étude, servie aussi sous /contact/ : une page de contact ne mène qu'à « / » ou
+        « /contact… » et ne charge rien sous /lab/, que la base d'une session en cours noterait (à la milliseconde)."""
+        return FileResponse(STATIQUES_PUBLICS / "public.css", media_type="text/css")
 
     @app.post("/contact")
     async def ecrire(request: Request) -> Response:
         if not meme_origine(request):
-            return refus(403, "Requête refusée", "Ce formulaire doit être envoyé depuis ce site.", contact=True)
+            return refus(403, "origine", langue_de(request), contact=True)
         champs = await formulaire(request, taille_formulaire_contact)
         if champs is None:
-            return refus(400, "Requête refusée", "Formulaire illisible ou trop long.", contact=True)
+            return refus(400, "illisible_contact", langue_de(request), contact=True)
         # À partir d'ici, un refus rend le formulaire avec le texte tapé : il n'est jamais perdu.
         texte = messages.nettoyer(champs.get("message", ""))
         if not csrf_valide(request, champs):
-            expire = (
-                "Le formulaire a expiré : envoyez-le de nouveau. Si cela se répète, autorisez les cookies de ce site."
-            )
-            return page_contact(request, expire, texte, status_code=403)
+            return page_contact(request, "contact_expire", texte, status_code=403)
         if not texte:
-            return page_contact(request, "Écrivez votre message.", status_code=422)
+            return page_contact(request, "contact_vide", status_code=422)
         if len(texte) > limites.taille_message:
-            trop_long = f"Message trop long : {limites.taille_message} caractères au plus."
-            return page_contact(request, trop_long, texte, status_code=422)
+            return page_contact(request, "contact_trop_long", texte, status_code=422)
         with boite() as cx:
             if messages.nombre(cx) >= limites.messages_gardes:
-                pleine = "Le formulaire n'accepte plus de message pour le moment. Réessayez dans quelques jours."
-                return page_contact(request, pleine, texte, status_code=503)
+                return page_contact(request, "contact_boite_pleine", texte, status_code=503)
             trop = messages.du_jour(cx) >= limites.messages_par_jour
             adresse = adresse_de(request)
             # L'heure d'abord : un envoi qu'elle refuse ne doit pas user le quota du jour.
             if trop or not limiteur_messages.autoriser(adresse) or not limiteur_messages_jour.autoriser(adresse):
-                return page_contact(request, "Trop de messages ont été envoyés. Réessayez plus tard.", texte, 429)
+                return page_contact(request, "contact_trop", texte, 429)
             messages.ajouter(cx, texte)
         _avis_au_responsable("message de contact reçu")  # jamais son texte, jamais dans le journal
         return RedirectResponse("/contact/envoye", status_code=303)
@@ -586,15 +652,15 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     def page_vitrine(request: Request, rendre: Callable[[str, vitrine.Habillage], str]) -> HTMLResponse:
         """Page vitrine ; pendant une session, observateur et bandeau (avec le bouton « Terminer », d'où le CSRF)."""
-        jeton = request.state.session
+        jeton, langue = request.state.session, langue_de(request)
         if jeton is None:
             return HTMLResponse(
-                rendre("", vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=pages.bandeau(None)))
+                rendre("", vitrine.Habillage(observateur=False, sans_tiers=True, bandeau=pages.bandeau(langue, None)))
             )
         return avec_csrf(
             request,
             lambda csrf: rendre(
-                jeton, vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=pages.bandeau(csrf))
+                jeton, vitrine.Habillage(observateur=True, sans_tiers=True, bandeau=pages.bandeau(langue, csrf))
             ),
         )
 

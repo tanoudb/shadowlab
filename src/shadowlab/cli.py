@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sous.add_parser(
         "public", help="application publique réduite : vitrine et sessions humaines (docs/site-public.md)"
     )
-    p.add_argument("action", choices=["servir", "purger", "supprimer", "messages", "effacer-message"])
+    p.add_argument("action", choices=["servir", "purger", "supprimer", "messages", "effacer-message", "frequentation"])
     p.add_argument(
         "identifiant",
         nargs="?",
@@ -525,6 +525,19 @@ def _public(args: argparse.Namespace) -> int:
         n = donnees.purger(cx, reglages.conservation_jours)
         m = messages.purger(boite, reglages.conservation_jours)
         print(f"{n} session(s) et {m} message(s) de contact de plus de {reglages.conservation_jours} jours effacé(s).")
+        return 0
+    if args.action == "frequentation":
+        jours = donnees.frequentation(cx)
+        if not jours:
+            print("Aucune visite comptée pour l'instant.")
+            return 0
+        print("Fréquentation du site public, par jour UTC (D-75) : chargements de l'accueil, sessions commencées,")
+        print("sessions terminées. Rien d'autre n'est compté.\n")
+        print(f"{'jour':<12}{'accueil':>10}{'commencées':>12}{'terminées':>11}")
+        for jour in jours:
+            print(f"{jour['jour']:<12}{jour['accueil']:>10}{jour['commencees']:>12}{jour['terminees']:>11}")
+        totaux = [sum(jour[c] for jour in jours) for c in donnees.COMPTES]
+        print(f"{'total':<12}{totaux[0]:>10}{totaux[1]:>12}{totaux[2]:>11}")
         return 0
     if args.action == "messages":
         recus = messages.lister(boite)
