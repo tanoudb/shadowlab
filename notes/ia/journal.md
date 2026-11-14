@@ -3481,3 +3481,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.
 - **Site public** à 19 h 25 : 42 visites de l'accueil, 8 sessions commencées (6 essais), 1 terminée, 1 ouverte.
 - **Reste** : corriger `deep-proxy` (Safari classé automatisé), puis campagne de contrôle ; 30 passages par niveau.
+
+## 2026-11-14 (19h40) — Claude (Fable 5.2, coordination) — Deux sessions humaines, `deep-proxy` en cause, correction lancée
+
+- **Site public** : deux sessions humaines, Safari 26 puis Safari 27 sur iPhone (18 h 21 et 18 h 40). Rejeu des deux :
+  niveaux 01 à 03 passés, niveaux 04 à 07 arrêtés (2 sur 2) par `deep-proxy` seul, signaux `getter_non_natif` et
+  `illegal_invoc_absent`. Cause lue dans `observateur.js` (`testDetectionProfonde`) : expression propre au texte de
+  Chrome (`function get x() { [native code] }`) et au message « Illegal invocation ».
+- **Correction confiée** à un sous-agent Sonnet (branche `arena-deep-proxy-safari`) : sonde juste sur les trois
+  moteurs et numérotée (`sonde: 2`), détecteur qui n'applique les deux signaux aux relevés de l'ancienne sonde que
+  pour Chromium. Tests vus en échec d'abord. Ensuite : contrôle, fusion, suite complète, campagne de contrôle
+  (`recolte-arena.yaml`), relance de l'application publique pour que les visiteurs reçoivent la nouvelle sonde.
+- **Plan** : § 8, ligne 1.7 mise à jour (premières sessions humaines, critère non atteint).
