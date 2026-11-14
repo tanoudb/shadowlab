@@ -24,7 +24,7 @@ from .textes import ERREURS, LANGUES, RELEVES_TRACE, RESUME_RELEVE, T
 from .trace import BALISE as BALISE_RELEVE
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.5"
+VERSION_INFORMATION = "2026-11-14.6"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [

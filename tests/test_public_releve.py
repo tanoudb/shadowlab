@@ -837,14 +837,14 @@ JAMAIS = {
     "fr": (
         "ni ce que vous tapez (ni le texte, ni les touches",
         "Ni votre adresse IP",
-        "ni votre localisation",
+        "Aucune géolocalisation n'est demandée ni relevée",
         "ni ce que vous copiez ou sélectionnez",
         "Rien qui demande une autorisation",
     ),
     "en": (
         "not what you type (neither the text nor the keys",
         "Not your IP address",
-        "not your location",
+        "No geolocation is requested or recorded",
         "not what you copy or select",
         "Nothing that needs your permission",
     ),

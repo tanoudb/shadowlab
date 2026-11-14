@@ -354,3 +354,53 @@ def test_la_valeur_csrf_change_a_l_ouverture_et_terminer_marche(client):
     champs = champs_du_formulaire(client.get("/lab/social/fil").text, "/session/terminer")
     assert champs["csrf"] == neuve
     assert client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
+
+
+# --- Vérité des textes de consentement (C4, C5, localisation, frappes et souris) ---------------------
+
+LOCALISATION = {
+    "fr": ("Aucune géolocalisation n'est demandée ni relevée", "fuseau horaire", "langues"),
+    "en": ("No geolocation is requested or recorded", "time zone", "languages"),
+}
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_accueil_et_notice_ne_promettent_plus_jamais_votre_localisation(client, langue):
+    """Le fuseau horaire du navigateur est relevé : c'est une localisation grossière. Ni l'accueil (« Jamais »), ni
+    la notice (« Ce qui n'est pas relevé ») ne disent plus « votre localisation » ; ils disent qu'aucune
+    géolocalisation n'est demandée ni relevée, et, au même endroit, que le fuseau horaire et les langues le sont."""
+    from shadowlab.public.textes import RESUME_RELEVE, T
+
+    nie, *releves = LOCALISATION[langue]
+    jamais = Selector(client.get(f"/{langue}").text).css(".releve-non li")
+    textes = [" ".join(li.xpath(".//text()").getall()) for li in jamais]
+    assert {"Votre localisation", "Your location"}.isdisjoint(RESUME_RELEVE[langue]["non"])
+    item = [t for t in textes if "géolocalisation" in t.lower() or "geolocation" in t.lower()]
+    assert len(item) == 1 and all(mot in item[0] for mot in releves), textes
+    non_releve = T[langue]["non_releve"]
+    assert "ni votre localisation" not in non_releve and "not your location" not in non_releve
+    assert nie in non_releve and all(mot in non_releve for mot in releves), non_releve
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_notice_dit_ce_que_disent_les_frappes_et_la_souris(langue):
+    from shadowlab.public.textes import T
+
+    attendus = {
+        "fr": ("nombre de frappes dans une zone de texte", "longueur", "jamais son contenu", "trajectoire de la"),
+        "en": ("number of keystrokes in a text field", "length", "never its content", "mouse's trajectory"),
+    }[langue]
+    assert all(mot in T[langue]["donnees_personnelles"] for mot in attendus), T[langue]["donnees_personnelles"]
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_notice_nomme_le_service_qui_achemine_et_ne_promet_pas_l_absence_de_detecteur(langue):
+    from shadowlab.public.textes import T
+
+    assert "Cloudflare" in T[langue]["transit"]
+    vrai = {
+        "fr": ("Aucune décision n'est prise sur vous pendant la visite", "rien ne peut vous bloquer"),
+        "en": ("No decision is made about you during the visit", "nothing can block you"),
+    }[langue]
+    assert all(phrase in T[langue]["pourquoi"] for phrase in vrai), T[langue]["pourquoi"]
+    assert ("renouvelée" if langue == "fr" else "new value") in T[langue]["cookie_csrf"], "valeur changée au début"

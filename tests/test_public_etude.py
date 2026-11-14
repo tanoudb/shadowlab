@@ -458,8 +458,8 @@ FRANCHISE = {
 @pytest.mark.parametrize("langue", ["fr", "en"])
 def test_accueil_resume_du_releve_exact_et_a_un_seul_endroit(client, langue):
     """Le résumé dit ce que relèvent observateur.js et releve.js (D-76) : le texte « Franchise » du cadrage. Il ne
-    promet plus « ni la position de la souris » ; il garde : jamais ce que vous tapez, ni votre adresse IP, ni votre
-    localisation, rien qui demande une autorisation."""
+    promet plus « ni la position de la souris » ; il garde : jamais ce que vous tapez, ni votre adresse IP, ni aucune
+    géolocalisation (et dit que le fuseau horaire est relevé, D-77), rien qui demande une autorisation."""
     from shadowlab.public.pages import RESUME_RELEVE
 
     html = client.get(f"/{langue}").text
@@ -474,8 +474,8 @@ def test_accueil_resume_du_releve_exact_et_a_un_seul_endroit(client, langue):
     jamais = " ".join(resume["non"]).lower()
     assert "position" not in jamais, "la position de la souris est relevée"
     attendus = {
-        "fr": ("ce que vous tapez", "les touches", "adresse ip", "localisation", "autorisation"),
-        "en": ("what you type", "the keys", "ip address", "location", "permission"),
+        "fr": ("ce que vous tapez", "les touches", "adresse ip", "géolocalisation", "fuseau horaire", "autorisation"),
+        "en": ("what you type", "the keys", "ip address", "geolocation", "time zone", "permission"),
     }
     for mot in attendus[langue]:
         assert mot in jamais, mot
@@ -589,8 +589,8 @@ def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
 def test_version_du_texte_d_information_changee():
     from shadowlab.public.pages import VERSION_INFORMATION
 
-    anciennes = ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3", "2026-11-14.4")
-    assert VERSION_INFORMATION not in anciennes, "le relevé enrichi (D-76) change le texte accepté"
+    anciennes = ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3", "2026-11-14.4", "2026-11-14.5")
+    assert VERSION_INFORMATION not in anciennes, "le relevé enrichi (D-76), puis les textes de D-77, changent le texte"
 
 
 # === Étape 3 : la fréquentation, un compte par jour ===================================================
