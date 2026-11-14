@@ -41,6 +41,12 @@ STATUTS_A_RETENTER = frozenset({500, 502, 504})
 ATTENTE_APRES_ALERTE_S = 3600  # « reprendre » conseille d'attendre 1 h (choix du document, § 5)
 PAS_AFFICHAGE = 25
 PAS_ATTENTE_PORTE_S = 1.0  # la porte d'entrée relit la page toutes les secondes, sans rien faire d'autre
+# Repasser la porte en cours de passe : une protection pose parfois plusieurs laissez-passer à quelques secondes d'écart
+# (l'Arena : défi, Turnstile, reCAPTCHA, CAPTCHA), qui expirent de même. Les défis vus moins de RAFALE_PORTE_S après le
+# premier passage d'une porte, RAFALE_PORTE_MAX au plus ce premier compris, font partie de ce passage : ils ne comptent
+# pas comme repassages et ne sont pas soumis à `ecart_min_s`.
+RAFALE_PORTE_S = 120.0
+RAFALE_PORTE_MAX = 4
 REDIRECTIONS = frozenset({301, 302, 303, 307, 308})
 REDIRECTIONS_MAX = 5  # sauts suivis un à un, chacun contrôlé avant d'être demandé
 PASSES_NON_FINIES = ("en_cours", "arretee", "interrompue", "limitee")
@@ -132,7 +138,7 @@ class Moteur(Protocol):
 
     def relire(self) -> Reponse | None:
         """La page courante telle qu'elle est maintenant, SANS nouvelle requête ; None si le moteur ne peut pas
-        (pas de JavaScript : la page ne change pas seule). Sert à la porte d'entrée."""
+        (pas de JavaScript : la page ne change pas seule). Sert à la porte (entrée et repassages)."""
         ...
 
     def description(self) -> dict[str, Any]: ...
@@ -254,6 +260,21 @@ def lignes_alertes(alertes: Mapping[str, Any]) -> list[str]:
 
 def _maintenant() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _secondes(depuis: str, jusqu_a: str) -> float:
+    """Secondes entre deux horodatages ISO (l'horloge de la porte : elle survit à une reprise, comme l'état)."""
+    return (datetime.fromisoformat(jusqu_a) - datetime.fromisoformat(depuis)).total_seconds()
+
+
+def _page_ordinaire(reponse: Reponse | None) -> bool:
+    """Vrai si la page relue est en 2xx et sans défi : la vraie page est là."""
+    return (
+        reponse is not None
+        and reponse.statut is not None
+        and 200 <= reponse.statut < 300
+        and detecter_defi(reponse.html, reponse.entetes) is None
+    )
 
 
 class Parcours:
@@ -516,6 +537,15 @@ class Parcours:
         self._incrementale = not self.options.tout_refaire and passe > self._base
         self._premiere_page = not reprise and etat.compteurs(passe)["lues"] == 0  # la porte d'entrée n'y est que là
         self._porte: dict[str, Any] | None = None
+        # Repasser la porte en cours de passe (option `porte_entree.repassages_max`) : passages tracés, heure du
+        # dernier passage franchi, rafale en cours (heure de son premier passage, nombre de défis).
+        porte = recette.porte_entree
+        self._repasser = porte is not None and porte.repassages_max > 0
+        self._repassages: list[dict[str, Any]] = []
+        self._dernier_passage = ""
+        self._rafale: tuple[str, int] | None = None
+        if self._repasser:
+            self._relire_les_passages(etat, passe)
         self._annoncer(etat, passe, reprise)
         statut, arret = "terminee", None
         try:
@@ -627,6 +657,14 @@ class Parcours:
             if alerte is not None:
                 etat.rendre(page)
                 return alerte, 0
+            if self._repasser and self._porte is not None and self._porte["franchie"]:
+                self._dernier_passage = self._horodatage()  # l'entrée compte comme un passage de la porte
+                self._rafale = (self._dernier_passage, 1)
+        elif self._repasser:
+            reponse, alerte = self._porte_en_cours(page, reponse)
+            if alerte is not None:
+                etat.rendre(page)
+                return alerte, 0
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -680,29 +718,21 @@ class Parcours:
         """Première page de la passe, `porte_entree` déclarée : un défi qui se valide seul est attendu SANS AUCUNE
         action (ni clic, ni rechargement, ni résolution), `attendre_s` secondes au plus. Il passe : la page lue est
         celle qui est apparue, la porte est comptée à part dans `resume.json`. Il ne passe pas : alerte, arrêt.
-        Un défi qui arrive plus tard dans la passe n'attend pas : `Sentinelle.examiner` l'arrête."""
+        Un défi qui arrive plus tard dans la passe : `_porte_en_cours` si la recette permet de repasser la porte
+        (`repassages_max`), sinon `Sentinelle.examiner` l'arrête sans attendre."""
         porte = self.recette.porte_entree
         defi = detecter_defi(reponse.html, reponse.entetes)
         if porte is not None and defi is None and reponse.statut in STATUTS_ALERTE:
             return self._porte_deja_franchie(reponse), None
         if porte is None or defi is None:
             return reponse, None
-        attendu = 0.0
-        while True:
-            courante = self.moteur.relire()
-            if courante is None:  # un moteur sans JavaScript : rien ne changera tout seul
-                break
-            if detecter_defi(courante.html, courante.entetes) is None:
-                courante.duree_ms = reponse.duree_ms
-                self._porte = {"defi": defi, "franchie": True, "attente_s": attendu}
-                self._evenement(self._etat, self._passe, "porte_entree", self._porte)
-                self._ecran(f"Porte d'entrée : défi ({defi}) validé seul après {attendu:g} s, sans action.")
-                return courante, None
-            if attendu >= porte.attendre_s:
-                break
-            pas = min(PAS_ATTENTE_PORTE_S, porte.attendre_s - attendu)
-            self._dormir(pas)
-            attendu += pas
+        courante, attendu = self._attendre_sans_action()
+        if courante is not None:
+            courante.duree_ms = reponse.duree_ms
+            self._porte = {"defi": defi, "franchie": True, "attente_s": attendu}
+            self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+            self._ecran(f"Porte d'entrée : défi ({defi}) validé seul après {attendu:g} s, sans action.")
+            return courante, None
         self._porte = {"defi": defi, "franchie": False, "attente_s": attendu}
         self._evenement(self._etat, self._passe, "porte_entree", self._porte)
         detail = f"page de défi ({defi}) toujours là après {attendu:g} s d'attente sans action"
@@ -714,13 +744,8 @@ class Parcours:
         État actuel en 2xx et sans défi : la porte est franchie, la page lue est l'état actuel. Sinon la réponse
         reste telle quelle et la sentinelle arrête sur le statut. La nature du défi n'est plus connue : `defi` porte
         le statut périmé (« statut 403 »)."""
-        courante = self.moteur.relire()
-        if (
-            courante is None  # un moteur sans JavaScript : rien n'a pu changer
-            or courante.statut is None
-            or not 200 <= courante.statut < 300
-            or detecter_defi(courante.html, courante.entetes) is not None
-        ):
+        courante = self.moteur.relire()  # None : un moteur sans JavaScript, rien n'a pu changer
+        if courante is None or not _page_ordinaire(courante):
             return reponse
         courante.duree_ms = reponse.duree_ms
         self._porte = {"defi": f"statut {reponse.statut}", "franchie": True, "attente_s": 0.0}
@@ -729,6 +754,134 @@ class Parcours:
             f"Porte d'entrée : déjà franchie pendant la lecture (premier statut {reponse.statut}), sans action."
         )
         return courante
+
+    def _attendre_sans_action(self, premiere: Reponse | None = None) -> tuple[Reponse | None, float]:
+        """Regarde la page sur place (`premiere`, sinon une relecture), puis après chaque seconde, `attendre_s` au plus,
+        SANS AUCUNE action (ni clic, ni rechargement, ni résolution). Rend la page apparue sans défi (None : le défi
+        est toujours là, ou le moteur ne sait pas relire) et le temps attendu."""
+        porte = self.recette.porte_entree
+        assert porte is not None
+        attendu = 0.0
+        courante = premiere if premiere is not None else self.moteur.relire()
+        while courante is not None:  # None : un moteur sans JavaScript, rien ne changera tout seul
+            if detecter_defi(courante.html, courante.entetes) is None:
+                return courante, attendu
+            if attendu >= porte.attendre_s:
+                break
+            pas = min(PAS_ATTENTE_PORTE_S, porte.attendre_s - attendu)
+            self._dormir(pas)
+            attendu += pas
+            courante = self.moteur.relire()
+        return None, attendu
+
+    # ── Repasser la porte en cours de passe (option `repassages_max`) ───
+    def _porte_en_cours(self, page: Page, reponse: Reponse) -> tuple[Reponse, Alerte | None]:
+        """En cours de passe, la recette permettant de repasser la porte : un défi qui revient (le laissez-passer a
+        expiré) est traité comme à l'entrée, SANS AUCUNE action : attente sur place (`attendre_s`), ou statut d'alerte
+        périmé d'un défi franchi pendant la lecture (aucun défi dans la page, page actuelle en 2xx et sans défi).
+        Borné : au plus `repassages_max` repassages, jamais moins de `ecart_min_s` après le passage précédent
+        (entrée comprise) ; les défis d'une même rafale (`RAFALE_PORTE_S`, `RAFALE_PORTE_MAX`) font un seul passage.
+        Hors des bornes, ou avec un moteur sans JavaScript, la réponse est rendue telle quelle : la sentinelle arrête
+        avec la même alerte que sans l'option. Un défi qui ne se lève pas : alerte, arrêt. Chaque défi vu ici est tracé
+        (événement `porte_repassage`, `resume.json`)."""
+        defi = detecter_defi(reponse.html, reponse.entetes)
+        if defi is None and reponse.statut not in STATUTS_ALERTE:
+            return reponse, None  # une page ordinaire
+        courante = self.moteur.relire()
+        if courante is None:
+            return reponse, None  # un moteur sans JavaScript : rien ne changera tout seul
+        if defi is None and not _page_ordinaire(courante):
+            return reponse, None  # un vrai refus, pas une porte : la sentinelle arrête sur le statut
+        porte = self.recette.porte_entree
+        assert porte is not None
+        vu = self._horodatage()
+        rafale = self._rafale
+        en_rafale = rafale is not None and _secondes(rafale[0], vu) < RAFALE_PORTE_S and rafale[1] < RAFALE_PORTE_MAX
+        trace: dict[str, Any] = {
+            "adresse": page.adresse,
+            "rang": self._etat.compteurs(self._passe)["lues"] + 1,  # le rang de lecture qu'aura la page
+            "defi": defi or f"statut {reponse.statut}",
+            "franchie": False,
+            "attente_s": 0.0,
+            "ecart_s": _secondes(self._dernier_passage, vu),  # depuis le passage précédent, ou le début de la passe
+            "rafale": en_rafale,
+        }
+        refus = None if en_rafale else self._refus_repassage(trace["ecart_s"])
+        if refus is not None:
+            trace["refus"], raison = refus
+            self._tracer_repassage(trace)
+            self._ecran(f"Porte : défi ({trace['defi']}) en page {trace['rang']}, pas de nouveau passage : {raison}.")
+            return reponse, None
+        if defi is not None:
+            apparue, attendu = self._attendre_sans_action(courante)
+            trace["attente_s"] = attendu
+            if apparue is None:
+                self._tracer_repassage(trace)
+                detail = f"page de défi ({defi}) toujours là après {attendu:g} s d'attente sans action"
+                return reponse, Alerte("defi", detail, page.adresse, reponse.statut)
+            if not _page_ordinaire(apparue):  # le défi a disparu sur un statut d'alerte : la sentinelle en juge
+                self._tracer_repassage(trace)
+                return reponse, None
+            courante = apparue
+        courante.duree_ms = reponse.duree_ms
+        trace["franchie"] = True
+        self._tracer_repassage(trace)
+        self._dernier_passage = self._horodatage()
+        self._rafale = (rafale[0], rafale[1] + 1) if en_rafale and rafale else (self._dernier_passage, 1)
+        quel = (
+            "même passage que le précédent"
+            if en_rafale
+            else f"repassage {self._nombre_repassages()} sur {porte.repassages_max} au plus"
+        )
+        self._ecran(
+            f"Porte repassée en page {trace['rang']} ({quel}) : défi ({trace['defi']}) levé seul après "
+            f"{trace['attente_s']:g} s, sans action, {trace['ecart_s']:g} s après le passage précédent."
+        )
+        return courante, None
+
+    def _refus_repassage(self, ecart: float) -> tuple[str, str] | None:
+        """(borne, raison) si la porte ne doit pas être repassée : maximum atteint, ou défi revenu trop tôt."""
+        porte = self.recette.porte_entree
+        assert porte is not None
+        faits = self._nombre_repassages()
+        if faits >= porte.repassages_max:
+            return "repassages_max", f"déjà {faits} repassage(s), le maximum de la recette ({porte.repassages_max})"
+        if ecart < porte.ecart_min_s:
+            return "ecart_min_s", (
+                f"défi revenu {ecart:g} s après le passage précédent, moins que les {porte.ecart_min_s:g} s exigées"
+            )
+        return None
+
+    def _tracer_repassage(self, trace: dict[str, Any]) -> None:
+        self._repassages.append(trace)
+        self._evenement(self._etat, self._passe, "porte_repassage", trace)
+
+    def _nombre_repassages(self) -> int:
+        """Repassages franchis ; un défi d'une rafale ne compte pas (il fait partie du passage en cours)."""
+        return sum(1 for p in self._repassages if p["franchie"] and not p["rafale"])
+
+    def _relire_les_passages(self, etat: Etat, passe: int) -> None:
+        """Compte et horloge de la porte d'après les événements de la passe (une reprise les retrouve) : les défis déjà
+        tracés en cours de passe, et l'heure du dernier passage franchi (entrée comprise), ou du début de la passe s'il
+        n'y en a pas eu. Une reprise ouvre une session neuve : aucune rafale ne se prolonge au-delà."""
+        self._dernier_passage = etat.passe(passe)["debut"]
+        for evenement in etat.evenements(passe):
+            if evenement["genre"] == "porte_repassage":
+                self._repassages.append(evenement["detail"])
+            if evenement["genre"] in ("porte_entree", "porte_repassage") and evenement["detail"].get("franchie"):
+                self._dernier_passage = evenement["quand"]
+
+    def _bilan_repassages(self) -> dict[str, Any] | None:
+        """Le bloc `porte_repassages` de `resume.json` (None : la recette ne permet pas de repasser la porte)."""
+        porte = self.recette.porte_entree
+        if not self._repasser or porte is None:
+            return None
+        return {
+            "repassages_max": porte.repassages_max,
+            "ecart_min_s": porte.ecart_min_s,
+            "nombre": self._nombre_repassages(),
+            "passages": list(self._repassages),
+        }
 
     def _lire_la_page(self, page: Page, reponse: Reponse, total_ms: Callable[[], float]) -> str:
         etat = self._etat
@@ -904,6 +1057,7 @@ class Parcours:
             "incrementale": self._bilan_incremental(etat, passe, c["lues"]),
             "relocalisations": c["relocalisations"],
             "porte_entree": self._porte,
+            "porte_repassages": self._bilan_repassages(),
             "alertes_lecture": etat.alertes_lecture(passe),
             "arret": arret,
         }
