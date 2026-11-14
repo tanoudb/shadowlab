@@ -3387,3 +3387,16 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `outputs/campagne-cookie-court-essai.log`). Le site public tourne en même temps sur le port 8771.
 - **Reste** : lire l'essai (repassages, écarts, rafales, pages et champs), puis le rallye ; à lire aussi : la durée de
   la page de liste au niveau 04 (campagne 111).
+
+## 2026-11-14 (13h00) — Claude (Fable 5.2, coordination) — Campagne 112 : la récolte repasse la porte quand le défi revient
+
+- **Suite complète** à 11 h 49 : 1 714 tests verts (1 670 rapides, 44 d'intégration), après D-80 à D-83.
+- **Campagne 112** (`recolte-arena-cookie-court-essai.yaml`, 11 h 49 à 12 h 52, 3 passages, 0 panne, cookie de défi de
+  600 s, vitrine à 150 annonces) : niveaux 04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à
+  chacun, en 1 194, 1 369 et 1 248 s. Le défi revient 1, 2 et 2 fois, 582 à 612 s après le passage précédent ; trois
+  défis de rafale (19, 23, 36 s). Aucun arrêt, aucune page de moins de 500 ms sur 491 relevés. Arena remise.
+- **Point de la campagne 111 relu** : au niveau 04, la vraie page de liste après le défi dure 4,8 s ; rien d'anormal.
+- **Lancé à 12 h 53** : `recolte-arena-cookie-court.yaml` (rallye, 427 pages, mêmes niveaux, environ 2 h 45), journal
+  `outputs/campagne-cookie-court-rallye.log`. Le site public tourne en même temps (port 8771).
+- **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.
+- **Reste** : lire le rallye ; une passe de plus d'une heure avec le cookie d'une heure ; avis d'Ethan sur l'accueil.

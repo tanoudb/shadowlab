@@ -114,13 +114,16 @@ recommander des optimisations.
   sur option de la recette (`porte_entree.repassages_max`, 0 par défaut ; `ecart_min_s`), sans aucune action, de
   façon bornée et tracée (`resume.json`, `recolte etat`). Les campagnes l'activent : tout bilan donne le nombre de
   repassages et compare leur écart à la durée du cookie (un repassage bien avant l'expiration est un soupçon).
+  **Campagne 112** (cookie de 600 s, vitrine à 150 annonces, 20 minutes par passage) : 3 passages sur 3 aux niveaux
+  04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun ; le défi revient 1, 2 et 2 fois, à
+  582 à 612 s du passage précédent, et la récolte repasse la porte sans arrêt. Réserves : un passage par niveau,
+  cookie raccourci, CAPTCHA en clés de test levés par le pilote, pas de corrélation, aucun humain en base.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 640 tests verts** (`uv run pytest`, 14/11 à 10 h 12, après D-79, hors campagne : 1 596 rapides et 44
+- **1 714 tests verts** (`uv run pytest`, 14/11 à 11 h 49, après D-83, hors campagne : 1 670 rapides et 44
   d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Depuis, suite rapide seule : 1 650 verts le 14/11 à 11 h 30 (après D-80 à D-82) ;
-  les 44 tests d'intégration ne sont pas relancés. Branche `niveau-authentifie-perimetre` (dernière fusion `f374e4e`), rien sur
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `4907834`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :

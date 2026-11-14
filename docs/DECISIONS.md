@@ -882,3 +882,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   mesure dans un vrai Chrome à cette date ; une page de blocage de l'Arena est attendue `attendre_s` avant l'arrêt ;
   les constantes de campagne dépendent de la durée du cookie (écart minimal au plus la moitié de cette durée).
   Décidé par : coordination (conception d'un sous-agent Opus, relue).
+  **Ajout du 14/11, mesure dans un vrai Chrome (campagne 112, cookie de 600 s, vitrine à 150 annonces, 3 passages, 0
+  panne)** : niveaux 04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun. Le défi revient 1, 2
+  et 2 fois, à 582 à 612 s du passage précédent (l'expiration du cookie), et la porte est repassée sans attente. Trois
+  défis de rafale aux niveaux 05 et 06 (19, 23 et 36 s après un passage) : la règle de rafale était nécessaire. Limites :
+  un passage par niveau ; les défis sont levés par le pilote sur notre Arena (CAPTCHA en clés de test aux niveaux 05 et
+  06) ; le cookie d'une heure sur une passe de plus d'une heure reste à mesurer.
