@@ -8,7 +8,8 @@ Signes retenus (§ 5 du document de conception) :
 4. sélecteur `requis` absent sur 3 pages de suite d'un même type ;
 5. plus de 5 échecs (réseau, 500, 502, 504) sur les 20 dernières pages.
 La porte d'entrée (attente sans action d'un défi qui se valide seul, sur la première page) est dans `parcours.py` :
-elle utilise `detecter_defi` ; un défi plus tard dans la passe est toujours une alerte. Aucun clic, aucune résolution.
+elle utilise `detecter_defi`. Un défi plus tard dans la passe est une alerte, sauf si la recette permet de repasser la
+porte (`porte_entree.repassages_max`, borné, même attente sans action, `parcours.py`). Aucun clic, aucune résolution.
 
 La sentinelle ne fait aucune requête et ne décide que d'une chose : y a-t-il une alerte ? Le parcours s'arrête alors,
 sans aucun nouvel essai (réessayer aggrave).

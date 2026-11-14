@@ -23,6 +23,14 @@ DELAI_DEFI_S = 20
 NB_REQUETES_RAFALE = 30
 # Attente de la porte d'entrée d'une recette lancée par l'Arena (elle sert un défi d'entrée dès le niveau 04).
 PORTE_ENTREE_PASSAGE_S = 15
+# Repasser la porte en cours de passe : le laissez-passer de l'Arena expire (`arena.defis.DUREE_COOKIE_S`, 1 h), une
+# passe plus longue est redéfiée. Au plus PORTE_REPASSAGES_PASSAGE repassages, jamais deux à moins de
+# PORTE_ECART_MIN_PASSAGE_S (un défi qui revient plus vite est un signe d'alerte : la passe s'arrête). À tenir si la
+# durée du cookie change : écart minimal ≤ la moitié de cette durée (le passage est noté quelques secondes après la
+# pose du cookie), et maximum ≥ durée de la passe / durée du cookie (427 pages du rallye ≈ 50 min ; cookie de
+# 10 min : 5 repassages).
+PORTE_REPASSAGES_PASSAGE = 10
+PORTE_ECART_MIN_PASSAGE_S = 300
 
 
 @dataclass
@@ -664,8 +672,12 @@ def recette_du_passage(nom: str, base: str) -> tuple[Recette, str]:
         "hotes": [urlsplit(base).hostname or ""],
         "parametres_ignores": ignores,
     }
-    if recette.porte_entree is None:  # une recette qui déclare sa porte d'entrée garde la sienne
-        reglages["porte_entree"] = PorteEntree(attendre_s=PORTE_ENTREE_PASSAGE_S)
+    if recette.porte_entree is None:  # une recette qui déclare sa porte d'entrée garde la sienne, repassages compris
+        reglages["porte_entree"] = PorteEntree(
+            attendre_s=PORTE_ENTREE_PASSAGE_S,
+            repassages_max=PORTE_REPASSAGES_PASSAGE,
+            ecart_min_s=PORTE_ECART_MIN_PASSAGE_S,
+        )
     recette = recette.model_copy(update=reglages)
     return recette, texte
 
@@ -700,6 +712,7 @@ def _recolter_avec_recette(
     finally:
         if nom_moteur == "navigateur":
             d.hotes_navigation = avant  # type: ignore[attr-defined]
+    repassages = bilan.resume.get("porte_repassages") or {}
     details: dict[str, Any] = {
         "moteur": nom_moteur,
         "recette": recette_nom,
@@ -708,6 +721,13 @@ def _recolter_avec_recette(
         "pages_faites": bilan.resume["pages"]["faites"],
         "pages_en_echec": bilan.resume["pages"]["echecs"],
         "recolte": note,
+        # La porte repassée en cours de passe : le nombre, puis chaque défi vu (rang de page, attente, écart depuis
+        # le passage précédent, franchi ou non, rafale, borne qui a refusé).
+        "porte_repassages": repassages.get("nombre", 0),
+        "porte_repassages_liste": [
+            {cle: p.get(cle) for cle in ("rang", "attente_s", "ecart_s", "franchie", "rafale", "refus")}
+            for p in repassages.get("passages", [])
+        ],
     }
     if bilan.arret:
         details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"

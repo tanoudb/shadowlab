@@ -341,7 +341,7 @@ commençant par une lettre.
 | `parametres_ignores` | paramètres d'adresse sans effet (jeton, suivi), retirés avant le dédoublonnage et avant le test du motif `url` | liste de noms | aucun |
 | `rythme` | pause entre deux pages | `libre`, `prudent` ou le détail (4.2) | `libre` si tous les hôtes sont locaux, sinon `prudent` |
 | `robots` | `agent` : nom présenté au `robots.txt` | `{agent: nom}` | `noezia` (la règle `*` s'applique si le nom n'est pas cité) |
-| `porte_entree` | `attendre_s` : attente d'un défi qui se valide seul, première page seulement (section 8) | `{attendre_s: nombre > 0}` | aucune |
+| `porte_entree` | `attendre_s` : attente d'un défi qui se valide seul, à la première page ; `repassages_max`, `ecart_min_s` : repasser la porte en cours de passe (section 8) | `{attendre_s: nombre > 0, repassages_max: entier ≥ 0, ecart_min_s: nombre ≥ 0}` | aucune ; `repassages_max: 0` (jamais), `ecart_min_s: 300` |
 | `bornes` | limites de la passe | `pages_max` (entier ≥ 1) ; `par_type` (`{type: n}`) | aucune |
 | `pages` | les types de pages (4.3) | tableau `type: {…}` | obligatoire |
 
@@ -576,8 +576,8 @@ uv run shadowlab recolte noter     <nom>           --verite vitrine|rallye  [--a
   sauf
   `--maintenant`. Si le fichier de recette a disparu, la copie gardée au début de la passe sert.
 - **`etat`** : où en est la dernière passe : pages faites par type, à faire, échecs, pages interdites par
-  `robots.txt`, anormales, introuvables, liens hors site, enregistrements, alertes de lecture, arrêt
-  éventuel, et
+  `robots.txt`, anormales, introuvables, liens hors site, enregistrements, repassages de la porte (s'il y en a
+  eu), alertes de lecture, arrêt éventuel, et
   « une passe tourne en ce moment » si le verrou est pris, et, pour une passe incrémentale, une ligne « incrémentale ». `--pages` ajoute le journal page par page.
 - **`essayer`** : une page, rien d'écrit (section 3, étape 6). Il lit `robots.txt` comme le ferait une
   passe, sauf
@@ -660,7 +660,7 @@ exacte.
 de `robots.txt` (`respecte`, groupe lu, `Crawl-delay`, ou `ignore_par`), tranche, bornes, `sans`, compteurs de
 pages (faites, échecs, interdites, hors site, anormales, introuvables, évitées, à faire, par type), nombre
 d'enregistrements
-par collection, relocalisations, porte d'entrée, alertes de lecture, arrêt, liste des fichiers et format du
+par collection, relocalisations, porte d'entrée, repassages de la porte, alertes de lecture, arrêt, liste des fichiers et format du
 CSV.
 
 Une passe interrompue ou arrêtée écrit quand même ces fichiers. Exemple d'arrêt puis de reprise (site local de
@@ -860,18 +860,57 @@ Points propres au moteur `navigateur` (d'après le code, non rejoués ici) :
   exception volontaire : `porte_entree: {attendre_s: N}` attend, **sans aucune action**, un défi qui se
   valide seul
   sur la première page (au plus N secondes). S'il passe, la passe continue et la porte est comptée à part dans
-  `resume.json` ; sinon, arrêt. Un défi plus tard dans la passe arrête toujours.
+  `resume.json` ; sinon, arrêt. Sans autre réglage, un défi plus tard dans la passe arrête toujours.
   Cas « déjà franchie pendant la lecture » : si le défi s'est validé pendant la lecture même, le premier statut
   est celui de la page de défi (403) alors que la vraie page est déjà là. Sur la première page, avec une porte
   déclarée, un statut d'alerte sans défi dans la page déclenche un regard sur place (aucune requête, aucune
   attente) : état actuel en 2xx et sans défi, la passe continue et `resume.json` note
   `porte_entree: {defi: "statut 403", franchie: true, attente_s: 0.0}` (la nature du défi n'est plus connue).
-  Sans porte déclarée, ou en cours de passe, un 403 reste une alerte de statut. Le moteur `http` ne peut pas
-  attendre (pas de JavaScript). Non rejoué ici : aucun défi de ce type sur nos sites de test locaux.
+  Sans porte déclarée, ou en cours de passe sans `repassages_max`, un 403 reste une alerte de statut. Le moteur
+  `http` ne peut pas attendre (pas de JavaScript). Non rejoué ici : aucun défi de ce type sur nos sites de test
+  locaux.
   Nuance du code : avec le moteur `navigateur` et uniquement des hôtes locaux (le labo), l'option
   `resoudre_defis` du navigateur est active pour passer les défis maison de l'Arena ; sur un site tiers elle
   est
   coupée.
+
+- **Repasser la porte en cours de passe, sur demande de la recette.** Le laissez-passer d'une protection expire
+  (le cookie de défi de l'Arena vit une heure) : une passe plus longue est redéfiée en plein travail. Avec
+  `repassages_max` dans `porte_entree`, ce défi est traité comme à l'entrée, **sans aucune action** : même attente
+  sur place (au plus `attendre_s`), même regard sur place pour un statut d'alerte périmé. La page dont le défi s'est
+  levé est lue normalement (une seule requête, ni échec ni alerte).
+
+  ```yaml
+  porte_entree:
+    attendre_s: 15        # attente sans action d'un défi qui se valide seul
+    repassages_max: 3     # en cours de passe : au plus 3 nouveaux passages (0, le défaut : jamais)
+    ecart_min_s: 300      # jamais deux passages à moins de 300 s (défaut 300)
+  ```
+
+  Bornes : chacune arrête la passe (page laissée « à faire », code 3), sans attendre et avec la même alerte que sans
+  l'option, sauf le défi attendu en vain :
+  - plus de `repassages_max` repassages franchis dans la passe ;
+  - un défi qui revient moins de `ecart_min_s` secondes après le passage précédent de la porte (entrée comprise ;
+    s'il n'y en a pas eu, après le début de la passe) : un laissez-passer qui expire ne revient pas si vite ;
+  - un défi qui ne se lève pas dans `attendre_s` : alerte « page de défi … toujours là après N s » (la page de
+    blocage de l'Arena porte aussi `data-arena` : avec l'option, elle est attendue `attendre_s` avant l'arrêt) ;
+  - un moteur sans JavaScript (`http`) : rien ne peut changer seul, arrêt immédiat.
+
+  Rafale : une protection pose parfois plusieurs laissez-passer à quelques secondes d'écart (l'Arena : défi,
+  Turnstile, reCAPTCHA, CAPTCHA), qui expirent de même. Les défis vus moins de 120 s après le premier passage d'une
+  porte, 4 au plus ce premier compris, font partie de ce passage : ils ne comptent pas comme repassages et ne sont
+  pas soumis à `ecart_min_s` (constantes `RAFALE_PORTE_S` et `RAFALE_PORTE_MAX` de `parcours.py`).
+
+  Trace : chaque défi vu en cours de passe laisse un événement `porte_repassage` (adresse, rang de la page dans la
+  passe, défi, franchie, attente, écart depuis le passage précédent, rafale, et la borne qui a refusé s'il y a lieu),
+  une ligne à l'écran, et `resume.json` porte `porte_repassages: {repassages_max, ecart_min_s, nombre, passages}`
+  (`null` sans l'option). `recolte etat` affiche « porte repassée en cours de passe : N fois ».
+
+  Reprise : le compte et l'heure du dernier passage sont relus dans l'état (les événements de la passe), donc
+  l'écart minimal se compte aussi à travers un arrêt. Une reprise ouvre une session neuve : sa première page est
+  redéfiée sur un site protégé et compte comme un repassage (aucune rafale ne se prolonge au-delà d'une reprise).
+  Dans une campagne (`recolte_recette_vitrine`, `recolte_recette_rallye`), l'option est active : 10 repassages au
+  plus, 300 s d'écart minimal (`scenarios.py`). Non rejoué ici : aucune passe de plus d'une heure sous protection.
 
 - **Les redirections vers un autre site ne sont jamais suivies en `http`.** Chaque redirection est contrôlée
   avant
@@ -1023,9 +1062,8 @@ Ce qui n'a pas été mesuré ni rejoué :
   valeurs très courtes ;
 - l'arrêt par **Ctrl-C** (statut « interrompue », code 1) n'a pas été rejoué ; seule une passe tuée par signal
   (`kill`) l'a été : elle reste « en_cours » et se reprend ;
-- la **porte d'entrée** (`porte_entree`) et le lancement sur un **site tiers avec `autorisation`** n'ont pas
-  été
-  rejoués.
+- la **porte d'entrée** (`porte_entree`), ses **repassages en cours de passe** et le lancement sur un **site
+  tiers avec `autorisation`** n'ont pas été rejoués.
 
 Ce qui n'existe pas encore :
 - `attendre` (attente d'un bloc chargé par JavaScript) est accepté par la lecture de la recette mais sans

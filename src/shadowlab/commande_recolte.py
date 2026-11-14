@@ -239,6 +239,10 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
                 f"{c['evitees']} évitée(s) car déjà lues"
             )
         print(f"  enregistrements : {enregistrements}")
+        defis = [e["detail"] for e in etat.evenements(numero) if e["genre"] == "porte_repassage"]
+        if defis:  # option `porte_entree.repassages_max` : un défi d'une rafale ne compte pas comme repassage
+            faits = sum(1 for d in defis if d.get("franchie") and not d.get("rafale"))
+            print(f"  porte repassée en cours de passe : {faits} fois ({len(defis)} défi(s) vu(s), voir resume.json)")
         for ligne in lignes_alertes(etat.alertes_lecture(numero)):
             print(f"  {ligne}")
         if passe["arret"]:
