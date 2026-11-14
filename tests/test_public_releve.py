@@ -60,7 +60,8 @@ RELEVE = RACINE / "src" / "shadowlab" / "public" / "static" / "releve.js"
 BANC = Path(__file__).parent / "banc_releve.js"
 OBSERVATEUR = RACINE / "src" / "shadowlab" / "site" / "static" / "observateur.js"
 # Relevée le 14/11/2026 sur le commit 72bed9f, avant ce travail : le script du labo ne change pas d'un octet.
-EMPREINTE_OBSERVATEUR = "93bc6217ad740289e404d7fd512c0aaeb01d022807a4d257049f9c5913f22f6e"
+# Renouvelée le 14/11/2026 pour la sonde 2 de `testDetectionProfonde` (Safari et Firefox), seul changement.
+EMPREINTE_OBSERVATEUR = "c404d693a9bd568cc8746cb8cdfb782a1040a693214dd28bcb52c8b43aa4296e"
 BALISE = '<script src="/public/static/releve.js" defer></script>'
 JETON = "a" * 32
 avec_node = pytest.mark.skipif(shutil.which("node") is None, reason="node absent")

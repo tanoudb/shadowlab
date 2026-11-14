@@ -1028,7 +1028,8 @@ function cdpDetectionTest() {
 }
 
 function testDetectionProfonde() {
-  const r = {};
+  // Sonde 2 : même mesure sur Chrome, Safari et Firefox. (Sonde 1, sans ce champ : formes de Chrome seulement.)
+  const r = { sonde: 2 };
   try {
     const cibles = [
       { obj: Navigator.prototype, prop: 'hardwareConcurrency', nom: 'hwc' },
@@ -1043,12 +1044,13 @@ function testDetectionProfonde() {
       if (!desc || !desc.get) continue;
       const getter = desc.get;
       const str = Function.prototype.toString.call(getter);
-      r[`${c.nom}_natif`] = /^\s*function\s+get\s+\w+\(\)\s*\{\s*\[native code\]\s*\}$/.test(str.trim());
+      // Texte d'une fonction native : `get ` facultatif (Chrome l'écrit, WebKit et Gecko non), une ou plusieurs lignes.
+      r[`${c.nom}_natif`] = /^function\s+(?:get\s+)?\w+\(\)\s*\{\s*\[native code\]\s*\}$/.test(str.trim());
       try {
         getter.call({});
         r[`${c.nom}_illegal_invoc`] = false;
       } catch (e) {
-        r[`${c.nom}_illegal_invoc`] = /illegal invocation/i.test(e.message);
+        r[`${c.nom}_illegal_invoc`] = e instanceof TypeError; // le message dépend du moteur, la classe non
       }
       try {
         const objDesc = Object.getOwnPropertyDescriptor(c.obj, c.prop);

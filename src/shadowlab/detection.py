@@ -2376,9 +2376,27 @@ class DetecteurDeepProxy:
     """Détection de Proxy sur les getters natifs du navigateur (toString, illegal invocation, descripteurs)."""
 
     name = "deep-proxy"
-    version = "1"
+    version = (
+        "1.1"  # 1.1 : la sonde 2 mesure aussi Safari et Firefox ; un relevé de la sonde 1 ne vaut que sous Chromium
+    )
 
     _GETTERS = ("hwc", "ua", "wd", "platform", "dm", "screen_w")
+
+    @staticmethod
+    def _est_chromium(obs: Observations, p: dict[str, Any]) -> bool:
+        """Famille Chromium, seul cas où la sonde 1 (formes de Chrome) mesurait juste.
+
+        Indices, du plus solide au plus faible : `userAgentData` (API absente de WebKit et Gecko, relevée par le
+        script), `Sec-CH-UA` (envoyé par Chromium seul), `Chrome/` dans le User-Agent annoncé.
+        """
+        nav = p.get("navigateur") or {}
+        if nav.get("userAgentData"):
+            return True
+        for o in obs.http:
+            e = _entetes(o)
+            if "sec-ch-ua" in e or "chrome/" in e.get("user-agent", "").lower():
+                return True
+        return "chrome/" in str(nav.get("userAgent", "")).lower()
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -2392,7 +2410,10 @@ class DetecteurDeepProxy:
         if not dp:
             return _indetermine(self.name, self.version, "non_collecte", "données deep proxy non collectées")
 
-        non_natifs = [g for g in self._GETTERS if dp.get(f"{g}_natif") is False]
+        # Sans `sonde`, relevé de la sonde 1 : ces deux signaux ne valent que sous Chromium.
+        sonde_fiable = dp.get("sonde", 1) >= 2 or self._est_chromium(obs, p)
+
+        non_natifs = [g for g in self._GETTERS if dp.get(f"{g}_natif") is False] if sonde_fiable else []
         if non_natifs:
             signaux.append(
                 Signal(
@@ -2402,7 +2423,7 @@ class DetecteurDeepProxy:
                 )
             )
 
-        pas_invoc = [g for g in self._GETTERS if dp.get(f"{g}_illegal_invoc") is False]
+        pas_invoc = [g for g in self._GETTERS if dp.get(f"{g}_illegal_invoc") is False] if sonde_fiable else []
         if pas_invoc:
             signaux.append(
                 Signal(
