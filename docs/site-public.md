@@ -1,7 +1,9 @@
 # Site public — application réduite (étape 1.6)
 
-Mis à jour : 14/11/2026 (version « étude », D-75). Code : `src/shadowlab/public/`. Tests : `tests/test_public.py`,
-`tests/test_public_social.py`, `tests/test_public_etude.py`.
+Mis à jour : 14/11/2026 (version « étude », D-75 ; relevé enrichi, D-76 ; quatrième relecture, D-77). Code :
+`src/shadowlab/public/`. Tests : `tests/test_public.py`, `tests/test_public_social.py`, `tests/test_public_etude.py`,
+`tests/test_public_releve.py`, `tests/test_public_relecture4.py` (les quinze essais de la quatrième relecture) et
+`tests/test_public_corrections4.py` (ses corrections).
 
 ## Ce que c'est
 
@@ -21,9 +23,11 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
 - le réseau social fictif « Mosaïk Démo » (squelette du 13/11, `public/social.py`, cadrage
   `docs/recherche/site-public-communaute-2026-11-13.md`) : `/lab/social` (redirige vers le fil), `/lab/social/fil`,
   `/lab/social/explorer` (paramètre `page`), `/lab/social/p/{identifiant}`, `/lab/social/u/{pseudonyme}`,
-  `/lab/social/t/{etiquette}`, et les photos `/lab/social/photos/{fichier}` (seulement les fichiers du manifeste
-  `public/static/social/photos/manifeste.json`). Même traitement que la vitrine : observateur et requêtes notées
-  pendant une session seulement. Sa feuille et son script, `social.css` et `social.js`, sont servis sous
+  `/lab/social/t/{etiquette}`, les crédits des photos `/lab/social/credits` (paramètre `page` ; auteur, licence et
+  page d'origine de chacune des 93 photos), et les photos `/lab/social/photos/{fichier}` (seulement les fichiers du
+  manifeste `public/static/social/photos/manifeste.json`). Même traitement que la vitrine : observateur et requêtes
+  notées pendant une session seulement. L'accueil mène aux crédits sous chaque groupe de photos qu'il montre, et le
+  pied de chaque page de l'étude aussi, sauf les pages de contact (licences CC BY et CC BY-SA, D-77). Sa feuille et son script, `social.css` et `social.js`, sont servis sous
   `/public/static/` (liste fermée) ; le script ne fait aucune requête et n'écrit rien dans le navigateur ;
 - la feuille des pages de l'étude, `public.css`, sous `/public/static/` (même liste fermée) et sous
   `/contact/style.css` pour les pages de contact ;
@@ -39,7 +43,8 @@ le navigateur. Les textes sont dans `public/textes.py` (un dictionnaire par lang
 une seule fois dans `public/pages.py`. Le résumé de ce qui est relevé, sur l'accueil, est à un seul endroit
 (`textes.RESUME_RELEVE`).
 
-Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
+Toute page servie en `GET` répond aussi à `HEAD`, sans corps (D-77) ; un chargement de l'accueil n'est compté qu'en
+`GET`. Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
 test, la démo reCAPTCHA, `/lab/verdict` et les autres pages du labo. Ces modules ne sont même pas importés
 (ni l'API, ni le gardien, ni le frontal, ni les détecteurs, ni les moteurs).
 
@@ -75,7 +80,9 @@ Puis `uv run shadowlab public servir` (sous un utilisateur sans privilège, rela
 **Option A — Cloudflare Tunnel (le plus simple, aucun port ouvert).** `cloudflared` relaie
 `https://vitrine.example.org` vers `http://127.0.0.1:8771`. Cloudflare termine le HTTPS et pose
 `CF-Connecting-IP` : régler `SHADOWLAB_PUBLIC_ENTETE_IP=CF-Connecting-IP`. Personne ne peut joindre
-l'application sans passer par Cloudflare, donc cet en-tête ne peut pas être forgé.
+l'application sans passer par Cloudflare, donc cet en-tête ne peut pas être forgé. La notice nomme Cloudflare comme
+le service par lequel le site est relié à Internet (paragraphe sur le transit) : une mise en ligne sans Cloudflare
+(options B et C seules) demande de changer ce paragraphe dans les deux langues, et `VERSION_INFORMATION`.
 
 **Option B — Caddy.** Caddy obtient le certificat, transmet `Host` tel quel et **remplace**
 `X-Forwarded-For` par l'adresse du client (défaut `SHADOWLAB_PUBLIC_ENTETE_IP=X-Forwarded-For` qui convient).
@@ -117,14 +124,22 @@ SHADOWLAB_PUBLIC_CONTACT="Nom ou pseudonyme" scripts/site-public-tunnel.sh
 
 Le script ouvre un tunnel Cloudflare « rapide » (`cloudflared`, installé par Homebrew), affiche l'adresse
 publique tirée au hasard (`https://…trycloudflare.com`, aussi écrite dans `outputs/public/adresse-publique.txt`),
-puis lance l'application pour cette adresse seulement, avec `CF-Connecting-IP` et le Mac tenu éveillé
-(`caffeinate`). Ctrl+C arrête l'application et le tunnel. Il se lance **par Ethan** : l'ouverture d'un tunnel
+puis lance l'application pour cette adresse seulement, avec `CF-Connecting-IP`, le mode HTTPS imposé
+(`SHADOWLAB_PUBLIC_HTTPS=1`, quoi que dise le shell ou `.env`) et le Mac tenu éveillé (`caffeinate`). Ctrl+C arrête l'application et le tunnel. Il se lance **par Ethan** : l'ouverture d'un tunnel
 est refusée à l'assistant par le garde-fou de l'application, et la mise en ligne reste à lui.
 
 Limites de cette voie, à connaître avant de partager le lien :
 
 - **L'adresse change à chaque lancement** : un lien déjà partagé meurt si le script, le Mac ou la connexion
   s'arrête. Cloudflare donne ces tunnels sans garantie de disponibilité.
+- **« Ma session » ne survit pas à une relance.** Le cookie `slp-droits`, qui permet à un participant de retrouver
+  et de supprimer sa session pendant 90 jours (notice, « Vos droits »), est lié au nom d'hôte. Après une relance, le
+  site a un autre nom : le navigateur ne renvoie plus ce cookie, la page « Ma session » dit « Aucune session »,
+  l'ancienne adresse ne répond plus, et le formulaire de contact n'est plus joignable à l'adresse que le participant
+  connaît. Sa session reste en base ; il ne peut plus la supprimer seul (seulement en écrivant au responsable, s'il
+  retrouve le site, avec l'identifiant noté ailleurs). Le droit d'effacement promis n'est donc tenu que tant que le
+  tunnel tourne sans interruption. **Conclusion : avant toute annonce publique, un nom d'hôte stable** (tunnel
+  nommé sur un domaine à soi, option A ; voir « Avant d'annoncer le site publiquement »).
 - **Aucune limitation de débit** devant l'application (pas de règles Cloudflare sans domaine) : le plafond
   de sessions par jour (40 par défaut) peut être vidé par un script (voir « Limites connues »).
 - **Le site tourne sur le poste de travail**, qui porte d'autres projets. L'application n'écoute que sur
@@ -142,6 +157,26 @@ Vercel et Netlify ne conviennent pas : pas de processus continu ni de disque dur
 Non vérifié au 12/11 : le script n'a jamais tourné avec un vrai tunnel (syntaxe, refus sans contact, lecture de
 l'adresse et filtre `sed` vérifiés à vide).
 
+## Avant d'annoncer le site publiquement
+
+Le tunnel rapide suffit pour quelques proches. Avant un message public (Reddit…), à la charge de l'exploitant (D-77) :
+
+- **Un nom d'hôte stable** : tunnel nommé sur un domaine à soi (option A). Sans lui, « Ma session », la suppression
+  par le participant et le formulaire de contact meurent à chaque relance (voir « Limites de cette voie »).
+- **Une règle de limitation de débit chez Cloudflare devant le site** (le tunnel rapide n'en a aucune) : pages et
+  images, et surtout `POST /session/commencer` et `POST /contact` (quelques requêtes par minute et par adresse).
+  Sans elle, un script qui change d'adresse vide le plafond de sessions du jour et remplit la base.
+- **Régler `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`** sur la participation attendue le jour du message (voir « Ce que
+  tient la base »).
+- **Surveiller** `uv run shadowlab public frequentation` (comptes du jour), `uv run shadowlab public sessions` (les
+  sessions, la plus grosse d'abord, et la place occupée par la base) et la taille de la base ; supprimer une session
+  abusive avec `uv run shadowlab public supprimer <identifiant>`.
+- **Au premier lancement réel, une fois** : comparer le HTML d'une page servie par le tunnel à celui servi en local
+  (Cloudflare peut récrire une page : scripts ajoutés, adresses e-mail masquées, ce qui casserait la politique de
+  sécurité ou la promesse « aucun autre site »), et vérifier que les photos arrivent bien à l'application pendant
+  une session (requêtes `/lab/social/photos/…` notées en base) : servies avec `Cache-Control: public`, elles peuvent
+  être gardées en cache par Cloudflare et ne plus jamais atteindre l'application.
+
 ## Réglages
 
 | Variable | Défaut | Rôle |
@@ -149,10 +184,10 @@ l'adresse et filtre `sed` vérifiés à vide).
 | `SHADOWLAB_PUBLIC_HOTES` | `localhost,127.0.0.1` | Noms acceptés dans `Host` (liste exacte, `*` refusé). **Indépendant** de `SHADOWLAB_HOTES_AUTORISES`, le périmètre des moteurs |
 | `SHADOWLAB_PUBLIC_CONTACT` | *(aucun)* | Responsable (nom ou pseudonyme), affiché sur la page d'information. Une adresse y est facultative : les visiteurs écrivent par le formulaire de contact. **Vide = refus de démarrer** |
 | `SHADOWLAB_PUBLIC_CONSERVATION_JOURS` | `90` | Durée de conservation d'une session et d'un message de contact (≥ 1) |
-| `SHADOWLAB_PUBLIC_HTTPS` | `1` | Cookies `Secure` et préfixe `__Host-`, en-tête HSTS. `0` seulement pour l'essai local |
+| `SHADOWLAB_PUBLIC_HTTPS` | `1` | Cookies `Secure` et préfixe `__Host-`, en-tête HSTS. `0` seulement pour l'essai local ; le script du tunnel impose `1` |
 | `SHADOWLAB_PUBLIC_PORT` | `8771` | Port d'écoute sur `127.0.0.1` |
 | `SHADOWLAB_PUBLIC_BASE` | `outputs/public/public.sqlite3` | Base publique. Une base qui contient une expérience du labo est refusée |
-| `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (dernière valeur lue). Vide = adresse de la connexion |
+| `SHADOWLAB_PUBLIC_ENTETE_IP` | `X-Forwarded-For` | En-tête où le mandataire met l'adresse du visiteur (dernière ligne de l'en-tête, puis sa dernière valeur : un mandataire qui ajoute sa ligne la met à la fin). Vide = adresse de la connexion |
 | `SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE` | `20261111`, `500` | Contenu du site vitrine, comme dans le labo |
 | `SHADOWLAB_PUBLIC_SOCIAL_GRAINE`, `SHADOWLAB_PUBLIC_SOCIAL_TAILLE` | `20261113`, `120` | Contenu du réseau social fictif : graine et nombre de publications (au moins 1) |
 | `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` | `40` | Plafond de sessions ouvertes par jour UTC, toutes adresses (ramené entre 1 et 5 000). Atteint, l'accueil et le refus disent, dans les deux langues, que l'étude a fait le plein pour aujourd'hui et invitent à revenir demain. Voir « Limites » avant de l'élever |
@@ -169,11 +204,14 @@ la dernière action est sortie de la fenêtre (1 heure ou 24 heures) ; il a lieu
 requête reçue par l'application (`test_une_requete_ordinaire_balaie_les_empreintes_expirees_de_chaque_limiteur`).
 Une empreinte quitte donc la mémoire à la première requête qui suit la fin de sa fenêtre : une journée au plus
 pour la plus longue, un peu plus si personne ne visite le site entre-temps ; elle disparaît aussi à l'arrêt du
-processus. Elle est salée, mais un attaquant qui lirait la mémoire du processus retrouverait une adresse IPv4 par
+processus. Pour reconnaître un double clic sur « Commencer », l'application garde aussi, 30 secondes au plus, une
+empreinte salée de la valeur anti-CSRF de chaque session ouverte (pas la valeur, pas le jeton de la session). Elle est salée, mais un attaquant qui lirait la mémoire du processus retrouverait une adresse IPv4 par
 essais : on ne la dit pas « non réversible ». Une table pleine (10 000 empreintes) d'entrées encore valides n'est
 **plus vidée** : une adresse inconnue est refusée jusqu'au prochain balayage, les adresses déjà connues gardent
-leur compte (`test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`). Une adresse IPv6 y compte pour son bloc /64 : un abonné en
-reçoit au moins un entier et y change d'adresse à volonté. Une adresse IPv4, même écrite en IPv6
+leur compte (`test_limiteur_table_pleine_ne_remet_aucun_compteur_a_zero`). Une adresse IPv6 y compte pour son bloc /56 (D-77 ; /64
+avant) : un abonné reçoit souvent un /56 entier (256 blocs /64 ; RIPE-690 conseille au moins un /56 pour un
+particulier) et peut y changer d'adresse, et de /64, à volonté. Prix accepté : des abonnés voisins d'un opérateur qui
+ne délègue qu'un /64 par client comptent ensemble. Une adresse IPv4, même écrite en IPv6
 (`::ffff:a.b.c.d`), reste elle-même ; une valeur qui n'est pas une adresse est comptée telle quelle. Si
 l'en-tête est mal réglé, tous les visiteurs partagent la même adresse (celle du mandataire ou de
 Cloudflare) et ces limites deviennent globales : 6 sessions et 3 messages par heure, 5 messages par jour,
@@ -184,9 +222,9 @@ journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_a
 
 | Limite | Valeur | Pourquoi |
 |--------|--------|----------|
-| Sessions ouvertes par adresse | 6 par heure glissante (IPv6 : par /64) | Disque, en mémoire seulement |
+| Sessions ouvertes par adresse | 6 par heure glissante (IPv6 : par /56) ; un double clic n'ouvre qu'une session et n'use rien | Disque, en mémoire seulement |
 | Sessions ouvertes par jour | réglage `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR`, 40 par défaut, toutes adresses ; un jour plein n'use pas la limite par adresse | Afflux et abus ; compté en base, survit au redémarrage. Le disque, lui, est protégé par le plafond de taille (ci-dessous) |
-| Taille de la base (+ WAL) | 2 Gio ; au-delà, plus aucune session ne s'ouvre et **plus rien ne s'écrit** (requêtes servies sans être notées, collecte en 503) | Disque |
+| Place occupée par la base (+ WAL) | 2 Gio d'espace **réellement occupé** : pages utilisées, `(page_count - freelist_count) × page_size`, plus le journal WAL (`donnees.occupation`). Au-delà, plus aucune session ne s'ouvre et **plus rien ne s'écrit** (requêtes servies sans être notées, collecte en 503) ; une suppression ou la purge rouvre aussitôt | Disque |
 | Envois de l'observateur par session (`envois_par_session`) | 300 (deux par page) | Disque |
 | Volume des envois de l'observateur par session (`volume_par_session`) | 4 Mio (~10 Ko par empreinte) | Disque |
 | Envois du relevé enrichi par session (`envois_trace_par_session`, D-76) | 1 000, comptés à part : une trace n'use jamais les envois de l'observateur | Disque ; le rejeu a besoin des envois de l'observateur |
@@ -197,7 +235,7 @@ journal, une seule fois par démarrage**, sans aucune adresse (`test_en_tete_d_a
 | Une requête notée | en-têtes : 40 au plus, nom ≤ 64 car., valeur ≤ 512 car., JSON ≤ 2 048 octets ; méthode ≤ 16, chemin ≤ 200 | Disque |
 | Corps d'un envoi | 64 Kio, annoncé ou réel | Mémoire, disque |
 | Durée d'une session | 2 heures (cookie et contrôle serveur) | Un cookie volé ne sert pas longtemps |
-| Messages de contact | 2 000 caractères ; par adresse (en mémoire, IPv6 par /64) : 3 par heure glissante et 5 par 24 h glissantes ; 30 par jour pour tout le monde, 500 gardés (au-delà, 503 jusqu'à la purge ou un effacement à la main) ; formulaire borné à 12 octets par caractère permis, plus 1 Kio | Disque : quelques Mo au pire (500 messages de 8 Ko, non mesuré). 5 par adresse et par jour : un visiteur écrit une ou deux fois, et une adresse seule n'épuise ni le plafond du jour (30) ni la boîte avant la purge (5 × 90 jours = 450 < 500) |
+| Messages de contact | 2 000 caractères ; par adresse (en mémoire, IPv6 par /56) : 3 par heure glissante et 5 par 24 h glissantes ; 30 par jour pour tout le monde, 500 gardés (au-delà, 503 jusqu'à la purge ou un effacement à la main) ; formulaire borné à 12 octets par caractère permis, plus 1 Kio | Disque : quelques Mo au pire (500 messages de 8 Ko, non mesuré). 5 par adresse et par jour : un visiteur écrit une ou deux fois, et une adresse seule n'épuise ni le plafond du jour (30) ni la boîte avant la purge (5 × 90 jours = 450 < 500) |
 
 **Pire cas, avant le relevé enrichi, mesuré** (12/11/2026, base temporaire, ces bornes atteintes) : une session
 occupait 16,9 Mo — 12,6 Mo pour 3 000 requêtes aux en-têtes de 2 Ko (une ligne de ~2,3 Ko prend une page SQLite
@@ -205,8 +243,13 @@ de 4 Kio) et 4,3 Mo d'envois. **Depuis D-76, par le calcul (non mesuré)** : 25,
 jour (le défaut) : **environ 1 Go par jour** au pire. Le plafond de 2 Gio est contrôlé à chaque écriture ; il ne
 peut être dépassé que des lignes déjà en cours d'écriture (une par requête simultanée, 64 Kio au plus chacune).
 Sous abus soutenu, il est donc atteint le 3ᵉ jour : le site reste visitable mais n'ouvre plus de session jusqu'à
-la purge ou une suppression à la main (voir « Limites connues »). Une purge ne réduit pas le fichier, mais ses
-pages libérées sont réutilisées.
+la purge ou une suppression à la main (`shadowlab public sessions` pour repérer les sessions abusives, la plus
+grosse d'abord, puis `shadowlab public supprimer`). Le plafond porte sur l'espace **réellement occupé**, pas sur
+la taille du fichier : SQLite garde dans le fichier les pages libérées par une suppression (ni VACUUM, ni
+auto_vacuum) et les réutilise, donc le fichier ne rétrécit jamais ; mesurer sa taille gardait l'étude fermée pour
+toujours (quatrième relecture, D-77). Le journal WAL est remis à zéro après chaque suppression et chaque purge.
+Tant que les fichiers tiennent sous le plafond, la mesure n'ouvre aucune connexion
+(`test_base_pleine_rouvre_quand_les_sessions_sont_effacees`).
 
 **Ce que tient la base, et ce que cela veut dire pour le réglage** (calcul du 14/11/2026 refait pour D-76,
 verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
@@ -240,8 +283,8 @@ verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
   (3 600 sessions, environ 4 Go) rempliraient la base entre le 45ᵉ et le 55ᵉ jour : à surveiller si la
   participation dure.
 - Conséquence pour le réglage : le fixer sur la participation attendue le jour d'un message (quelques centaines,
-  pas plus), surveiller `shadowlab public frequentation` et la taille de `public.sqlite3`, supprimer les sessions
-  abusives (`shadowlab public supprimer`), et demander une limitation de débit au mandataire (voir « Ce qui reste
+  pas plus), surveiller `shadowlab public frequentation` et `shadowlab public sessions` (qui donne aussi la place
+  occupée par la base), supprimer les sessions abusives (`shadowlab public supprimer`), et demander une limitation de débit au mandataire (voir « Ce qui reste
   à la charge de l'hébergement »). Élever `taille_max_base` (constante de `Limites`) demande d'abord de mesurer
   une vraie session et la place libre du disque. La première vraie session donnera le chiffre ordinaire (taille de
   la base avant et après).
@@ -263,6 +306,14 @@ verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
 - **Sur demande écrite** (autre appareil, cookies effacés) : le visiteur écrit par le formulaire de contact
   en donnant l'identifiant de sa session (affiché sur « Ma session ») ; puis
   `uv run shadowlab public supprimer <identifiant>`.
+- **Repérer une session abusive** : `uv run shadowlab public sessions` liste chaque session (identifiant, début en
+  UTC, état « ouverte », « expirée » ou « terminée », requêtes notées, nombre et volume des envois, et un total
+  envois plus requêtes notées), la plus grosse d'abord, après la place occupée par la base
+  (`test_commande_sessions_les_plus_grosses_d_abord`).
+- **Lignes orphelines** : la purge et chaque suppression retirent aussi toute ligne d'observation dont la session
+  n'existe plus (`test_purge_et_suppression_retirent_les_lignes_orphelines`). Un envoi encore en vol pendant
+  « Supprimer ma session » n'écrit rien : l'écriture revérifie que la session est en cours, dans la même
+  instruction SQL (`test_envoi_en_vol_pendant_la_suppression_ne_laisse_rien`).
 - **Messages de contact** : `uv run shadowlab public messages` les affiche (numéro, jour, texte) ;
   `uv run shadowlab public effacer-message <n°>` en efface un, `effacer-message tous` les efface tous et
   dit combien (les numéros suivants ne reprennent pas à 1). Ils suivent la même purge que les sessions
@@ -272,8 +323,11 @@ verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
   message. Rien n'est envoyé ailleurs : il faut regarder l'écran ou lancer la commande de temps en temps
   (une demande d'effacement se traite sous un mois) ; sous systemd, seule la commande les montre.
 - La base et la boîte de messages sont ouvertes avec `PRAGMA secure_delete=ON` : SQLite vide les pages d'une
-  ligne effacée, au lieu de les laisser lisibles dans le fichier. Cela **ne garantit pas l'écrasement physique** :
-  le journal de transaction de SQLite (`-wal`), un disque SSD, un système de fichiers en copie sur écriture
+  ligne effacée, au lieu de les laisser lisibles dans le fichier. Après chaque suppression et chaque purge de
+  sessions, `PRAGMA wal_checkpoint(TRUNCATE)` reporte les pages vidées dans la base et remet le journal de
+  transaction (`-wal`) à zéro, sans attendre : si un lecteur d'un autre processus le bloque, le journal n'est vidé
+  qu'au point de contrôle suivant (`test_suppression_ne_laisse_rien_dans_le_journal_de_la_base`).
+  Cela **ne garantit pas l'écrasement physique** : un disque SSD, un système de fichiers en copie sur écriture
   (APFS) et les sauvegardes peuvent garder des copies. Ce que la page d'information promet (« efface aussitôt
   toutes les données qui la concernent ») vaut pour la base, pas pour ces copies : voir « Ce qui reste à la
   charge de l'hébergement » (FileVault, sauvegardes).
@@ -283,7 +337,8 @@ verrouillé par `test_plafond_de_la_base_en_sessions_au_pire`) :
 L'application n'écrit une ligne que pour une **réponse d'erreur** (statut 400 ou plus : `méthode chemin statut`,
 niveau DEBUG) dans `<dossier de la base>/logs/shadowlab.jsonl` (à l'écran seulement avec `--verbeux`) : ni
 adresse, ni chaîne de requête, ni en-tête, ni jeton, ni identifiant de session. Une requête réussie ou redirigée
-n'écrit **rien** (`test_journal_ne_garde_que_les_erreurs`) : ce journal est horodaté à la milliseconde et ne suit
+n'écrit **rien** (`test_journal_ne_garde_que_les_erreurs`) ; une requête `HEAD` sur une page non plus (avant D-77 :
+405 et une ligne, `test_head_repond_comme_get_sans_corps_ni_ligne_au_journal`) : ce journal est horodaté à la milliseconde et ne suit
 pas la purge à 90 jours (il tourne par taille), il ne doit pas dater chaque visite, ce qui contredirait « rien
 n'est enregistré » pour qui visite sans participer (hormis le compte du jour, voir « Fréquentation »). La notice
 le dit (« Un journal technique ne garde que les erreurs… »).
@@ -307,7 +362,7 @@ clé `secret`) sauf `slp-csrf`, qui n'est qu'une valeur au hasard.
 
 | Cookie | Posé | Durée | Rôle |
 |--------|------|-------|------|
-| `slp-csrf` | dès la première page à formulaire, **avant tout accord** | fermeture du navigateur | Anti-CSRF (double soumission) ; jamais enregistré en base |
+| `slp-csrf` | dès la première page à formulaire, **avant tout accord** ; nouvelle valeur à « Commencer » | fermeture du navigateur | Anti-CSRF (double soumission) ; jamais enregistré en base. Il ne donne jamais les cookies d'une session (D-77) |
 | `slp-session` | à « Commencer » | 2 h, effacé à « Terminer » | Relie les pages à la session en cours |
 | `slp-droits` | à « Commencer » | durée de conservation (90 j), effacé à la suppression | Retrouver et supprimer sa session depuis « Ma session » |
 
@@ -421,8 +476,11 @@ d'une touche.
 
 `uv run shadowlab public frequentation` affiche, jour par jour (UTC), les chargements de l'accueil, les sessions
 commencées et les sessions terminées, puis les totaux. L'accueil affiche le total des sessions terminées
-(« N sessions enregistrées à ce jour »). Limites : tout chargement de l'accueil compte (rechargements, robots,
-aperçus de lien) ; une session terminée puis supprimée reste comptée ; une session abandonnée sans « Terminer »
+(« N sessions enregistrées à ce jour »). Une session n'est comptée terminée que par la requête qui l'a fait passer
+de « en cours » à « terminée », une seule fois même sous 20 « Terminer » simultanés, et un double clic sur
+« Commencer » n'ouvre et ne compte qu'une session (`test_terminer_en_rafale_ne_compte_qu_une_session`,
+`test_double_clic_sur_commencer_n_ouvre_qu_une_session`). Limites : tout chargement de l'accueil en `GET` compte
+(rechargements, robots, aperçus de lien ; pas les `HEAD`) ; une session terminée puis supprimée reste comptée ; une session abandonnée sans « Terminer »
 compte comme commencée seulement.
 
 ## Les dix règles de l'étape 1.6 et leurs preuves
@@ -501,6 +559,23 @@ Relevé enrichi (14/11/2026, D-76, `tests/test_public_releve.py`, banc sous Node
 | Suppression, purge, rejeu | `test_suppression_et_purge_effacent_les_traces`, `test_rejeu_ignore_les_traces` |
 | Notice clé par clé, plafonds, promesse retirée, D-76 | `test_cles_du_script_du_serveur_et_de_la_notice`, `test_notice_decrit_la_trace_cle_par_cle`, `test_notice_dit_les_plafonds_par_page`, `test_notice_jamais_releve_sans_la_position_de_la_souris`, `test_rien_de_l_ancienne_promesse_ailleurs`, `test_accueil_resume_du_releve_exact_et_a_un_seul_endroit`, `test_decision_d76_et_documentation` |
 
+Quatrième relecture indépendante (14/11/2026, D-77, `tests/test_public_relecture4.py` : quinze essais vus en échec
+avant correction, inchangés ; corrections : `tests/test_public_corrections4.py`) :
+
+| Point | Tests |
+|-------|-------|
+| B1. Base pleine qui rouvre ; repérer une session abusive | `test_base_pleine_rouvre_quand_les_sessions_sont_effacees`, `test_commande_sessions_les_plus_grosses_d_abord` |
+| B2, C3. Compteurs : une session terminée comptée une fois, un double clic n'ouvre qu'une session et ne rend jamais ses cookies | `test_terminer_en_rafale_ne_compte_qu_une_session`, `test_double_clic_sur_commencer_n_ouvre_qu_une_session`, `test_seconde_requete_du_double_clic_sans_aucun_cookie_de_session`, `test_la_valeur_csrf_d_un_autre_visiteur_ne_donne_jamais_sa_session`, `test_la_valeur_csrf_change_a_l_ouverture_et_terminer_marche` |
+| B3. Crédits des photos (accueil, pied des pages, `objets-03` retirée, domaine public) | `test_accueil_credite_les_photos_qu_il_montre`, `test_manifeste_credite_le_photographe_d_une_licence_creative_commons`, `test_pied_des_pages_de_l_etude_mene_aux_credits_sauf_le_contact`, `test_aucun_texte_ne_compte_encore_94_photos`, `test_page_de_credits_complete` |
+| B4. IPv6 par /56 ; avant d'annoncer | `test_bloc_d_adresse`, `test_limites_par_adresse_comptent_un_bloc_ipv6` ; section « Avant d'annoncer le site publiquement » |
+| B5. Tunnel rapide : « Ma session » ne survit pas à une relance | `test_documentation_du_tunnel_rapide_dit_que_ma_session_ne_survit_pas_a_une_relance` |
+| C1. Demi-paire UTF-16 : 400 propre | `test_collecte_demi_paire_utf16_refusee_proprement` |
+| C2. Envoi en vol après suppression ; lignes orphelines | `test_envoi_en_vol_pendant_la_suppression_ne_laisse_rien`, `test_purge_et_suppression_retirent_les_lignes_orphelines` |
+| C4, C5, textes. Notice vraie (Cloudflare nommé, aucune décision, géolocalisation, frappes et souris) | `test_notice_ne_dit_pas_qu_aucun_service_de_cloudflare_n_est_utilise`, `test_notice_ne_dit_pas_qu_aucun_detecteur_ne_tourne`, `test_accueil_et_notice_ne_promettent_plus_jamais_votre_localisation`, `test_notice_dit_ce_que_disent_les_frappes_et_la_souris`, `test_notice_nomme_le_service_qui_achemine_et_ne_promet_pas_l_absence_de_detecteur` |
+| C6. Dernière ligne de l'en-tête d'adresse | `test_limite_par_adresse_lit_la_derniere_ligne_de_l_en_tete` |
+| C7. Le tunnel impose HTTPS | `test_script_du_tunnel_impose_le_mode_https` |
+| Journal vidé après suppression ; HEAD | `test_suppression_ne_laisse_rien_dans_le_journal_de_la_base`, `test_head_repond_comme_get_sans_corps_ni_ligne_au_journal`, `test_head_sur_l_accueil_ne_compte_aucun_chargement` |
+
 ## Les huit conditions du § 5 du plan
 
 | Condition | Couverture |
@@ -518,8 +593,9 @@ Relevé enrichi (14/11/2026, D-76, `tests/test_public_releve.py`, banc sous Node
 
 - Certificat TLS, redirection HTTP → HTTPS, mandataire qui transmet `Host` sans le changer.
 - Journaux du mandataire : coupés, ou sans adresse ni chaîne de requête (le jeton de session passe dans
-  `?sl=` des envois de l'observateur). L'hébergeur et le service placé devant (Cloudflare…) voient passer
-  toutes les données en transit, adresse comprise : la page d'information le dit ; la nommer si on la précise.
+  `?sl=` des envois de l'observateur). L'hébergeur et le service placé devant voient passer toutes les données en
+  transit, adresse comprise : la notice le dit et nomme Cloudflare ; un autre service demande de changer ce
+  paragraphe (deux langues) et `VERSION_INFORMATION`.
 - En-tête d'adresse non forgeable (tunnel, ou pare-feu limité aux plages de Cloudflare).
 - Limitation de débit par adresse au mandataire ou chez Cloudflare : pages et images, **et
   `POST /session/commencer` et `POST /contact`** (quelques requêtes par minute), pour que les plafonds
@@ -555,16 +631,22 @@ Relevé enrichi (14/11/2026, D-76, `tests/test_public_releve.py`, banc sous Node
   elle arrive après, elle est refusée comme le dernier envoi « comportement ». Le rythme des touches et les
   gestes de la souris sont des données proches de la biométrie, et le rythme des touches peut, en théorie,
   renseigner sur ce qui est tapé (la notice dit qu'une façon de bouger ou de taper peut aider à reconnaître une
-  personne ; elle ne parle pas de ce second point). La note du réseau social sous la zone de commentaire
+  personne, que le nombre de frappes dans une zone de texte en dit la longueur et que la trajectoire de la souris
+  peut dire ce sur quoi le regard s'est attardé ; D-77). La note du réseau social sous la zone de commentaire
   (« jamais envoyé ni enregistré ») reste vraie pour le texte, pas pour le rythme de sa frappe : texte de
   `public/social.py`, non changé.
-- **Formulaire de contact blocable.** Une adresse seule ne le peut plus (5 messages par jour ; un /64 IPv6
-  compte pour une adresse). Mais six adresses IPv4, ou six /64, épuisent les 30 messages du jour en deux
+- **Formulaire de contact blocable.** Une adresse seule ne le peut plus (5 messages par jour ; un /56 IPv6
+  compte pour une adresse). Mais six adresses IPv4, ou six /56, épuisent les 30 messages du jour en deux
   heures (dix en quelques minutes), chaque jour, et remplissent la boîte (500 messages) en 17 jours : le
   formulaire refuse alors tout (503) jusqu'à la purge ou jusqu'à `shadowlab public effacer-message` (`tous`
   vide la boîte d'un coup). Parade : limitation de débit au mandataire, et lire la boîte de temps en temps.
   Sans cookie (navigateur réglé pour tous les bloquer), le formulaire ne peut pas être envoyé : le jeton
   anti-CSRF en dépend, comme pour les autres formulaires ; le texte tapé est rendu à chaque refus.
+- **Double clic sur « Commencer ».** La seconde requête d'un double clic reçoit une simple redirection, sans
+  cookie : le navigateur doit garder les cookies de la première réponse. S'il abandonne la première (la seconde
+  navigation annule la première), le visiteur arrive sur le fil sans session ; la session ouverte reste « en
+  cours » jusqu'à son expiration (2 heures) et use une place du jour. Rendre les cookies de la session à la seconde
+  requête donnerait une session à quiconque présente la même valeur anti-CSRF : écarté (D-77).
 - **SQLite bloque la boucle asynchrone.** Chaque accès à la base se fait dans la boucle d'uvicorn, sans
   fil séparé : acceptable pour une dizaine de participants simultanés, pas pour du trafic réel.
 - **Onglet en arrière-plan.** La sonde d'empreinte attend `requestAnimationFrame`, sans délai maximal :
@@ -575,7 +657,7 @@ Relevé enrichi (14/11/2026, D-76, `tests/test_public_releve.py`, banc sous Node
 ## Limites acceptées
 
 - Le responsable présent devant l'écran voit l'heure d'arrivée d'un message (l'avis « message de contact reçu »).
-- Le regroupement IPv6 par /64 se contourne avec un préfixe plus large, et quelques adresses suffisent à épuiser
+- Le regroupement IPv6 par /56 se contourne avec un préfixe plus large (un /48), et quelques adresses suffisent à épuiser
   le plafond du jour du formulaire (la suppression de sa session, elle, ne passe pas par le formulaire).
 - N'importe qui peut ouvrir une session par script : les sessions du site public ne prouvent pas qu'un humain
   était là.
