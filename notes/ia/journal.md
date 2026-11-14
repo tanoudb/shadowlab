@@ -3388,7 +3388,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Reste** : lire l'essai (repassages, écarts, rafales, pages et champs), puis le rallye ; à lire aussi : la durée de
   la page de liste au niveau 04 (campagne 111).
 
-## 2026-11-14 (13h00) — Claude (Fable 5.2, coordination) — Campagne 112 : la récolte repasse la porte quand le défi revient
+## 2026-11-14 (12h55) — Claude (Fable 5.2, coordination) — Campagne 112 : la récolte repasse la porte quand le défi revient
 
 - **Suite complète** à 11 h 49 : 1 714 tests verts (1 670 rapides, 44 d'intégration), après D-80 à D-83.
 - **Campagne 112** (`recolte-arena-cookie-court-essai.yaml`, 11 h 49 à 12 h 52, 3 passages, 0 panne, cookie de défi de
