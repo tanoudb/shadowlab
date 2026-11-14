@@ -206,13 +206,14 @@ reste visitable mais n'ouvre plus de session jusqu'à la purge ou une suppressio
 
 - Une session au volume maximal : 3 000 requêtes notées × 4 Kio (une ligne par page SQLite, mesuré le 12/11)
   = 12,3 Mo, plus 4 Mio d'envois et environ 300 octets par envoi (300 envois) = 4,3 Mo, soit **16,6 Mo par le
-  calcul** (16,9 Mo mesurés le 12/11, index compris).
+  calcul** (16,9 Mo mesurés le 12/11 ; l'écart de 0,3 Mo n'est pas expliqué).
 - 2 Gio (2 147 483 648 octets) / 16,9 Mo = **127 sessions** (129 par le calcul). C'est un **total**, pas un
   nombre par jour : une session reste en base 90 jours.
-- Le plafond par jour ne protège donc pas le disque ; c'est le plafond de 2 Gio qui le fait. Il règle la vitesse
-  à laquelle un abus peut remplir la base : au pire, en 3 jours à 40 sessions par jour, en 30 heures à 100, en
-  6 heures à 500, en 40 minutes à 5 000. Base pleine, plus aucune session ne s'ouvre (503) jusqu'à la purge
-  (jusqu'à 90 jours) ou à une suppression à la main : l'étude serait bloquée, pas le disque.
+- Le plafond par jour ne protège donc pas le disque ; c'est le plafond de 2 Gio qui le fait. C'est un nombre
+  par jour UTC, pas un débit : il fixe le jour où un abus peut remplir la base, au plus tôt le
+  `ceil(127 / plafond)`-ième jour : le 4ᵉ jour à 40 sessions par jour, le 2ᵉ à 100, **le jour même dès 127**.
+  Au-delà de 127 environ, il ne retarde plus rien. Base pleine, plus aucune session ne s'ouvre (503) jusqu'à la
+  purge (jusqu'à 90 jours) ou à une suppression à la main : l'étude serait bloquée, pas le disque.
 - Une session humaine ordinaire est bien plus petite que ce pire cas : non mesuré (aucune session humaine en
   base au 14/11). La première vraie session donnera le chiffre (taille de la base avant et après).
 - Conséquence pour le réglage : le fixer sur la participation attendue le jour d'un message (quelques centaines,
@@ -454,8 +455,8 @@ Version « étude » (14/11/2026, D-75, `tests/test_public_etude.py`) :
   quelques unités (une par requête simultanée). Sans conséquence sur le disque à cette échelle.
 - **Plafond quotidien épuisable.** `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` sessions par jour pour tout le monde
   (40 par défaut) : un script qui change d'adresse peut les consommer et priver les vrais participants de la
-  journée, et remplir la base (127 sessions au pire : en 3 jours à 40 par jour, en quelques heures avec un
-  plafond de quelques centaines ; voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
+  journée, et remplir la base (127 sessions au pire : le 4ᵉ jour à 40 par jour, le jour même avec un plafond de
+  127 ou plus ; voir « Limites »). Parade : limitation de débit au mandataire (ci-dessus), surveillance, suppression à la
   main des sessions abusives (`shadowlab public supprimer`).
 - **Formulaire de contact blocable.** Une adresse seule ne le peut plus (5 messages par jour ; un /64 IPv6
   compte pour une adresse). Mais six adresses IPv4, ou six /64, épuisent les 30 messages du jour en deux

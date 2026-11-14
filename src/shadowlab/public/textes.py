@@ -101,7 +101,7 @@ T: dict[str, dict[str, str]] = {
         "h_sites": "Le site de démonstration",
         "vedette": "Un faux réseau social de photos : un fil, des publications et leurs commentaires, des profils, des étiquettes.",
         "site_second": 'Il existe aussi <a href="/lab/vitrine">un second site de démonstration, des annonces fictives</a>.',
-        "fictif": "Tout y est fictif : personnes, publications, commentaires et annonces sont inventés. Seules les photos du réseau social sont de vraies photos, sous licence libre.",
+        "fictif": "Tout y est fictif : personnes, publications, commentaires et annonces sont inventés. Seules les photos du réseau social sont de vraies photos, sous licence libre ou dans le domaine public.",
         # Accord
         "deja_en_cours": "Une session est déjà en cours dans ce navigateur.",
         "reprendre": "Reprendre la visite",
@@ -236,7 +236,7 @@ T: dict[str, dict[str, str]] = {
         "h_sites": "The demonstration site",
         "vedette": "A fake photo-sharing network: a feed, posts with their comments, profiles, tags.",
         "site_second": 'There is also <a href="/lab/vitrine">a second demonstration site, with fictional listings</a>.',
-        "fictif": "Everything there is fictional: people, posts, comments and listings are made up. Only the social network's photos are real photos, under free licences.",
+        "fictif": "Everything there is fictional: people, posts, comments and listings are made up. Only the social network's photos are real photos, under free licences or in the public domain.",
         # Consent
         "deja_en_cours": "A session is already in progress in this browser.",
         "reprendre": "Resume your visit",

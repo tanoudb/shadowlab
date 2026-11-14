@@ -663,7 +663,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   limite de durée. Base pleine, rien ne s'écrit ; base en panne, l'accueil reste servi sans compteur. Commande
   `shadowlab public frequentation` ; l'accueil affiche le total des sessions terminées. La notice dit ce compte
   (section « Fréquentation ») et ne dit plus « rien n'est relevé » pour une visite sans participer, ni « ni mesure
-  d'audience ». Texte d'information en version 2026-11-14.3. Limites : le total affiché compte aussi une session
+  d'audience ». Au passage, les lignes `navigateur` et `apis` de la liste des données nomment les sous-champs
+  qu'elles taisaient (cookies permis, lecteur PDF, types de fichiers, mobile ou non, objet propre à Chrome,
+  périphériques HID). Texte d'information en version 2026-11-14.4. Limites : le total affiché compte aussi une session
   terminée puis supprimée ; tout chargement de l'accueil compte, robots et rechargements compris ; le bandeau du
   réseau social (`social.T`, hors de ce travail) parle encore de « la page d'information ». Décidé par :
   coordination.

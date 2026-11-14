@@ -17,20 +17,20 @@ from .social import MARQUE as MARQUE_SOCIAL
 from .textes import ERREURS, LANGUES, RESUME_RELEVE, T
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.3"
+VERSION_INFORMATION = "2026-11-14.4"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
     (
         "navigateur",
-        "Navigateur : identifiant (user-agent), système, langues, nombre de cœurs du processeur, mémoire approximative, nombre de points tactiles, nombre de modules, marques annoncées, indicateur d'automatisation.",
+        "Navigateur : identifiant (user-agent), système, langues, nombre de cœurs du processeur, mémoire approximative, nombre de points tactiles, nombre de modules et de types de fichiers pris en charge, cookies permis ou non, lecteur PDF intégré ou non, marques annoncées et type d'appareil (mobile ou non), indicateur d'automatisation.",
     ),
     ("ecran", "Écran : taille, zone utile, profondeur des couleurs, densité de pixels."),
     ("fenetre", "Taille de la fenêtre du navigateur, intérieure et extérieure."),
     ("fuseau", "Fuseau horaire et décalage avec l'heure universelle."),
     (
         "apis",
-        "Présence (oui ou non) de fonctions du navigateur : Bluetooth, USB, port série, partage, identifiants, périphériques média, synthèse vocale, service worker.",
+        "Présence (oui ou non) de fonctions du navigateur : objet propre à Chrome, Bluetooth, USB, port série, périphériques HID, partage, identifiants, périphériques média, synthèse vocale, service worker.",
     ),
     (
         "permissions",
@@ -119,14 +119,14 @@ DONNEES_COMPORTEMENT: list[tuple[str, str]] = [
 DONNEES_RELEVEES_EN: list[tuple[str, str]] = [
     (
         "navigateur",
-        "Browser: identifier (user agent), operating system, languages, number of processor cores, approximate memory, number of touch points, number of plugins, declared brands, automation flag.",
+        "Browser: identifier (user agent), operating system, languages, number of processor cores, approximate memory, number of touch points, number of plugins and of supported file types, whether cookies are allowed, whether the built-in PDF viewer is on, declared brands and device type (mobile or not), automation flag.",
     ),
     ("ecran", "Screen: size, usable area, colour depth, pixel density."),
     ("fenetre", "Size of the browser window, inner and outer."),
     ("fuseau", "Time zone and offset from universal time."),
     (
         "apis",
-        "Presence (yes or no) of browser features: Bluetooth, USB, serial port, sharing, credentials, media devices, speech synthesis, service worker.",
+        "Presence (yes or no) of browser features: Chrome-specific object, Bluetooth, USB, serial port, HID devices, sharing, credentials, media devices, speech synthesis, service worker.",
     ),
     (
         "permissions",

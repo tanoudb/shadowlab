@@ -387,11 +387,17 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with suppress(sqlite3.Error), base() as cx:
             donnees.compter(cx, compte)
 
-    def complet_aujourd_hui() -> bool:
-        """Plafond de sessions du jour atteint ; faux si la base ne répond pas (le formulaire le dira à l'envoi)."""
+    def etat_de_l_accueil(chargement: bool, en_cours: bool) -> tuple[int | None, bool]:
+        """En une connexion : compte le chargement de l'accueil (sauf base pleine), lit le total des sessions terminées
+        et dit si le plafond du jour est atteint. Base en panne : ni compte ni compteur, et la case d'accord reste
+        (l'envoi tranchera)."""
+        pleine = plein()
         with suppress(sqlite3.Error), base() as cx:
-            return donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
-        return False
+            if chargement and not pleine:
+                donnees.compter(cx, "accueil")
+            complet = not en_cours and donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
+            return donnees.sessions_terminees(cx), complet
+        return None, False
 
     def total_des_sessions() -> int | None:
         """Sessions terminées depuis le début, pour l'accueil ; None si la base ne répond pas (pas de compteur)."""
@@ -471,9 +477,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     @app.get("/en", response_class=HTMLResponse)
     def accueil(request: Request) -> HTMLResponse:
         en_cours, langue = request.state.session is not None, langue_de(request)
-        if request.method == "GET":  # un chargement de la page ; une requête HEAD ne compte pas
-            compter("accueil")
-        sessions, complet = total_des_sessions(), not en_cours and complet_aujourd_hui()
+        # Un chargement de la page compte ; une requête HEAD, non.
+        sessions, complet = etat_de_l_accueil(request.method == "GET", en_cours)
         return avec_csrf(
             request,
             lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours, sessions=sessions, complet=complet),
