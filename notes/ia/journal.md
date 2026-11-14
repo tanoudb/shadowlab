@@ -3134,3 +3134,23 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   façon dont les humains utilisent un navigateur et sur la différence entre un humain et une IA ; voir le
   nombre de visiteurs ; que les gens soient au courant de ce qui est relevé. Chantier ouvert dans
   l'application publique (`src/shadowlab/public/`).
+
+## 2026-11-14 — Claude (Opus 5.5, sous-agent du dessin) — Dessin de « Mosaïk Démo » et crédits des photos
+
+- **Fait** (branche `public-communaute`, dossier `noezia-shadowlab-public`) : tests des crédits d'abord
+  (`9f8c47c`, rouges), puis crédits et structure (`7b0664b`), puis le dessin (`8e71c5b`).
+- **Crédits** : `Photo` lit `titre`, `licence_url`, `modifie` ; page `/lab/social/credits` (12 photos par page,
+  plafond de requêtes d'une session, pages numérotées) ; ligne « Photo : auteur · licence · crédits » sur chaque
+  publication, vers l'ancre de la photo. Seuls liens sortants du site, sur ces pages : https vers
+  `commons.wikimedia.org` et `creativecommons.org` exactement, `rel="noopener noreferrer"`, vérifiés au rendu
+  (`lien_de_credit`).
+- **Dessin** : identité en tesselles (emblème, avatars, puces d'étiquette, bandeaux générés, éclat du « j'aime »),
+  palette lapis et or, serif du système pour les titres ; mosaïque composée selon le format des photos
+  (`composer_bandes`, fonction pure testée) ; thèmes clair et sombre ; bouton « Terminer ma session » flottant
+  (CSS seule, `pages.py` et `social.bandeau` non touchés). Contenu généré inchangé (instantané comparé).
+- **Tests adaptés** : `TYPES_DE_PAGE` (+ `credits`), `parcourir` ignore l'ancre, exceptions explicites pour les
+  pages de crédits dans la politique de sécurité (deux hôtes) et le test des marques (titres d'origine).
+- **Vérifié** : 1 354 tests rapides verts, lint propre ; captures 390 et 1 280 px, clair et sombre, en session et
+  hors session, dans `outputs/apercu-dessin/captures/` (console sans erreur de politique de sécurité).
+- **Reste** : clavier virtuel d'un vrai téléphone non essayé ; cinq sujets du manifeste sans libellé anglais
+  (`fleurs`, `lacs`, `routes`, `sauvages`, `domestiques`) ; relecture par la coordination.
