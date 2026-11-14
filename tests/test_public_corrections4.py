@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from parsel import Selector
 from test_public import (
     AUTRE_IP,
     CONTACT,
@@ -224,3 +225,42 @@ def test_head_sur_l_accueil_ne_compte_aucun_chargement(client, reglages_publics)
         assert cx.execute("SELECT COALESCE(SUM(accueil), 0) FROM frequentation").fetchone()[0] == 1
     finally:
         cx.close()
+
+
+# --- B3 : crédits des photos ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_pied_des_pages_de_l_etude_mene_aux_credits_sauf_le_contact(client, langue):
+    """Les photos sous CC BY et CC BY-SA demandent l'attribution : le pied de chaque page de l'étude mène à la page
+    des crédits, dans la langue de la page. Les pages de contact ne mènent qu'à « / » et « /contact… » (D-67) : pas
+    de lien vers les crédits."""
+    libelle = {"fr": "Crédits des photos", "en": "Photo credits"}[langue]
+    client.headers["Accept-Language"] = langue
+    for chemin in (f"/{langue}", f"/{langue}/information", "/session"):
+        pied = Selector(client.get(chemin).text).css("footer.etude-pied")
+        assert pied.css('a[href="/lab/social/credits"]::text').get() == libelle, chemin
+    accueil = Selector(client.get(f"/{langue}").text)
+    sous_les_photos = accueil.css('main a[href="/lab/social/credits"]::text').getall()
+    assert sous_les_photos == [libelle, libelle], "sous la mosaïque et sous les vignettes"
+    for chemin in ("/contact", "/contact/envoye"):
+        liens = Selector(client.get(chemin).text).css("a::attr(href)").getall()
+        assert "/lab/social/credits" not in liens, chemin
+        assert all(lien == "/" or lien.startswith("/contact") for lien in liens), (chemin, liens)
+
+
+def test_aucun_texte_ne_compte_encore_94_photos():
+    """`objets-03` (une fresque créditée à son peintre, pas au photographe) est retirée : 93 photos."""
+    from pathlib import Path
+
+    from shadowlab.public import social
+
+    racine = Path(__file__).parents[1]
+    photos = social.charger_photos(social.DOSSIER_PHOTOS)
+    assert len(photos) == 93 and "objets-03" not in {p.id for p in photos}
+    assert not list(social.DOSSIER_PHOTOS.glob("objets-03*"))
+    for fichier in [
+        racine / "docs" / "site-public.md",
+        *sorted((racine / "src" / "shadowlab" / "public").glob("*.py")),
+    ]:
+        assert not re.search(r"\b94 (?:photos|fichiers|images)", fichier.read_text(encoding="utf-8")), fichier

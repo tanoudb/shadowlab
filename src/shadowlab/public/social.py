@@ -309,8 +309,8 @@ T: dict[str, Texte] = {
     "a_l_instant": ("à l'instant", "just now"),
     "credits": ("Crédits des photos", "Photo credits"),
     "credits_intro": (
-        "Les photos de {marque} sont de vraies photos, publiées sous licence libre par leurs auteurs sur Wikimedia Commons. Les comptes qui les «\u00a0publient\u00a0» ici sont fictifs.",
-        "The photos on {marque} are real photos, shared under a free licence by their authors on Wikimedia Commons. The accounts that “post” them here are fictional.",
+        "Les photos de {marque} sont de vraies photos, publiées sur Wikimedia Commons sous licence libre ou dans le domaine public. Les comptes qui les «\u00a0publient\u00a0» ici sont fictifs.",
+        "The photos on {marque} are real photos, shared on Wikimedia Commons under a free licence or in the public domain. The accounts that “post” them here are fictional.",
     ),
     "credit_ligne": ("Photo\u00a0: {auteur} · {licence} · ", "Photo: {auteur} · {licence} · "),
     "credit_lien": ("crédits", "credits"),

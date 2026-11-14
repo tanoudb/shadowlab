@@ -598,10 +598,12 @@ def test_page_de_credits_complete(client, langue):
         assert 1 <= len(entrees) <= social.PAR_PAGE_GRILLE, chemin
         vues += [e.attrib["id"].removeprefix("photo-") for e in entrees]
         intro = texte_de(sel.css(".credits-intro"))
+        # Quatre photos sont dans le domaine public (et quatre sous CC0) : « sous licence libre » seul ne suffit pas.
         if langue == "fr":
-            assert all(m in intro for m in ("vraies photos", "licence libre", "fictifs")), intro
+            attendus = ("vraies photos", "licence libre ou dans le domaine public", "fictifs")
         else:
-            assert all(m in intro for m in ("real photos", "free licence", "fictional")), intro
+            attendus = ("real photos", "free licence or in the public domain", "fictional")
+        assert all(m in intro for m in attendus), intro
     assert sorted(vues) == sorted(p.id for p in photos), "chaque photo du manifeste, une fois"
     entrees = {
         e.attrib["id"].removeprefix("photo-"): e

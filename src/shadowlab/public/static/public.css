@@ -293,6 +293,9 @@ strong {
 .etude-pied p {
   max-width: 60ch;
 }
+.etude-pied a {
+  color: inherit;
+}
 
 /* --- Boutons ------------------------------------------------------------------------------------- */
 
@@ -529,6 +532,32 @@ strong {
 .mosaique-legende .embleme {
   width: 18px;
   height: 18px;
+}
+/* Crédits des photos (licences CC BY et CC BY-SA), sous la mosaïque et sous les vignettes : une ligne discrète, à
+   droite, juste sous les photos. */
+p.credits-photos {
+  color: var(--discret);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-align: right;
+}
+.credits-photos a {
+  color: inherit;
+}
+.credits-photos a:hover {
+  color: var(--smalt);
+}
+/* La mosaïque et sa ligne de crédits restent ensemble : en tête sur un téléphone, à droite du texte sur un grand
+   écran. */
+.accueil-visuel {
+  order: -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.site-vedette p.vedette-credits {
+  margin-top: 8px;
+  color: var(--discret);
 }
 
 /* Le seul mouvement de la page : à l'arrivée, les tesselles se posent une à une. */
@@ -1369,6 +1398,9 @@ strong {
   .site-vedette > p {
     grid-column: 1;
   }
+  .site-vedette > .vedette-credits {
+    grid-column: 2;
+  }
   .vedette-photos {
     grid-column: 2;
     grid-row: 1 / span 2;
@@ -1417,6 +1449,9 @@ strong {
   .mosaique-legende {
     left: 20px;
     bottom: 20px;
+  }
+  .accueil-visuel {
+    order: 0;
   }
   .accueil-accroche {
     font-size: 1.25rem;

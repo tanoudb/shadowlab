@@ -258,6 +258,9 @@ def _duree(secondes: int, langue: str) -> str:
 
 
 SOCIAL = "/lab/social/fil"  # le site vedette : « Commencer », « Reprendre la visite », « Revenir au site » y mènent
+# Crédits des photos (auteur, licence, page d'origine) : les licences CC BY et CC BY-SA demandent l'attribution. L'accueil
+# y mène sous chaque groupe de photos, et le pied de chaque page de l'étude aussi, sauf les pages de contact.
+CREDITS = "/lab/social/credits"
 NOM_LANGUE = {"fr": "Français", "en": "English"}
 
 # --- Dessin (14/11/2026) ---------------------------------------------------------------------------
@@ -378,9 +381,15 @@ def _mosaique(langue: str, avec_photos: bool) -> str:
             tesselles.append(f'<span class="tesselle tesselle-{place}{vide}" aria-hidden="true"></span>')
     pose = f'<div class="tesselles">{"".join(tesselles)}</div>'
     if not montrees:
-        return f'<div class="accueil-mosaique" aria-hidden="true">{pose}</div>'
+        return f'<div class="accueil-visuel"><div class="accueil-mosaique" aria-hidden="true">{pose}</div></div>'
     legende = f'<figcaption class="mosaique-legende">{EMBLEME}<span>{escape(MARQUE_SOCIAL)}</span></figcaption>'
-    return f'<figure class="accueil-mosaique">{pose}{legende}</figure>'
+    credits = _lien_credits(langue, "mosaique-credits")  # juste sous les photos, à toutes les largeurs
+    return f'<div class="accueil-visuel">\n<figure class="accueil-mosaique">{pose}{legende}</figure>\n{credits}\n</div>'
+
+
+def _lien_credits(langue: str, classe: str) -> str:
+    """« Crédits des photos », sous des photos du réseau social montrées par l'accueil."""
+    return f'<p class="credits-photos {classe}"><a href="{CREDITS}">{_t(langue, "credits_photos")}</a></p>'
 
 
 def _vignettes_vedette(langue: str) -> str:
@@ -388,7 +397,9 @@ def _vignettes_vedette(langue: str) -> str:
     images = [
         _image(photos[i], langue, "vedette-photo", tailles=None, paresseuse=True) for i in PHOTOS_VEDETTE if i in photos
     ]
-    return f'\n<div class="vedette-photos">{"".join(images)}</div>' if images else ""
+    if not images:
+        return ""
+    return f'\n<div class="vedette-photos">{"".join(images)}</div>\n{_lien_credits(langue, "vedette-credits")}'
 
 
 def _sommaire(corps: str, langue: str) -> str:
@@ -433,6 +444,7 @@ def _page(
         else ""
     )
     entete_titre = escape(titre) if titre == marque else f"{escape(titre)} — {marque}"
+    credits = "" if contact else f' <a href="{CREDITS}">{_t(langue, "credits_photos")}</a>'
     return f"""<!doctype html>
 <html lang="{langue}">
 <head>
@@ -450,7 +462,7 @@ def _page(
 <main class="conteneur etude-principal">
 {corps}
 </main>
-<footer class="etude-pied"><div class="conteneur">{MARQUE_ETUDE}<p>{_t(langue, "pied")}</p></div></footer>
+<footer class="etude-pied"><div class="conteneur">{MARQUE_ETUDE}<p>{_t(langue, "pied")}{credits}</p></div></footer>
 </body>
 </html>"""
 
