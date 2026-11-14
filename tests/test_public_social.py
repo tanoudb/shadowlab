@@ -46,8 +46,9 @@ from shadowlab.site import gardien
 RACINE = Path(__file__).parents[1]
 SOCIAL_JS = RACINE / "src" / "shadowlab" / "public" / "static" / "social.js"
 SOCIAL_CSS = RACINE / "src" / "shadowlab" / "public" / "static" / "social.css"
-# Relevée le 13/11/2026 sur le commit f4e0452, avant toute modification : l'application du labo ne change pas.
-EMPREINTE_SITE_APP = "571e2067c9b6ea148795615c2d369922264dfc135ac191756607b7641afda629"
+# Relevée le 13/11/2026 sur le commit f4e0452 ; mise à jour le 14/11/2026 pour la durée de cookie réglable par profil
+# (seul changement : `duree_s=duree_cookie_de(sceau)` aux quatre créations de cookie de défi, aucune page ne change).
+EMPREINTE_SITE_APP = "d22967b4fe55baf385d474f8226663f65a5d8a89568f696d1b2e747a569200de"
 # Copie littérale de la politique de sécurité du 13/11/2026 : le réseau social n'y change rien.
 CSP_ATTENDUE = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "

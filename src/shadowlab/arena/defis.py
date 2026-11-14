@@ -58,9 +58,12 @@ def verifier_defi(secret: bytes, jeton: str, defi: str, nonce: object) -> str | 
     return None
 
 
-def creer_cookie(secret: bytes, usage: str, jeton: str, ja4: str = "") -> str:
-    """Cookie de réussite, lié à la session et, si `ja4` est fourni, à l'empreinte TLS du client."""
-    expiration = int(time.time()) + DUREE_COOKIE_S
+def creer_cookie(secret: bytes, usage: str, jeton: str, ja4: str = "", *, duree_s: int = DUREE_COOKIE_S) -> str:
+    """Cookie de réussite, lié à la session et, si `ja4` est fourni, à l'empreinte TLS du client.
+
+    `duree_s` : durée de vie signée dans la valeur (réglage `duree_cookie_s` du profil ; 3 600 s par défaut).
+    """
+    expiration = int(time.time()) + duree_s
     return f"{expiration}.{secrets_arena.signer(secret, usage, jeton, ja4, expiration)}"
 
 

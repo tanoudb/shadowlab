@@ -1,0 +1,208 @@
+# Niveaux 04, 05 et 06 sans corrélation à l'identique, avec des cookies de réussite d'un défi de 600 s au lieu de 3 600 s.
+# Généré à partir de configs/arena/profils.yaml (04, 05) et de profils-sans-correlation.yaml (06scorr) : seules
+# les lignes `duree_cookie_s: 600` et `description` diffèrent. À régénérer si 04, 05 ou 06scorr changent.
+# Pourquoi : mesurer une récolte qui dure plus longtemps que le cookie (défi, captcha, Turnstile, reCAPTCHA), donc
+# qui doit être redéfiée en cours de route, sans attendre une heure. Le cookie `connexion` garde 3 600 s.
+# Ce fichier se suffit : `SHADOWLAB_PROFILS_EXTRA` ne prend qu'un seul fichier, et `06scorrcourt` y est une copie
+# complète de `06scorr` (pas besoin de profils-sans-correlation.yaml en plus). Les niveaux `04court`, `05court` et
+# `06scorrcourt` s'ajoutent à ceux de profils.yaml ; relancer `shadowlab arena appliquer` sans la variable après.
+04court:
+  captcha:
+    actif: true
+  connexion:
+    actif: false
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 12
+    lier_tls: false
+  description: Intégrité JS, stack traces, patches détectés, WAF en blocage ; cookies de réussite d'un défi limités à 600
+    s (mesure d'une récolte plus longue que le cookie)
+  duree_cookie_s: 600
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - deep-proxy
+    - cdp
+    seuil_composite: 0.8
+  honeypots:
+    actif: false
+  limitation:
+    debit: 5
+    rafale: 15
+  nom: Challenges
+  recaptcha:
+    actif: false
+  turnstile:
+    actif: false
+  waf:
+    mode: blocage
+    paranoia: 1
+    seuil: 5
+05court:
+  captcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 15
+    lier_tls: true
+  description: Comportement, canvas, timing, workers — WAF haute paranoïa, TLS binding ; cookies de réussite d'un défi limités
+    à 600 s (mesure d'une récolte plus longue que le cookie)
+  duree_cookie_s: 600
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    seuil_composite: 0.6
+  honeypots:
+    actif: false
+  limitation:
+    debit: 3
+    rafale: 8
+  nom: Protection avancée
+  recaptcha:
+    actif: true
+  turnstile:
+    actif: true
+  waf:
+    mode: blocage
+    paranoia: 2
+    seuil: 5
+06scorrcourt:
+  captcha:
+    actif: true
+  connexion:
+    actif: true
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 18
+    lier_tls: true
+  description: Niveau 06 à l'identique, détecteur correlation-session écarté (exclure) ; cookies de réussite d'un défi limités
+    à 600 s (mesure d'une récolte plus longue que le cookie)
+  duree_cookie_s: 600
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    exclure:
+    - correlation-session
+    seuil_composite: 0.5
+  honeypots:
+    actif: true
+  limitation:
+    debit: 2
+    rafale: 4
+  nom: Défense multicouche sans corrélation
+  recaptcha:
+    actif: true
+  turnstile:
+    actif: true
+  waf:
+    mode: blocage
+    paranoia: 3
+    seuil: 3
