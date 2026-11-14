@@ -118,7 +118,10 @@ recommander des optimisations.
   repassages et compare leur écart à la durée du cookie (un repassage bien avant l'expiration est un soupçon).
   **Campagne 112** (cookie de 600 s, vitrine à 150 annonces, 20 minutes par passage) : 3 passages sur 3 aux niveaux
   04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun ; le défi revient 1, 2 et 2 fois, à
-  582 à 612 s du passage précédent, et la récolte repasse la porte sans arrêt. Réserves : un passage par niveau,
+  582 à 612 s du passage précédent, et la récolte repasse la porte sans arrêt. **Campagne 113** (cookie de 600 s,
+  rallye, 427 pages en 50 minutes) : 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois,
+  aucun arrêt. Limite mesurée : aux niveaux 05 et 06, les cookies de l'Arena se décalent de 8 à 10 s par cycle ; la
+  règle de rafale (120 s) céderait vers le onzième cycle (arrêt propre). Réserves : un passage par niveau,
   cookie raccourci, CAPTCHA en clés de test levés par le pilote, pas de corrélation, aucun humain en base.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,

@@ -28,7 +28,9 @@ sur nos propres cibles (site vitrine factice, tor-i).
 - **14/11, D-80 à D-83** : site public en ligne par tunnel rapide, accueil court, plus aucun nom du projet servi
   (D-80, D-81) ; durée du cookie de l'Arena réglable par profil (D-82) ; la récolte peut repasser la porte en cours
   de passe (D-83). Campagne 112 (cookie de 600 s) : 3 passages sur 3 aux niveaux 04, 05 et 06 sans corrélation,
-  158 pages et 2 100 champs sur 2 100, le défi revenu 1, 2 et 2 fois et repassé sans arrêt. Détail : `docs/PLAN.md` § 2.
+  158 pages et 2 100 champs sur 2 100, le défi revenu 1, 2 et 2 fois et repassé sans arrêt. Campagne 113 (rallye, 427
+  pages) : 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois, aucun arrêt. Site d'annonces
+  caché sur le site public, site dans tmux (D-84). Détail : `docs/PLAN.md` § 2.
 - Tests au 14/11 à 11 h 49, après D-83, sans campagne : **1 714 verts** (`uv run pytest` : 1 670 rapides et 44
   d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche

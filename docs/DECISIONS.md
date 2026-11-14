@@ -888,6 +888,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   défis de rafale aux niveaux 05 et 06 (19, 23 et 36 s après un passage) : la règle de rafale était nécessaire. Limites :
   un passage par niveau ; les défis sont levés par le pilote sur notre Arena (CAPTCHA en clés de test aux niveaux 05 et
   06) ; le cookie d'une heure sur une passe de plus d'une heure reste à mesurer.
+  **Ajout du 14/11, campagne 113 (cookie de 600 s, rallye, 427 pages par passage, 3 passages, 0 panne)** : 34 410 champs
+  sur 34 410 aux niveaux 04, 05 et 06 sans corrélation ; le défi revient 4, 5 et 4 fois (546 à 607 s), neuf défis de
+  rafale, aucun arrêt. Limite mesurée de la règle de rafale : aux niveaux 05 et 06 le délai du deuxième défi grandit de
+  8 à 10 s par cycle (22 s puis 62 s au cinquième cycle du niveau 05) ; au-delà de 120 s, vers le onzième cycle, il
+  serait pris pour un défi revenu trop tôt et la passe s'arrêterait. Non corrigé (trait de notre Arena, un cookie par
+  défi) ; à revoir si un travail de plus d'une dizaine d'heures est visé.
 - **D-84 — 14/11/2026 — Site public : le site d'annonces est caché par défaut, et le site tourne dans tmux.** Constat :
   Ethan, avant de partager le site sur Reddit : « Pour le site masqué l'autre site annonce on s'en fou ». Décision : le
   site d'annonces « Habitat Démo » n'apparaît plus sur le site public : ses cinq routes `/lab/vitrine/…` ne sont pas
