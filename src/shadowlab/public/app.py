@@ -62,9 +62,10 @@ TAILLE_FORMULAIRE = 4096
 OCTETS_PAR_CARACTERE = 12  # un caractère de 4 octets, une fois encodé dans un formulaire (%F0%9F…)
 PROFONDEUR_MAX = 32  # imbrication d'un envoi ; 5 au plus sur les 3000 derniers envois du labo (12/11/2026)
 UNE_JOURNEE_S = 24 * 3600
-# Double clic sur « Commencer » : une session ouverte avec le même jeton anti-CSRF depuis moins de ce délai, et encore
-# en cours, est rendue à la seconde requête au lieu d'en ouvrir une autre.
-DOUBLE_CLIC_S = 60
+# Double clic sur « Commencer » : une seconde ouverture avec la même valeur anti-CSRF dans ce délai n'ouvre rien (simple
+# redirection, sans cookie). Au plus OUVERTURES_MAX empreintes en mémoire.
+DOUBLE_CLIC_S = 30
+OUVERTURES_MAX = 10_000
 # Journal tournant : 5 Mio par fichier, le courant et 3 anciens, donc 20 Mio au plus en tout.
 ROTATION_JOURNAL = (5 * 1024 * 1024, 3)
 # Le journal ne garde que les réponses d'erreur (code 400 ou plus) : une requête réussie ou redirigée n'écrit rien.
@@ -262,10 +263,10 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     fichiers_photos = social.fichiers(photos)
     univers = social.generer(reglages.social_graine, reglages.social_taille, photos)
     derniere_purge = [time.monotonic()]
-    # Sessions ouvertes depuis moins de DOUBLE_CLIC_S, par empreinte salée du jeton anti-CSRF (jamais le jeton
-    # lui-même, jamais sur le disque) : {empreinte: (jeton de session, instant)}.
+    # Ouvertures de session des DOUBLE_CLIC_S dernières secondes : {empreinte salée de la valeur anti-CSRF : instant}.
+    # Ni la valeur elle-même, ni le jeton de la session ; en mémoire seulement.
     sel_csrf = secrets.token_bytes(16)
-    ouvertes_recemment: dict[bytes, tuple[str, float]] = {}
+    ouvertures_recentes: dict[bytes, float] = {}
 
     # Sans redirection sur barre oblique finale : elle serait construite en http:// derrière le mandataire.
     app = FastAPI(title="Habitat Démo", docs_url=None, redoc_url=None, openapi_url=None, redirect_slashes=False)
@@ -434,26 +435,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     def oublier_les_ouvertures_anciennes() -> None:
         maintenant = time.monotonic()
-        for cle in [c for c, (_, instant) in ouvertes_recemment.items() if maintenant - instant >= DOUBLE_CLIC_S]:
-            del ouvertes_recemment[cle]
-
-    def session_du_double_clic(csrf: str) -> str | None:
-        """Session ouverte par ce navigateur (même jeton anti-CSRF) il y a moins de DOUBLE_CLIC_S, et encore en
-        cours : la seconde requête d'un double clic est partie sans le cookie que la première allait poser."""
-        oublier_les_ouvertures_anciennes()
-        recente = ouvertes_recemment.get(empreinte_csrf(csrf))
-        if recente is None:
-            return None
-        with base() as cx:
-            return recente[0] if donnees.session_en_cours(cx, recente[0], limites.duree_session_s) else None
-
-    def session_ouverte(jeton: str) -> RedirectResponse:
-        """Vers le site vedette, avec le cookie de la session et celui des droits (« Ma session »)."""
-        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
-        poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
-        # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
-        poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
-        return reponse
+        for cle in [c for c, instant in ouvertures_recentes.items() if maintenant - instant >= DOUBLE_CLIC_S]:
+            del ouvertures_recentes[cle]
 
     def preparer(request: Request) -> None:
         """Ce que la garde lit et écrit en base : purge quotidienne, session du cookie, requête notée. Et le balayage
@@ -559,6 +542,17 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return refus(400, "illisible", langue_de(request))
         # La langue de la page où l'accord est donné (champ caché du formulaire), sinon celle de la requête.
         langue = champs["langue"] if champs.get("langue") in LANGUES else langue_de(request)
+        # Double clic : le même formulaire, envoyé une seconde fois avant la réponse au premier (ni cookie de
+        # session, ancienne valeur anti-CSRF en cookie et dans le champ) ou après (cookie de session, valeur déjà
+        # renouvelée en cookie). Simple redirection, sans aucun cookie : le navigateur garde ceux de la première
+        # réponse. La valeur anti-CSRF n'est pas un secret d'authentification : elle ne donne jamais les cookies d'une
+        # session. Rien n'attend entre cette lecture et la création plus bas : deux envois simultanés n'ouvrent
+        # qu'une session.
+        oublier_les_ouvertures_anciennes()
+        if empreinte_csrf(champs.get("csrf", "")) in ouvertures_recentes and (
+            request.state.session is not None or csrf_valide(request, champs)
+        ):
+            return RedirectResponse(pages.SOCIAL, status_code=303)
         if not csrf_valide(request, champs):
             return refus(403, "expire_accueil", langue)
         if champs.get("consentement") != "oui":
@@ -566,14 +560,8 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return avec_csrf(
                 request, lambda csrf: pages.accueil(csrf, langue, erreur=message, sessions=sessions), status_code=422
             )
-        if request.state.session is not None:  # double clic, ou session déjà ouverte : on ne recrée rien
+        if request.state.session is not None:  # session déjà ouverte dans ce navigateur : on ne recrée rien
             return RedirectResponse(pages.SOCIAL, status_code=303)
-        # Double clic dont la seconde requête est partie avant la réponse à la première : la même session, mêmes
-        # cookies (le navigateur ne garde souvent que la dernière réponse), sans user aucun quota. Rien n'attend
-        # entre cette lecture et la création plus bas : deux requêtes simultanées n'ouvrent qu'une session.
-        deja = session_du_double_clic(champs["csrf"])
-        if deja is not None:
-            return session_ouverte(deja)
         with base() as cx:
             trop = donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
         if plein():
@@ -589,9 +577,16 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 "langue": langue,
             }
             jeton = donnees.creer_session(cx, accord)
-        ouvertes_recemment[empreinte_csrf(champs["csrf"])] = (jeton, time.monotonic())
+        if len(ouvertures_recentes) < OUVERTURES_MAX:  # pleine : un double clic ouvrirait deux sessions, rien de pire
+            ouvertures_recentes[empreinte_csrf(champs["csrf"])] = time.monotonic()
         compter("commencees")  # une fois par session créée : un double clic n'en crée qu'une
-        return session_ouverte(jeton)
+        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
+        poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
+        # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
+        poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
+        # Nouvelle valeur anti-CSRF avec la session : celle de l'accueil, vue avant l'accord, ne sert plus.
+        poser(reponse, cookie_csrf, secrets.token_hex(16))
+        return reponse
 
     @app.post("/session/terminer", response_class=HTMLResponse)
     async def terminer(request: Request) -> Response:

@@ -264,3 +264,93 @@ def test_aucun_texte_ne_compte_encore_94_photos():
         *sorted((racine / "src" / "shadowlab" / "public").glob("*.py")),
     ]:
         assert not re.search(r"\b94 (?:photos|fichiers|images)", fichier.read_text(encoding="utf-8")), fichier
+
+
+# --- C3 : le double clic ne rend jamais les cookies d'une session ----------------------------------
+
+
+def cookies_poses(reponse) -> dict[str, str]:
+    """Cookies posés par une réponse : {nom sans préfixe : valeur}."""
+    poses = {}
+    for ligne in reponse.headers.get_list("set-cookie"):
+        nom, _, reste = ligne.partition("=")
+        poses[nom.removeprefix("__Host-")] = reste.split(";", 1)[0]
+    return poses
+
+
+def test_seconde_requete_du_double_clic_sans_aucun_cookie_de_session(reglages_publics):
+    """Deux « Commencer » simultanés du même navigateur : une seule session ; la seconde réponse est une simple
+    redirection vers le fil, sans cookie de session ni de droits (le navigateur garde ceux de la première)."""
+    import asyncio
+
+    import httpx
+
+    from shadowlab.public import Limites, creer_app_publique
+
+    async def scenario() -> list[httpx.Response]:
+        app = creer_app_publique(reglages_publics, Limites())
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=ORIGINE) as c:
+            csrf = Selector((await c.get("/")).text).css('input[name="csrf"]::attr(value)').get()
+            envoi = {"consentement": "oui", "csrf": csrf}
+            entetes = {"Origin": ORIGINE, "X-Forwarded-For": IP}
+            return list(
+                await asyncio.gather(*(c.post("/session/commencer", data=envoi, headers=entetes) for _ in range(2)))
+            )
+
+    reponses = asyncio.run(scenario())
+    assert [r.status_code for r in reponses] == [303, 303]
+    assert all(r.headers["location"] == "/lab/social/fil" for r in reponses)
+    poses = [cookies_poses(r) for r in reponses]
+    avec = [p for p in poses if "slp-session" in p]
+    sans = [p for p in poses if "slp-session" not in p]
+    assert len(avec) == 1 and len(sans) == 1, poses
+    assert "slp-droits" in avec[0] and not {"slp-session", "slp-droits"} & set(sans[0]), poses
+
+
+def test_la_valeur_csrf_d_un_autre_visiteur_ne_donne_jamais_sa_session(reglages_publics):
+    """La valeur anti-CSRF n'est pas un secret d'authentification : la présenter (cookie et champ) juste après
+    qu'un visiteur a commencé ne donne jamais sa session, ni ses cookies."""
+    from fastapi.testclient import TestClient
+
+    from shadowlab.public import Limites, creer_app_publique
+
+    app = creer_app_publique(reglages_publics, Limites())
+    with TestClient(app, base_url=ORIGINE) as visiteur, TestClient(app, base_url=ORIGINE) as autre:
+        csrf = Selector(visiteur.get("/").text).css('input[name="csrf"]::attr(value)').get()
+        ouverture = visiteur.post(
+            "/session/commencer",
+            data={"consentement": "oui", "csrf": csrf},
+            headers={"Origin": ORIGINE, "X-Forwarded-For": IP},
+            follow_redirects=False,
+        )
+        assert ouverture.status_code == 303
+        jeton = Selector(visiteur.get("/lab/vitrine").text).css('meta[name="sl-session"]::attr(content)').get()
+        assert jeton
+        essai = autre.post(
+            "/session/commencer",
+            data={"consentement": "oui", "csrf": csrf},
+            headers={"Origin": ORIGINE, "X-Forwarded-For": AUTRE_IP, "Cookie": f"__Host-slp-csrf={csrf}"},
+            follow_redirects=False,
+        )
+        assert jeton not in " ".join(essai.headers.get_list("set-cookie")), "les cookies de la session du visiteur"
+        assert not {"slp-session", "slp-droits"} & set(cookies_poses(essai))
+        page = autre.get("/lab/vitrine").text
+        assert Selector(page).css('meta[name="sl-session"]::attr(content)').get() != jeton
+
+
+def test_la_valeur_csrf_change_a_l_ouverture_et_terminer_marche(client):
+    """La réponse qui ouvre la session pose une nouvelle valeur anti-CSRF ; le formulaire « Terminer » de la page
+    suivante la porte et fonctionne."""
+    csrf = Selector(client.get("/").text).css('input[name="csrf"]::attr(value)').get()
+    ouverture = client.post(
+        "/session/commencer",
+        data={"consentement": "oui", "csrf": csrf},
+        headers={"Origin": ORIGINE, "X-Forwarded-For": IP},
+        follow_redirects=False,
+    )
+    assert ouverture.status_code == 303
+    neuve = cookies_poses(ouverture).get("slp-csrf")
+    assert neuve and neuve != csrf
+    champs = champs_du_formulaire(client.get("/lab/social/fil").text, "/session/terminer")
+    assert champs["csrf"] == neuve
+    assert client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
