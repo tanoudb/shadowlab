@@ -59,7 +59,7 @@ MARQUEURS = {
         "Delete my session",
         "Back to",
         "Take part",
-        "Start the session",
+        "I agree, start",
         "Send",
         "Request refused",
         "Your message",
@@ -365,17 +365,12 @@ PUBLIC_CSS = Path(__file__).parents[1] / "src" / "shadowlab" / "public" / "stati
 TEXTES_ACCUEIL = {
     "fr": (
         "Humain ou robot ?",
-        "Une étude ouverte sur la façon dont de vraies personnes naviguent sur le Web.",
-        "Les sites se protègent des robots avec des détecteurs. Ces détecteurs se trompent parfois et prennent de "
-        "vraies personnes pour des robots. Aidez-nous à les améliorer : promenez-vous 5 à 10 minutes sur un faux "
-        "réseau social de photos, comme vous le feriez sur un vrai.",
+        "Baladez-vous 2 minutes sur un faux réseau social de photos. Votre façon de naviguer nous aide à mieux "
+        "distinguer un humain d'un robot.",
     ),
     "en": (
         "Human or bot?",
-        "An open study of how real people browse the web.",
-        "Websites use detectors to keep bots out. Those detectors sometimes get it wrong and flag real people. Help "
-        "us make them better: spend 5 to 10 minutes browsing a fake photo-sharing network, the way you would browse "
-        "a real one.",
+        "Spend 2 minutes on a fake photo-sharing network. The way you browse helps us tell humans from bots.",
     ),
 }
 LIEN_HABITAT = {
@@ -391,23 +386,14 @@ CLASSES_ACCUEIL = (
     "accueil",
     "accueil-entete",
     "accueil-titre",
-    "accueil-sous-titre",
     "accueil-accroche",
-    "accueil-etapes",
-    "etapes",
-    "etape",
     "accueil-releve",
     "releve-franchise",
     "releve-oui",
     "releve-non",
     "accueil-but",
-    "accueil-sites",
-    "site-vedette",
-    "site-second",
-    "fictif",
     "accord",
     "accord-notice",
-    "accord-case",
     "lien-notice",
     "bouton-principal",
     "visiter-sans-participer",
@@ -431,13 +417,9 @@ def classes_de(html: str) -> set[str]:
 def test_accueil_de_l_etude(client, langue):
     html = client.get(f"/{langue}").text
     sel = Selector(html)
-    titre, sous_titre, accroche = TEXTES_ACCUEIL[langue]
+    titre, accroche = TEXTES_ACCUEIL[langue]
     assert [texte_de(h, None) for h in sel.css("main h1").getall()] == [titre], "un seul titre de premier niveau"
-    assert texte_de(html, ".accueil-sous-titre") == sous_titre
     assert texte_de(html, ".accueil-accroche") == accroche
-    etapes = sel.css("main ol.etapes > li.etape")
-    assert len(etapes) == 3, "trois étapes « comment ça se passe »"
-    assert all(e.css("h3") and e.css("p") for e in etapes)
     for section in sel.css("main section"):
         assert section.css("h2"), "chaque section a son titre"
     assert set(CLASSES_ACCUEIL) <= classes_de(html), set(CLASSES_ACCUEIL) - classes_de(html)
@@ -482,27 +464,25 @@ def test_accueil_resume_du_releve_exact_et_a_un_seul_endroit(client, langue):
 
 
 @pytest.mark.parametrize("langue", ["fr", "en"])
-def test_accueil_presente_mosaik_en_grand_et_habitat_en_lien_discret(client, langue):
+def test_accueil_presente_la_mosaique_du_reseau_social(client, langue):
+    """L'accueil court (14/11) ne garde que la mosaïque du réseau social : plus de section « les sites », donc plus de
+    lien vers les annonces ni de mention « fictif » (le mot « faux » est dans l'accroche, « fictifs » dans le pied)."""
     html = client.get(f"/{langue}").text
-    sel = Selector(html)
-    assert MARQUE_SOCIAL in texte_de(html, ".site-vedette")
-    liens = sel.css('.site-second a[href="/lab/vitrine"]').getall()
-    assert [texte_de(a, None) for a in liens] == [LIEN_HABITAT[langue]]
-    assert ("Tout y est fictif" if langue == "fr" else "Everything there is fictional") in texte_de(html, ".fictif")
+    assert MARQUE_SOCIAL in texte_de(html, ".mosaique-legende")
+    assert ("faux réseau social" if langue == "fr" else "fake photo-sharing network") in texte_de(
+        html, ".accueil-accroche"
+    )
+    assert ("entièrement fictifs" if langue == "fr" else "Entirely fictional") in texte_de(html, "footer")
 
 
 @pytest.mark.parametrize("langue", ["fr", "en"])
 def test_accueil_accord_notice_a_cote_et_visite_sans_participer(client, langue):
     sel = Selector(client.get(f"/{langue}").text)
     formulaire = sel.css('form.accord[action="/session/commencer"][method="post"]')
-    assert formulaire.css('input[type="checkbox"][name="consentement"][value="oui"][required]')
+    assert formulaire.css('button[type="submit"][name="consentement"][value="oui"]'), "le bouton porte l'accord"
     assert formulaire.css('input[type="hidden"][name="csrf"]')
     assert formulaire.css('input[type="hidden"][name="langue"]::attr(value)').get() == langue
-    case = formulaire.css(".accord-case")
-    libelle = texte_de(case.get(), "label")
-    assert ("J'ai lu la notice complète" if langue == "fr" else "I have read the full notice") in libelle
-    assert case.css(f'a.lien-notice[href="/{langue}/information"]'), "la notice juste à côté de la case"
-    assert formulaire.css('button[type="submit"]')
+    assert formulaire.css(f'a.lien-notice[href="/{langue}/information"]'), "la notice juste à côté du bouton"
     assert sel.css('a.visiter-sans-participer[href="/lab/social/fil"]')
     autre = AUTRE[langue]
     assert sel.css(f'.autre-langue a[href="/{autre}"][hreflang="{autre}"]'), "lien vers l'autre langue"
@@ -589,7 +569,15 @@ def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
 def test_version_du_texte_d_information_changee():
     from shadowlab.public.pages import VERSION_INFORMATION
 
-    anciennes = ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3", "2026-11-14.4", "2026-11-14.5")
+    anciennes = (
+        "2026-11-12.7",
+        "2026-11-14.1",
+        "2026-11-14.2",
+        "2026-11-14.3",
+        "2026-11-14.4",
+        "2026-11-14.5",
+        "2026-11-14.7",
+    )
     assert VERSION_INFORMATION not in anciennes, "le relevé enrichi (D-76), puis les textes de D-77, changent le texte"
 
 
@@ -855,7 +843,7 @@ def test_plafond_du_jour_atteint_la_page_le_dit(reglages_publics, langue):
         assert titre in texte_de(refus.text) and demain in texte_de(refus.text)
         accueil_plein = tardif.get(f"/{langue}").text
     sel = Selector(accueil_plein)
-    assert not sel.css('form[action="/session/commencer"]'), "plus de case à cocher pour rien"
+    assert not sel.css('form[action="/session/commencer"]'), "plus de formulaire pour rien"
     assert titre in texte_de(accueil_plein, ".accord-complet") and demain in texte_de(accueil_plein, ".accord-complet")
     assert sel.css('a.visiter-sans-participer[href="/lab/social/fil"]'), "on peut encore visiter sans participer"
 
@@ -949,23 +937,22 @@ def references_chargees(html: str) -> list[str]:
 
 @pytest.mark.parametrize("langue", ["fr", "en"])
 def test_accueil_montre_de_vraies_photos_du_reseau_social(client, langue):
-    """Hors session : la mosaïque du haut (photos chargées tout de suite) et les vignettes de la carte du site
-    (chargées en différé), de vraies photos du manifeste, dimensions réelles et description dans la langue."""
+    """Hors session : la mosaïque du haut (photos chargées tout de suite), de vraies photos du manifeste, dimensions
+    réelles et description dans la langue. L'accueil court n'a plus les vignettes de la carte du site."""
     from shadowlab.public import social
-    from shadowlab.public.pages import DESCRIPTIONS_PHOTOS, PHOTOS_VEDETTE, PLACES_MOSAIQUE
+    from shadowlab.public.pages import DESCRIPTIONS_PHOTOS, PLACES_MOSAIQUE
 
     sel = Selector(client.get(f"/{langue}").text)
     photos = {p.id: p for p in social.charger_photos(social.DOSSIER_PHOTOS)}
-    attendues = [i for _, i in PLACES_MOSAIQUE if i] + list(PHOTOS_VEDETTE)
+    attendues = [i for _, i in PLACES_MOSAIQUE if i]
     images = sel.css("main img")
     assert [img.attrib["src"] for img in images] == [f"/lab/social/photos/{i}-480.jpg" for i in attendues]
     for img, ident in zip(images, attendues, strict=True):
         assert (img.attrib["width"], img.attrib["height"]) == tuple(str(n) for n in photos[ident].dimensions(480))
         assert img.attrib["alt"] == DESCRIPTIONS_PHOTOS[ident][1 if langue == "en" else 0] != ""
         assert client.get(img.attrib["src"]).status_code == 200
-    haut, bas = sel.css(".accueil-mosaique img"), sel.css(".site-vedette img")
-    assert haut and all("loading" not in img.attrib for img in haut), "premier écran : chargées tout de suite"
-    assert bas and all(img.attrib.get("loading") == "lazy" for img in bas), "plus bas : chargées en différé"
+    haut = sel.css(".accueil-mosaique img")
+    assert len(haut) == len(images) and all("loading" not in img.attrib for img in haut), "chargées tout de suite"
     for ref in references_chargees(sel.get()):
         assert ref.startswith(("/lab/social/photos/", "/public/static/")), ref
         assert client.get(ref).status_code == 200, ref

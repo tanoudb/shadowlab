@@ -116,7 +116,7 @@ def test_accueil_dit_deux_minutes_et_aucune_page_ne_dit_cinq_a_dix(client, langu
 def test_plus_aucun_texte_ne_parle_de_case_a_cocher(client, langue):
     pages = {"accueil": client.get(f"/{langue}").text, "notice": client.get(f"/{langue}/information").text}
     pages.update(parcours_complet(client, langue))
-    champs = champs_du_formulaire(pages["accueil"], "/session/commencer")
+    champs = champs_du_formulaire(client.get(f"/{langue}").text, "/session/commencer")  # jeton du moment
     refus = client.post(
         "/session/commencer",
         data={k: v for k, v in champs.items()},

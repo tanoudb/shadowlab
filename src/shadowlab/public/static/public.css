@@ -192,13 +192,12 @@ strong {
   flex-wrap: wrap;
   align-items: center;
   column-gap: 12px;
-  padding-top: 6px;
-  padding-bottom: 2px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .etude-marque {
   order: 1;
-  /* Base courte : sur un très petit écran, la marque se plie plutôt que de chasser la langue sur une autre ligne,
-     et la navigation reste sur la sienne. */
+  /* Base courte : sur un très petit écran, la marque se plie plutôt que de chasser la langue sur une autre ligne. */
   flex: 1 1 10rem;
   min-width: 0;
   display: inline-flex;
@@ -234,39 +233,6 @@ strong {
   border-color: var(--smalt);
   color: var(--smalt);
 }
-.etude-navigation {
-  order: 3;
-  flex: 1 0 100%;
-  display: flex;
-  margin-inline: -8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.etude-navigation::-webkit-scrollbar {
-  display: none;
-}
-.etude-navigation a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 8px;
-  border-radius: 10px;
-  color: var(--encre-2);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.etude-navigation a:hover {
-  color: var(--smalt);
-  text-decoration: underline;
-}
-/* Sur un téléphone, le réseau social a déjà sa place dans la page (« Visiter sans participer », « Revenir au
-   site ») : la barre garde la notice, « Ma session » et le contact sur une ligne. */
-.etude-navigation a[href="/lab/social/fil"] {
-  display: none;
-}
-
 .etude-principal {
   flex: 1 0 auto;
   padding-top: 18px;
@@ -282,8 +248,9 @@ strong {
 }
 .etude-pied .conteneur {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 12px;
+  gap: 4px 12px;
 }
 .etude-pied .marque-etude {
   flex: none;
@@ -291,10 +258,26 @@ strong {
   height: 22px;
 }
 .etude-pied p {
+  flex: 1 1 0;
+  min-width: 0;
   max-width: 60ch;
 }
+/* Les liens utiles de chaque page : la notice, « Ma session » (le droit de suppression), le contact, les crédits. */
+.etude-pied-liens {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin-top: 6px;
+}
+.etude-pied-liens a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
 .etude-pied a {
-  color: inherit;
+  color: var(--encre-2);
 }
 
 /* --- Boutons ------------------------------------------------------------------------------------- */
@@ -369,26 +352,15 @@ strong {
   flex-direction: column;
   gap: 12px;
 }
-.accueil-titre + .accueil-sous-titre {
-  margin-top: 4px;
-}
 .accueil-titre {
-  font-size: clamp(3.125rem, 13.6vw, 5.5rem);
+  font-size: clamp(2.5rem, 11vw, 5.5rem);
   line-height: 0.98;
   letter-spacing: -0.028em;
 }
-.accueil-sous-titre {
-  max-width: 32rem;
-  color: var(--encre);
-  font-size: 1.1875rem;
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.005em;
-}
 .accueil-accroche {
   max-width: 34rem;
-  color: var(--encre-2);
-  font: 400 1.125rem/1.55 var(--serif);
+  color: var(--encre);
+  font: 400 1.1875rem/1.45 var(--serif);
 }
 .accueil-appel {
   display: flex;
@@ -403,24 +375,24 @@ strong {
 }
 /* Compteur : le nombre sur une tesselle d'or, la phrase à côté. Il reste juste à 0 comme à 12 345. */
 .accueil-compteur {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  color: var(--encre-2);
-  font-size: 0.9375rem;
+  gap: 10px;
+  color: var(--discret);
+  font-size: 0.875rem;
   line-height: 1.3;
 }
 .compteur-nombre {
   display: inline-grid;
   place-items: center;
   flex: none;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 10px;
-  border-radius: 10px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
   background: var(--or);
   color: var(--or-encre);
-  font: 600 1.375rem/1 var(--serif);
+  font: 600 1.0625rem/1 var(--serif);
   font-variant-numeric: lining-nums tabular-nums;
   transform: rotate(-4deg);
   box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.14);
@@ -550,7 +522,7 @@ p.credits-photos {
 /* La mosaïque et sa ligne de crédits restent ensemble : en tête sur un téléphone, à droite du texte sur un grand
    écran. */
 .accueil-visuel {
-  order: -1;
+  order: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -785,6 +757,59 @@ p.credits-photos {
   transform: rotate(-8deg);
 }
 
+/* Le détail de ce qui est relevé : replié par défaut (`<details>`, sans JavaScript), même dessin que la liste complète
+   de la notice. */
+.accueil-releve {
+  max-width: 60rem;
+  margin-top: 28px;
+  border: 1px solid var(--trait);
+  border-radius: 16px;
+  background: var(--carte);
+}
+.accueil-releve summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 52px;
+  padding: 8px 18px;
+  border-radius: 16px;
+  color: var(--encre);
+  font-size: 1rem;
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+}
+.accueil-releve summary::-webkit-details-marker {
+  display: none;
+}
+.accueil-releve summary::after {
+  content: "";
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-right: 2.5px solid var(--smalt);
+  border-bottom: 2.5px solid var(--smalt);
+  transform: translateY(-3px) rotate(45deg);
+  transition: transform 0.2s;
+}
+.accueil-releve[open] summary {
+  border-bottom: 1px solid var(--trait);
+  border-radius: 16px 16px 0 0;
+}
+.accueil-releve[open] summary::after {
+  transform: translateY(3px) rotate(-135deg);
+}
+.accueil-releve > :not(summary) {
+  margin-inline: 18px;
+}
+.accueil-releve > .releve-colonnes {
+  margin-top: 18px;
+}
+.accueil-releve > .accueil-but {
+  margin-bottom: 18px;
+}
+
 /* Le site de démonstration : sa marque telle qu'elle paraît là-bas, et quelques-unes de ses photos. */
 .site-vedette {
   padding: 22px;
@@ -847,17 +872,24 @@ p.credits-photos {
 /* Participer : l'accord, la case juste à côté de la notice, le bouton juste sous la case. */
 .accord {
   max-width: 44rem;
-  padding: 22px;
+  padding: 18px;
   border: 1px solid var(--trait);
   border-radius: 22px;
   background: var(--carte);
   box-shadow: 0 22px 44px -30px var(--ombre);
   scroll-margin-top: 16px;
 }
-.accord-notice {
+.accord .releve-franchise {
+  font: 400 1rem/1.55 var(--serif);
   color: var(--encre-2);
 }
+.accord-notice {
+  margin-top: 2px;
+}
 .lien-notice {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-weight: 650;
 }
 .accord-case {
@@ -931,6 +963,9 @@ p.credits-photos {
 }
 .accord-actions .bouton-principal {
   flex: 1 1 100%;
+}
+.accord > .accord-actions {
+  margin-top: 4px;
 }
 .visiter-sans-participer,
 .actions > a:not([class]) {
@@ -1328,16 +1363,6 @@ p.credits-photos {
     flex: none;
     white-space: nowrap;
   }
-  .etude-navigation {
-    order: 2;
-    flex: none;
-    margin: 0 0 0 auto;
-    overflow: visible;
-  }
-  .autre-langue {
-    order: 3;
-    margin-left: 8px;
-  }
   .etude-principal {
     padding-top: 40px;
     padding-bottom: 96px;
@@ -1407,7 +1432,10 @@ p.credits-photos {
     margin-top: 0;
   }
   .accord {
-    padding: 30px;
+    padding: 24px;
+  }
+  .accord-actions {
+    column-gap: 18px;
   }
   .notice-sommaire ol {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1418,16 +1446,11 @@ p.credits-photos {
 }
 
 @media (min-width: 1000px) {
-  /* Sur une tablette, la marque, quatre liens et la langue ne tiennent pas sur une ligne : Mosaïk rejoint la barre
-     ici seulement. */
-  .etude-navigation a[href="/lab/social/fil"] {
-    display: inline-flex;
-  }
   .accueil-entete {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 34rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
     align-items: center;
-    column-gap: 56px;
+    column-gap: 48px;
   }
   .accueil-mosaique {
     order: 0;
@@ -1454,7 +1477,7 @@ p.credits-photos {
     order: 0;
   }
   .accueil-accroche {
-    font-size: 1.25rem;
+    font-size: 1.375rem;
   }
   /* Sections de l'accueil : le titre à gauche (il reste en vue dans une longue section), le contenu à droite. */
   .accueil > section {
