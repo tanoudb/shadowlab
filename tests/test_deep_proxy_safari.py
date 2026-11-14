@@ -25,6 +25,7 @@ from test_rejeu import (
     t,
     verdict,
 )
+from test_rejeu import empreinte as empreinte_rejeu
 from test_rejeu import requete as requete_rejeu
 
 from shadowlab import database as db
@@ -256,13 +257,14 @@ def test_sonde_porte_son_numero_de_version():
 def test_rejeu_session_humaine_safari_n_est_plus_arretee_par_deep_proxy(tmp_path):
     cx = db.ouvrir(tmp_path / "labo.sqlite3")
     jeton = session_labo(cx)
-    e = empreinte_chrome()["payload"]
+    e = empreinte_rejeu()
     e["navigateur"] = {
         **e["navigateur"],
         "userAgent": UA_SAFARI_IPHONE,
         "userAgentData": None,
         "platform": "iPhone",
     }
+    e["languages_test"] = {**e["languages_test"], "vendor": "Apple Computer, Inc."}
     e["deep_proxy"] = RELEVE_SAFARI_SONDE_1
     sans_hints = [h for h in entetes() if not h[0].startswith("sec-ch-ua")]
     sans_hints = [["user-agent", UA_SAFARI_IPHONE] if h[0] == "user-agent" else h for h in sans_hints]
