@@ -752,3 +752,40 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   visiteur arrive sur le fil sans session ; la notice nomme Cloudflare, donc une autre voie de mise en ligne demande
   de la changer ; rien n'a tourné avec un vrai tunnel. Décidé par : coordination, après la quatrième relecture
   indépendante.
+
+- **D-78 — 14/11/2026 — Le détecteur de comportement ne compte plus les photos comme des pages.** Constat : campagne
+  109, passage 34409, niveau 04 : le défi d'entrée se résout en 6 ms, la liste et ses 18 photos arrivent dans la même
+  seconde, et à la deuxième photo le détecteur lit « 5,3 pages par seconde » (`rythme_soutenu`) et « moins de
+  500 ms par page » (`pages_eclair`) : session bloquée, 18 refus. Un vrai Chrome sur une machine rapide serait arrêté
+  pareil. Rejeu hors ligne des campagnes 108 et 109 (niveaux 04, 05, 06 sans corrélation, 35 passages chacun) :
+  `rythme_soutenu` ou `pages_eclair` signalé sur 37 des 105 passages de la 108 (35 au niveau 04, 2 au 05) et sur 35
+  des 105 de la 109 (tout le niveau 04) ; les 34 autres passages du 04 en 109 n'étaient pas arrêtés parce que le
+  défi, plus lent, diluait le calcul : le résultat tenait au hasard. Sur le site public (sans défi d'entrée), le
+  rejeu arrêtait la session sociale dès la première page aux niveaux 06 et 07. Cause : `Observations.documents`
+  prenait pour une page tout chemin hors `CHEMINS_TECHNIQUES`, photos comprises ; et `pages_eclair`, qui moyenne la
+  durée des relevés, lisait la durée de la page de défi (404 ms, quittée dès la vérification) comme une page lue.
+  Même famille de défaut que D-71 (Nginx). Décision : (1) une seule définition, `detection.RESSOURCES_DE_PAGE`
+  (fichiers statiques, `/lab/vitrine/photos/`, `/lab/social/photos/`, sans remontée `..`) ; `documents` ne garde que
+  les pages, `requetes_de_page` toutes les requêtes de navigation, `ressources_de_page` ce que les pages chargent ;
+  `ressources` (règle `sans_ressources`) reste les seuls fichiers statiques : une photo n'est ni du CSS ni du
+  JavaScript ; un test aligne la liste sur `CHEMINS_STATIQUES` (D-71). (2) L'appel de données d'une fiche
+  (`/lab/vitrine/api/`) reste une page : il rend du contenu, un client qui moissonne par là à toute vitesse doit
+  rester vu. (3) `cookies_ignores` et les cookies de `proprietes` lisent toutes les requêtes de navigation (une page
+  suivie de photos sans cookie reste signalée) ; `pages` de `proprietes` ne liste que les pages ; les règles qui lisent
+  `documents[0]` (en-têtes de la première requête) sont inchangées. (4) `pages_eclair` ne conclut pas sur les seules
+  pages de défi (relevé d'une page qui a posté `/lab/{defi,captcha,turnstile,recaptcha}/verifier` pendant sa vie) ;
+  dès qu'une page lue existe, la moyenne reste faite sur tous les relevés, comme avant. (5) `gardien.protegee` est
+  inchangée : une photo reste un moment de contrôle (défi, session bloquée), car une photo d'annonce porte du contenu
+  (ville, titre) ; c'est le compte des pages qui est corrigé, pas la protection (essai d'abord fait, puis annulé après
+  relecture). Seuils (4 pages par seconde, 500 ms), profils, moteur, `observateur.js` inchangés. Preuve : 10 tests
+  vus en échec avant (cas mesuré aux instants réels du passage 34409, `documents`, `navigation_lineaire`,
+  `proprietes`, définition unique, alignement D-71, les deux tests du réseau social sortis de `xfail`), témoins et
+  contrôle des pages verts avant et après ; rejeu hors ligne après : 0 passage signalé sur 105 en 108, 0 sur 105 en
+  109, 0 sur 30 en 105 ; les 15 passages du témoin `curl-cffi` de la 105 restent tous arrêtés par l'ensemble des
+  détecteurs (15 sur 15 avant et après ; le détecteur de comportement ne les voit pas, ils n'exécutent pas de
+  JavaScript). Limites : mesure hors ligne, à confirmer par campagne ; la page de défi reste dans la moyenne de
+  `pages_eclair` quand une page lue existe (la retirer ferait signaler `pages_eclair` sur la première page lue, quittée
+  en 55 ms par le moteur, à 34 passages sur 35 au niveau 05 et 35 sur 35 au 06 en 108 et 109, ce qui bloquerait le
+  06 à seuil composite 0,5) ; cette quasi-fuite du moteur est un point faible latent, non corrigé ici ; la liste
+  doit être complétée à tout nouveau fichier chargé par une page ; aucun humain mesuré. Décidé par : coordination
+  (travail d'un sous-agent, relu).

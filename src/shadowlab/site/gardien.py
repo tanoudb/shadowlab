@@ -199,7 +199,11 @@ def parametres(profil: profils.Profil) -> dict:
 
 
 def protegee(chemin: str, methode: str) -> bool:
-    """Requête que `controler` examine : une page du site de test en GET, hors échanges techniques."""
+    """Requête que `controler` examine : une page du site de test en GET, hors échanges techniques.
+
+    Les photos en font partie (D-78) : une photo d'annonce porte du contenu (ville, titre), l'exempter laisserait un
+    client bloqué ou jamais contrôlé la lire. C'est le compte des pages du détecteur qui est corrigé, pas la protection.
+    """
     return chemin.startswith("/lab") and not chemin.startswith(HORS_PROTECTION) and methode == "GET"
 
 

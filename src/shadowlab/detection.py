@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib.metadata import entry_points
 from typing import Any, Protocol
 
@@ -21,7 +21,32 @@ SEUIL_DUREE_PAGE_MS = 500
 PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délais de souris d'une page
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
+# Fichiers qu'une page charge d'elle-même (D-78) : un navigateur les réclame sans que la personne ou le robot ne
+# l'ait demandé, par dizaines et dans la même seconde. Ce ne sont pas des pages : ni le rythme des pages, ni leur
+# durée, ni la navigation ne les comptent (le gardien, lui, les contrôle toujours : `gardien.protegee`). L'appel de
+# données d'une fiche (`/lab/vitrine/api/`) n'en fait pas partie : il rend du contenu, il reste une page pour les
+# détecteurs. Définition unique : la lire ici, ne pas la recopier. Alignée sur la limite de débit de Nginx
+# (`arena.profils.CHEMINS_STATIQUES`, D-71), que `tests/test_ressources_de_page.py` surveille.
+PHOTOS = ("/lab/vitrine/photos/", "/lab/social/photos/")
+RESSOURCES_DE_PAGE = ("/lab/static",) + PHOTOS
+# Vérification d'un défi : la page qui la poste est une page intermédiaire, pas une page lue.
+VERIFICATIONS_DE_DEFI = (
+    "/lab/defi/verifier",
+    "/lab/captcha/verifier",
+    "/lab/turnstile/verifier",
+    "/lab/recaptcha/verifier",
+)
 MARQUEURS_UA_OUTILS = re.compile(r"python|curl|httpx|requests|aiohttp|wget|go-http|java/|okhttp", re.I)
+
+
+def _sans_remontee(chemin: str) -> bool:
+    """Un chemin qui remonte d'un dossier (`..`) ne désigne pas ce que son début laisse croire."""
+    return ".." not in chemin.split("/")
+
+
+def est_ressource_de_page(chemin: str) -> bool:
+    """Fichier statique ou photo qu'une page charge d'elle-même : pas une page (D-78)."""
+    return chemin.startswith(RESSOURCES_DE_PAGE) and _sans_remontee(chemin)
 
 
 @dataclass
@@ -66,9 +91,22 @@ class Observations:
         return None
 
     @property
-    def documents(self) -> list[dict[str, Any]]:
-        """Requêtes de pages (hors échanges techniques et fichiers statiques)."""
+    def requetes_de_page(self) -> list[dict[str, Any]]:
+        """Toutes les requêtes de navigation, photos comprises (hors échanges techniques).
+
+        Pour les règles qui regardent chaque requête (cookies renvoyés), pas pour compter des pages.
+        """
         return [o for o in self.http if not o["path"].startswith(CHEMINS_TECHNIQUES)]
+
+    @property
+    def documents(self) -> list[dict[str, Any]]:
+        """Les pages : ni échanges techniques, ni ressources qu'une page charge d'elle-même (D-78)."""
+        return [o for o in self.requetes_de_page if not est_ressource_de_page(o["path"])]
+
+    @property
+    def ressources_de_page(self) -> list[dict[str, Any]]:
+        """Fichiers chargés par les pages : CSS, JavaScript, photos."""
+        return [o for o in self.http if est_ressource_de_page(o["path"])]
 
     @property
     def ressources(self) -> list[dict[str, Any]]:
@@ -176,8 +214,9 @@ class DetecteurReglesHttp:
             signaux.append(Signal("host_tardif", "en HTTP/1.1, Host n'est pas le premier en-tête", 0.5))
         if e.get("sec-fetch-site") == "none" and "referer" in e:
             signaux.append(Signal("referent_incoherent", "Sec-Fetch-Site « none » avec un Referer", 0.5))
-        cookies = [o for o in documents[1:] if not o["cookies"]]
-        if len(documents) > 1 and len(cookies) == len(documents) - 1:
+        requetes = obs.requetes_de_page  # chaque requête renvoie ses cookies, photos comprises
+        cookies = [o for o in requetes[1:] if not o["cookies"]]
+        if len(requetes) > 1 and len(cookies) == len(requetes) - 1:
             signaux.append(Signal("cookies_ignores", "cookies de session jamais renvoyés", 0.5))
         return _verdict(self.name, self.version, signaux)
 
@@ -609,7 +648,8 @@ class DetecteurComportement:
         if rythme is not None and rythme > SEUIL_RYTHME_PAR_S:
             signaux.append(Signal("rythme_soutenu", f"{rythme:.1f} pages par seconde", 0.5))
 
-        releves = [o["payload"] for o in obs.js if o["kind"] == "comportement"]
+        releves_js = [o for o in obs.js if o["kind"] == "comportement"]
+        releves = [o["payload"] for o in releves_js]
         if not releves:
             if obs.empreinte_js is None:
                 return _indetermine(self.name, self.version, "sans_releve", "aucun relevé de comportement reçu")
@@ -619,6 +659,11 @@ class DetecteurComportement:
         total_moves = sum(e.get("mousemove", 0) for e in evenements)
         total_clicks = sum(e.get("click", 0) for e in evenements)
         interactions = sum(sum(e.values()) for e in evenements)
+        # Une page de défi (vérifiée en quelques ms, puis quittée) n'est pas une page lue : sans aucune autre page
+        # lue, sa durée seule ne dit rien (D-78). Elle reste dans la moyenne dès qu'une page lue existe : l'en
+        # retirer ferait lire à la règle la première page lue, souvent quittée en quelques dizaines de ms par le
+        # moteur (campagnes 108 et 109, niveaux 05 et 06), et la règle changerait de portée.
+        lues = [o for o in releves_js if not _page_de_defi(o, obs.http)]
         duree = sum(r.get("duree_page_ms") or 0 for r in releves)
 
         if interactions == 0:
@@ -626,7 +671,7 @@ class DetecteurComportement:
         elif total_moves == 0 and total_clicks > 0:
             signaux.append(Signal("clic_sans_souris", "des clics sans aucun mouvement de souris", 0.5))
 
-        if duree and duree < SEUIL_DUREE_PAGE_MS * len(releves):
+        if duree and lues and duree < SEUIL_DUREE_PAGE_MS * len(releves):
             signaux.append(Signal("pages_eclair", f"moins de {SEUIL_DUREE_PAGE_MS} ms par page en moyenne", 0.5))
 
         # --- Signaux de naturalité (v2) ---
@@ -2515,6 +2560,23 @@ class DetecteurCorrelationSession:
         return _verdict(self.name, self.version, signaux)
 
 
+def _page_de_defi(releve: dict[str, Any], http: list[dict[str, Any]]) -> bool:
+    """Le relevé vient-il d'une page intermédiaire de défi ? Elle a posté sa vérification pendant sa vie, entre son
+    ouverture (arrivée du relevé moins sa durée) et sa sortie (arrivée du relevé)."""
+    fin = releve.get("received_at")
+    duree = releve["payload"].get("duree_page_ms")
+    if not fin or not duree:
+        return False
+    sortie = datetime.fromisoformat(fin)
+    entree = sortie - timedelta(milliseconds=duree)
+    return any(
+        o["method"] == "POST"
+        and o["path"] in VERIFICATIONS_DE_DEFI
+        and entree <= datetime.fromisoformat(o["received_at"]) <= sortie
+        for o in http
+    )
+
+
 def _requetes_par_seconde(documents: list[dict[str, Any]]) -> float | None:
     if len(documents) < 3:
         return None
@@ -2752,7 +2814,7 @@ def proprietes(obs: Observations) -> dict[str, Any]:
         or {"statut": "not_collected", "raison": "session hors Arena : le site direct est servi en HTTP local"},
         "session_properties": {
             "pages": [o["path"] for o in documents],
-            "cookies_renvoyes": sorted({c for o in documents for c in o["cookies"]}),
+            "cookies_renvoyes": sorted({c for o in obs.requetes_de_page for c in o["cookies"]}),
             "comportement": comportement[-1] if comportement else {"statut": "not_collected"},
         },
     }
