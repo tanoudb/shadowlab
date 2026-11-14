@@ -468,7 +468,11 @@ class DriverNoezia(Driver):
 
         # Détection et résolution des défis de l'Arena
         if self.options.get("resoudre_defis", True):
+            deja = len(self.mesures.details["defis_resolus"])
             self._resoudre_defis()
+            # D-79 : la page finale, arrivée après un défi, n'a encore reçu aucun geste.
+            if self._config.interaction_post_page and len(self.mesures.details["defis_resolus"]) > deja:
+                self._interaction_post_chargement()
 
         return ResultatNavigation(status, self._page.url, duree)
 
@@ -645,7 +649,11 @@ class DriverNoezia(Driver):
                 self._interaction_post_clic_navigation()
             # La page cible peut imposer ses propres défis (ex. /lab/espace après login)
             if self.options.get("resoudre_defis", True):
+                deja = len(self.mesures.details["defis_resolus"])
                 self._resoudre_defis()
+                # D-79 : la page finale, arrivée après un défi, n'a encore reçu aucun geste.
+                if self._config.interaction_post_page and len(self.mesures.details["defis_resolus"]) > deja:
+                    self._interaction_post_clic_navigation()
         else:
             self._page.click(selector)
 
