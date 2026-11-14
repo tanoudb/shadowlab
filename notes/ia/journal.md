@@ -3308,3 +3308,23 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   55 ms environ (l'interaction a lieu sur la page de défi). À corriger dans le moteur.
 - **Reste** : cette faiblesse ; `ClientDisconnect` non rattrapé dans l'application publique ; site public : attend
   Ethan (nom d'hôte stable, limite de débit, nom du réseau social).
+
+## 2026-11-14 (11h05) — Claude (Fable 5.2, coordination) — D-79 mesurée dans un vrai Chrome (campagne 111) ; coupure de connexion du site public
+
+- **D-79** (branche `moteur-premiere-page`, sous-agent, relu ; commits `a1a7568` tests, `06ebb65` et `6058ac7` code,
+  fusion `8983345`) : dans `engines/noezia/moteur.py`, `navigate` et `click` refont l'interaction humaine sur la page
+  obtenue après un défi. 2 tests vus en échec avant le code (`tests/test_noezia_interaction_defis.py`), 6 verts après.
+- **Site public, coupure de connexion** (branche `public-deconnexion`, commits `3ac718e` tests, `6617c2e` code, fusion
+  `d86aaff`, ajout à D-77) : un client qui coupe pendant l'envoi du corps reçoit un 499 sans trace d'erreur, sans
+  écriture et sans quota entamé (`tests/test_public_deconnexion.py`).
+- **Suite complète** à 10 h 12 : 1 640 tests verts (1 596 rapides, 44 d'intégration).
+- **Campagne 111** (`recolte-arena.yaml`, la même que la 110, 10 h 12 à 10 h 53, 30 passages, 0 panne) : la vraie page
+  de liste dure 8 044 à 10 478 ms avec 38 à 67 mouvements de souris au niveau 05 (54 à 55 ms sans geste à la 110) et
+  6 242 à 6 609 ms avec 47 à 52 mouvements au niveau 06 sans corrélation (55 à 71 ms sans geste). Navigateur 15 sur 15
+  du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280, témoin `http` 0 sur 15. Session médiane : 164 → 177 s
+  au niveau 05, 163 → 168 s au niveau 06 sans corrélation. Arena remise, ports libres.
+- **Limite** : aucun détecteur de l'Arena ne voyait ce défaut, donc aucun taux ne change ; 3 passages par niveau.
+- **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-79), `AGENTS.md`, `notes/ia/contexte.md`.
+- **Reste** : une passe de plus d'une heure sous protection (le cookie de défi vit une heure : arrêt puis reprise,
+  jamais mesuré) ; l'identité native comme réglage de référence du moteur ; site public et sessions humaines : attend
+  Ethan (`docs/PLAN.md` § 7).

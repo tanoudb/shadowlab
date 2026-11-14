@@ -811,3 +811,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   première page n'étant plus quittée en quelques millisecondes ; un défi résolu sans que le compteur grandisse (échec de
   résolution) ne déclenche pas l'interaction ; `pages_eclair` n'est pas modifiée. Décidé par : coordination (travail d'un
   sous-agent, relu).
+  **Ajout du 14/11, mesure dans un vrai Chrome (campagne 111, même fichier que la 110, 30 passages, 0 panne)** : la vraie
+  page de liste dure 8 044 à 10 478 ms avec 38 à 67 mouvements de souris au niveau 05 (54 à 55 ms et aucun geste à la
+  campagne 110) et 6 242 à 6 609 ms avec 47 à 52 mouvements au niveau 06 sans corrélation (55 à 71 ms et aucun geste), 3
+  passages par niveau. Moteur navigateur 15 sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280, témoin
+  `http` 0 sur 15 : rien n'a régressé. Coût mesuré : session médiane de 164 à 177 s au niveau 05, de 163 à 168 s au niveau
+  06 sans corrélation. Limite : aucun détecteur de l'Arena ne voyait ce défaut, donc aucun taux de passage ne change.

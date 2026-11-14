@@ -94,14 +94,18 @@ recommander des optimisations.
   (`detection.RESSOURCES_DE_PAGE`, `Observations.documents`) ; les photos restent contrôlées par le gardien, les
   appels de données restent des pages. Avant : 1 passage sur 35 bloqué à tort au niveau 04 (campagne 109), et un
   humain arrêté aux niveaux 06 et 07 sur le site public. Campagne 110 (non-régression) : navigateur 15 sur 15,
-  témoin `http` 0 sur 15. **Faiblesse du moteur connue, non corrigée** : après le défi d'entrée, la récolte
-  quitte la première vraie page en 55 ms environ (`docs/PLAN.md` § 2).
+  témoin `http` 0 sur 15.
+- **Moteur, première page après un défi** (D-79, 14/11) : la page obtenue après un défi reçoit l'interaction
+  humaine (`moteur.py`, `navigate` et `click`). Avant, la récolte quittait la première vraie page en 54 à 71 ms
+  sans un geste (campagne 110, niveaux 05 et 06 sans corrélation). Campagne 111 (même fichier) : 6,2 à 10,5 s
+  avec souris et défilement, navigateur 15 sur 15, témoin `http` 0 sur 15. Aucun détecteur de l'Arena ne voyait
+  ce défaut : aucun taux ne change. `pages_eclair` fait toujours la moyenne avec les pages de défi.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 624 tests verts** (`uv run pytest`, 14/11 à 9 h 16, après D-78, hors campagne : 1 580 rapides et 44
+- **1 640 tests verts** (`uv run pytest`, 14/11 à 10 h 12, après D-79, hors campagne : 1 596 rapides et 44
   d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `1a6955b`), rien sur
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `d86aaff`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
