@@ -90,7 +90,7 @@ recommander des optimisations.
   site publiquement »). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Les pages du labo n'ont pas changé
   d'un octet (`tests/test_labo_inchange.py`). Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md`.
   Le labo lui-même ne se met jamais en ligne.
-- **Défaut connu de l'Arena, à corriger après la campagne de contrôle de D-74** : `detection.Observations.documents`
+- **Défaut connu de l'Arena, vu en vrai à la campagne 109 (1 passage sur 35 au niveau 04), à corriger** : `detection.Observations.documents`
   compte les photos comme des pages, et `rythme_soutenu` divise par la durée depuis la première page ; sans défi
   d'entrée (site public), un humain serait arrêté aux niveaux 06 et 07 dès la première page. Deux tests en échec
   attendu le figent (`tests/test_public_social.py`).
@@ -103,8 +103,9 @@ recommander des optimisations.
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
-  `tests/test_souris_trajectoire.py`. **Pas encore mesuré dans un vrai Chrome** : campagne de contrôle
-  `recolte-arena-35.yaml` à comparer à la 108.
+  `tests/test_souris_trajectoire.py`. Vérifié dans un vrai Chrome par la campagne 109 (14/11, même fichier que
+  la 108) : 0 page sur 2 015 sous la marge de 0,15 rad (30 sur 1 997 avant), niveau 05 à 35 sur 35 (32 avant),
+  niveaux 04 et 06 sans corrélation à 34 et 35 sur 35 ; le seul échec est le défaut de l'Arena ci-dessous.
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
   qu'il est fait 15, 10, 10, 10, 0, 0, 0 sur 15 aux niveaux 01 à 07 (06 et 07 sans corrélation), avec une seule
   cause d'échec, le signal `headless_dans_une_requete`. `noezia` en identité native (`headless: false`,

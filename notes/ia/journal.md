@@ -3273,3 +3273,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   la sortie d'uvicorn) ; `rythme_soutenu` compte les photos comme des pages (Arena) ; les annonces n'ont pas de
   thème sombre et restent en français.
 - **Suite** : campagne de contrôle de D-74 (`recolte-arena-35.yaml`), lancée après cette entrée.
+
+## 2026-11-14 (9h05) — Claude (Fable 5.2, coordination) — Campagne 109 : la souris corrigée tient dans un vrai Chrome
+
+- **Campagne 109** (`recolte-arena-35.yaml`, contrôle de D-74, 14/11 de 4 h 15 à 8 h 54, 105 passages, 0 panne) :
+  niveau 04, 34 sur 35 ; niveau 05, 35 sur 35 (32 sur 35 à la 108) ; niveau 06 sans corrélation, 35 sur 35.
+  Chaque passage réussi : 21 pages, 280 champs sur 280. Durées inchangées.
+- **Souris** (lecture de `observations_js`) : 2 015 pages jugées, minimum 0,261 rad, 1 % à 0,441, médiane 0,943 ;
+  aucune sous 0,15 ni sous 0,08. Campagne 108 : 1 997 pages, minimum 0,050, 30 sous 0,15, 3 sous 0,08.
+- **Le seul échec** (passage 34409, niveau 04) : `rythme_soutenu` et `pages_eclair`, défi d'entrée résolu en
+  6 ms puis 18 photos comptées comme des pages (5,3 « pages » par seconde). Défaut de l'Arena, déjà vu par le
+  rejeu du site public ; pas le moteur.
+- **Écrit** : `docs/PLAN.md` § 2 et § 8 (étape 1.9), ajout daté à D-74, `AGENTS.md`. Arena remise, ports libres.
+- **Reste** : corriger dans l'Arena le compte des photos comme des pages (test d'abord), puis une courte campagne
+  de non-régression avec le témoin HTTP ; site public : attend Ethan (nom d'hôte stable, limite de débit, nom).

@@ -569,6 +569,35 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   1.9), et pas un réglage de l'Arena à adoucir. Réserves : CAPTCHA en clés de test aux niveaux 05 et 06 ;
   niveau 06 sans corrélation ; le seuil du détecteur n'est pas calibré sur des humains ; site à nous, une
   machine, un Chrome sur macOS.
+- **Campagne 109 : la même, après D-74 (contrôle de la souris)** (14/11 de 4 h 15 à 8 h 54, 105 passages,
+  0 panne, même fichier `recolte-arena-35.yaml`, pages du labo inchangées).
+
+  | Niveau | Campagne 108 (avant) | Campagne 109 (après) | Wilson à 95 % (109) | Échecs de la 109 |
+  |--------|----------------------|----------------------|---------------------|------------------|
+  | 04 | 35 sur 35 | 34 sur 35 | 85,5 à 99,5 % | 1 : `rythme_soutenu` et `pages_eclair` (défaut de l'Arena) |
+  | 05 | 32 sur 35 | **35 sur 35** | 90,1 à 100 % | aucun |
+  | 06 sans corr. | 35 sur 35 | 35 sur 35 | 90,1 à 100 % | aucun |
+
+  **La souris, objet du contrôle** : moyenne des angles entre segments, par page jugée (au moins 10 angles).
+
+  | | Pages jugées | Minimum | 1 % | Médiane | Sous 0,08 (seuil) | Sous 0,15 (marge) |
+  |---|---|---|---|---|---|---|
+  | Campagne 108 | 1 997 | 0,050 | 0,121 | 0,720 | 3 | 30 |
+  | Campagne 109 | 2 015 | 0,261 | 0,441 | 0,943 | **0** | **0** |
+
+  D-74 est vérifiée dans un vrai Chrome : plus aucune page ne s'approche du seuil, le niveau 05 passe de 32 à
+  35 sur 35, les durées ne changent pas (médianes 156, 167 et 162 s contre 155, 162 et 163 s), et chaque
+  passage réussi lit toujours 21 pages et 280 champs sur 280. Le banc de mesure sans navigateur avait prédit
+  ces valeurs (minimum 0,196, 1 % à 0,43, médiane 0,94).
+  **Le seul échec (passage 34409, niveau 04) n'est pas le moteur** : le défi d'entrée s'est résolu en 6 ms, les
+  18 photos de la liste sont arrivées dans la foulée, et le détecteur de comportement, qui compte les photos
+  comme des pages, a vu 5,3 « pages » par seconde dès la deuxième photo (`rythme_soutenu`, `pages_eclair`). Un
+  humain sur une machine rapide serait bloqué de la même façon. C'est le défaut repéré le 14/11 par le rejeu
+  du site public ; il tient au hasard de la durée du défi, d'où 0 cas sur 35 à la 108 et 1 sur 35 ici. À
+  corriger dans l'Arena. Réserves : inchangées (CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 sans
+  corrélation, aucun humain en base, une machine, un Chrome sur macOS) ; la souris bouge plus qu'avant
+  partout (médiane 0,94 au lieu de 0,72), et sans session humaine on ne sait pas si c'est plus proche d'une
+  vraie main.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -771,7 +800,7 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.6 Application publique réduite | **code fait, mise en ligne à faire par Ethan** | 12/11 | `src/shadowlab/public/` (D-55), 570 tests rapides verts dont 114 pour l'application publique ; 12 failles volontaires détectées ; audit indépendant : rien de bloquant, tous les points corrigés ; parcours complet rejoué dans un navigateur (accord, collecte, « Ma session », fin, suppression). Reste : hébergement, domaine, contact (`docs/site-public.md`). 12/11 : voie courte par tunnel Cloudflare, `scripts/site-public-tunnel.sh` (`ccf24c9`), jamais lancé avec un vrai tunnel ; le lancement revient à Ethan **Refaite le 14/11 pour une étude ouverte à une communauté** (demande d'Ethan le 13/11 au soir, cadrage `docs/recherche/site-public-communaute-2026-11-13.md`) : accueil « Humain ou robot ? » en deux langues, faux réseau social de photos « Mosaïk Démo » (93 photos libres créditées), relevé enrichi des gestes (`releve.js`, D-76), fréquentation par jour (D-75), quatrième relecture indépendante : 15 défauts prouvés par des tests, tous corrigés (D-77). 1 552 tests rapides verts dans la branche du site, fusion `346f4b6`. Parcours complet vu à l'écran (téléphone et ordinateur) et rejoué par `shadowlab rejeu --base`. Avant une annonce publique, à la charge d'Ethan : nom d'hôte stable, limitation de débit chez Cloudflare, plafond de sessions (`docs/site-public.md`, « Avant d'annoncer le site publiquement »). Non essayé : Safari, iPhone, Firefox, un vrai tunnel |
 | 1.7 Sessions humaines et calibrage | **outil prêt, attend les sessions** | 12/11 | `shadowlab rejeu` (D-56, `1f2e3b4`) ; aucune session humaine en base. Préparé sans humains : ablations 93 et 94 (§ 2), trois défauts de l'Arena corrigés (`1f2e3b4`, `c2fbdfc`, `f713b39`), un quatrième trouvé au niveau 07 (WAF, § 2). Attend 5 sessions locales d'Ethan, puis ≥ 10 sessions publiques. Campagne 97 (12/11, § 2) : un vrai Chrome est arrêté aux niveaux 04 à 07 par quatre signaux, corrigés par D-66 ; campagne 98 (12/11, § 2) : contrôle fait, `noezia` en identité native passe les niveaux 04 à 06 sans corrélation (15 sur 15 chacun), le même Chrome sans le comportement de noezia est arrêté pour absence d'interaction, le témoin reste arrêté ; campagne 100 (12/11, § 2) : `noezia` en identité native, 30 passages par niveau, 179 sur 180 (01 à 05 : 30 sur 30 ; 06 sans corrélation : 29 sur 30, un blocage du WAF corrigé par D-69) ; campagne 101 (12/11, § 2) : niveau 06 complet, 0 sur 15 (corrélation) |
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
-| 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains Campagne 108 (13/11) : premier blocage du moteur en identité native sur une récolte, au niveau 05, signal `trajectoire_lineaire` (2 passages sur 35 ; environ une page sur 1 000 sous le seuil sur 4 400 pages) : correction du mouvement de souris en cours |
+| 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains Campagne 108 (13/11) : premier blocage du moteur en identité native sur une récolte, au niveau 05, signal `trajectoire_lineaire` (2 passages sur 35 ; environ une page sur 1 000 sous le seuil sur 4 400 pages) : corrigé par D-74 (tremblement visible au pixel) et vérifié par la campagne 109 (14/11) : 0 page sur 2 015 sous la marge (30 sur 1 997 avant), niveau 05 à 35 sur 35 |
 | Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages de 21 pages par niveau ; 427 pages d'une seule session aux niveaux 04, 05 et 06 sans corrélation)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12 au niveau 01, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06 ; D-71 dans l'Arena, D-72 dans la commande), campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun. Parcours long : campagne 106 (427 pages aux niveaux 04 et 05, arrêt au niveau 06 : D-73 dans l'Arena), campagne 107 : 427 pages et 34 410 champs sur 34 410 aux trois niveaux ; 1 285 tests verts (fusion `d4e6d4e`). Campagne 108, 35 passages par niveau : 35 sur 35 au niveau 04, 32 sur 35 au niveau 05 (2 blocages du moteur sur `trajectoire_lineaire`, 1 erreur réseau du CAPTCHA de test), 35 sur 35 au niveau 06 sans corrélation. Reste : corriger la trajectoire de souris du moteur (environ une page sur 1 000 sous le seuil) et remesurer ; une passe de plus d'une heure (le cookie de défi expire : arrêt puis reprise, jamais mesuré) ; aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
 | Palier 2 — Une identité qui dure | à faire | | |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |

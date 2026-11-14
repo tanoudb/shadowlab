@@ -639,6 +639,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   aucune session humaine pour dire si c'est plus proche d'une vraie main ; le banc ne reproduit ni la cadence
   d'images de Chrome ni les gestes vers un élément. Décidé par : coordination (travail d'un sous-agent Opus,
   coupé avant son rapport, relu et remesuré).
+  **Ajout du 14/11, mesure dans un vrai Chrome (campagne 109, même fichier que la 108)** : 2 015 pages jugées,
+  minimum 0,261 rad, aucune sous 0,15 (30 sur 1 997 à la campagne 108, dont 3 sous 0,08) ; niveau 05 à 35 sur 35
+  (32 sur 35 avant) ; durées inchangées. La limite « pas encore mesuré dans un vrai Chrome » est levée ; les
+  autres restent.
 
 - **D-75 — 14/11/2026 — Site public, version « étude » : deux langues, accueil « Humain ou robot ? », but élargi,
   fréquentation (cadrage `docs/recherche/site-public-communaute-2026-11-13.md`, v2 ; complète D-55, D-57, D-65 et
