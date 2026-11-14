@@ -2,12 +2,15 @@
 
 Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md` (« Règles », « Langue », « Textes de l'accueil »).
 Étape 1 : deux langues sans cookie de plus. Étape 2 : l'accueil de l'étude et la notice. Étape 3 : la fréquentation.
+Étape 4 : le plafond de sessions par jour devient un réglage.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from html import escape
 from pathlib import Path
@@ -28,7 +31,8 @@ from test_public import (
     vieillir,
 )
 
-from shadowlab.config import ReglagesPublics
+from shadowlab import config
+from shadowlab.config import ReglagesPublics, charger_public
 from shadowlab.public.social import MARQUE as MARQUE_SOCIAL
 
 ACCEPT = {"fr": "fr-FR,fr;q=0.9", "en": "en-US,en;q=0.9"}
@@ -770,3 +774,90 @@ def test_commande_frequentation(monkeypatch, reglages_publics, capsys):
     assert par_jour[aujourd_hui()] == ["2", "1", "1"]
     assert par_jour["total"] == ["32", "5", "4"]
     assert [ligne.split()[0] for ligne in lignes if re.match(r"\d{4}-", ligne)] == ["2026-11-01", aujourd_hui()]
+
+
+# === Étape 4 : le plafond de sessions par jour devient un réglage =====================================
+
+PLEIN = {
+    "fr": ("L'étude a fait le plein pour aujourd'hui", "Revenez demain"),
+    "en": ("The study is full for today", "come back tomorrow"),
+}
+
+
+@pytest.mark.parametrize(
+    "valeur, attendue", [(None, 40), ("250", 250), ("1", 1), ("5000", 5000), ("0", 1), ("-3", 1), ("999999", 5000)]
+)
+def test_reglage_sessions_par_jour(monkeypatch, tmp_path, valeur, attendue):
+    monkeypatch.setattr(config, "_charger_env", lambda *a, **k: None)
+    for variable in [v for v in os.environ if v.startswith("SHADOWLAB_")]:
+        monkeypatch.delenv(variable)
+    monkeypatch.setenv("SHADOWLAB_SORTIES", str(tmp_path))
+    if valeur is not None:
+        monkeypatch.setenv("SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR", valeur)
+    assert charger_public().sessions_par_jour == attendue
+
+
+def essai_de_session(client: TestClient, adresse: str, langue: str = "fr"):
+    client.cookies.clear()
+    return commencer_depuis(client, langue, adresse=adresse)
+
+
+def test_reglage_applique_sans_limites_explicites(reglages_publics):
+    """Le chemin de `shadowlab public servir` : `creer_app_publique(reglages)`, sans `Limites` donnée par un test."""
+    from shadowlab.public import creer_app_publique
+
+    app = creer_app_publique(replace(reglages_publics, sessions_par_jour=2))
+    with TestClient(app, base_url=ORIGINE) as c:
+        statuts = [essai_de_session(c, f"192.0.2.{n}").status_code for n in range(1, 4)]
+    assert statuts == [303, 303, 429]
+
+
+@pytest.mark.parametrize("langue", ["fr", "en"])
+def test_plafond_du_jour_atteint_la_page_le_dit(reglages_publics, langue):
+    from shadowlab.public import creer_app_publique
+
+    app = creer_app_publique(replace(reglages_publics, sessions_par_jour=1))
+    with TestClient(app, base_url=ORIGINE) as tardif, TestClient(app, base_url=ORIGINE) as premier:
+        accueil_avant = tardif.get(f"/{langue}").text
+        champs = champs_du_formulaire(accueil_avant, "/session/commencer")
+        assert essai_de_session(premier, "192.0.2.1", langue).status_code == 303
+        refus = tardif.post(
+            "/session/commencer",
+            data={**champs, "consentement": "oui"},
+            headers={"Origin": ORIGINE, "X-Forwarded-For": "192.0.2.2"},
+        )
+        assert refus.status_code == 429
+        titre, demain = PLEIN[langue]
+        assert langue_html(refus.text) == langue
+        assert titre in texte_de(refus.text) and demain in texte_de(refus.text)
+        accueil_plein = tardif.get(f"/{langue}").text
+    sel = Selector(accueil_plein)
+    assert not sel.css('form[action="/session/commencer"]'), "plus de case à cocher pour rien"
+    assert titre in texte_de(accueil_plein, ".accord-complet") and demain in texte_de(accueil_plein, ".accord-complet")
+    assert sel.css('a.visiter-sans-participer[href="/lab/social/fil"]'), "on peut encore visiter sans participer"
+
+
+def test_plafond_du_jour_n_use_pas_la_limite_par_adresse(reglages_publics):
+    from shadowlab.public import creer_app_publique
+
+    app = creer_app_publique(replace(reglages_publics, sessions_par_jour=1))
+    limiteur = app.state.limiteurs[0]
+    with TestClient(app, base_url=ORIGINE) as c:
+        assert essai_de_session(c, "192.0.2.1").status_code == 303
+        assert essai_de_session(c, "192.0.2.2").status_code == 429
+    assert len(limiteur._vues) == 1, "un jour plein ne consomme pas le quota horaire d'une adresse"
+
+
+def test_plafond_de_la_base_en_sessions_au_pire():
+    """Calcul (pas une mesure) repris dans docs/site-public.md : combien de sessions au volume maximal tient la base.
+
+    Une requête notée occupe au pire une page SQLite de 4 Kio (mesuré le 12/11 : une ligne de ~2,3 Ko par page) ;
+    les envois d'une session font au plus `volume_par_session` octets de charges, plus ~300 octets par ligne."""
+    from shadowlab.public import Limites
+
+    limites = Limites()
+    pire_session = limites.requetes_par_session * 4096 + limites.volume_par_session + limites.envois_par_session * 300
+    assert 16_000_000 < pire_session < 17_000_000, pire_session
+    sessions = limites.taille_max_base // pire_session
+    assert 120 <= sessions <= 130, sessions
+    assert limites.sessions_par_jour == 40, "défaut inchangé"
