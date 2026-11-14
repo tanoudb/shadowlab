@@ -894,6 +894,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   8 à 10 s par cycle (22 s puis 62 s au cinquième cycle du niveau 05) ; au-delà de 120 s, vers le onzième cycle, il
   serait pris pour un défi revenu trop tôt et la passe s'arrêterait. Non corrigé (trait de notre Arena, un cookie par
   défi) ; à revoir si un travail de plus d'une dizaine d'heures est visé.
+  **Ajout du 14/11, campagne 114 (cookie d'origine de 3 600 s, rallye à 683 pages, 3 passages, 0 panne)** : niveaux 04,
+  05 et 06 sans corrélation, 59 257 champs sur 59 257 à chacun, en 4 515, 4 867 et 4 631 s. Le défi revient une fois,
+  à 3 607, 3 590 et 3 590 s, et la récolte finit le travail. Première passe de plus d'une heure sous protection.
 - **D-84 — 14/11/2026 — Site public : le site d'annonces est caché par défaut, et le site tourne dans tmux.** Constat :
   Ethan, avant de partager le site sur Reddit : « Pour le site masqué l'autre site annonce on s'en fou ». Décision : le
   site d'annonces « Habitat Démo » n'apparaît plus sur le site public : ses cinq routes `/lab/vitrine/…` ne sont pas

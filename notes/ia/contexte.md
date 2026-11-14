@@ -31,7 +31,11 @@ sur nos propres cibles (site vitrine factice, tor-i).
   158 pages et 2 100 champs sur 2 100, le défi revenu 1, 2 et 2 fois et repassé sans arrêt. Campagne 113 (rallye, 427
   pages) : 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois, aucun arrêt. Site d'annonces
   caché sur le site public, site dans tmux (D-84). Détail : `docs/PLAN.md` § 2.
-- Tests au 14/11 à 11 h 49, après D-83, sans campagne : **1 714 verts** (`uv run pytest` : 1 670 rapides et 44
+- **Campagne 114 (14/11)** : un travail de plus d'une heure sous protection avec le cookie d'origine : 683 pages et
+  59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation, en 75 à 81 minutes, le défi revenu une fois.
+- **Première session humaine du site public** (14/11, 18 h 21, Safari sur iPhone) : arrêtée aux niveaux 04 à 07 par
+  le seul détecteur `deep-proxy`, qui ne reconnaît que les formes de Chrome : défaut de l'Arena, à corriger.
+- Tests au 14/11 à 15 h 33, après D-84, sans campagne : **1 759 verts** (`uv run pytest` : 1 715 rapides et 44
   d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,

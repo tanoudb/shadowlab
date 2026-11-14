@@ -126,9 +126,9 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 714 tests verts** (`uv run pytest`, 14/11 à 11 h 49, après D-83, hors campagne : 1 670 rapides et 44
+- **1 759 tests verts** (`uv run pytest`, 14/11 à 15 h 33, après D-84, hors campagne : 1 715 rapides et 44
   d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `4907834`), rien sur
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `48f587a`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
@@ -174,11 +174,13 @@ recommander des optimisations.
   une seule session, environ 50 minutes) : campagne 106, réussi aux niveaux 04 et 05, arrêté à la 10ᵉ page au
   niveau 06 sans corrélation (l'Arena redemandait le défi quand Chrome reprenait sa session TLS : D-73) ;
   campagne 107 (13/11) : 427 pages et 34 410 champs sur 34 410 aux niveaux 04, 05 et 06 sans corrélation, un
-  passage par niveau. Le cookie de défi de l'Arena vit une heure : une passe plus longue sera redéfiée et
-  arrêtée par la sentinelle (arrêt puis `reprendre`, jamais mesuré).
+  passage par niveau. Le cookie de défi de l'Arena vit une heure : depuis D-83 la récolte repasse la
+  porte quand le défi revient. **Campagne 114** (14/11, cookie d'origine, rallye à 683 pages, 75 à 81 minutes par
+  passage) : 59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation, le défi revenu une fois vers 3 600 s
+  et repassé ; un passage par niveau.
   **Non prouvé** : aucun vrai site ni vraie protection ; la commande elle-même vise le site en direct (niveau
-  01), les niveaux protégés ne sont mesurés que par campagne ; une passe de plus d'une heure sous
-  protection ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non
+  01), les niveaux protégés ne sont mesurés que par campagne ; plusieurs heures d'affilée sous
+  protection (une passe de 81 minutes à la campagne 114) ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non
   branché ; champ adaptatif sans signature mémorisée muet ; rythme « prudent » jamais tourné en temps réel ;
   CSV jamais ouvert dans Excel.
 - **Pas encore** : score v3 réel (attend une clé), Turnstile réel sur domaine test + fiabilité de son

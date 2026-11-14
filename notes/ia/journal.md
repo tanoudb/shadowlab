@@ -3470,3 +3470,14 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Campagne 114, deux passages lus** : niveau 04, 683 pages et 59 257 champs sur 59 257 en 4 515 s, le défi revenu
   une fois à 3 607 s ; niveau 05, 683 pages et 59 257 champs en 4 867 s, le défi revenu à 3 590 s plus un défi de
   rafale 35 s après. Niveau 06 sans corrélation en cours.
+
+## 2026-11-14 (19h35) — Claude (Fable 5.2, coordination) — Campagne 114 : plus d'une heure sous protection, cookie d'origine
+
+- **Suite complète** à 15 h 33 : 1 759 tests verts (1 715 rapides, 44 d'intégration), après D-84.
+- **Campagne 114** (`recolte-arena-rallye-long.yaml`, 15 h 34 à 19 h 27, 3 passages, 0 panne, niveaux et cookie
+  d'origine, rallye à la taille 40) : niveaux 04, 05 et 06 sans corrélation, 683 pages et 59 257 champs sur 59 257 à
+  chacun, en 4 515, 4 867 et 4 631 s. Le défi revient une fois (3 607, 3 590, 3 590 s), un défi de rafale aux niveaux
+  05 et 06 (35 et 21 s). Aucune page de moins de 500 ms sur 2 060 relevés. Arena remise, ports libres.
+- **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.
+- **Site public** à 19 h 25 : 42 visites de l'accueil, 8 sessions commencées (6 essais), 1 terminée, 1 ouverte.
+- **Reste** : corriger `deep-proxy` (Safari classé automatisé), puis campagne de contrôle ; 30 passages par niveau.
