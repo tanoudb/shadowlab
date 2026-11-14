@@ -35,7 +35,7 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (12/11/2026)
+## État (14/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
@@ -69,21 +69,42 @@ recommander des optimisations.
 - **Récolte notée** : scénario `recolte_vitrine` (toute la liste puis chaque fiche) et `notation.noter_recolte`
   (complétude, exactitude). Campagne : `SHADOWLAB_VITRINE_TAILLE=40 uv run shadowlab campagne
   configs/experiments/recolte-palier1.yaml` (environ 2 h).
-- **Application publique réduite** (`src/shadowlab/public/`, D-55) : la seule partie faite pour être mise en
-  ligne. Site vitrine, consentement, collecte fermée, suppression de sa session, formulaire de contact
-  (D-57, aucune adresse affichée) ; aucune route du labo. Trois relectures (D-65, D-67) : le journal de
-  l'application ne garde que les erreurs (code 400 ou plus, ni adresse ni jeton), une page de contact ne laisse
-  aucune trace dans une session, dossier en 700 et bases en 600, `.env` réduit aux variables publiques, journal
-  de `cloudflared` filtré. Parcours vérifié à l'écran le 12/11 (16 h 17), feu vert à la mise en ligne, avec une
-  réserve : `scripts/site-public-tunnel.sh` n'a jamais tourné avec un vrai tunnel. Ethan le lance lui-même.
-  Lancement et conditions : `docs/site-public.md`. Le labo lui-même ne se met jamais en ligne.
+- **Application publique** (`src/shadowlab/public/`, D-55 ; refaite le 14/11, D-75 à D-77) : la seule partie faite
+  pour être mise en ligne ; aucune route du labo. C'est le site d'étude « Humain ou robot ? », en français et en
+  anglais (langue par l'adresse `/fr`, `/en`, puis la session, puis le navigateur ; trois cookies, pas un de plus) :
+  accueil avec l'accord, notice complète (`/fr|en/information`), « Ma session », suppression, contact (D-57).
+  Site de démonstration vedette : **Mosaïk Démo**, un faux réseau social de photos sous `/lab/social/…`
+  (`public/social.py` : fil paginé, publication, profil, étiquette, explorer, crédits ; de vraies pages courtes ;
+  aucune écriture venant du visiteur, le texte tapé ne quitte jamais la page). 93 photos de Wikimedia Commons
+  sous licence libre ou dans le domaine public (`public/static/social/photos/manifeste.json`), créditées sous
+  chaque publication, sur l'accueil et sur la page de crédits. Second site, discret : les annonces
+  (`/lab/vitrine/…`). **Relevé** pendant une session seulement : l'observateur du labo (inchangé) et un second
+  script propre au site public, `public/static/releve.js` (envoi `trace`, validé par `public/trace.py` :
+  trajectoire de la souris, clics, défilement, rythme du clavier, tactile ; jamais une touche ni un texte).
+  **Fréquentation** : un compte par jour (accueil, sessions commencées, terminées), `shadowlab public
+  frequentation` ; `shadowlab public sessions` liste les sessions par taille. Plafond réglable
+  `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` (40 par défaut). Quatre relectures indépendantes (D-65, D-67, D-77) ; la
+  quatrième a trouvé 15 défauts, tous corrigés. **Pas encore en ligne.** Avant une annonce publique, à la charge
+  d'Ethan : un nom d'hôte stable (tunnel nommé sur un domaine, pas le tunnel rapide), une règle de limitation de
+  débit chez Cloudflare, le plafond de sessions réglé ; liste dans `docs/site-public.md` (« Avant d'annoncer le
+  site publiquement »). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Les pages du labo n'ont pas changé
+  d'un octet (`tests/test_labo_inchange.py`). Cadrage : `docs/recherche/site-public-communaute-2026-11-13.md`.
+  Le labo lui-même ne se met jamais en ligne.
+- **Défaut connu de l'Arena, à corriger après la campagne de contrôle de D-74** : `detection.Observations.documents`
+  compte les photos comme des pages, et `rythme_soutenu` divise par la durée depuis la première page ; sans défi
+  d'entrée (site public), un humain serait arrêté aux niveaux 06 et 07 dès la première page. Deux tests en échec
+  attendu le figent (`tests/test_public_social.py`).
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 285 tests verts** (`uv run pytest`, 13/11 à 5 h 06, après D-71, D-72 et D-73, hors campagne : 1 241
-  rapides et 44 d'intégration avec de
-  vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest), lint propre. Branche
-  `niveau-authentifie-perimetre` (fusions `759ca18` et `59674d0`), rien sur `master`. Base au schéma 9 (D-68).
+- **1 598 tests verts** et 2 en échec attendu (`uv run pytest`, 14/11 à 4 h 14, après la fusion du site public,
+  hors campagne : 1 554 rapides et 44 d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `346f4b6`), rien sur
+  `master`. Base au schéma 9 (D-68).
+- **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
+  niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
+  `tests/test_souris_trajectoire.py`. **Pas encore mesuré dans un vrai Chrome** : campagne de contrôle
+  `recolte-arena-35.yaml` à comparer à la 108.
 - **Campagne 97** (identité réécrite ou native, 525 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` tel
   qu'il est fait 15, 10, 10, 10, 0, 0, 0 sur 15 aux niveaux 01 à 07 (06 et 07 sans corrélation), avec une seule
   cause d'échec, le signal `headless_dans_une_requete`. `noezia` en identité native (`headless: false`,
@@ -173,6 +194,7 @@ SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VI
 SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_RALLYE_TAILLE=24 uv run shadowlab campagne configs/experiments/recolte-arena-rallye.yaml  # 427 pages d'une seule session aux niveaux 04 à 06 sans corrélation (campagne 107, 2 h 35) ; même encadrement par `arena appliquer`
 uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <n°>
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
+uv run shadowlab public frequentation | sessions            # visites et sessions par jour ; sessions par taille (repérer un abus)
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
@@ -216,7 +238,8 @@ src/shadowlab/
 ├── reports.py       # Rapports HTML/CSV/JSON
 ├── rejeu.py         # Rejeu des sessions humaines contre chaque niveau (jalon A)
 ├── labo.py          # Sert l'interface construite (frontend/dist) sous /labo
-├── public/          # Application publique réduite (vitrine + sessions humaines), seule à se mettre en ligne
+├── public/          # Application publique : étude « Humain ou robot ? », réseau social fictif (social.py), relevé (trace.py,
+│                    #   static/releve.js), textes des deux langues (textes.py) ; seule à se mettre en ligne
 └── tableau.py       # Ancien tableau de bord (déprécié, remplacé par /labo)
 frontend/            # Interface React + TypeScript (Vite), consomme /api
 │   ├── src/screens/ # Configurer, Experiences, Suivi, Passage, Comparer, Moteurs, Protections

@@ -21,8 +21,8 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Le lire d'abord. Constats détaillés du 11/11 : `notes/ia/analyse-paliers-2026-11-11.md`.
 - Palier 1 : étapes 1.1 à 1.5 faites, 1.6 codée (application publique ; mise en ligne par Ethan, script
   `scripts/site-public-tunnel.sh`), 1.7 outillée (`uv run shadowlab rejeu`, D-56) mais sans session humaine.
-- Tests au 13/11 à 5 h 06, après D-71, D-72 et D-73, sans campagne : **1 285 verts** (`uv run pytest` : 1 241
-  rapides et 44 d'intégration
+- Tests au 14/11 à 4 h 14, après la fusion du site public, sans campagne : **1 598 verts** et 2 en échec
+  attendu (`uv run pytest` : 1 554 rapides et 44 d'intégration
   avec de vrais navigateurs et la pile Docker), 11 tests de l'interface (vitest, 12/11 à 16 h 16), lint propre. Branche
   `niveau-authentifie-perimetre` poussée (fusions `759ca18`, assemblage `integration-12-11-b`, et `59674d0`,
   passages orphelins), rien sur `master`.
@@ -100,8 +100,16 @@ ci-dessous. Dossiers de travail retirés pour les premiers ; vérifier ceux des 
    troisième échec est une erreur réseau du CAPTCHA de test. Sur environ 4 400 pages, la souris du moteur
    passe sous le seuil environ une fois sur 1 000 (mouvement court de 10 à 15 angles) : défaut du moteur, à
    corriger avant tout long travail. Rien n'est prouvé sur un vrai site.
-3. **Tunnel du site public** : à lancer par Ethan, à son Mac (`SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine"
-   scripts/site-public-tunnel.sh`) ; relire `outputs/public/tunnel.log` après le premier lancement.
+3. **Site public pour la communauté (14/11)** : refait à la demande d'Ethan pour une étude ouverte (Reddit, amis) :
+   accueil « Humain ou robot ? » en français et en anglais, faux réseau social de photos « Mosaïk Démo » (93 photos
+   libres de Wikimedia Commons, créditées), relevé enrichi des gestes (jamais une touche ni un texte), fréquentation
+   par jour (`shadowlab public frequentation`, `shadowlab public sessions`), plafond de sessions réglable. Quatrième
+   relecture indépendante : 15 défauts, tous corrigés (D-75 à D-77). Fusionné dans la branche de travail (`346f4b6`).
+   **Pas en ligne.** À la charge d'Ethan avant une annonce : nom d'hôte stable (tunnel nommé sur un domaine), règle de
+   limitation de débit chez Cloudflare, plafond de sessions ; liste dans `docs/site-public.md`. Lancement d'essai :
+   `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" scripts/site-public-tunnel.sh` (tunnel rapide : adresse qui change, à
+   ne pas annoncer). Non essayé : Safari, iPhone, Firefox, un vrai tunnel. Défaut de l'Arena trouvé au passage :
+   `rythme_soutenu` compte les photos comme des pages (à corriger après la campagne de contrôle de D-74).
 4. Reporté au 13/11 : `configs/experiments/recolte-rythme.yaml` (mesure du rythme de récolte).
 5. **Palier 2** : conception `docs/recherche/identite-qui-dure-2026-11-12.md`, à valider par Ethan (quatre
    questions au § 10 de ce document, reprises au `docs/PLAN.md` § 7). Aucune session humaine en base à 21 h 30.

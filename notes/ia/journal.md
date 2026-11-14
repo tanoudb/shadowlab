@@ -3248,3 +3248,28 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   complet, `site/` inchangé depuis `cb1ff99`.
 - **Reste** : corrections par un autre agent, essai par essai ; vérifier une fois avec un vrai tunnel ce que fait
   Cloudflare (en-tête d'adresse, cache des photos, HTML inchangé).
+
+## 2026-11-14 (4h20) — Claude (Fable 5.2, coordination) — Site public : quatrième relecture, 15 défauts corrigés, fusion dans la branche de travail
+
+- **Quatrième relecture indépendante** (sous-agent Opus, branche `public-relecture-4`) : avis « pas prêt à être
+  annoncé », 15 essais en échec (`tests/test_public_relecture4.py`). Bloquants : compteur de l'accueil gonflable
+  (300 « Terminer » simultanés), base pleine qui ne rouvre jamais (taille du fichier), photos de l'accueil sans
+  crédit et une photo créditée au peintre de la fresque, aucune limite de débit avec le tunnel rapide, « Ma
+  session » perdue à chaque relance du tunnel rapide. À corriger : 500 sur une demi-paire UTF-16, envoi écrit
+  après une suppression, double clic sur « Commencer », trois phrases de la notice, première ligne de l'en-tête
+  d'adresse, script du tunnel sans `HTTPS=1`.
+- **Corrections** (sous-agent Opus, relu ; 9 commits `30b025b` à `0fc27dd`, D-77) : toutes faites, les 15 essais
+  verts sans avoir été modifiés. En plus : `shadowlab public sessions`, IPv6 compté par /56, HEAD servi, point de
+  contrôle après suppression, « géolocalisation » à la place de « localisation », photo `objets-03` retirée (93
+  photos). Une relecture automatique de sécurité a signalé que la première correction du double clic rendait les
+  cookies d'une session sur la seule valeur anti-CSRF : repris (`e08adbd`), la seconde requête ne porte aucun
+  cookie, la valeur anti-CSRF est renouvelée à l'ouverture. Relu par moi.
+- **Fusion** de `public-communaute` dans `niveau-authentifie-perimetre` (`346f4b6`, conflit du journal résolu en
+  gardant les deux côtés). Suite complète à 4 h 14 : **1 598 tests verts**, 2 en échec attendu (défaut du rejeu sur
+  les photos). `AGENTS.md`, `docs/PLAN.md` (§ 7 et § 8) et `notes/ia/contexte.md` mis à jour.
+- **Reste à la charge d'Ethan avant une annonce** : nom d'hôte stable, règle de limitation de débit chez
+  Cloudflare, plafond de sessions ; essayer sur son téléphone ; dire s'il garde le nom « Mosaïk Démo ».
+- **Défauts connus, non corrigés** : `ClientDisconnect` non rattrapé dans la lecture du corps (trace d'erreur sur
+  la sortie d'uvicorn) ; `rythme_soutenu` compte les photos comme des pages (Arena) ; les annonces n'ont pas de
+  thème sombre et restent en français.
+- **Suite** : campagne de contrôle de D-74 (`recolte-arena-35.yaml`), lancée après cette entrée.
