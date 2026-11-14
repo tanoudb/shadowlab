@@ -3436,7 +3436,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/DECISIONS.md` (D-84), `AGENTS.md`.
 - **Reste** : campagne 113 à lire ; nom d'hôte stable ; iPhone et Safari ; texte de franchise encore long.
 
-## 2026-11-14 (15h40) — Claude (Fable 5.2, coordination) — Campagne 113 : 427 pages malgré quatre à cinq retours du défi
+## 2026-11-14 (15h27) — Claude (Fable 5.2, coordination) — Campagne 113 : 427 pages malgré quatre à cinq retours du défi
 
 - **Campagne 113** (`recolte-arena-cookie-court.yaml`, 12 h 53 à 15 h 25, 3 passages, 0 panne, cookie de 600 s) :
   niveaux 04, 05 et 06 sans corrélation, 427 pages et 34 410 champs sur 34 410 à chacun, en 2 940, 3 141 et 3 027 s.
@@ -3446,7 +3446,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   l'Arena renouvelés à des instants différents). La règle de rafale (120 s) céderait vers le onzième cycle : arrêt
   propre. Non corrigé, noté dans D-83 et au plan.
 - **Biais possible** : le dernier passage a tourné pendant des tests et des relances du site public.
-- **Lancé à 15 h 37** : suite complète, puis `recolte-arena-rallye-long.yaml` (cookie d'origine d'une heure, rallye à
+- **Lancé à 15 h 26** : suite complète, puis `recolte-arena-rallye-long.yaml` (cookie d'origine d'une heure, rallye à
   la taille 40 : 683 pages, environ 80 minutes par passage, niveaux 04, 05, 06 sans corrélation ; environ 4 h),
   journal `outputs/campagne-rallye-long.log`.
 - **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `docs/DECISIONS.md` (ajout à D-83), `AGENTS.md`, `notes/ia/contexte.md`.

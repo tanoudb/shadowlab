@@ -677,7 +677,7 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   Le dernier passage (niveau 06) a tourné pendant des tests du site public : sa durée peut en être un peu faussée.
   Réserves : un passage par niveau ; cookie raccourci ; CAPTCHA en clés de test aux niveaux 05 et 06, levés par le
   pilote sur notre Arena ; niveau 06 sans corrélation ; aucun humain en base. Suite : `recolte-arena-rallye-long.yaml`,
-  le cookie d'origine (une heure) sur un parcours de 683 pages (environ 80 minutes), lancé à 15 h 37.
+  le cookie d'origine (une heure) sur un parcours de 683 pages (environ 80 minutes), lancé le 14/11 vers 15 h 35, après la suite complète.
 
 ## 3. Pourquoi on a perdu du temps
 
