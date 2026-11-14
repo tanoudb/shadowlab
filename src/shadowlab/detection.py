@@ -131,6 +131,56 @@ def _annonce_headless(obs_http: dict[str, Any]) -> bool:
     return any("headlesschrome" in e.get(nom, "").lower() for nom in ("user-agent", "sec-ch-ua"))
 
 
+def famille_navigateur(obs: Observations, p: dict[str, Any]) -> str | None:
+    """Famille du moteur du navigateur : `chromium`, `webkit`, `gecko`, ou `None` sans indice.
+
+    Indices, du plus solide au plus faible : `userAgentData` (API absente de WebKit et Gecko, relevée par le
+    script), `Sec-CH-UA` (envoyé par Chromium seul), puis le User-Agent annoncé (`Chrome/` pour Chromium,
+    `Firefox/` pour Gecko, `AppleWebKit` sans `Chrome/` pour WebKit : Safari, mais aussi Chrome et Firefox sur
+    iPhone, qui sont du WebKit). Un robot qui veut se faire passer pour une autre famille doit donc réécrire ces
+    trois couches ; une incohérence entre elles reste visible aux autres détecteurs.
+    """
+    nav = p.get("navigateur") or {}
+    if nav.get("userAgentData"):
+        return "chromium"
+    agents = []
+    for o in obs.http:
+        e = _entetes(o)
+        if "sec-ch-ua" in e or "chrome/" in e.get("user-agent", "").lower():
+            return "chromium"
+        agents.append(e.get("user-agent", "").lower())
+    agents.append(str(nav.get("userAgent", "")).lower())
+    if any("chrome/" in ua for ua in agents):
+        return "chromium"
+    if any("firefox/" in ua for ua in agents):
+        return "gecko"
+    if any("applewebkit" in ua for ua in agents):
+        return "webkit"
+    return None
+
+
+def appareil_tactile(obs: Observations, p: dict[str, Any]) -> bool:
+    """Appareil tactile (téléphone, tablette) : vrai seulement si au moins deux indices concordent.
+
+    Indices : `maxTouchPoints > 0` ; `css_media` sans survol ni pointeur fin (`hover: none`, ni `hover: hover`,
+    ni `pointer: fine`) ; événements `touchstart` relevés dans le comportement. Un seul ne suffit pas : un
+    ordinateur à écran tactile a des points de contact mais un pointeur fin, et un navigateur sans tête n'a pas de
+    survol mais aucun point de contact.
+    """
+    nav = p.get("navigateur") or {}
+    points = nav.get("maxTouchPoints")
+    cm = p.get("css_media") or {}
+    toucher = sum(
+        (o["payload"].get("evenements") or {}).get("touchstart", 0) for o in obs.js if o["kind"] == "comportement"
+    )
+    indices = (
+        isinstance(points, int) and not isinstance(points, bool) and points > 0,
+        bool(cm.get("hover_none")) and not cm.get("hover_hover") and not cm.get("pointer_fine"),
+        toucher > 0,
+    )
+    return sum(indices) >= 2
+
+
 def _verdict(nom: str, version: str, signaux: list[Signal], appui_humain: float = 0.6) -> Classement:
     # `confidence` ici est un score heuristique non calibré (somme de poids plafonnée,
     # ou `appui_humain` constant). Il sert à trier/afficher, jamais à calculer un taux.
@@ -631,7 +681,7 @@ class DetecteurComportement:
     """
 
     name = "comportement"
-    version = "2.1"
+    version = "2.2"  # 2.2 : `ratio_move_click_faible` ne vaut pas pour des clics venus du toucher
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -677,7 +727,11 @@ class DetecteurComportement:
         # --- Signaux de naturalité (v2) ---
         # Un humain produit typiquement 30-200 mousemove par clic.
         # Un bot Bézier fait des trajectoires directes : ratio < 10 est suspect.
-        if total_clicks > 0 and total_moves > 0:
+        # 2.2 : au toucher, un clic ne donne qu'un mouvement de souris synthétique (ratio 1,0 mesuré sur iPhone) ;
+        # la règle ne vaut pas pour des clics venus du toucher d'un appareil tactile (indices concordants).
+        touches = sum(e.get("touchstart", 0) for e in evenements)
+        clics_au_toucher = touches > 0 and appareil_tactile(obs, obs.empreinte_js or {})
+        if total_clicks > 0 and total_moves > 0 and not clics_au_toucher:
             ratio_move_click = total_moves / total_clicks
             if ratio_move_click < 8:
                 signaux.append(
@@ -1349,7 +1403,7 @@ class DetecteurLangues:
     """Vérifie la cohérence des langues déclarées et la qualité du patch."""
 
     name = "langues"
-    version = "1"
+    version = "1.1"  # 1.1 : `vendor_absent` compare au vendor de la famille du navigateur (Safari, Firefox)
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1393,7 +1447,12 @@ class DetecteurLangues:
                     )
                 )
 
-        if lang.get("vendor") != "Google Inc.":
+        # 1.1 : le vendor attendu est celui de la famille (Safari annonce « Apple Computer, Inc. », Firefox une
+        # chaîne vide) ; famille inconnue : « Google Inc. », comme avant.
+        vendor_attendu = {"chromium": "Google Inc.", "webkit": "Apple Computer, Inc.", "gecko": ""}.get(
+            famille_navigateur(obs, p), "Google Inc."
+        )
+        if lang.get("vendor") != vendor_attendu:
             signaux.append(Signal("vendor_absent", f"navigator.vendor = '{lang.get('vendor')}'", 0.25))
 
         return _verdict(self.name, self.version, signaux)
@@ -1723,7 +1782,7 @@ class DetecteurCSSMedia:
     """Détecte les incohérences CSS media queries typiques de headless."""
 
     name = "css-media"
-    version = "1"
+    version = "1.1"  # 1.1 : `hover_none` n'est plus un signal sur un appareil tactile
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1734,7 +1793,8 @@ class DetecteurCSSMedia:
         cm = p.get("css_media") or {}
         signaux: list[Signal] = []
 
-        if cm.get("hover_none") and not cm.get("hover_hover"):
+        # 1.1 : `hover: none` est l'état normal d'un appareil tactile ; il ne vaut que sans indice tactile concordant.
+        if cm.get("hover_none") and not cm.get("hover_hover") and not appareil_tactile(obs, p):
             signaux.append(Signal("hover_none", "hover:none — pas de souris (headless ou mobile)", 0.5))
 
         if cm.get("pointer_none") and not cm.get("pointer_fine"):
@@ -1825,7 +1885,7 @@ class DetecteurPaintTiming:
     """Détecte l'absence ou les anomalies de PerformancePaintTiming (headless Chrome)."""
 
     name = "paint-timing"
-    version = "1"
+    version = "1.1"  # 1.1 : `no_first_paint` ne vaut que pour Chromium (Safari et Firefox n'ont pas `first-paint`)
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1844,7 +1904,9 @@ class DetecteurPaintTiming:
                     0.5,
                 )
             )
-        elif not pt.get("has_first_paint"):
+        elif famille_navigateur(obs, p) not in ("webkit", "gecko") and not pt.get("has_first_paint"):
+            # 1.1 : seul Chromium expose `first-paint` ; Safari et Firefox n'ont que `first-contentful-paint`,
+            # contrôlé par la branche suivante pour toutes les familles.
             signaux.append(
                 Signal(
                     "no_first_paint",
@@ -2389,14 +2451,7 @@ class DetecteurDeepProxy:
         Indices, du plus solide au plus faible : `userAgentData` (API absente de WebKit et Gecko, relevée par le
         script), `Sec-CH-UA` (envoyé par Chromium seul), `Chrome/` dans le User-Agent annoncé.
         """
-        nav = p.get("navigateur") or {}
-        if nav.get("userAgentData"):
-            return True
-        for o in obs.http:
-            e = _entetes(o)
-            if "sec-ch-ua" in e or "chrome/" in e.get("user-agent", "").lower():
-                return True
-        return "chrome/" in str(nav.get("userAgent", "")).lower()
+        return famille_navigateur(obs, p) == "chromium"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
