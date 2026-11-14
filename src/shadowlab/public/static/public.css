@@ -3,7 +3,7 @@
    thème sombre ; titres en serif du système. Une seule audace : la tesselle posée à la main (mosaïque de vraies
    photos en haut de l'accueil, puces, chiffres des étapes, compteur). Le reste se tait pour laisser lire.
    Aucune ressource extérieure (politique de sécurité) : ni police téléchargée, ni image, ni feuille importée.
-   Cette feuille sert aussi les pages de contact (sous /contact/style.css). Classes : src/shadowlab/public/pages.py. */
+   Cette feuille sert aussi les pages de contact (sous /contact/style.css). Classes : pages.py. */
 
 :root {
   color-scheme: light dark;
