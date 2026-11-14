@@ -911,3 +911,20 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   social) ; le test d'intégration du site public n'est pas relancé ; l'adresse reste celle d'un tunnel rapide (perdue
   si le Mac redémarre ou si le tunnel tombe, et avec elle « Ma session » pour les participants). Décidé par : Ethan (la
   demande), coordination (la forme ; travail d'un sous-agent, relu).
+- **D-85 — 14/11/2026 — Arena : la sonde `deep-proxy` mesure aussi Safari et Firefox (sonde 2, détecteur 1.1).**
+  Constat : les deux premières sessions humaines du site public (Safari 26 et 27 sur iPhone), rejouées contre les
+  niveaux, passent 01 à 03 et sont arrêtées de 04 à 07 par le seul détecteur `deep-proxy` (`getter_non_natif` 0,8 et
+  `illegal_invoc_absent` 0,7). Cause : la sonde de `observateur.js` (`testDetectionProfonde`) ne reconnaissait que les
+  formes de Chrome (texte `function get x() { [native code] }`, message « Illegal invocation ») ; tout Safari et tout
+  Firefox étaient classés automatisés. Décision : la sonde accepte le texte d'une fonction native avec ou sans `get `,
+  sur une ou plusieurs lignes, compte toute `TypeError` levée par le getter appelé sur un objet étranger, et écrit
+  `sonde: 2`. Le détecteur (1.1) n'applique ces deux signaux à un relevé de l'ancienne sonde (sans `sonde`) que pour
+  la famille Chromium (`userAgentData`, `Sec-CH-UA`, ou `Chrome/` dans le User-Agent) ; ses autres signaux ne changent
+  pas. Preuve : `tests/test_deep_proxy_safari.py` (19 tests, 9 vus en échec avant le code ; sonde exécutée sous Node
+  sur les trois formes de texte et de message), 1 734 tests rapides verts ; rejeu des deux vraies sessions avec le
+  code corrigé : `deep-proxy` ne les arrête plus. Limites : aucun vrai Safari ni Firefox n'a encore exécuté la sonde
+  2 (on le saura à la prochaine session Safari du site public, relancé avec elle à 19 h 45) ; le repli sur le
+  User-Agent est falsifiable ; **les deux sessions restent arrêtées de 04 à 07 par le score composite** (`vendor_absent`,
+  `hover_none`, `ratio_move_click_faible`, `no_first_paint`, quatre règles pensées pour Chrome sur ordinateur) :
+  correction suivante. Campagne de contrôle à faire après les deux corrections. Décidé par : coordination (travail
+  d'un sous-agent, relu).

@@ -3493,3 +3493,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   pour Chromium. Tests vus en échec d'abord. Ensuite : contrôle, fusion, suite complète, campagne de contrôle
   (`recolte-arena.yaml`), relance de l'application publique pour que les visiteurs reçoivent la nouvelle sonde.
 - **Plan** : § 8, ligne 1.7 mise à jour (premières sessions humaines, critère non atteint).
+
+## 2026-11-14 (19h50) — Claude (Fable 5.2, coordination) — D-85 : `deep-proxy` corrigé ; les sessions iPhone butent encore sur le composite
+
+- **D-85** (branche `arena-deep-proxy-safari`, sous-agent Sonnet, relu : rouge sur `c4089b9`, 9 échecs ; fusion
+  `7d4d764`) : sonde 2 dans `observateur.js` (`testDetectionProfonde`), détecteur `deep-proxy` 1.1 dans `detection.py`,
+  hachage épinglé du script renouvelé dans `tests/test_public_releve.py`. Suite rapide : 1 734 verts, lint propre.
+- **Rejeu des deux vraies sessions avec le code corrigé** : `deep-proxy` ne les arrête plus, mais elles restent arrêtées
+  de 04 à 07 par le composite : `vendor_absent` (« Apple Computer, Inc. » n'est pas « Google Inc. »), `hover_none`,
+  `ratio_move_click_faible` (1 mouvement par toucher), `no_first_paint` (niveau 05). Score 1,025 au niveau 04.
+- **Site public relancé** (application seule, même adresse) : il sert la sonde 2 ; session d'essai puis suppression.
+- **Lancé** : sous-agent Sonnet, branche `arena-composite-tactile` : famille du navigateur et appareil tactile comme
+  conditions de ces quatre règles, tests vus en échec d'abord, rien d'autre.
+- **Reste** : contrôler et fusionner, suite complète, campagne de contrôle (`controle-vrai-chrome.yaml`, à comparer à
+  la campagne 98), décision D-86.
