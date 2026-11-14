@@ -959,11 +959,10 @@ a.auteur-nom:hover {
   color: var(--encre-2);
   font: italic 400 1rem/1.4 var(--serif);
 }
-.explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden]))) .mosaique-vide {
+.explorer:not(:has([data-recherche-vide]:not([hidden])))
+  .explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden])))
+  .mosaique-vide {
   display: block;
-}
-.explorer:has([data-recherche-vide]:not([hidden])) .mosaique-vide {
-  display: none;
 }
 .listes {
   display: grid;

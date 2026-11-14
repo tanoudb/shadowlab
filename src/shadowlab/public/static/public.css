@@ -488,18 +488,26 @@ strong {
   background: var(--verre-lapis);
   --pose: -7deg;
 }
-/* Pendant une session, l'accueil ne charge pas de photos : les mêmes cases, en verre teinté. */
+/* Pendant une session, l'accueil ne charge pas de photos : les mêmes cases, remplies de petites tesselles de
+   verre teinté (un quadrillage de joints dessiné par dégradés, sans image). */
+.tesselle-vide {
+  background-image:
+    linear-gradient(var(--joint-mosaique) 2px, transparent 2px),
+    linear-gradient(90deg, var(--joint-mosaique) 2px, transparent 2px);
+  background-size: 13px 13px;
+  background-position: -1px -1px;
+}
 .tesselle-vide.tesselle-lac {
-  background: color-mix(in srgb, var(--t0) 55%, var(--joint-mosaique));
+  background-color: color-mix(in srgb, var(--t0) 55%, var(--joint-mosaique));
 }
 .tesselle-vide.tesselle-renard {
-  background: color-mix(in srgb, var(--t3) 55%, var(--joint-mosaique));
+  background-color: color-mix(in srgb, var(--t3) 55%, var(--joint-mosaique));
 }
 .tesselle-vide.tesselle-fleur {
-  background: color-mix(in srgb, var(--t1) 70%, var(--joint-mosaique));
+  background-color: color-mix(in srgb, var(--t1) 70%, var(--joint-mosaique));
 }
 .tesselle-vide.tesselle-brioche {
-  background: color-mix(in srgb, var(--t2) 55%, var(--joint-mosaique));
+  background-color: color-mix(in srgb, var(--t2) 55%, var(--joint-mosaique));
 }
 .mosaique-legende {
   position: absolute;
@@ -1197,9 +1205,8 @@ strong {
   border-radius: 12px;
   background: var(--fond);
   color: var(--encre);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.45;
-  letter-spacing: 0.01em;
   user-select: all;
 }
 .message-suite {

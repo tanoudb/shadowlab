@@ -855,8 +855,11 @@ def test_explorer_dit_quand_aucune_photo_de_la_page_ne_correspond(client, langue
     ]
     css = SOCIAL_CSS.read_text(encoding="utf-8")
     assert re.search(r"\.mosaique-vide \{\s*display: none;", css), "caché sans recherche"
-    assert ".explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden]))) .mosaique-vide" in css
-    assert ".explorer:has([data-recherche-vide]:not([hidden])) .mosaique-vide" in css, "pas avec « Aucun résultat »"
+    regle = re.search(r"\.explorer:not\(([^{]*)\.mosaique-vide \{\s*display: block;", css)
+    assert regle, "affiché par une seule règle"
+    condition = " ".join(regle.group(1).split())
+    assert condition.startswith(":has([data-recherche-vide]:not([hidden])))"), "jamais avec « Aucun résultat »"
+    assert ".explorer-mosaique:has(.mosaique.en-recherche):not(:has(.vignette:not([hidden])))" in condition
 
 
 @pytest.mark.parametrize(
