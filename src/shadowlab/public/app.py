@@ -41,9 +41,10 @@ FICHIERS_STATIQUES = {
     "vitrine.css": "text/css",
     "vitrine.js": "text/javascript",
 }
-# Fichiers propres à l'application publique (réseau social), servis sous /public/static/ : liste fermée aussi.
+# Fichiers propres à l'application publique (pages de l'étude, réseau social), servis sous /public/static/ : liste
+# fermée aussi.
 STATIQUES_PUBLICS = Path(__file__).resolve().parent / "static"
-FICHIERS_PUBLICS = {"social.css": "text/css", "social.js": "text/javascript"}
+FICHIERS_PUBLICS = {"public.css": "text/css", "social.css": "text/css", "social.js": "text/javascript"}
 PREFIXE_LANGUE = re.compile(r"/(fr|en)(?:/|$)")  # « /fr », « /en/information » ; pas « /english »
 CSP = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
@@ -442,16 +443,20 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     # --- Information et consentement ---------------------------------------------------------------
 
-    # La même page sous « / » (langue de la session ou du navigateur) et sous chaque préfixe de langue.
+    # L'accueil de l'étude sous « / » (langue de la session ou du navigateur) et sous chaque préfixe de langue.
     @app.get("/", response_class=HTMLResponse)
     @app.get("/fr", response_class=HTMLResponse)
     @app.get("/en", response_class=HTMLResponse)
-    def information(request: Request) -> HTMLResponse:
+    def accueil(request: Request) -> HTMLResponse:
         en_cours, langue = request.state.session is not None, langue_de(request)
-        return avec_csrf(
-            request,
-            lambda csrf: pages.information(reglages, csrf, limites.duree_session_s, langue, en_cours=en_cours),
-        )
+        return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, en_cours=en_cours))
+
+    # La notice complète, sans formulaire ; « /information » suit la langue de la session ou du navigateur.
+    @app.get("/information", response_class=HTMLResponse)
+    @app.get("/fr/information", response_class=HTMLResponse)
+    @app.get("/en/information", response_class=HTMLResponse)
+    def notice(request: Request) -> HTMLResponse:
+        return HTMLResponse(pages.notice(reglages, limites.duree_session_s, langue_de(request)))
 
     @app.post("/session/commencer")
     async def commencer(request: Request) -> Response:
@@ -466,13 +471,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return refus(403, "expire_accueil", langue)
         if champs.get("consentement") != "oui":
             message = pages.texte(langue, "accord_manquant")
-            return avec_csrf(
-                request,
-                lambda csrf: pages.information(reglages, csrf, limites.duree_session_s, langue, erreur=message),
-                status_code=422,
-            )
+            return avec_csrf(request, lambda csrf: pages.accueil(csrf, langue, erreur=message), status_code=422)
         if request.state.session is not None:  # double clic, ou session déjà ouverte : on ne recrée rien
-            return RedirectResponse("/lab/vitrine", status_code=303)
+            return RedirectResponse(pages.SOCIAL, status_code=303)
         with base() as cx:
             trop = donnees.sessions_du_jour(cx) >= limites.sessions_par_jour
         if plein():
@@ -486,7 +487,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
                 "langue": langue,
             }
             jeton = donnees.creer_session(cx, accord)
-        reponse = RedirectResponse("/lab/vitrine", status_code=303)
+        reponse = RedirectResponse(pages.SOCIAL, status_code=303)  # le site vedette, le réseau social fictif
         poser(reponse, cookie_session, signer("session", jeton), max_age=limites.duree_session_s)
         # Droit d'effacement dès le début : « Ma session » retrouve la session tant qu'elle est conservée.
         poser(reponse, cookie_droits, signer("supprimer", jeton), max_age=reglages.conservation_jours * UNE_JOURNEE_S)
@@ -577,9 +578,9 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
 
     @app.get("/contact/style.css")
     def contact_style() -> FileResponse:
-        """La feuille du site, servie sous /contact/ : une page de contact ne charge rien sous /lab/, que la base
-        d'une session en cours noterait (un référent « / », à la milliseconde)."""
-        return FileResponse(STATIQUES / "vitrine.css", media_type="text/css")
+        """La feuille des pages de l'étude, servie aussi sous /contact/ : une page de contact ne mène qu'à « / » ou
+        « /contact… » et ne charge rien sous /lab/, que la base d'une session en cours noterait (à la milliseconde)."""
+        return FileResponse(STATIQUES_PUBLICS / "public.css", media_type="text/css")
 
     @app.post("/contact")
     async def ecrire(request: Request) -> Response:

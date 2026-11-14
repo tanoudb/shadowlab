@@ -1,4 +1,4 @@
-"""Pages de l'application publique : information et consentement, remerciement, suppression, erreurs.
+"""Pages de l'application publique : accueil de l'étude, notice, session, contact, erreurs, bandeau de la vitrine.
 
 Deux langues (français, anglais) : la structure HTML est écrite une fois ici, les textes sont dans `textes.py`.
 La liste des données relevées suit `site/static/observateur.js` clé par clé, dans chaque langue : un test vérifie
@@ -14,10 +14,10 @@ from ..config import ReglagesPublics
 from ..site.vitrine import MARQUE
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
 from .social import MARQUE as MARQUE_SOCIAL
-from .textes import ERREURS, LANGUES, T
+from .textes import ERREURS, LANGUES, RESUME_RELEVE, T
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.1"
+VERSION_INFORMATION = "2026-11-14.2"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -242,45 +242,67 @@ def _duree(secondes: int, langue: str) -> str:
     return _t(langue, "minutes", n=secondes // 60)
 
 
-def _page(titre: str, corps: str, langue: str, *, contact: bool = False) -> str:
-    """Gabarit commun. Une page de contact ne charge rien sous /lab/ et ne mène qu'à « / » ou « /contact… » : pendant
-    une session, la base noterait toute requête /lab/ (à la milliseconde), donc l'ouverture du formulaire."""
+SOCIAL = "/lab/social/fil"  # le site vedette : « Commencer », « Reprendre la visite », « Revenir au site » y mènent
+NOM_LANGUE = {"fr": "Français", "en": "English"}
+
+
+def _page(
+    titre: str, corps: str, langue: str, *, classe: str, contact: bool = False, bascule: str | None = None
+) -> str:
+    """Gabarit des pages de l'étude (accueil, notice, session, contact, erreurs), classe `classe` sur `body`.
+
+    `bascule` : suffixe de l'adresse de la même page dans l'autre langue (« » pour l'accueil, « /information » pour la
+    notice) ; sans lui, pas de lien vers l'autre langue. Une page de contact ne charge rien sous /lab/ et ne mène qu'à
+    « / » ou « /contact… » : pendant une session, la base noterait toute requête /lab/ (à la milliseconde), donc
+    l'ouverture du formulaire. Sa feuille de style, la même, est servie sous /contact/."""
     langue = langue_sure(langue)
+    marque = _t(langue, "marque")
     if contact:
-        feuille, marque = "/contact/style.css", "/"
-        navigation = f'<a href="/">{_t(langue, "nav_participer")}</a><a href="/contact">{_t(langue, "nav_contact")}</a>'
+        feuille, accueil = "/contact/style.css", "/"
+        liens = [("/", _t(langue, "nav_accueil")), ("/contact", _t(langue, "nav_contact"))]
     else:
-        feuille, marque = "/lab/static/vitrine.css", "/lab/vitrine"
-        navigation = (
-            f'<a href="/">{_t(langue, "nav_participer")}</a><a href="/lab/vitrine">{_t(langue, "nav_site")}</a>'
-            f'<a href="/session">{_t(langue, "nav_ma_session")}</a>'
-        )
+        feuille, accueil = "/public/static/public.css", f"/{langue}"
+        liens = [
+            (f"/{langue}/information", _t(langue, "nav_notice")),
+            (SOCIAL, escape(MARQUE_SOCIAL)),
+            ("/session", _t(langue, "nav_ma_session")),
+            ("/contact", _t(langue, "nav_contact")),
+        ]
+    navigation = "".join(f'<a href="{href}">{texte}</a>' for href, texte in liens)
+    autre = "en" if langue == "fr" else "fr"
+    lien_langue = (
+        f'\n<p class="autre-langue"><a href="/{autre}{bascule}" hreflang="{autre}" lang="{autre}">{NOM_LANGUE[autre]}</a></p>'
+        if bascule is not None
+        else ""
+    )
+    entete_titre = escape(titre) if titre == marque else f"{escape(titre)} — {marque}"
     return f"""<!doctype html>
 <html lang="{langue}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="sl-sans-tiers" content="1">
-<title>{escape(titre)} — {MARQUE}</title>
+<title>{entete_titre}</title>
 <link rel="stylesheet" href="{feuille}">
 </head>
-<body class="vitrine">
-<header class="entete"><div class="conteneur">
-<a class="marque" href="{marque}">{MARQUE}</a>
-<nav aria-label="{_t(langue, "nav_aria")}">{navigation}</nav>
+<body class="etude {classe}">
+<header class="etude-entete"><div class="conteneur">
+<a class="etude-marque" href="{accueil}">{marque}</a>
+<nav class="etude-navigation" aria-label="{_t(langue, "nav_aria")}">{navigation}</nav>{lien_langue}
 </div></header>
-<main class="conteneur public">
+<main class="conteneur etude-principal">
 {corps}
 </main>
-<footer class="pied"><div class="conteneur">{_t(langue, "pied")}</div></footer>
+<footer class="etude-pied"><div class="conteneur">{_t(langue, "pied")}</div></footer>
 </body>
 </html>"""
 
 
-def _bouton_terminer(csrf: str, langue: str) -> str:
+def _bouton_terminer(csrf: str, langue: str, classe: str = "bouton-plein") -> str:
+    """Bouton « Terminer ma session ». `bouton-plein` : classe de la feuille de la vitrine (bandeau)."""
     return f"""<form class="en-ligne" method="post" action="/session/terminer">
 <input type="hidden" name="csrf" value="{escape(csrf)}">
-<button class="bouton-plein" type="submit">{_t(langue, "terminer")}</button>
+<button class="{classe}" type="submit">{_t(langue, "terminer")}</button>
 </form>"""
 
 
@@ -305,15 +327,84 @@ def _liste(donnees: list[tuple[str, str]]) -> str:
     return "".join(f"<dt><code>{escape(cle)}</code></dt><dd>{escape(texte)}</dd>" for cle, texte in donnees)
 
 
-def information(
-    reglages: ReglagesPublics,
-    csrf: str,
-    duree_session_s: int,
-    langue: str,
-    *,
-    en_cours: bool = False,
-    erreur: str = "",
-) -> str:
+def _puces(elements: list[str]) -> str:
+    return "".join(f"<li>{escape(e)}</li>" for e in elements)
+
+
+def accueil(csrf: str, langue: str, *, en_cours: bool = False, erreur: str = "") -> str:
+    """Accueil de l'étude « Humain ou robot ? » (cadrage du 13/11/2026, « Textes de l'accueil »). La case d'accord, la
+    notice juste à côté, et la visite sans participer ; pendant une session, « Reprendre la visite » à la place."""
+    langue = langue_sure(langue)
+    resume = RESUME_RELEVE[langue]
+    notice_href = f"/{langue}/information"
+    social = escape(MARQUE_SOCIAL)
+    if en_cours:
+        accord = f"""<div class="accord accord-en-cours" id="participer">
+<p><strong>{_t(langue, "deja_en_cours")}</strong></p>
+<p class="accord-actions"><a class="bouton-principal" href="{SOCIAL}">{_t(langue, "reprendre")}</a><a class="bouton-secondaire" href="/session">{_t(langue, "nav_ma_session")}</a></p>
+</div>"""
+    else:
+        alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>\n' if erreur else ""
+        lien = f'<a class="lien-notice" href="{notice_href}">{_t(langue, "accord_notice_lien")}</a>'
+        accord = f"""<form class="accord" id="participer" method="post" action="/session/commencer">
+{alerte}<input type="hidden" name="csrf" value="{escape(csrf)}">
+<input type="hidden" name="langue" value="{langue}">
+<p class="accord-notice">{_t(langue, "accord_notice", lien=lien)}</p>
+<div class="accord-case">
+<input type="checkbox" id="consentement" name="consentement" value="oui" required>
+<label for="consentement">{_t(langue, "accord_case", notice=notice_href)}</label>
+</div>
+<p class="accord-actions"><button class="bouton-principal" type="submit">{_t(langue, "commencer")}</button><a class="visiter-sans-participer" href="{SOCIAL}">{_t(langue, "visiter_sans_participer")}</a></p>
+</form>"""
+    corps = f"""<article class="accueil">
+<header class="accueil-entete">
+<h1 class="accueil-titre">{_t(langue, "accueil_titre")}</h1>
+<p class="accueil-sous-titre">{_t(langue, "accueil_sous_titre")}</p>
+<p class="accueil-accroche">{_t(langue, "accueil_accroche")}</p>
+</header>
+
+<section class="accueil-etapes" aria-labelledby="titre-etapes">
+<h2 id="titre-etapes">{_t(langue, "h_etapes")}</h2>
+<ol class="etapes">
+<li class="etape"><h3>{_t(langue, "etape_1_titre")}</h3><p>{_t(langue, "etape_1")}</p></li>
+<li class="etape"><h3>{_t(langue, "etape_2_titre")}</h3><p>{_t(langue, "etape_2", social=social)}</p></li>
+<li class="etape"><h3>{_t(langue, "etape_3_titre")}</h3><p>{_t(langue, "etape_3")}</p></li>
+</ol>
+</section>
+
+<section class="accueil-releve" aria-labelledby="titre-releve">
+<h2 id="titre-releve">{_t(langue, "h_resume")}</h2>
+<p class="releve-franchise">{escape(resume["franchise"])}</p>
+<div class="releve-colonnes">
+<div class="releve-oui"><h3>{_t(langue, "resume_oui")}</h3><ul>{_puces(resume["oui"])}</ul></div>
+<div class="releve-non"><h3>{_t(langue, "resume_non")}</h3><ul>{_puces(resume["non"])}</ul></div>
+</div>
+<p class="releve-sans-session">{escape(resume["sans_session"])}</p>
+<p class="releve-detail"><a href="{notice_href}">{_t(langue, "resume_detail")}</a></p>
+<p class="accueil-but">{_t(langue, "accueil_but")}</p>
+</section>
+
+<section class="accueil-sites" aria-labelledby="titre-sites">
+<h2 id="titre-sites">{_t(langue, "h_sites")}</h2>
+<div class="site-vedette">
+<h3 class="site-vedette-nom">{social}</h3>
+<p>{_t(langue, "vedette")}</p>
+</div>
+<p class="site-second">{_t(langue, "site_second")}</p>
+<p class="fictif">{_t(langue, "fictif")}</p>
+</section>
+
+<section class="accueil-participer" aria-labelledby="titre-participer">
+<h2 id="titre-participer">{_t(langue, "h_participer")}</h2>
+{accord}
+</section>
+</article>"""
+    return _page(_t(langue, "marque"), corps, langue, classe="page-accueil", bascule="")
+
+
+def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
+    """Notice complète, dans une langue : la même structure pour les deux, phrase pour phrase. Sans formulaire :
+    l'accord se donne sur l'accueil, vers lequel elle renvoie."""
     langue = langue_sure(langue)
     entetes = ", ".join(f"<code>{escape(e)}</code>" for e in ENTETES_GARDES)
     prefixes = _t(langue, "et").join(f"<code>{escape(p)}*</code>" for p in PREFIXES_GARDES)
@@ -321,37 +412,23 @@ def information(
     jours = reglages.conservation_jours
     duree = _duree(duree_session_s, langue)
     relevees, comportement = RELEVES[langue]
-    alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>' if erreur else ""
-    if en_cours:
-        action = f"""<div class="encadre accord">
-<p><strong>{_t(langue, "deja_en_cours")}</strong></p>
-<p class="actions"><a class="bouton-plein" href="/lab/vitrine">{_t(langue, "reprendre")}</a><a href="/session">{_t(langue, "nav_ma_session")}</a></p>
-</div>"""
-    else:
-        action = f"""<form class="encadre accord" method="post" action="/session/commencer">
-{alerte}
-<input type="hidden" name="csrf" value="{escape(csrf)}">
-<input type="hidden" name="langue" value="{langue}">
-<label><input type="checkbox" name="consentement" value="oui" required>
-<span>{_t(langue, "accord_case")}</span></label>
-<p class="actions"><button class="bouton-plein" type="submit">{_t(langue, "commencer")}</button><a href="/lab/vitrine">{_t(langue, "visiter_sans_participer")}</a></p>
-</form>"""
-    corps = f"""<article class="info">
+    social, habitat = escape(MARQUE_SOCIAL), escape(MARQUE)
+    corps = f"""<article class="notice">
 <h1>{_t(langue, "notice_h1")}</h1>
-<p class="chapeau">{_t(langue, "notice_chapeau")}</p>
+<p class="notice-chapeau">{_t(langue, "notice_chapeau", social=social, vitrine=habitat)}</p>
 
-<section>
+<section class="notice-section" id="deroulement">
 <h2>{_t(langue, "h_deroulement")}</h2>
 <ol>
 <li>{_t(langue, "deroulement_1")}</li>
-<li>{_t(langue, "deroulement_2")}</li>
+<li>{_t(langue, "deroulement_2", social=social)}</li>
 <li>{_t(langue, "deroulement_3", duree=duree)}</li>
 </ol>
 <p>{_t(langue, "deroulement_ma_session")}</p>
 <p>{_t(langue, "deroulement_sans_participer")}</p>
 </section>
 
-<section>
+<section class="notice-section" id="releve">
 <h2>{_t(langue, "h_releve")}</h2>
 <p>{_t(langue, "releve_intro")}</p>
 <ul>
@@ -360,7 +437,7 @@ def information(
 <li>{_t(langue, "releve_pages", entetes=entetes, prefixes=prefixes)}</li>
 <li>{_t(langue, "releve_session")}</li>
 </ul>
-<details>
+<details class="liste-complete">
 <summary>{_t(langue, "liste_complete")}</summary>
 <h3>{_t(langue, "h_liste_appareil")}</h3>
 <dl class="donnees">{_liste(relevees)}</dl>
@@ -370,7 +447,7 @@ def information(
 </details>
 </section>
 
-<section>
+<section class="notice-section" id="non-releve">
 <h2>{_t(langue, "h_non_releve")}</h2>
 <p>{_t(langue, "non_releve")}</p>
 <p>{_t(langue, "transit")}</p>
@@ -378,7 +455,7 @@ def information(
 <p>{_t(langue, "donnees_personnelles")}</p>
 </section>
 
-<section>
+<section class="notice-section" id="cookies">
 <h2>{_t(langue, "h_cookies")}</h2>
 <p>{_t(langue, "cookies_intro")}</p>
 <ul>
@@ -388,24 +465,24 @@ def information(
 </ul>
 </section>
 
-<section>
+<section class="notice-section" id="pourquoi">
 <h2>{_t(langue, "h_pourquoi")}</h2>
 <p>{_t(langue, "pourquoi")}</p>
 <p>{_t(langue, "base_legale")}</p>
 </section>
 
-<section>
+<section class="notice-section" id="duree">
 <h2>{_t(langue, "h_duree")}</h2>
 <p>{_t(langue, "duree", jours=jours)}</p>
 </section>
 
-<section>
+<section class="notice-section" id="responsable">
 <h2>{_t(langue, "h_responsable")}</h2>
 <p>{contact}</p>
 <p>{_t(langue, "responsable_ecrire", jours=jours)}</p>
 </section>
 
-<section>
+<section class="notice-section" id="droits">
 <h2>{_t(langue, "h_droits")}</h2>
 <ul>
 <li>{_t(langue, "droits_ma_session")}</li>
@@ -415,99 +492,99 @@ def information(
 </ul>
 </section>
 
-{action}
+<p class="notice-retour"><a class="bouton-principal" href="/{langue}">{_t(langue, "notice_retour")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_information"), corps, langue)
+    return _page(_t(langue, "titre_notice"), corps, langue, classe="page-notice", bascule="/information")
 
 
 def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, en_cours: bool, langue: str) -> str:
-    terminer = f'<p class="actions">{_bouton_terminer(csrf, langue)}</p>' if en_cours else ""
+    terminer = f'<p class="actions">{_bouton_terminer(csrf, langue, "bouton-principal")}</p>' if en_cours else ""
     etat = _t(langue, "etat_en_cours" if en_cours else "etat_terminee")
-    return f"""<div class="encadre">
+    return f"""<div class="encadre session-encadre">
 <p>{_t(langue, "identifiant", etat=etat)}<br><code class="identifiant">{escape(jeton)}</code></p>
 {terminer}
 <p>{_t(langue, "effacement_auto", jours=jours)}</p>
 <form method="post" action="/session/supprimer">
 <input type="hidden" name="csrf" value="{escape(csrf)}">
 <input type="hidden" name="session" value="{escape(suppression)}">
-<button class="bouton-plein bouton-danger" type="submit">{_t(langue, "supprimer")}</button>
+<button class="bouton-danger" type="submit">{_t(langue, "supprimer")}</button>
 </form>
 <p class="discret">{_t(langue, "supprimer_plus_tard")}</p>
 </div>"""
 
 
 def merci(jeton: str, suppression: str, csrf: str, jours: int, langue: str) -> str:
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "merci_h1")}</h1>
 <p class="chapeau">{_t(langue, "merci_chapeau")}</p>
 {_encadre_session(jeton, suppression, csrf, jours, False, langue)}
-<p><a href="/lab/vitrine">{_t(langue, "revenir_site")}</a></p>
+<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_merci"), corps, langue)
+    return _page(_t(langue, "titre_merci"), corps, langue, classe="page-merci")
 
 
 def ma_session(jeton: str, suppression: str, csrf: str, jours: int, en_cours: bool, langue: str) -> str:
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "titre_ma_session")}</h1>
 {_encadre_session(jeton, suppression, csrf, jours, en_cours, langue)}
-<p><a href="/lab/vitrine">{_t(langue, "revenir_site")}</a></p>
+<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_ma_session"), corps, langue)
+    return _page(_t(langue, "titre_ma_session"), corps, langue, classe="page-session")
 
 
 def aucune_session(langue: str) -> str:
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "titre_aucune_session")}</h1>
 <p>{_t(langue, "aucune_session")}</p>
 <p>{_t(langue, "aucune_session_ailleurs")}</p>
-<p class="actions"><a class="bouton-plein" href="/">{_t(langue, "participer")}</a><a href="/lab/vitrine">{_t(langue, "revenir_site")}</a></p>
+<p class="actions"><a class="bouton-principal" href="/{langue_sure(langue)}">{_t(langue, "participer")}</a><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_aucune_session"), corps, langue)
+    return _page(_t(langue, "titre_aucune_session"), corps, langue, classe="page-session")
 
 
 def contact(csrf: str, jours: int, taille: int, langue: str, *, erreur: str = "", texte: str = "") -> str:
     """Formulaire pour écrire au responsable. `texte` (échappé) rend au visiteur un message refusé."""
     alerte = f'<p class="erreur" role="alert">{escape(erreur)}</p>' if erreur else ""
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "contact_h1")}</h1>
 <p class="chapeau">{_t(langue, "contact_chapeau")}</p>
-<form class="encadre contact" method="post" action="/contact">
+<form class="encadre formulaire-contact" method="post" action="/contact">
 {alerte}
 <input type="hidden" name="csrf" value="{escape(csrf)}">
 <label for="message">{_t(langue, "contact_message")}</label>
 <textarea id="message" name="message" rows="8" maxlength="{taille}" required>{escape(texte)}</textarea>
 <p class="discret">{_t(langue, "contact_aide", taille=taille)}</p>
-<p class="actions"><button class="bouton-plein" type="submit">{_t(langue, "envoyer")}</button><a href="/">{_t(langue, "revenir_information")}</a></p>
+<p class="actions"><button class="bouton-principal" type="submit">{_t(langue, "envoyer")}</button><a href="/">{_t(langue, "revenir_information")}</a></p>
 </form>
 <p class="discret">{_t(langue, "contact_conservation", jours=jours)}</p>
 </article>"""
-    return _page(_t(langue, "titre_contact"), corps, langue, contact=True)
+    return _page(_t(langue, "titre_contact"), corps, langue, classe="page-contact", contact=True)
 
 
 def contact_envoye(langue: str) -> str:
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "titre_envoye")}</h1>
 <p>{_t(langue, "envoye")}</p>
 <p><a href="/">{_t(langue, "revenir_information")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_envoye"), corps, langue, contact=True)
+    return _page(_t(langue, "titre_envoye"), corps, langue, classe="page-contact", contact=True)
 
 
 def supprimee(existait: bool, langue: str) -> str:
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{_t(langue, "titre_supprimee")}</h1>
 <p>{_t(langue, "supprimee" if existait else "deja_effacee")}</p>
-<p><a href="/lab/vitrine">{_t(langue, "revenir_site")}</a></p>
+<p><a href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
 </article>"""
-    return _page(_t(langue, "titre_supprimee"), corps, langue)
+    return _page(_t(langue, "titre_supprimee"), corps, langue, classe="page-session")
 
 
 def erreur(cle: str, langue: str, *, contact: bool = False) -> str:
     """Page d'erreur : titre et message de `textes.ERREURS`, dans la langue du visiteur."""
     titre, message = ERREURS[langue_sure(langue)][cle]
-    corps = f"""<article class="info">
+    corps = f"""<article class="message">
 <h1>{escape(titre)}</h1>
 <p>{escape(message)}</p>
 <p><a href="/">{_t(langue, "revenir_information")}</a></p>
 </article>"""
-    return _page(titre, corps, langue, contact=contact)
+    return _page(titre, corps, langue, classe="page-erreur", contact=contact)
