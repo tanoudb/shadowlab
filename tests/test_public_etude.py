@@ -571,7 +571,7 @@ def test_pages_de_l_etude_sans_style_ni_script_dans_la_page(client, langue):
 def test_version_du_texte_d_information_changee():
     from shadowlab.public.pages import VERSION_INFORMATION
 
-    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2")
+    assert VERSION_INFORMATION not in ("2026-11-12.7", "2026-11-14.1", "2026-11-14.2", "2026-11-14.3")
 
 
 # === Étape 3 : la fréquentation, un compte par jour ===================================================
@@ -865,3 +865,45 @@ def test_plafond_de_la_base_en_sessions_au_pire():
     sessions = limites.taille_max_base // pire_session
     assert 120 <= sessions <= 130, sessions
     assert limites.sessions_par_jour == 40, "défaut inchangé"
+
+
+# === Relecture : parité des textes, sous-champs de la notice ==========================================
+
+
+def test_textes_memes_cles_et_memes_champs_dans_les_deux_langues():
+    """Une clé absente dans une langue ferait une erreur 500 ; un champ `{jours}` oublié promettrait moins."""
+    import string
+
+    from shadowlab.public.textes import ERREURS, RESUME_RELEVE, T
+
+    def champs(texte: str) -> set[str]:
+        return {nom for _, nom, _, _ in string.Formatter().parse(texte) if nom}
+
+    assert set(T["fr"]) == set(T["en"])
+    for cle in T["fr"]:
+        assert champs(T["fr"][cle]) == champs(T["en"][cle]), cle
+    assert set(ERREURS["fr"]) == set(ERREURS["en"])
+    for cle in ERREURS["fr"]:
+        assert all(texte.strip() for texte in ERREURS["fr"][cle] + ERREURS["en"][cle]), cle
+    for partie in ("oui", "non"):
+        assert len(RESUME_RELEVE["fr"][partie]) == len(RESUME_RELEVE["en"][partie]), partie
+
+
+def test_notice_decrit_les_sous_champs_de_navigateur_et_apis():
+    """`observateur.js` envoie aussi, dans `navigateur` et `apis`, des champs que la notice ne nommait pas : cookies
+    permis, lecteur PDF, types de fichiers, appareil mobile ou non, objet propre à Chrome, périphériques HID."""
+    from shadowlab.public.pages import RELEVES
+
+    source = OBSERVATEUR.read_text(encoding="utf-8")
+    collecte = re.search(r"^async function collecter\(\) \{(.*?)^\}$", source, re.S | re.M).group(1)
+    for sous_champ in ("cookieEnabled:", "pdfViewerEnabled:", "mimeTypes:", "mobile:", "chrome:", "hid:"):
+        assert sous_champ in collecte, sous_champ
+    attendus = {
+        "fr": {"navigateur": ("cookies", "PDF", "types de fichiers", "mobile"), "apis": ("Chrome", "HID")},
+        "en": {"navigateur": ("cookies", "PDF", "file types", "mobile"), "apis": ("Chrome", "HID")},
+    }
+    for langue, par_cle in attendus.items():
+        descriptions = dict(RELEVES[langue][0])
+        for cle, mots in par_cle.items():
+            for mot in mots:
+                assert mot in descriptions[cle], (langue, cle, mot)
