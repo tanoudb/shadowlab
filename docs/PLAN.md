@@ -760,6 +760,38 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   comportement ; un robot qui émettrait de vrais touchers avec une fenêtre cohérente n'est pas mesuré. Tel quel, ce
   témoin confirme la campagne 115 : 15 sur 15 au niveau 05.
 
+### Quatrième session du site public (15/11) : un navigateur intégré, pas Chrome
+
+Jeton `414f351a…`, 15/11 à 18 h 06
+UTC (19 h 06 heure locale), 61 s, 12 pages relevées. Son User-Agent porte `Claude/5.1231.2 Chrome/156.0.8078.75` : c'est
+le navigateur intégré de l'application Claude (un Chromium embarqué), pas Google Chrome. Marques annoncées
+(`sec-ch-ua`, `userAgentData`) : `Not:A-Brand` et `Chromium` seulement, en-tête absent d'une partie des requêtes ;
+`window.chrome` présent sans `app`, `loadTimes` ni `csi`. Elle avait été annoncée comme « Chrome 156 sur Mac, premier
+humain connu sur ordinateur » : ce n'est pas le cas. Conduite à la main ou par un automate : non établi.
+Rejeu du 15/11 (code `fd57b6e`) : elle passe 01 et 02 ; arrêtée de 03 à 07 à 18:06:25 par `chrome-apis`
+(`chrome_app_absent`, `loadTimes_absent`, `csi_absent`) et `comportement` (`clic_sans_souris`, `pages_eclair`).
+Hors ligne, sans ces deux détecteurs : elle passe 03 et 04, reste arrêtée de 05 à 07 (05 : `client_hints_absents` 0,25
++ `trajectoire_lineaire` 0,6 ; 06 et 07 : `client_hints_absents` 0,25 + `permissions_all_denied` 0,35 +
+`screen_position_zero` 0,28). Non évalués, comme pour toute session du site public : TLS, HTTP/2, corrélation,
+pièges, WebRTC. Les trois autres sessions n'ont pas changé.
+`trajectoire_lineaire` est dans le détecteur `entropie-interaction` (`detection.py`, l. 1004 à 1018), pas dans
+`comportement` ; elle est émise une fois par page, poids 0,6 : une seule page sous 0,08 rad atteint le seuil composite
+des niveaux 05 (0,6), 06 (0,5) et 07 (0,3) ; deux pages donnent 1,2 et classent `entropie-interaction` à lui seul.
+Session `414f351a` : 4 pages sur 9 évaluées sous 0,08. Session Chrome sur Windows : 2 sur 11 ; règle neutralisée, elle
+passe de 01 à 07, c'est la seule règle qui l'arrête. Dans le labo (campagnes 115 et 117, 255 passages) : déclenchée
+0 fois ; seul `noezia` en identité native produit des angles (126 pages d'au moins 10 angles, moyenne minimale 0,467).
+`screen_position_zero` : `screenX` et `screenY` valent 0 dans les quatre sessions du site public ; poids 0,4 × 0,7 =
+0,28, niveaux 06 et 07. Neutralisée, aucun verdict ne bascule chez les quatre. Labo : déclenchée dans 105 passages sur
+255 (45 `patchright` sans tête, 60 `patchright-chrome-mobile`), jamais pour un Chrome visible ; elle ne pèse dans une
+décision que pour 15 passages (`patchright-chrome-mobile`, niveau 06 sans corrélation, campagne 117) ; sans elle, 14 de
+ces 15 restent arrêtés et le quinzième n'a pas de relevé de comportement en base.
+**Décision (coordination, 15/11) : aucune règle ne change, pas de D-87, pas de campagne.** `trajectoire_lineaire` : pas
+de recalage (une session anonyme, une session dans un navigateur intégré dont on ne sait pas qui la conduisait) ;
+critère annoncé d'avance : dès qu'un humain connu, dans un vrai Chrome, Safari ou Firefox sur ordinateur, a une seule
+page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera D-87) ; la valeur
+du seuil attend le critère de 1.7. `screen_position_zero` : inchangée, elle ne change aucun verdict aujourd'hui ; à
+traiter avec le prochain changement de l'Arena. Détail : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`.
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -789,7 +821,7 @@ But : on mesure juste, l'Arena est crédible, le moteur récolte tout et passe.
 | 1.4 | **Site vitrine à contenu connu.** Contenu généré à partir d'une graine, taille réglable, fiches à plusieurs champs, pages de détail, images, liste chargée en JavaScript, espace privé, export de la vérité, apparence crédible. Thème : annonces immobilières fictives (choix de Claude) | Un parcours complet par un moteur témoin au niveau 01 égale la vérité à 100 % |
 | 1.5 | **Scénario de récolte et notation.** Complétude et exactitude, sans migration (compteurs dans `details`), visibles dans les rapports | Tests ; playwright au niveau 01 obtient 100 % et 100 % ; tableau moteur × niveau avec les deux notes |
 | 1.6 | **Application publique réduite.** La vitrine sans espace privé ni connexion, les sessions humaines et la collecte, rien d'autre (§ 5). Pas de Nginx, pas de Coraza, pas de niveaux : une simple application Python | Tests : `/api`, `/labo`, `/tableau`, `/api/docs` répondent 404 ; liste du § 5 cochée ; mise en ligne par Ethan |
-| 1.7 | **Sessions humaines et calibrage.** Au moins 10 sessions sur ordinateur en tout (Ethan et amis, navigateurs variés). Les sessions enregistrées sont **rejouées** contre les détecteurs de chaque niveau : on obtient le taux d'humains classés automatisés par niveau sans faire passer les humains par l'Arena. Ajouter ce rejeu et la clôture automatique des sessions. Un détecteur gardé classe au plus 1 humain sur 10 en automatisé ; sinon il est recalibré ou retiré (`cdp` en premier). L'Arena doit bloquer, pas seulement classer | **Jalon A** : l'Arena bloque les moteurs témoins (playwright, selenium) et, par rejeu, laisse passer ≥ 9 humains sur 10 à chaque niveau |
+| 1.7 | **Sessions humaines et calibrage.** Au moins 10 sessions sur ordinateur en tout (Ethan et amis, navigateurs variés). Les sessions enregistrées sont **rejouées** contre les détecteurs de chaque niveau : on obtient le taux d'humains classés automatisés par niveau sans faire passer les humains par l'Arena. Ajouter ce rejeu et la clôture automatique des sessions. Un détecteur gardé classe au plus 1 humain sur 10 en automatisé ; sinon il est recalibré ou retiré (`cdp` en premier). L'Arena doit bloquer, pas seulement classer | **Jalon A** : l'Arena bloque les moteurs témoins (playwright, selenium) et, par rejeu, laisse passer ≥ 9 humains sur 10 à chaque niveau. **15/11** : la quatrième session du site public est un navigateur intégré à l'application Claude, pas Chrome, et sa conduite n'est pas établie : elle ne compte pas comme humain connu ; le rejeu l'arrête de 03 à 07 ; aucune règle n'est changée (critère de `trajectoire_lineaire` dans `docs/DECISIONS.md`, ajout à D-86) |
 | 1.8 | **Mesure témoin contre Cloudflare.** Dès que le site public est derrière Cloudflare gratuit : 30 passages noezia + playwright depuis le poste. Une mesure, pas un critère | Un taux chiffré, noté ici |
 | 1.9 | **Corriger le moteur**, dans l'ordre des signaux mesurés en 1.3, 1.7 et 1.8. Une correction = une campagne avant/après | Seuils « Récolte » et « Discrétion » atteints depuis le poste |
 
@@ -931,7 +963,7 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 | Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`). Voie courte demandée le 12/11 : tunnel depuis le poste, `scripts/site-public-tunnel.sh`, à lancer par lui (lien temporaire, ne couvre pas 1.8) | 1.6, 1.8 |
 | **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`, en visitant aussi `/lab/vitrine` (la liste, une fiche). Arrêter le site, puis `uv run shadowlab rejeu` : il dit, niveau par niveau, si `cdp` et les autres détecteurs arrêtent les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
 | Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
-| **Deux sessions d'humains connus sur ordinateur** (15/11) : 2 minutes sur son Mac, et autant depuis le PC d'un ami, en notant l'heure. Sans elles on ne peut pas recaler `trajectoire_lineaire` ni `screen_position_zero` : la seule session sur ordinateur est anonyme | 1.7 |
+| **Deux sessions d'humains connus sur ordinateur** (15/11, mis à jour le 15/11 à 19 h 30) : refaire 2 minutes **dans Google Chrome lui-même** (coller le lien dans Chrome ; ne pas cliquer le lien dans l'application Claude, qui l'ouvre dans son navigateur intégré), un seul clic sur le bouton d'entrée, navigation ordinaire à la souris, et dire l'heure ; et l'heure de la session faite depuis le PC d'un ami. La session `414f351a` reste en base, étiquetée « humain » comme tout ce que le site reçoit : ni supprimée ni ré-étiquetée. Sans humain connu on ne recale pas `trajectoire_lineaire` ni `screen_position_zero` | 1.7 |
 | **Avant d'annoncer le site public (Reddit, amis)** : un nom d'hôte stable (tunnel nommé sur un domaine à lui, pas le tunnel rapide dont l'adresse change à chaque lancement) ; une règle de limitation de débit chez Cloudflare devant le site ; régler `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` ; regarder le site lui-même sur son téléphone (Safari et iPhone jamais essayés) ; dire s'il garde le nom « Mosaïk Démo » | 1.6, 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
 | Un serveur Linux x86_64 avec Docker, et un proxy résidentiel | 3.2, 3.3, 3.4 |

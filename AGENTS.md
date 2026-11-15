@@ -134,6 +134,15 @@ recommander des optimisations.
   **Campagne 117** (15/11) : le même Chrome sans comportement, déguisé en téléphone (option `appareil: "Pixel 7"` des
   pilotes Playwright et Patchright), ne passe pas mieux : 15, 10, 0 et 0 sur 15 aux niveaux 03 à 06 sans corrélation,
   contre 15, 10, 15 et 0 tel quel. Non mesuré : un robot qui émet de vrais touchers, ou qui se dit WebKit.
+  **Quatrième session** (15/11, `414f351a`) : ce n'est pas Chrome mais le navigateur intégré de l'application Claude
+  (Chromium embarqué, `window.chrome` sans `app`, `loadTimes` ni `csi`) ; conduite à la main ou par un automate : non
+  établi, donc pas un humain connu. Le rejeu l'arrête de 03 à 07 (`chrome-apis`, `comportement`, puis
+  `client_hints_absents`, `permissions_all_denied` et les deux règles ci-dessus). **Décision du 15/11 : aucune règle ne
+  change, pas de D-87** ; `trajectoire_lineaire` (détecteur `entropie-interaction`, pas `comportement`) sera corrigée
+  dès qu'un humain connu sur ordinateur, dans un vrai navigateur, a une seule page sous 0,08 ; `screen_position_zero`
+  attend le prochain changement de l'Arena. À surveiller : un humain qui arrive par un navigateur intégré à une
+  application est arrêté dès le niveau 03 ; à trancher quand un humain connu arrivera ainsi. Détail :
+  `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.

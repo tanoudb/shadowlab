@@ -968,3 +968,23 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   rien gagner : il est arrêté par `aucune_interaction` et `outer_eq_inner`. Limite : une seule émulation, sans vrais
   touchers ; l'option `appareil` des pilotes Playwright et Patchright est documentée par Playwright et déclarée dans
   `options_permises`.
+
+  **Ajout du 15/11, quatrième session et critère annoncé** : la quatrième session du site public (`414f351a`, 15/11 à
+  18 h 06 UTC, 61 s, 12 pages) vient du navigateur intégré de l'application Claude (`Claude/5.1231.2 Chrome/156`, marques
+  `Not:A-Brand` et `Chromium`, `window.chrome` sans `app`, `loadTimes` ni `csi`), pas de Google Chrome ; conduite à la
+  main ou par un automate : non établi. Rejeu (code `fd57b6e`) : elle passe 01 et 02, arrêtée de 03 à 07 par
+  `chrome-apis` et `comportement` ; sans ces deux détecteurs elle passe 03 et 04 et reste arrêtée de 05 à 07
+  (`client_hints_absents`, `trajectoire_lineaire`, `permissions_all_denied`, `screen_position_zero`). Les trois autres
+  sessions n'ont pas changé. `trajectoire_lineaire` (détecteur `entropie-interaction`, une émission par page, poids 0,6) :
+  une seule page sous 0,08 rad franchit le seuil composite des niveaux 05, 06 et 07 ; 4 pages sur 9 évaluées pour
+  `414f351a`, 2 sur 11 pour la session Windows, qu'elle seule arrête ; 0 déclenchement dans les 255 passages des
+  campagnes 115 et 117. `screen_position_zero` : `screenX` et `screenY` à 0 dans les quatre sessions publiques ;
+  déclenchée dans 105 passages sur 255 du labo, jamais pour un Chrome visible ; neutralisée, aucun verdict ne bascule
+  chez les quatre sessions. Décision : aucune règle ne change, pas de D-87, pas de campagne. Critère annoncé d'avance
+  pour `trajectoire_lineaire` : dès qu'un humain connu, dans un vrai Chrome, Safari ou Firefox sur ordinateur, a une
+  seule page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera D-87, avec
+  les campagnes de contrôle `controle-vrai-chrome.yaml` et `temoin-mobile-emule.yaml` à comparer aux 115 et 117) ; la
+  valeur du seuil attend le critère de 1.7 (10 sessions sur ordinateur). `screen_position_zero` reste inchangée : elle
+  ne change aucun verdict aujourd'hui et coûte 0,28 de marge aux niveaux 06 et 07 ; à traiter avec le prochain
+  changement de l'Arena, pas seule. Détail : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`. Décidé par :
+  coordination.

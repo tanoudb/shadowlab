@@ -8,13 +8,14 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
-- **2026-11-15 — Deux sessions d'humains connus sur ordinateur, s'il te plaît.** Le site public a reçu trois sessions
-  (deux iPhone sous Safari, un Chrome sur Windows), toutes anonymes : on ne sait pas si un humain tenait le
-  navigateur. La session sur ordinateur déclenche deux règles de l'Arena (`trajectoire_lineaire`, souris jugée trop
-  droite ; `screen_position_zero`, fenêtre en haut à gauche). Je ne recale pas un seuil sur une session anonyme.
-  **Ce qu'il faut** : 2 minutes de navigation ordinaire sur le site public depuis ton Mac, et autant depuis le PC d'un
-  ami, en me disant l'heure, pour que je sache quelles sessions sont de vrais humains. Recommandation : le faire
-  avant tout autre partage du lien.
+- **2026-11-15 (mis à jour le 15/11 à 19 h 30) — Deux sessions d'humains connus sur ordinateur, s'il te plaît.** La
+  quatrième session du site public n'était pas « Chrome 156 sur Mac » : c'est le navigateur intégré de l'application
+  Claude (Chromium embarqué), et on ne sait pas si elle était conduite à la main. Elle ne compte donc pas comme humain
+  connu ; elle reste en base, ni supprimée ni ré-étiquetée. Sans humain connu on ne recale pas `trajectoire_lineaire` ni
+  `screen_position_zero`. **Ce qu'il faut** : refaire 2 minutes dans Google Chrome lui-même (colle le lien dans Chrome ;
+  ne clique pas le lien dans l'application Claude, qui l'ouvre dans son navigateur intégré), un seul clic sur le bouton
+  d'entrée, navigation ordinaire à la souris, et me dire l'heure ; et l'heure de la session faite depuis le PC d'un ami.
+  Recommandation : le faire avant tout autre partage du lien.
 - **2026-11-12 — Site public : à qui donner le lien, et faut-il un lien par canal ?** Quiconque a le lien
   peut ouvrir une session, y compris par script : rien ne prouve qu'un humain était là (relecture de
   sécurité du 12/11, 15 h). Or ces sessions servent d'étalon (« un détecteur n'est valide que s'il laisse

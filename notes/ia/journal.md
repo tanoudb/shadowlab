@@ -3569,3 +3569,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/PLAN.md` (§ 2), `docs/DECISIONS.md` (ajout à D-86), `AGENTS.md`.
 - **Suite** : plus rien d'utile sans Ethan côté moteur et Arena (humains connus sur ordinateur, questions du palier 2,
   nom de domaine). La boucle reste en veille lente : état du site public et rejeu des nouvelles sessions.
+
+## 2026-11-15 (19h30) — Claude (Fable 5.2, coordination) — Quatrième session du site public : un navigateur intégré, pas Chrome ; aucune règle changée
+
+- **Fait** : enquête en lecture seule (sous-agent Sonnet, contrôlée sur la base). La session `414f351a` vient du navigateur
+  intégré de l'application Claude, pas de Google Chrome ; conduite non établie. Rejeu : arrêtée de 03 à 07 ; sans
+  `chrome-apis` et `comportement`, passe 03 et 04, arrêtée de 05 à 07. Les trois autres sessions n'ont pas changé.
+- **Mesuré** : `trajectoire_lineaire` (détecteur `entropie-interaction`) une seule page sous 0,08 suffit à franchir le seuil ; elle
+  seule arrête la session Windows ; 0 déclenchement dans les 255 passages des campagnes 115 et 117. `screen_position_zero` :
+  4 sessions sur 4, 105 passages sur 255 du labo, aucun verdict ne bascule chez les sessions publiques.
+- **Décision (coordination)** : aucune règle ne change, pas de D-87, pas de campagne ; critère annoncé d'avance pour
+  `trajectoire_lineaire` (humain connu, vrai navigateur sur ordinateur, une page sous 0,08).
+- **Fichiers** : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md` (nouveau), `docs/PLAN.md` (§ 2, § 7, § 8),
+  `docs/DECISIONS.md` (ajout à D-86), `AGENTS.md`, `notes/ia/contexte.md`, `notes/ia/questions-ouvertes.md`.
+- **Tests non lancés** (documents seulement) : dernier compte 1 807 verts (14/11, 19 h 55), 1 770 rapides après la fusion du 15/11.
+- **Reste, avec Ethan** : 2 minutes dans Google Chrome lui-même, et l'heure de la session du PC d'un ami ; à surveiller : un humain
+  arrivant par un navigateur intégré est arrêté dès le niveau 03.

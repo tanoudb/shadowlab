@@ -72,6 +72,10 @@ sur nos propres cibles (site vitrine factice, tor-i).
 - Manquent pour l'objectif : les sessions humaines et le calibrage de l'Arena, le bannissement dans
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
   Linux, un test contre Cloudflare, la preuve de la récolte générale (campagne complète, un vrai site).
+- **15/11, quatrième session du site public** (`414f351a`) : navigateur intégré de l'application Claude, pas Chrome ;
+  conduite non établie, pas un humain connu. Rejeu : arrêtée de 03 à 07. Aucune règle changée, pas de D-87 : critère
+  annoncé d'avance pour `trajectoire_lineaire` (`docs/DECISIONS.md`, ajout à D-86). Attendu d'Ethan : 2 minutes dans
+  Google Chrome lui-même, et l'heure de la session du PC d'un ami.
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native
