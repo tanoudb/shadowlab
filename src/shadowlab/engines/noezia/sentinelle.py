@@ -6,7 +6,8 @@ Signes retenus (§ 5 du document de conception) :
    Cloudflare ; cadre reCAPTCHA, hCaptcha ou Turnstile (`detecter_defi`) ;
 3. adresse finale hors des hôtes de la recette, ou hors du motif `url` du type de page attendu ;
 4. sélecteur `requis` absent sur 3 pages de suite d'un même type ;
-5. plus de 5 échecs (réseau, 500, 502, 504) sur les 20 dernières pages.
+5. plus de 5 échecs (réseau, 500, 502, 504) sur les 20 dernières pages ;
+6. (identité, `parcours.py`) le défi de la porte d'entrée revenu avant la durée déclarée : `porte_revenue`.
 La porte d'entrée (attente sans action d'un défi qui se valide seul, sur la première page) est dans `parcours.py` :
 elle utilise `detecter_defi`. Un défi plus tard dans la passe est une alerte, sauf si la recette permet de repasser la
 porte (`porte_entree.repassages_max`, borné, même attente sans action, `parcours.py`). Aucun clic, aucune résolution.
@@ -72,7 +73,7 @@ def detecter_defi(html: str, entetes: Mapping[str, str] | None = None) -> str | 
 
 @dataclass(frozen=True)
 class Alerte:
-    signe: str  # statut | defi | hors_site | hors_motif | page_non_conforme | echecs
+    signe: str  # statut | defi | hors_site | hors_motif | page_non_conforme | echecs | porte_revenue
     detail: str
     adresse: str
     statut: int | None = None
@@ -81,7 +82,12 @@ class Alerte:
         return f"signe d'alerte ({self.detail}) sur {self.adresse}"
 
 
-def verdict_identite(alerte: Alerte, premiere_page: bool) -> str:  # coquille : le code vient au commit suivant
+def verdict_identite(alerte: Alerte, premiere_page: bool) -> str:
+    """Ce que l'alerte veut dire pour l'identité (§ 5.5) : `banni` pour un refus franc (403) dès la première page de la
+    passe, `alerte` pour tout le reste (429 et autres statuts, défi, retour à la connexion, hors site, porte revenue
+    trop tôt…). Ne fait que classer : aucune requête, aucune action."""
+    if alerte.signe == "statut" and alerte.statut == 403 and premiere_page:
+        return "banni"
     return "alerte"
 
 

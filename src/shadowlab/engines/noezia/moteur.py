@@ -414,7 +414,7 @@ class DriverNoezia(Driver):
             pass
         self._contexte.close()
         if self._identite is not None:
-            self._identite.fin_visite(pages=self._pages_visite, statut="ok")
+            self._identite.fin_visite(pages=self._pages_visite)  # le statut marqué par la sentinelle, sinon ok
         self._contexte = None
         self._page = None
         self._souris = None
