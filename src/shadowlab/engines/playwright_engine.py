@@ -21,7 +21,10 @@ class DriverPlaywright(Driver):
     name = "playwright"
     runtime = "navigateur"
     executes_javascript = True
-    options_permises = {"headless": bool, "trace": bool, "channel": str}
+    # `appareil` : nom d'un appareil du registre documenté de Playwright (`playwright.devices`, ex. « Pixel 7 »).
+    # Documentation : https://playwright.dev/python/docs/emulation#devices — le contexte est créé avec le descripteur
+    # de l'appareil (User-Agent, taille, `is_mobile`, `has_touch`, échelle).
+    options_permises = {"headless": bool, "trace": bool, "channel": str, "appareil": str}
 
     def configuration(self) -> dict[str, Any]:
         return {"browser": "chromium", "headless": True, "trace": False, "tls_non_verifie": True, **self.options}
@@ -37,8 +40,21 @@ class DriverPlaywright(Driver):
 
         return sync_playwright
 
+    def _descripteur_appareil(self) -> dict[str, Any]:
+        """Descripteur Playwright de l'appareil demandé (vide sans l'option). Refuse un nom inconnu."""
+        nom = self.options.get("appareil")
+        if nom is None:
+            return {}
+        registre = self._pw.devices
+        if nom not in registre:
+            raise ValueError(f"appareil inconnu : {nom!r} (absent du registre `playwright.devices`)")
+        # `default_browser_type` n'est pas un argument de `new_context`.
+        return {cle: valeur for cle, valeur in registre[nom].items() if cle != "default_browser_type"}
+
     def _nouveau_contexte(self):
-        contexte = self._navigateur.new_context(ignore_https_errors=True)  # certificat local de l'Arena
+        # Les réglages du périmètre viennent après le descripteur de l'appareil : il ne peut pas les écraser.
+        reglages = {**self._descripteur_appareil(), "ignore_https_errors": True}  # certificat local de l'Arena
+        contexte = self._navigateur.new_context(**reglages)
         contexte.route("**/*", self._filtrer)
         return contexte
 
@@ -48,6 +64,11 @@ class DriverPlaywright(Driver):
     def open(self) -> None:
         config = self.configuration()
         self._pw = self._api()().start()
+        try:
+            self._descripteur_appareil()  # nom d'appareil inconnu : refusé avant de lancer le navigateur
+        except ValueError:
+            self._pw.stop()
+            raise
         verrou = proxy_verrou(self.hotes_autorises)  # None en périmètre illimité
         self._navigateur = self._pw.chromium.launch(
             headless=config["headless"], channel=config.get("channel"), proxy=verrou

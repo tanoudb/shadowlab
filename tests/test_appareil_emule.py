@@ -31,7 +31,7 @@ def test_appareil_inconnu_refuse_avant_tout_lancement_de_navigateur():
     pilote = DriverPlaywright(HOTES, {"appareil": "Telephone Imaginaire 9000"})
     with pytest.raises(ValueError, match="Telephone Imaginaire 9000"):
         pilote.open()
-    assert pilote._navigateur is None  # aucun navigateur n'a été lancé
+    assert getattr(pilote, "_navigateur", None) is None  # aucun navigateur n'a été lancé
 
 
 @pytest.mark.integration
@@ -65,9 +65,11 @@ def test_pixel_7_se_presente_comme_un_telephone_et_le_temoin_comme_un_ordinateur
     assert "Mobile" not in ordinateur["ua"]
 
 
-def test_la_campagne_temoin_mobile_est_valide(reglages):
+def test_la_campagne_temoin_mobile_est_valide(reglages, monkeypatch):
     from pathlib import Path
 
+    # `06scorr` n'existe que dans les profils supplémentaires, comme pour la vraie campagne.
+    monkeypatch.setenv("SHADOWLAB_PROFILS_EXTRA", "configs/arena/profils-sans-correlation.yaml")
     experience = campaigns.lire(
         Path(__file__).resolve().parent.parent / "configs" / "experiments" / "temoin-mobile-emule.yaml", reglages
     )
