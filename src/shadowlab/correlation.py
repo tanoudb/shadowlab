@@ -238,7 +238,23 @@ def correlation_historique(
 
 
 def visite_neuve(cx: sqlite3.Connection, jeton: str) -> bool:
-    """La session est-elle une première visite de son visiteur ? Sans visite enregistrée : oui (rien ne dit qu'il
-    revient ; `sans_ressources` garde alors son effet)."""
-    ligne = cx.execute("SELECT neuve FROM visites WHERE session_token = ?", (jeton,)).fetchone()
-    return True if ligne is None else bool(ligne["neuve"])
+    """`sans_ressources` doit-il juger cette session comme une première visite ?
+
+    Oui pour une session neuve, ou sans visite enregistrée. Un visiteur connu n'en est dispensé que si une session
+    antérieure du même visiteur, dans le même monde, avait chargé les ressources (`/lab/static`) avant le début de
+    celle-ci : sans cela son cache ne peut pas les contenir, et un robot qui rejoue un seul cookie sans jamais les
+    charger resterait signalé. Une seule lecture indexée, et seulement pour une session connue ; elle est faite
+    là où le gardien (et le rejeu) construisent leurs observations, pas à chaque requête.
+    """
+    ligne = cx.execute(
+        "SELECT monde_id, visiteur, neuve, vue_le FROM visites WHERE session_token = ?", (jeton,)
+    ).fetchone()
+    if ligne is None or ligne["neuve"]:
+        return True
+    cache = cx.execute(
+        "SELECT 1 FROM visites w WHERE w.monde_id = ? AND w.visiteur = ? AND w.session_token != ? AND w.vue_le < ?"
+        " AND EXISTS (SELECT 1 FROM observations_http h WHERE h.session_token = w.session_token"
+        " AND h.path LIKE '/lab/static%' AND h.received_at <= ?) LIMIT 1",
+        (ligne["monde_id"], ligne["visiteur"], jeton, ligne["vue_le"], ligne["vue_le"]),
+    ).fetchone()
+    return cache is None
