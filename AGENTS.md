@@ -186,7 +186,9 @@ recommander des optimisations.
   passage par niveau. Le cookie de défi de l'Arena vit une heure : depuis D-83 la récolte repasse la
   porte quand le défi revient. **Campagne 114** (14/11, cookie d'origine, rallye à 683 pages, 75 à 81 minutes par
   passage) : 59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation, le défi revenu une fois vers 3 600 s
-  et repassé ; un passage par niveau.
+  et repassé ; un passage par niveau. **Campagne 116** (15/11, niveau 07, vitrine à 20 annonces, 3 passages par cas) :
+  07 sans corrélation 2 sur 3 (un échec sur `duree_pages_reguliere`, les pages de défi ayant des durées trop
+  voisines), 07 complet 0 sur 3 (corrélation entre sessions), témoin `http` 0 sur 6.
   **Non prouvé** : aucun vrai site ni vraie protection ; la commande elle-même vise le site en direct (niveau
   01), les niveaux protégés ne sont mesurés que par campagne ; plusieurs heures d'affilée sous
   protection (une passe de 81 minutes à la campagne 114) ; coupure d'une redirection vers un autre hôte non vérifiée dans un vrai Chrome ; `attendre` non

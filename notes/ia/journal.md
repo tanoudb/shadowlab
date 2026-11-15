@@ -3545,3 +3545,14 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   prochain changement de l'Arena, pas seul.
 - **Demandé à Ethan** : deux sessions d'humains connus sur ordinateur (son Mac, le PC d'un ami).
 - **Tests** : suite complète du 14/11 à 19 h 55, 1 807 verts (1 763 rapides, 44 d'intégration).
+
+## 2026-11-15 (18h45) — Claude (Fable 5.2, coordination) — Campagne 116 : la récolte au niveau 07
+
+- **Campagne 116** (`recolte-arena-07.yaml`, 18 h 26 à 18 h 36, 12 passages, 0 panne) : moteur navigateur au niveau 07
+  sans corrélation 2 sur 3 (280 champs sur 280 aux deux réussis ; l'échec : `duree_pages_reguliere`, score 0,4 pour un
+  seuil de 0,3, les quatre premières pages durant 4,6 à 6,6 s) ; niveau 07 complet 0 sur 3 (`defi-js rejete-empreinte`,
+  corrélation entre sessions) ; témoin `http` 0 sur 6 (WAF, règle 920320). Arena remise, ports libres.
+- **Non corrigé** : niveau hors de l'objectif de la v1, seuil non calibré, règle qui compte les pages de défi.
+- **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `AGENTS.md`.
+- **Reste, sans Ethan** : mesurer ce que D-86 ouvre à un automate qui se présente comme un téléphone (témoin en
+  émulation mobile). **Avec Ethan** : deux humains connus sur ordinateur, questions du palier 2, nom de domaine.
