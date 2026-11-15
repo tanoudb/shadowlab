@@ -1,0 +1,39 @@
+# Témoin de la réserve de D-86 : un automate sans comportement humain passe-t-il plus de niveaux en se présentant
+# comme un téléphone ?
+# D-86 a fait en sorte que quatre règles de l'Arena n'arrêtent plus de vrais humains sur téléphone (aides
+# `famille_navigateur` et `appareil_tactile` de `detection.py`). Réserve écrite : un robot qui émule un mobile de
+# façon cohérente profite de ces exemptions. Personne ne l'a mesuré ; cette campagne le mesure.
+#   patchright-chrome-interface : vrai Chrome avec interface, piloté par patchright, rien de noezia (témoin de référence)
+#   patchright-chrome-mobile    : le même, avec le descripteur « Pixel 7 » du registre de Playwright (option `appareil`)
+# Aucun comportement humain ni défi résolu par noezia : seule l'émulation de l'appareil change entre les deux.
+# Lecture : si le second passe plus de niveaux que le premier, l'exemption mobile est exploitable par un automate.
+# Niveaux 03 à 06 ; niveau 06 sans le détecteur correlation-session (profil `06scorr`).
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/temoin-mobile-emule.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran pendant la campagne.
+# 2 configurations × 4 niveaux × 3 scénarios × 5 répétitions = 120 passages, un à la fois (environ 1 h 30 : un
+# passage refusé attend 30 s avant d'abandonner).
+experiment:
+  name: temoin_mobile_emule
+  description: >-
+    Un automate ordinaire (patchright, vrai Chrome avec interface, sans comportement humain) passe-t-il plus de
+    niveaux en se présentant comme un téléphone (Pixel 7) ? Niveaux 03 à 06 sans corrélation entre sessions.
+  environment: local
+  engines:
+    - name: patchright
+      label: patchright-chrome-interface
+      options: {headless: false, channel: chrome}
+    - name: patchright
+      label: patchright-chrome-mobile
+      options: {headless: false, channel: chrome, appareil: "Pixel 7"}
+  protections: ["03", "04", "05", "06scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261115
+  output: [json, html]
