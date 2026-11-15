@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from . import __version__, passages
 from . import database as db
-from .arena import pile
+from .arena import pile, visiteurs
 from .arena import profils as module_profils
 from .arena.profils import BASELINE, normaliser
 from .config import Reglages
@@ -100,6 +100,7 @@ class Experience(BaseModel):
     warmup: int = Field(default=0, ge=0)
     concurrency: int = Field(default=1, ge=1)
     limites: Limites = Field(default_factory=Limites)
+    monde: Literal["passage", "serie", "campagne"] = "campagne"  # portée du monde de l'Arena (arena/visiteurs.py)
     base_url: str | None = None
     screenshots_on_failure: bool = True
 
@@ -520,6 +521,9 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                     scenario = SCENARIOS[nom_scenario]
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
                     graine = f"{experience.seed}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
+                    monde = visiteurs.nom_monde(
+                        experience.monde, experiment_id, moteur_cfg.nom_affiche, protection, nom_scenario, repetition
+                    )
                     _passage(
                         cx,
                         reglages,
@@ -535,6 +539,7 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                         random.Random(graine),
                         dossier_artefacts,
                         engine_version=db.j(versions),
+                        monde=monde,
                     )
                     if protection != BASELINE and _arena_en_panne(cx, experiment_id):
                         journal.error(
@@ -587,6 +592,7 @@ def _passage(
     rng,
     dossier_artefacts,
     engine_version: str = "",
+    monde: str | None = None,
 ) -> None:
     profil = module_profils.charger().de(protection)
     protection_config = (
@@ -610,6 +616,7 @@ def _passage(
         protection_config=protection_config,
         is_warmup=repetition <= experience.warmup,
         engine_version=engine_version,
+        monde=monde,
     )
     pilote.mesures = type(pilote.mesures)()
     erreur: str | None = None

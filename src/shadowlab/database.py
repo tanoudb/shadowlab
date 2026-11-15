@@ -195,6 +195,35 @@ MIGRATIONS: list[str] = [
     WHERE experiment_id NOT IN (SELECT id FROM experiments)
     GROUP BY experiment_id
     """,
+    # 10 — visiteurs et mondes (palier 2, I1) : un monde est un nom, une visite est une session reconnue par son
+    # cookie `sl_visiteur`, un bannissement (I3) est posé par visiteur ou par empreinte. Chaque passage garde son monde.
+    """
+    CREATE TABLE mondes (
+        id INTEGER PRIMARY KEY,
+        nom TEXT NOT NULL UNIQUE,
+        cree_le TEXT NOT NULL
+    );
+    CREATE TABLE visites (
+        id INTEGER PRIMARY KEY,
+        monde_id INTEGER NOT NULL REFERENCES mondes(id),
+        visiteur TEXT NOT NULL,
+        session_token TEXT,
+        neuve INTEGER NOT NULL,
+        vue_le TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX visites_session ON visites(session_token) WHERE session_token IS NOT NULL;
+    CREATE INDEX visites_visiteur ON visites(monde_id, visiteur);
+    CREATE TABLE bannissements (
+        id INTEGER PRIMARY KEY,
+        monde_id INTEGER NOT NULL REFERENCES mondes(id),
+        visiteur TEXT,
+        empreinte TEXT,
+        motif TEXT NOT NULL,
+        cree_le TEXT NOT NULL,
+        expire_le TEXT
+    );
+    ALTER TABLE runs ADD COLUMN monde_id INTEGER REFERENCES mondes(id)
+    """,
 ]
 
 

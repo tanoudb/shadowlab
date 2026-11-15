@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import correlation, passages
 from .. import database as db
-from ..arena import defis
+from ..arena import defis, visiteurs
 from ..arena import secret as secrets_arena
 from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
@@ -148,6 +148,20 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         sl = request.query_params.getlist("sl")
         if jeton and len(sl) == 1 and sl[0] == jeton:
             reponse.set_cookie(COOKIE_SESSION, jeton, httponly=True, samesite="lax", path="/")
+        if chemin == "/lab" or chemin.startswith(
+            "/lab/"
+        ):  # pas `/labo` (l'interface) ; jamais dans l'application publique
+            with base() as cx:
+                visite = visiteurs.reconnaitre(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton)
+            if visite.cookie:
+                reponse.set_cookie(
+                    visiteurs.COOKIE,
+                    visite.cookie,
+                    max_age=visiteurs.DUREE_S,
+                    httponly=True,
+                    samesite="lax",
+                    path="/lab",
+                )
         return reponse
 
     from ..api import _local
@@ -751,7 +765,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             experience = passages.experience_manuelle(cx)
             moteur = db.engine_id(cx, "navigateur-manuel", "n/a", "humain", {})
             scenario = db.scenario_id(cx, "navigation_manuelle", "Navigation libre par une personne")
-            _, jeton = passages.demarrer(cx, experience, moteur, scenario, 1, "humain", protection=protection)
+            _, jeton = passages.demarrer(
+                cx, experience, moteur, scenario, 1, "humain", protection=protection, monde=visiteurs.MONDE_MANUEL
+            )
             cx.execute("UPDATE runs SET consent_at = ? WHERE session_token = ?", (db.maintenant(), jeton))
         if protection == BASELINE:
             return RedirectResponse(f"/lab/?sl={jeton}", status_code=303)
