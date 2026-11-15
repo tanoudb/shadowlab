@@ -7,8 +7,8 @@ import secrets
 import sqlite3
 from typing import Any
 
+from . import correlation, issues
 from . import database as db
-from . import issues
 from .arena import visiteurs
 from .detection import Classement, Observations, classer, proprietes
 
@@ -80,6 +80,7 @@ def finaliser(
         js=js,
         attend_js=attend_js,
         tls=db.tls_session(cx, jeton),
+        visite_neuve=correlation.visite_neuve(cx, jeton),
         page_remplacee=any(d["decision"] in ("emis", "bloque") for d in decisions),
     )
     classements = classer(obs, detecteurs)

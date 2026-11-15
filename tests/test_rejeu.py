@@ -454,8 +454,9 @@ def test_session_non_consentie_ignoree(cx):
 def test_correlation_non_evaluee_et_historique_signale(cx):
     jeton = session_labo(cx)
     visite(cx, jeton)
-    # Même empreinte, 10 sessions : un seul signal de comptage (le plus grand des deux comptes), de poids 1 dès 10.
-    # À 6, il pèse 0,7 : le détecteur seul ne classe plus (avant, profil et canvas en donnaient chacun un).
+    # `correlation-session` est toujours écarté des verdicts du rejeu (dépend des autres sessions de la base). La
+    # session n'a pas de monde (`runs.monde_id` NULL) : même l'information « historique » n'est pas évaluée
+    # (règle 2.0, I2 ; les cas avec monde sont dans test_correlation_v2).
     for autre in [jeton, *(passages.nouveau_jeton() for _ in range(9))]:
         correlation.enregistrer_hash(cx, autre, empreinte())
     premier = rejeu.rejouer(cx)
@@ -463,7 +464,7 @@ def test_correlation_non_evaluee_et_historique_signale(cx):
     six = niveau(premier, "06")
     raison = next(d["raison"] for d in six["non_evalues"] if d["detecteur"] == "correlation-session")
     assert "historique" in raison
-    assert six["correlation_historique"] == {"sessions": 1, "sur": 1}
+    assert six["correlation_historique"] is None
     assert niveau(premier, "05")["correlation_historique"] is None  # non consulté au niveau 05
     assert rejeu.rejouer(cx) == premier  # rien d'écrit : l'ordre et le nombre de rejeux ne changent rien
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import sqlite3
 from collections import Counter
 from collections.abc import Iterator
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -30,8 +31,8 @@ SANS_FRONTAL = {
     "tls": "TLS non observé : session faite hors du frontal de l'Arena",
     "h2": "HTTP/2 non observé : session faite hors du frontal de l'Arena",
 }
-HISTORIQUE = "dépend de l'historique de la base (table empreintes_vues), pas de la session"
-HISTORIQUE_PUBLIC = "le site public ne tient pas la table empreintes_vues"
+HISTORIQUE = "dépend de l'historique des visites de son monde (table visites), pas de la session"
+HISTORIQUE_PUBLIC = "le site public ne tient pas les visites ni les mondes"
 SONDE_SAUTEE = "sonde WebRTC sautée par la page (site sans tiers)"
 PIEGES_NON_SERVIS = "pièges non servis pendant la session (enregistrée à un niveau sans honeypots)"
 # Règles qui lisent ce que le site public ne garde pas (public/donnees.py) : écartées de ses sessions.
@@ -94,8 +95,11 @@ def rejouer(cx: sqlite3.Connection, publique: bool = False, niveaux: profils_are
     """Rejoue les sessions humaines consenties de la base contre chaque niveau. N'écrit rien."""
     niveaux = niveaux or profils_arena.charger()
     experience = donnees.EXPERIENCE if publique else passages.EXPERIENCE_MANUELLE
+    # La base publique (schéma 9) n'a ni `runs.monde_id` ni `visites` : ses sessions n'ont pas de monde.
+    monde = "NULL" if publique else "r.monde_id"
     lignes = cx.execute(
-        "SELECT r.session_token, r.status, r.protection FROM runs r JOIN experiments e ON e.id = r.experiment_id"
+        f"SELECT r.session_token, r.status, r.protection, {monde} AS monde_id FROM runs r"
+        " JOIN experiments e ON e.id = r.experiment_id"
         " WHERE e.name = ? AND r.truth = 'humain' AND r.consent_at IS NOT NULL ORDER BY r.id",
         (experience,),
     ).fetchall()
@@ -147,10 +151,21 @@ def _non_evalues(tls: dict | None, empreinte: dict, publique: bool) -> dict[str,
     return raisons
 
 
-def _historique(cx: sqlite3.Connection, observations: Observations) -> bool:
-    """`correlation-session` lu avec l'état actuel de la table empreintes_vues (lecture seule) : à titre
-    d'information, car ce verdict dépend des sessions passées et futures de la base, pas de celle-ci."""
-    observations.correlation = correlation.correlation_session(cx, observations.empreinte_js)
+def _historique(
+    cx: sqlite3.Connection, ligne: sqlite3.Row, http: list[dict], js: list[dict], tls: dict | None
+) -> bool | None:
+    """`correlation-session` 2.0 telle qu'elle aurait jugé la session à son début, d'après les seules visites
+    antérieures de son monde (`runs.monde_id`) ; à titre d'information, hors des taux (ce verdict dépend des autres
+    sessions du monde, pas de celle-ci). `None` : session sans monde (avant I1), non évaluée."""
+    debut = http[0]["received_at"] if http else js[0]["received_at"]
+    donnees = correlation.correlation_historique(
+        cx, ligne["session_token"], ligne["monde_id"], datetime.fromisoformat(debut)
+    )
+    if donnees is None:
+        return None
+    observations = Observations(
+        http=http, js=js, tls=tls, correlation=asdict(donnees), visite_neuve=donnees.session_neuve
+    )
     return registre()["correlation-session"].classer(observations).classification == "automatise"
 
 
@@ -169,6 +184,7 @@ def _rejouer_session(
         if d["couche"] == "honeypot" and d["decision"] == "declenche"
     ]
     enregistree = niveaux.de(ligne["protection"])
+    neuve = True if publique else correlation.visite_neuve(cx, jeton)  # comme à la décision : `sans_ressources`
     ecartees = REGLES_PUBLIC if publique else {}
     tous = registre()
     for nom, regles in ecartees.items():
@@ -177,7 +193,7 @@ def _rejouer_session(
     verdicts = {code: {"arretee": False, "moment": None, "motifs": [], "classes": {}} for code, _ in niveaux.items()}
     actifs = [(code, profil) for code, profil in niveaux.items() if profil.fingerprinting.actif]
     for moment, nb_http, nb_js in _moments(http, js):
-        observations = Observations(http=http[:nb_http], js=js[:nb_js], tls=tls)
+        observations = Observations(http=http[:nb_http], js=js[:nb_js], tls=tls, visite_neuve=neuve)
         nb_pieges = sum(1 for instant in pieges if moment["instant"] is None or instant <= moment["instant"])
         for code, profil in actifs:
             parametres = gardien.parametres(profil)
@@ -199,7 +215,7 @@ def _rejouer_session(
         "non_evalues": non_evalues,
         "pieges_servis": bool(enregistree and enregistree.honeypots.actif),
         "regles_ecartees": ecartees,
-        "correlation_historique": None if publique else _historique(cx, Observations(http=http, js=js, tls=tls)),
+        "correlation_historique": None if publique else _historique(cx, ligne, http, js, tls),
     }
 
 
@@ -236,8 +252,9 @@ def _agreger(code: str, profil: profils_arena.Profil, sessions: list[dict]) -> d
                     ecartees[(nom, regle)] += 1
                     raisons[(nom, regle)] = raison
     historique = None
-    if "correlation-session" in consultes and all(s["correlation_historique"] is not None for s in sessions):
-        historique = {"sessions": sum(s["correlation_historique"] for s in sessions), "sur": len(sessions)}
+    evaluees = [s["correlation_historique"] for s in sessions if s["correlation_historique"] is not None]
+    if "correlation-session" in consultes and evaluees:  # les sessions sans monde ne sont pas évaluées
+        historique = {"sessions": sum(evaluees), "sur": len(evaluees)}
     return {
         "niveau": code,
         "nom": profil.nom,

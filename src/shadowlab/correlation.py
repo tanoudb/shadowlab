@@ -1,8 +1,14 @@
-"""Corrélation cross-session : détecte le recyclage de fingerprints entre sessions.
+"""Corrélation cross-session : même empreinte portée par beaucoup de visiteurs neufs, ou à un débit qu'aucune
+personne ne tient (règle `correlation-session` 2.0, palier 2 I2 ; conception : `docs/recherche/identite-qui-dure`
+§ 4.3).
 
-Un bot qui réutilise le même profil navigateur produit des hash identiques (canvas, profil,
-audio). Ce module enregistre les hash observés et signale les sessions dont l'empreinte
-a déjà été vue trop souvent.
+Une empreinte stable n'est pas suspecte (un humain qui revient garde la sienne) : la règle compte des **visites**
+(`visites`, I1) dans un **monde**, et ne reproche une empreinte qu'aux sessions neuves, celles dont la première requête
+n'apportait pas de visiteur connu. `evaluer` est une fonction pure ; `evaluer_session` et `correlation_historique` la
+nourrissent depuis la base.
+
+`hash_session` et `enregistrer_hash` (table `empreintes_vues`, règle 1.1) restent appelés à la collecte mais ne
+décident plus rien.
 """
 
 from __future__ import annotations
@@ -10,11 +16,13 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from . import database as db
 
 FENETRE_DEBIT = timedelta(minutes=60)
+FENETRE_NEUVES = timedelta(hours=24)
 
 
 def hash_session(empreinte_js: dict) -> dict[str, str]:
@@ -77,58 +85,176 @@ def enregistrer_hash(cx: sqlite3.Connection, jeton: str, empreinte_js: dict) -> 
             )
 
 
-def correlation_session(cx: sqlite3.Connection, empreinte_js: dict) -> dict[str, dict]:
-    """Données de corrélation de chaque hash de l'empreinte déjà vu (`profil_complet`, `canvas`).
+# --- Règle 2.0 ---------------------------------------------------------------------------------------------
 
-    `nb_sessions` : jetons distincts vus avec ce hash depuis la création de la ligne, la session courante comprise
-    (`/lab/collecte` l'enregistre avant de juger). `sessions_derniere_heure` et `derniere_heure_exacte` : voir
-    `_sessions_derniere_heure`.
+
+@dataclass(frozen=True)
+class VisiteObservee:
+    """Une visite d'un monde : une session (un jeton), son visiteur, son heure de début, son empreinte E."""
+
+    session: str
+    visiteur: str
+    neuve: bool
+    debut: datetime
+    empreinte: str | None  # E de la première empreinte reçue ; None tant qu'aucune n'est arrivée
+
+
+@dataclass(frozen=True)
+class Correlation:
+    """Ce que la règle 2.0 lit pour une session : les comptes de son empreinte E dans son monde."""
+
+    empreinte: str | None
+    session_neuve: bool
+    sessions_neuves_24h: int  # sessions neuves portant E commencées dans les 24 dernières heures, celle-ci comprise
+    debit_60min: int  # sessions portant E commencées dans les 60 dernières minutes, celle-ci comprise
+
+
+def empreinte_e(empreinte_js: dict) -> str:
+    """E : un seul hachage de `profil_complet` et `canvas` ensemble (un fait, un signal).
+
+    Un canvas en échec n'entre pas : E ne vaut alors que le profil, et ne sépare plus deux configurations de même
+    profil. À l'inverse, deux configurations de même canvas mais de profils différents ont deux E (en 1.1, elles
+    s'additionnaient par le canvas).
     """
-    maintenant = datetime.fromisoformat(db.maintenant())
-    resultats: dict[str, dict] = {}
-    for type_hash, valeur in hash_session(empreinte_js).items():
-        row = cx.execute(
-            "SELECT nb_sessions, premiere_vue, derniere_vue, sessions FROM empreintes_vues WHERE type = ? AND hash = ?",
-            (type_hash, valeur),
-        ).fetchone()
-        if row:
-            compte, exact = _sessions_derniere_heure(cx, row, maintenant)
-            resultats[type_hash] = {
-                "nb_sessions": row["nb_sessions"],
-                "premiere_vue": row["premiere_vue"],
-                "derniere_vue": row["derniere_vue"],
-                "sessions_derniere_heure": compte,
-                "derniere_heure_exacte": exact,
-            }
-    return resultats
+    h = hash_session(empreinte_js)
+    return hashlib.sha256(f"{h['profil_complet']}|{h.get('canvas', '')}".encode()).hexdigest()[:16]
 
 
-def _sessions_derniere_heure(cx: sqlite3.Connection, row: sqlite3.Row, maintenant: datetime) -> tuple[int, bool]:
-    """Sessions de ce hash commencées dans les 60 dernières minutes, et si ce compte est exact.
+def evaluer(visites: list[VisiteObservee], session: str, maintenant: datetime) -> Correlation:
+    """Règle 2.0, sans base : `visites` sont celles du monde de `session` (celle-ci comprise), `maintenant` l'heure.
 
-    L'heure d'une session est celle de sa première empreinte (`observations_js`). La ligne ne garde que les
-    10 derniers jetons (`sessions`, dans l'ordre d'arrivée). Le compte est exact :
-    - si la ligne est née dans la fenêtre : toutes ses sessions y sont, c'est `nb_sessions` ;
-    - sinon, si le plus ancien jeton gardé est daté d'avant la fenêtre : les sessions oubliées, plus anciennes
-      encore, n'y tombent pas.
-    Autrement (les 10 jetons gardés tous dans la fenêtre d'une ligne plus ancienne, ou un jeton sans date parce
-    que ses observations ont été effacées), c'est une borne basse : la table ne dit pas combien de sessions
-    oubliées tombent dans la fenêtre. Avec 10 jetons gardés, cette borne vaut au plus 10.
+    - une visite postérieure à `maintenant` n'existe pas encore (rejeu) ;
+    - une session compte une fois, quel que soit le nombre d'empreintes qu'elle a envoyées (E = la première) ;
+    - une visite sans empreinte ne porte aucune E ;
+    - une session inconnue de `visites` n'a ni empreinte ni compte.
     """
-    debut = maintenant - FENETRE_DEBIT
-    if datetime.fromisoformat(row["premiere_vue"]) >= debut:
-        return row["nb_sessions"], True
-    jetons = json.loads(row["sessions"])
-    marques = ", ".join("?" * len(jetons))
-    premieres = {
-        r[0]: datetime.fromisoformat(r[1])
-        for r in cx.execute(
-            "SELECT session_token, MIN(received_at) FROM observations_js "
-            f"WHERE kind = 'empreinte' AND session_token IN ({marques}) GROUP BY session_token",
-            jetons,
-        )
-    }
-    dates = [premieres.get(jeton) for jeton in jetons]
-    compte = sum(1 for d in dates if d is not None and d >= debut)
-    exact = bool(dates) and None not in dates and dates[0] < debut
-    return compte, exact
+    parjeton = {x.session: x for x in visites if x.debut <= maintenant}
+    propre = parjeton.get(session)
+    if propre is None:
+        return Correlation(None, True, 0, 0)
+    if propre.empreinte is None:
+        return Correlation(None, propre.neuve, 0, 0)
+    memes = [x for x in parjeton.values() if x.empreinte == propre.empreinte]
+    neuves = sum(1 for x in memes if x.neuve and x.debut >= maintenant - FENETRE_NEUVES)
+    debit = sum(1 for x in memes if x.debut >= maintenant - FENETRE_DEBIT)
+    return Correlation(propre.empreinte, propre.neuve, neuves, debit)
+
+
+_E_PAR_CONTENU: dict[str, str | None] = {}  # texte de l'empreinte → E : le contenu est la clé, sûr entre bases
+
+
+def _e_du_texte(payload: str | None) -> str | None:
+    if not payload:
+        return None
+    if payload not in _E_PAR_CONTENU:
+        if len(_E_PAR_CONTENU) >= 512:
+            _E_PAR_CONTENU.clear()
+        try:
+            valeur = json.loads(payload)
+            _E_PAR_CONTENU[payload] = empreinte_e(valeur) if isinstance(valeur, dict) else None
+        except ValueError:
+            _E_PAR_CONTENU[payload] = None
+    return _E_PAR_CONTENU[payload]
+
+
+_PREMIERE_EMPREINTE = (
+    "(SELECT payload FROM observations_js o WHERE o.session_token = v.session_token AND o.kind = 'empreinte'"
+    " ORDER BY o.id LIMIT 1)"
+)
+
+
+def _stamp(instant: datetime) -> str:
+    return instant.astimezone(UTC).isoformat(timespec="milliseconds")
+
+
+def _visites_du_monde(cx: sqlite3.Connection, monde_id: int, maintenant: datetime) -> list[VisiteObservee]:
+    """Visites du monde commencées dans les 24 heures qui précèdent `maintenant`, avec leur E (lecture seule)."""
+    lignes = cx.execute(
+        f"SELECT v.session_token, v.visiteur, v.neuve, v.vue_le, {_PREMIERE_EMPREINTE} AS payload FROM visites v"
+        " WHERE v.monde_id = ? AND v.session_token IS NOT NULL AND v.vue_le >= ? AND v.vue_le <= ?",
+        (monde_id, _stamp(maintenant - FENETRE_NEUVES), _stamp(maintenant)),
+    ).fetchall()
+    return [
+        VisiteObservee(r["session_token"], r["visiteur"], bool(r["neuve"]), datetime.fromisoformat(r["vue_le"]), e)
+        for r in lignes
+        if (e := _e_du_texte(r["payload"])) is not None
+    ]
+
+
+def _premiere_empreinte(cx: sqlite3.Connection, jeton: str) -> str | None:
+    ligne = cx.execute(
+        "SELECT payload FROM observations_js WHERE session_token = ? AND kind = 'empreinte' ORDER BY id LIMIT 1",
+        (jeton,),
+    ).fetchone()
+    return _e_du_texte(ligne["payload"]) if ligne else None
+
+
+def _evaluer_dans(
+    cx: sqlite3.Connection, jeton: str, monde_id: int, propre: VisiteObservee, maintenant: datetime
+) -> Correlation:
+    # La visite de la session est ajoutée à part : elle peut dater de plus de 24 h (session longue).
+    voisines = [x for x in _visites_du_monde(cx, monde_id, maintenant) if x.session != jeton]
+    return evaluer([*voisines, propre], jeton, maintenant)
+
+
+def evaluer_session(cx: sqlite3.Connection, jeton: str, maintenant: datetime | None = None) -> Correlation:
+    """La règle 2.0 pour une session en cours : son monde et sa visite viennent de la table `visites`.
+
+    Une session sans visite enregistrée (aucune requête `/lab` reconnue) n'a pas de monde : rien n'est compté.
+    """
+    maintenant = maintenant or datetime.fromisoformat(db.maintenant())
+    ligne = cx.execute(
+        "SELECT monde_id, visiteur, neuve, vue_le FROM visites WHERE session_token = ?", (jeton,)
+    ).fetchone()
+    if ligne is None:
+        return evaluer([], jeton, maintenant)
+    propre = VisiteObservee(
+        jeton, ligne["visiteur"], bool(ligne["neuve"]), datetime.fromisoformat(ligne["vue_le"]),
+        _premiere_empreinte(cx, jeton),
+    )  # fmt: skip
+    return _evaluer_dans(cx, jeton, ligne["monde_id"], propre, maintenant)
+
+
+def correlation_historique(
+    cx: sqlite3.Connection, jeton: str, monde_id: int | None, debut: datetime
+) -> Correlation | None:
+    """La règle 2.0 telle qu'elle aurait jugé cette session à son début (rejeu, lecture seule).
+
+    Ne voit que les visites antérieures de `monde_id` (celui de la session dans `runs`). Sans monde (`None` :
+    sessions d'avant I1), on ignore à quel monde la session appartenait : rien n'est jugé, la réponse est `None`.
+    `debut` sert quand la session n'a pas de ligne `visites` ; elle est alors comptée comme neuve.
+    """
+    if monde_id is None:
+        return None
+    ligne = cx.execute("SELECT visiteur, neuve, vue_le FROM visites WHERE session_token = ?", (jeton,)).fetchone()
+    if ligne:
+        propre = VisiteObservee(
+            jeton, ligne["visiteur"], bool(ligne["neuve"]), datetime.fromisoformat(ligne["vue_le"]),
+            _premiere_empreinte(cx, jeton),
+        )  # fmt: skip
+    else:
+        propre = VisiteObservee(jeton, "", True, debut, _premiere_empreinte(cx, jeton))
+    return _evaluer_dans(cx, jeton, monde_id, propre, propre.debut)
+
+
+def visite_neuve(cx: sqlite3.Connection, jeton: str) -> bool:
+    """`sans_ressources` doit-il juger cette session comme une première visite ?
+
+    Oui pour une session neuve, ou sans visite enregistrée. Un visiteur connu n'en est dispensé que si une session
+    antérieure du même visiteur, dans le même monde, avait chargé les ressources (`/lab/static`) avant le début de
+    celle-ci : sans cela son cache ne peut pas les contenir, et un robot qui rejoue un seul cookie sans jamais les
+    charger resterait signalé. Une seule lecture indexée, et seulement pour une session connue ; elle est faite
+    là où le gardien (et le rejeu) construisent leurs observations, pas à chaque requête.
+    """
+    ligne = cx.execute(
+        "SELECT monde_id, visiteur, neuve, vue_le FROM visites WHERE session_token = ?", (jeton,)
+    ).fetchone()
+    if ligne is None or ligne["neuve"]:
+        return True
+    cache = cx.execute(
+        "SELECT 1 FROM visites w WHERE w.monde_id = ? AND w.visiteur = ? AND w.session_token != ? AND w.vue_le < ?"
+        " AND EXISTS (SELECT 1 FROM observations_http h WHERE h.session_token = w.session_token"
+        " AND h.path LIKE '/lab/static%' AND h.received_at <= ?) LIMIT 1",
+        (ligne["monde_id"], ligne["visiteur"], jeton, ligne["vue_le"], ligne["vue_le"]),
+    ).fetchone()
+    return cache is None

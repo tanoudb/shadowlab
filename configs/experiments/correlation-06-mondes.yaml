@@ -1,0 +1,35 @@
+# Palier 2, I2 : `correlation-session` 2.0 au niveau 06 complet, bras « un monde par passage » (30 passages).
+# Un champ `monde` porte sur toute la campagne : le bras « une série » est dans le fichier voisin
+# `correlation-06-mondes-serie.yaml` (même configuration, `monde: serie`). Les deux se lancent l'un après l'autre.
+#
+# Règle 2.0 (docs/recherche/identite-qui-dure-2026-11-12.md § 4.3) : on compte des visites neuves de même empreinte
+# dans un monde. Ici chaque passage est son propre monde (`monde: passage`, nom `c<n°>:noezia-natif:06:<scénario>:<rép.>`) :
+# chaque passage est une première visite, seul dans son monde, donc la corrélation ne peut rien lui reprocher. C'est le
+# chiffre de discrétion du niveau 06 avec corrélation, que la règle 1.1 mettait à 0 sur 15 (campagne 101, 347 vues du
+# même Chrome) : on attend ~ 30 sur 30 à l'accueil du niveau (réserves : un Chrome, CAPTCHA en clés de test, aucun humain).
+#
+#   1. uv run shadowlab arena appliquer            # SANS SHADOWLAB_PROFILS_EXTRA : le niveau 06 complet, avec corrélation
+#   2. uv run shadowlab campagne configs/experiments/correlation-06-mondes.yaml
+#   3. uv run shadowlab campagne configs/experiments/correlation-06-mondes-serie.yaml
+#
+# Des fenêtres de Chrome s'ouvrent à l'écran. 1 configuration × 1 niveau × 3 scénarios × 10 répétitions = 30 passages,
+# un à la fois : environ 6 à 8 minutes (7,6 à 15,6 s par passage en médiane, campagne 100).
+# Ne rien lancer d'autre pendant la campagne (durées et CPU mesurés).
+experiment:
+  name: correlation_06_monde_passage
+  description: >-
+    noezia en identité native au niveau 06 complet (avec corrélation 2.0), un monde par passage, 30 passages.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["06"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 10
+  seed: 20261115
+  monde: passage
+  output: [json, html]

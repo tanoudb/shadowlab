@@ -1,0 +1,33 @@
+# Palier 2, I2 : `correlation-session` 2.0 au niveau 06 complet, bras « un monde par série » (15 passages).
+# Même configuration que `correlation-06-mondes.yaml`, avec `monde: serie` : tous les passages du moteur au niveau 06
+# partagent un monde (`c<n°>:noezia-natif:06`). Le moteur jette ses cookies à chaque passage (contexte neuf) : chaque
+# passage est une session neuve de même empreinte dans le même monde. La règle 2.0 doit en prendre à partir de la
+# 5e session neuve (`empreinte_sans_memoire` 0,7, composite 1,05 au-dessus du seuil 0,5), donc les passages 5 à 15.
+# On attend 4 passages réussis puis des refus (`rejete-empreinte`), avec le signal `empreinte_sans_memoire`
+# (et non plus `recycling_*`, ancien nom de la règle 1.1). Pas d'échauffement : `warmup` vaut 0, tous les passages
+# comptent dans le monde. L'ordre des passages est celui du plan de la campagne (répétition par répétition).
+#
+#   1. uv run shadowlab arena appliquer            # SANS SHADOWLAB_PROFILS_EXTRA : le niveau 06 complet, avec corrélation
+#   2. uv run shadowlab campagne configs/experiments/correlation-06-mondes-serie.yaml
+#
+# 1 configuration × 1 niveau × 3 scénarios × 5 répétitions = 15 passages, un à la fois : environ 7 à 8 minutes (4
+# passages réussis d'environ 12 s, puis 11 refus qui attendent chacun 30 s avant d'abandonner).
+# Ne rien lancer d'autre pendant la campagne.
+experiment:
+  name: correlation_06_monde_serie
+  description: >-
+    noezia en identité native au niveau 06 complet (avec corrélation 2.0), un monde par série, 15 passages.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["06"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261115
+  monde: serie
+  output: [json, html]
