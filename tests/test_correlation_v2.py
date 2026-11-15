@@ -247,14 +247,77 @@ def _codes_comportement(cx_, jeton: str) -> set[str]:
     return {s["code"] for m in _suspicion(cx_, jeton, ["comportement"]) for s in m["signaux"]}
 
 
-def test_visiteur_connu_sans_ressources_aucun_signal(monkeypatch):
+def _ressource(cx_, jeton: str, instant: datetime) -> None:
+    cx_.execute(
+        "INSERT INTO observations_http (session_token, received_at, method, path, http_version, headers, cookies)"
+        " VALUES (?, ?, 'GET', '/lab/static/observateur.js', '1.1', '[]', '[]')",
+        (jeton, instant.isoformat(timespec="milliseconds")),
+    )
+
+
+def _visite_ailleurs(cx_, monde: str, visiteur: str, jeton: str, instant: datetime) -> None:
+    cx_.execute(
+        "INSERT INTO visites (monde_id, visiteur, session_token, neuve, vue_le) VALUES (?, ?, ?, 1, ?)",
+        (visiteurs.identifiant_monde(cx_, monde), visiteur, jeton, instant.isoformat(timespec="milliseconds")),
+    )
+
+
+def _visiteur_de(cx_, jeton: str) -> str:
+    return cx_.execute("SELECT visiteur FROM visites WHERE session_token = ?", (jeton,)).fetchone()["visiteur"]
+
+
+def test_visiteur_connu_dont_la_premiere_session_a_charge_les_ressources_aucun_signal(monkeypatch):
     cx_ = _base()
-    cookie = _arrivee(cx_, monkeypatch, "premiere", MAINTENANT - timedelta(days=1), None, empreinte(0))
+    veille = MAINTENANT - timedelta(days=1)
+    cookie = _arrivee(cx_, monkeypatch, "premiere", veille, None, empreinte(0))
     cookie = _arrivee(cx_, monkeypatch, "retour", MAINTENANT, cookie, empreinte(0))
-    _page_sans_ressources(cx_, "premiere", MAINTENANT - timedelta(days=1))
+    _page_sans_ressources(cx_, "premiere", veille)
+    _ressource(cx_, "premiere", veille)  # le cache du navigateur les gardera
     _page_sans_ressources(cx_, "retour", MAINTENANT)
-    assert "sans_ressources" in _codes_comportement(cx_, "premiere")  # une première visite sans fichier : suspecte
     assert "sans_ressources" not in _codes_comportement(cx_, "retour")  # un retour a ses scripts en cache
+
+
+def test_visiteur_connu_sans_session_anterieure_chargeuse_garde_le_signal(monkeypatch):
+    """Un robot qui rejoue un seul cookie sans jamais charger les ressources : le cache ne peut pas les contenir."""
+    cx_ = _base()
+    cookie = _arrivee(cx_, monkeypatch, "s0", MAINTENANT - timedelta(minutes=3), None, empreinte(0))
+    cookie = _arrivee(cx_, monkeypatch, "s1", MAINTENANT - timedelta(minutes=2), cookie, empreinte(0))
+    cookie = _arrivee(cx_, monkeypatch, "s2", MAINTENANT, cookie, empreinte(0))
+    for jeton, instant in (("s0", -3), ("s1", -2), ("s2", 0)):
+        _page_sans_ressources(cx_, jeton, MAINTENANT + timedelta(minutes=instant))
+    assert correlation.visite_neuve(cx_, "s2") is True
+    assert "sans_ressources" in _codes_comportement(cx_, "s2")
+
+
+def test_ressources_d_une_session_posterieure_ne_dispensent_pas(monkeypatch):
+    cx_ = _base()
+    cookie = _arrivee(cx_, monkeypatch, "s0", MAINTENANT - timedelta(minutes=3), None, empreinte(0))
+    _arrivee(cx_, monkeypatch, "s1", MAINTENANT - timedelta(minutes=2), cookie, empreinte(0))
+    _ressource(cx_, "s0", MAINTENANT + timedelta(minutes=5))  # arrivée après : n'existait pas à la visite s1
+    _page_sans_ressources(cx_, "s1", MAINTENANT)
+    assert "sans_ressources" in _codes_comportement(cx_, "s1")
+
+
+def test_ressources_d_un_autre_visiteur_ne_dispensent_pas(monkeypatch):
+    cx_ = _base()
+    _arrivee(cx_, monkeypatch, "autre", MAINTENANT - timedelta(minutes=5), None, empreinte(0))
+    _ressource(cx_, "autre", MAINTENANT - timedelta(minutes=5))
+    cookie = _arrivee(cx_, monkeypatch, "s0", MAINTENANT - timedelta(minutes=3), None, empreinte(0))
+    _arrivee(cx_, monkeypatch, "s1", MAINTENANT, cookie, empreinte(0))
+    _page_sans_ressources(cx_, "s1", MAINTENANT)
+    assert _visiteur_de(cx_, "autre") != _visiteur_de(cx_, "s1")
+    assert "sans_ressources" in _codes_comportement(cx_, "s1")
+
+
+def test_ressources_d_un_autre_monde_ne_dispensent_pas(monkeypatch):
+    cx_ = _base()
+    cookie = _arrivee(cx_, monkeypatch, "s0", MAINTENANT - timedelta(minutes=3), None, empreinte(0))
+    _arrivee(cx_, monkeypatch, "s1", MAINTENANT, cookie, empreinte(0))
+    # Même identifiant de visiteur, mais dans un autre monde : sa session a chargé les ressources là-bas.
+    _visite_ailleurs(cx_, "ailleurs", _visiteur_de(cx_, "s1"), "ailleurs-1", MAINTENANT - timedelta(minutes=5))
+    _ressource(cx_, "ailleurs-1", MAINTENANT - timedelta(minutes=5))
+    _page_sans_ressources(cx_, "s1", MAINTENANT)
+    assert "sans_ressources" in _codes_comportement(cx_, "s1")
 
 
 def test_le_detecteur_comportement_ignore_sans_ressources_pour_un_visiteur_connu():
@@ -268,10 +331,12 @@ def test_le_detecteur_comportement_ignore_sans_ressources_pour_un_visiteur_connu
 
 def test_visite_neuve_lit_la_table_visites(monkeypatch):
     cx_ = _base()
-    cookie = _arrivee(cx_, monkeypatch, "a", MAINTENANT, None)
+    cookie = _arrivee(cx_, monkeypatch, "a", MAINTENANT - timedelta(minutes=2), None)
     _arrivee(cx_, monkeypatch, "b", MAINTENANT, cookie)
     assert correlation.visite_neuve(cx_, "a") is True
-    assert correlation.visite_neuve(cx_, "b") is False
+    assert correlation.visite_neuve(cx_, "b") is True  # connu, mais aucune session antérieure n'a chargé de ressources
+    _ressource(cx_, "a", MAINTENANT - timedelta(minutes=1))
+    assert correlation.visite_neuve(cx_, "b") is False  # une session antérieure du visiteur les a chargées
     assert correlation.visite_neuve(cx_, "inconnue") is True  # sans visite enregistrée : traitée comme neuve
 
 
