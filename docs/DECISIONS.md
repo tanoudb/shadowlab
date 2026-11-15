@@ -980,11 +980,54 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `414f351a`, 2 sur 11 pour la session Windows, qu'elle seule arrête ; 0 déclenchement dans les 255 passages des
   campagnes 115 et 117. `screen_position_zero` : `screenX` et `screenY` à 0 dans les quatre sessions publiques ;
   déclenchée dans 105 passages sur 255 du labo, jamais pour un Chrome visible ; neutralisée, aucun verdict ne bascule
-  chez les quatre sessions. Décision : aucune règle ne change, pas de D-87, pas de campagne. Critère annoncé d'avance
+  chez les quatre sessions. Décision : aucune règle ne change, aucune nouvelle décision, pas de campagne. Critère annoncé d'avance
   pour `trajectoire_lineaire` : dès qu'un humain connu, dans un vrai Chrome, Safari ou Firefox sur ordinateur, a une
-  seule page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera D-87, avec
+  seule page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera une nouvelle décision, avec
   les campagnes de contrôle `controle-vrai-chrome.yaml` et `temoin-mobile-emule.yaml` à comparer aux 115 et 117) ; la
   valeur du seuil attend le critère de 1.7 (10 sessions sur ordinateur). `screen_position_zero` reste inchangée : elle
   ne change aucun verdict aujourd'hui et coûte 0,28 de marge aux niveaux 06 et 07 ; à traiter avec le prochain
   changement de l'Arena, pas seule. Détail : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`. Décidé par :
   coordination.
+- **D-87 — 15/11/2026 — Palier 2, étape I1 : l'Arena garde la mémoire des visiteurs, par « monde » (migration 10).**
+  Pourquoi maintenant : le palier 1 attend Ethan (1.7 : des humains connus sur ordinateur ; 1.8 : un domaine). Le 15/11
+  au soir, Ethan : « je te laisse tout continue a travailler sur d'autre chose ». La coordination ouvre donc le palier 2
+  par ses deux étapes qui ne dépendent d'aucune des quatre questions de la conception
+  (`docs/recherche/identite-qui-dure-2026-11-12.md` § 7 et § 10) : I1 (ici) et I4 (D-88). C'est une **exception à la
+  règle du plan § 4** (« on ne commence pas un palier avant la fin du précédent »), décidée par la coordination. Les
+  quatre questions restent ouvertes. Constat : l'Arena ne reconnaît pas un visiteur d'une requête à l'autre (étape 2.1
+  du plan), et rien ne sépare l'état d'une campagne de celui de la suivante. Décision : migration **10** (tables
+  `mondes`, `visites`, `bannissements` vide, préparée pour I3 ; colonne `runs.monde_id`). Cookie `sl_visiteur`, signé
+  par le secret existant de l'Arena (`arena/secret.py`), valeur `<visiteur>.<hmac>`, nom du monde compris dans la
+  signature, 400 jours, `HttpOnly`, `SameSite=Lax`, `Path=/lab` ; posé sur les réponses `/lab` du labo seulement (pas
+  `/labo`, jamais par l'application publique). Champ `monde` des campagnes : `campagne` (défaut, monde `c<id>`),
+  `serie` (`c<id>:<moteur>:<niveau>`), `passage` (la même chose plus `:<scénario>:<répétition>`) ; monde `manuel` pour
+  `/manuel`, `hors-passage` pour une requête sans jeton. I1 ne change aucune décision de l'Arena : la corrélation reste
+  celle de D-48 et D-64 jusqu'à I2. Preuve : `tests/test_visiteurs.py` (16 tests, écrits d'abord, en échec avant le code
+  avec `ImportError`) ; commits `a2a4770` (tests), `7e42535` (code), `ba5ae45` (empreinte de `site/app.py` mise à jour
+  dans la garde de `tests/test_public_social.py`, comme pour D-82), fusion `9ce9066` ; suite complète 1 858 verts
+  (15/11, 22 h, 8 min 33 s). **Campagne de contrôle 118** (`controle-vrai-chrome.yaml`, 15/11, 22 h 04 à 22 h 43,
+  135 passages, 0 panne), comparée à la 115 : taux identiques à chaque cellule (`noezia-natif` 15, 15, 15 sur 15 aux
+  niveaux 04, 05 et 06 sans corrélation ; `patchright-chrome-interface` 10, 15, 0 ; témoin `patchright` 0, 0, 0) ; les
+  135 passages sont dans le monde `c118`. Limites : les durées moyennes sont plus longues (`noezia-natif` 15,7 / 31,5 /
+  32,8 s contre 15,1 / 30,2 / 30,1 s ; `patchright-chrome-interface` 1,6 / 6,7 / 4,8 s contre 1,4 / 5,8 / 4,1 s) ; cause
+  non établie : chaque requête `/lab` fait deux écritures `INSERT OR IGNORE` (`mondes`, `visites`) dans une connexion
+  SQLite neuve, et la charge de la machine a atteint 11 pendant la campagne ; à reprendre avec I2 (n'écrire qu'à la
+  première requête d'une session). Un test était déjà intermittent avant I1 (`tests/test_duree_cookie.py`, voir
+  `AGENTS.md`) : non corrigé. La base du site public recevra la migration 10 (tables vides) au prochain redémarrage de
+  l'application publique, qui tourne encore avec l'ancien code ; sauvegardes : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz`
+  (115 Mo, schéma 9) et `outputs/public/public-avant-migration10-2026-11-15.sqlite3`. Décidé par : coordination.
+- **D-88 — 15/11/2026 — Palier 2, étape I4 : le moteur `noezia` garde une identité persistante (option `identite`).**
+  Constat : chaque lancement du moteur repart d'un Chrome vierge (étape 2.5 du plan) ; un compte connecté ne peut pas
+  durer. Décision : option `identite` (chaîne, dans `options_permises`), acceptée seulement avec `identite_native: true`
+  et `headless: false`. Nom : `^[a-z0-9][a-z0-9-]{0,39}$`. `nb_essais` est forcé à 1. Un dossier par identité,
+  `outputs/identites/<nom>/` (droits 700) : `identite.json` (`nom`, `creee_le`, `etat`), `chrome/`, `visites.jsonl`,
+  `verrou` (`flock` non bloquant : une identité ne sert qu'à un lancement à la fois). La racine ne se règle que par
+  `SHADOWLAB_IDENTITES`, jamais par une option de campagne. Une identité à l'état `banni` est refusée. Chrome est lancé
+  par `launch_persistent_context`, avec le verrou réseau du périmètre. `configuration()` enregistre `identite` et
+  `identite_age_jours`. Preuve : tests écrits d'abord (commit `1b5907f`, en échec avant le code avec `ImportError`),
+  code `ea77e14`, fusion `49d9cf7` ; dans un vrai Chrome, la même identité sur deux lancements garde le même cookie
+  durable et le même `localStorage`, deux identités donnent deux visiteurs, et une redirection hors périmètre est
+  refusée en mode persistant (`test_noezia_identite_refuse_une_redirection_hors_perimetre`) ; suite complète 1 858 verts.
+  Limites : essayé avec le cookie d'une page locale, pas encore avec `sl_visiteur` ; pas d'état `alerte` ni de
+  sentinelle d'identité (I6) ; pas de sauvegarde du profil ; `identite.json` ne porte ni « hôtes visés » ni « machine »
+  (§ 5.2 de la conception) ; aucune campagne ne s'en sert encore. Décidé par : coordination.

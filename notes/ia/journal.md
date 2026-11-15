@@ -3585,3 +3585,13 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Tests non lancés** (documents seulement) : dernier compte 1 807 verts (14/11, 19 h 55), 1 770 rapides après la fusion du 15/11.
 - **Reste, avec Ethan** : 2 minutes dans Google Chrome lui-même, et l'heure de la session du PC d'un ami ; à surveiller : un humain
   arrivant par un navigateur intégré est arrêté dès le niveau 03.
+
+## 2026-11-15 (22h50) — Claude (Opus 5.5, coordination) — Palier 2 commencé : I1 (visiteurs et mondes) et I4 (identité persistante), campagne de contrôle 118
+- **Pourquoi** : le palier 1 attend Ethan (1.7, 1.8) ; il a dit « je te laisse tout continue a travailler sur d'autre chose ». Exception à la règle du plan § 4, décidée par la coordination.
+- **I1** (D-87, fusion `9ce9066`) : migration 10 (`mondes`, `visites`, `bannissements`, `runs.monde_id`), cookie `sl_visiteur`, champ `monde` des campagnes. `arena/visiteurs.py`, `database.py`, `site/app.py`, `campaigns.py`, `passages.py`, `tests/test_visiteurs.py` (16 tests).
+- **I4** (D-88, fusion `49d9cf7`) : option `identite` du moteur `noezia`, un dossier par identité sous `outputs/identites/`, preuve dans un vrai Chrome.
+- **Tests** : 1 858 verts (8 min 33 s). `test_duree_cookie` intermittent, déjà avant I1 : non corrigé.
+- **Campagne 118** (135 passages, monde `c118`) : mêmes taux que la 115 à chaque cellule ; durées un peu plus longues, cause non établie (deux écritures SQLite par requête `/lab`).
+- **Base** : sauvegardes `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ; la base publique migre au prochain redémarrage de l'application publique.
+- **Fichiers** : `docs/DECISIONS.md` (D-87, D-88 ; corrections dans D-86), `docs/PLAN.md` (§ 2, § 4, § 8, corrections), `AGENTS.md`, `notes/ia/contexte.md`, calibrage du 15/11 (une ligne).
+- **Reste** : I2 (corrélation 2.0) ; alléger les écritures par requête ; corriger `test_duree_cookie` ; les quatre questions à Ethan ; aucun humain connu sur ordinateur.

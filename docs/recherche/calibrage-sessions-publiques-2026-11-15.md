@@ -1,7 +1,7 @@
 # Calibrage : session 414f351a, trajectoire_lineaire, screen_position_zero (15/11/2026)
 
 - Ce document garde l'enquête sur la quatrième session du site public (`414f351a`, navigateur intégré de l'application Claude) et sur deux règles de l'Arena, `trajectoire_lineaire` et `screen_position_zero`.
-- Décision du 15/11 (coordination) : aucune règle ne change, pas de D-87, pas de campagne ; critère annoncé d'avance dans `docs/DECISIONS.md` (ajout à D-86).
+- Décision du 15/11 (coordination) : aucune règle ne change, aucune nouvelle décision, pas de campagne ; critère annoncé d'avance dans `docs/DECISIONS.md` (ajout à D-86).
 - Ces sessions servent à juger les détecteurs, jamais à régler le moteur.
 
 Enquête en lecture seule : scripts d'enquête non versionnés (dossier de brouillon de la session du 15/11). Aucun fichier du dépôt modifié ; bases ouvertes en `mode=ro`.

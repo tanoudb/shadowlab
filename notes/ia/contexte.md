@@ -73,9 +73,16 @@ sur nos propres cibles (site vitrine factice, tor-i).
   l'Arena, une identité persistante puis plusieurs identités dans le moteur, l'exécution sur un serveur
   Linux, un test contre Cloudflare, la preuve de la récolte générale (campagne complète, un vrai site).
 - **15/11, quatrième session du site public** (`414f351a`) : navigateur intégré de l'application Claude, pas Chrome ;
-  conduite non établie, pas un humain connu. Rejeu : arrêtée de 03 à 07. Aucune règle changée, pas de D-87 : critère
+  conduite non établie, pas un humain connu. Rejeu : arrêtée de 03 à 07. Aucune règle changée, aucune nouvelle décision : critère
   annoncé d'avance pour `trajectoire_lineaire` (`docs/DECISIONS.md`, ajout à D-86). Attendu d'Ethan : 2 minutes dans
   Google Chrome lui-même, et l'heure de la session du PC d'un ami.
+- **15/11, palier 2 commencé** (exception à la règle du plan § 4, décidée par la coordination ; Ethan : « je te laisse tout
+  continue a travailler sur d'autre chose ») : **I1** Arena, visiteurs et mondes, migration 10, cookie `sl_visiteur`
+  (D-87, fusion `9ce9066`) ; **I4** moteur, identité persistante, option `identite` (D-88, fusion `49d9cf7`). 1 858 tests
+  verts. Campagne de contrôle 118 : mêmes taux que la 115 à chaque cellule, durées un peu plus longues (cause non établie,
+  à reprendre avec I2). Sauvegardes : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et
+  `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ; la base du site public migre au prochain redémarrage de
+  l'application publique. Les quatre questions de la conception restent à Ethan.
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native

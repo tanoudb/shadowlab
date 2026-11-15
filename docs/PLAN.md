@@ -788,12 +788,42 @@ passe de 01 à 07, c'est la seule règle qui l'arrête. Dans le labo (campagnes 
 décision que pour 15 passages (`patchright-chrome-mobile`, niveau 06 sans corrélation, campagne 117) ; sans elle, 14 de
 ces 15 restent arrêtés et le quinzième n'a pas de relevé de comportement en base.
 
-**Décision (coordination, 15/11) : aucune règle ne change, pas de D-87, pas de campagne.** `trajectoire_lineaire` : pas
+**Décision (coordination, 15/11) : aucune règle ne change, aucune nouvelle décision, pas de campagne.** `trajectoire_lineaire` : pas
 de recalage (une session anonyme, une session dans un navigateur intégré dont on ne sait pas qui la conduisait) ;
 critère annoncé d'avance : dès qu'un humain connu, dans un vrai Chrome, Safari ou Firefox sur ordinateur, a une seule
-page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera D-87) ; la valeur
+page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain et on la corrige (ce sera une nouvelle décision) ; la valeur
 du seuil attend le critère de 1.7. `screen_position_zero` : inchangée, elle ne change aucun verdict aujourd'hui ; à
 traiter avec le prochain changement de l'Arena. Détail : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`.
+
+### Palier 2 commencé (15/11) : I1 et I4, campagne de contrôle 118
+
+Le palier 1 attend Ethan (1.7 : des humains connus sur ordinateur ; 1.8 : un domaine). Le 15/11 au soir, Ethan : « je te
+laisse tout continue a travailler sur d'autre chose ». La coordination a ouvert le palier 2 par deux étapes qui ne
+dépendent d'aucune des quatre questions de la conception : **I1** (Arena : visiteurs et mondes, migration 10, D-87) et
+**I4** (moteur : identité persistante, option `identite`, D-88). C'est une exception à la règle du § 4, décidée par la
+coordination. Fusions `49d9cf7` (I4) et `9ce9066` (I1) ; suite complète : 1 858 tests verts (15/11, 22 h, 8 min 33 s).
+
+**Campagne 118** (`controle-vrai-chrome.yaml`, 15/11, 22 h 04 à 22 h 43, 135 passages, 0 panne, niveaux 04 à 06 sans
+corrélation, tous les passages dans le monde `c118`) contre la **115** (14/11) : les taux sont identiques à chaque cellule.
+Chiffres de la base.
+
+| Moteur | Niveau | Succès 115 | Succès 118 | Durée moyenne 115 | Durée moyenne 118 |
+|---|---|---|---|---|---|
+| `noezia-natif` | 04 | 15 sur 15 | 15 sur 15 | 15,1 s | 15,7 s |
+| `noezia-natif` | 05 | 15 sur 15 | 15 sur 15 | 30,2 s | 31,5 s |
+| `noezia-natif` | 06 sans corrélation | 15 sur 15 | 15 sur 15 | 30,1 s | 32,8 s |
+| `patchright-chrome-interface` | 04 | 10 sur 15 | 10 sur 15 | 1,4 s | 1,6 s |
+| `patchright-chrome-interface` | 05 | 15 sur 15 | 15 sur 15 | 5,8 s | 6,7 s |
+| `patchright-chrome-interface` | 06 sans corrélation | 0 sur 15 | 0 sur 15 | 4,1 s | 4,8 s |
+| `patchright` (témoin) | 04, 05, 06 | 0 sur 45 | 0 sur 45 | environ 20 s | environ 20 s |
+
+Lecture : I1 ne change aucune décision de l'Arena, et les taux le confirment. Les durées sont un peu plus longues
+(témoin à part, dominé par son attente de 30 s). Cause non établie : chaque requête `/lab` fait maintenant deux
+écritures `INSERT OR IGNORE` (`mondes`, `visites`) dans une connexion SQLite neuve, et la charge de la machine a
+atteint 11 pendant la campagne. À reprendre avec I2 (n'écrire qu'à la première requête d'une session). Réserves : un
+seul Chrome sur macOS, 15 passages par cellule, aucun humain en base. Sauvegardes avant la migration 10 :
+`outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ;
+la base du site public migrera au prochain redémarrage de l'application publique.
 
 ## 3. Pourquoi on a perdu du temps
 
@@ -907,6 +937,9 @@ But : un seul compte connecté travaille 7 jours sans être banni.
 
 En parallèle possible : 2.1 à 2.4 (Arena) et 2.5 à 2.7 (moteur).
 
+**État au 15/11** : I1 et I4 de la conception sont faites (D-87, D-88) ; suite prévue : I2 (corrélation 2.0, qui dépend
+de I1) côté Arena, I5 et I6 côté moteur. Les quatre questions de la conception restent ouvertes (§ 7).
+
 ### Palier 3 — Serveur et Cloudflare réel
 
 But : les mêmes chiffres depuis un serveur Linux, contre une vraie protection.
@@ -999,6 +1032,6 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains Campagne 108 (13/11) : premier blocage du moteur en identité native sur une récolte, au niveau 05, signal `trajectoire_lineaire` (2 passages sur 35 ; environ une page sur 1 000 sous le seuil sur 4 400 pages) : corrigé par D-74 (tremblement visible au pixel) et vérifié par la campagne 109 (14/11) : 0 page sur 2 015 sous la marge (30 sur 1 997 avant), niveau 05 à 35 sur 35. D-79 (14/11, fusion `8983345`) : après un défi, la première vraie page était quittée en 54 à 71 ms sans un geste (campagne 110) ; elle dure 6,2 à 10,5 s avec souris et défilement à la campagne 111, 15 sur 15 inchangé, témoin 0 sur 15 |
 | Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages de 21 pages par niveau ; 427 pages d'une seule session aux niveaux 04, 05 et 06 sans corrélation)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12 au niveau 01, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06 ; D-71 dans l'Arena, D-72 dans la commande), campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun. Parcours long : campagne 106 (427 pages aux niveaux 04 et 05, arrêt au niveau 06 : D-73 dans l'Arena), campagne 107 : 427 pages et 34 410 champs sur 34 410 aux trois niveaux ; 1 285 tests verts (fusion `d4e6d4e`). Campagne 108, 35 passages par niveau : 35 sur 35 au niveau 04, 32 sur 35 au niveau 05 (2 blocages du moteur sur `trajectoire_lineaire`, 1 erreur réseau du CAPTCHA de test), 35 sur 35 au niveau 06 sans corrélation. Campagne 109 (14/11, souris corrigée par D-74) : 34, 35 et 35 sur 35, le seul échec est un défaut de l'Arena (D-78, corrigé). Campagnes 110 et 111 (14/11, après D-78 puis D-79) : 15 sur 15 du niveau 02 au niveau 06 sans corrélation, témoin 0 sur 15. 14/11 : la récolte peut repasser la porte en cours de passe (D-83) et le cookie de l'Arena est réglable par profil (D-82) ; campagne 112 (cookie de 600 s, vitrine à 150 annonces) : 3 passages sur 3 aux niveaux 04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun, le défi revenu 1, 2 et 2 fois et repassé sans arrêt ; campagne 113 (cookie de 600 s, rallye) : 427 pages et 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois, aucun arrêt ; limite mesurée : décalage des cookies de l'Arena aux niveaux 05 et 06 (arrêt attendu vers le onzième cycle). Campagne 114 (14/11, cookie d'origine d'une heure, rallye à 683 pages) : 59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation en 75 à 81 minutes, le défi revenu une fois vers 3 600 s et repassé. Campagne 116 (15/11) : niveau 07 sans corrélation 2 sur 3 (un échec sur `duree_pages_reguliere`), niveau 07 complet 0 sur 3 (corrélation). Reste : 30 passages par niveau ; plusieurs heures d'affilée (limite de décalage des cookies aux niveaux 05 et 06) ; aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
-| Palier 2 — Une identité qui dure | à faire | | |
+| Palier 2 — Une identité qui dure | **commencé (I1 et I4)** | 15/11 | Fusions `9ce9066` (I1, migration 10, D-87) et `49d9cf7` (I4, option `identite`, D-88) ; 1 858 tests verts (15/11, 22 h) ; campagne 118 : mêmes taux que la 115 à chaque cellule, tous les passages dans le monde `c118` (§ 2) |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

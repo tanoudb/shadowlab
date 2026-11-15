@@ -138,7 +138,7 @@ recommander des optimisations.
   (Chromium embarqué, `window.chrome` sans `app`, `loadTimes` ni `csi`) ; conduite à la main ou par un automate : non
   établi, donc pas un humain connu. Le rejeu l'arrête de 03 à 07 (`chrome-apis`, `comportement`, puis
   `client_hints_absents`, `permissions_all_denied` et les deux règles ci-dessus). **Décision du 15/11 : aucune règle ne
-  change, pas de D-87** ; `trajectoire_lineaire` (détecteur `entropie-interaction`, pas `comportement`) sera corrigée
+  change, aucune nouvelle décision** ; `trajectoire_lineaire` (détecteur `entropie-interaction`, pas `comportement`) sera corrigée
   dès qu'un humain connu sur ordinateur, dans un vrai navigateur, a une seule page sous 0,08 ; `screen_position_zero`
   attend le prochain changement de l'Arena. À surveiller : un humain qui arrive par un navigateur intégré à une
   application est arrêté dès le niveau 03 ; à trancher quand un humain connu arrivera ainsi. Détail :
@@ -146,10 +146,17 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 807 tests verts** (`uv run pytest`, 14/11 à 19 h 55, après D-86, hors campagne : 1 763 rapides et 44
-  d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `5b58f2c`), rien sur
-  `master`. Base au schéma 9 (D-68).
+- **Palier 2 commencé** (15/11, D-87, D-88 ; exception à la règle du plan § 4, décidée par la coordination, Ethan ayant
+  laissé la main : « je te laisse tout continue a travailler sur d'autre chose »). **I1**, Arena : migration 10 (tables
+  `mondes`, `visites`, `bannissements` vide, colonne `runs.monde_id`), cookie `sl_visiteur` signé, champ `monde` des
+  campagnes (`campagne`, `serie`, `passage`) ; aucune décision de l'Arena ne change (la corrélation reste celle de D-48
+  et D-64 jusqu'à I2). **I4**, moteur : option `identite` du moteur `noezia` (un dossier `outputs/identites/<nom>/`,
+  identité native seulement) ; aucune campagne ne s'en sert encore. Campagne de contrôle 118 : mêmes taux que la 115
+  à chaque cellule (`docs/PLAN.md` § 2). Les quatre questions de la conception restent ouvertes.
+- **1 858 tests verts** (`uv run pytest`, 15/11 à 22 h, après D-87 et D-88, rapides et intégration avec de vrais
+  navigateurs et la pile Docker, 8 min 33 s), 11 tests de l'interface (vitest), lint propre. Branche
+  `niveau-authentifie-perimetre` (dernière fusion `9ce9066`), rien sur `master`. Base au schéma 10 (D-87).
+  Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
   `tests/test_souris_trajectoire.py`. Vérifié dans un vrai Chrome par la campagne 109 (14/11, même fichier que
@@ -265,11 +272,11 @@ Prérequis : Python 3.12, `uv`, Node 22 (`mise`), Google Chrome (Selenium), Chro
 ## Carte du code
 ```
 src/shadowlab/
-├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker)
+├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker) ; visiteurs.py = visiteurs et mondes (D-87)
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
 │   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
-│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export
+│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88)
 ├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
 ├── scenarios.py     # 19 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
@@ -341,6 +348,10 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Un vrai Chrome n'a pas un JA4 unique : quand il reprend sa session TLS, son ClientHello porte l'extension
   `pre_shared_key` en plus (`t13d1517h2_…` devient `t13d1518h2_…`). Tout ce qui lie quelque chose au TLS doit
   passer par l'empreinte de liaison (`tls.ja4_liaison`, D-73), pas par le JA4 exact.
+- La base du site public passe par le même `database.MIGRATIONS` : elle reçoit la migration 10 (tables vides, colonne
+  `runs.monde_id`) **au prochain redémarrage de l'application publique** (non relancée au 15/11). Sauvegardes avant la
+  migration 10 : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` (labo, schéma 9) et
+  `outputs/public/public-avant-migration10-2026-11-15.sqlite3`.
 - Le navigateur garde les scripts de `/lab/static` en cache une heure : après une modification, vérifier avec
   une adresse neuve (`?v=2`). La racine `/` redirige vers l'ancien tableau de bord `/tableau`.
 
