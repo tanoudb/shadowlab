@@ -9,6 +9,7 @@ from typing import Any
 
 from . import database as db
 from . import issues
+from .arena import visiteurs
 from .detection import Classement, Observations, classer, proprietes
 
 EXPERIENCE_MANUELLE = "sessions-manuelles"
@@ -29,13 +30,15 @@ def demarrer(
     protection_config: str | None = None,
     is_warmup: bool = False,
     engine_version: str = "",
+    monde: str | None = None,
 ) -> tuple[int, str]:
     jeton = nouveau_jeton()
+    monde_id = visiteurs.identifiant_monde(cx, monde) if monde else None
     config_hash = hashlib.sha256(protection_config.encode()).hexdigest()[:16] if protection_config else None
     curseur = cx.execute(
         "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at, status,"
-        " protection, protection_config, config_hash, is_warmup, engine_version)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?, ?, ?, ?, ?)",
+        " protection, protection_config, config_hash, is_warmup, engine_version, monde_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, 'en_cours', ?, ?, ?, ?, ?, ?)",
         (
             experiment_id,
             engine_id,
@@ -49,6 +52,7 @@ def demarrer(
             config_hash,
             int(is_warmup),
             engine_version,
+            monde_id,
         ),
     )
     return int(curseur.lastrowid), jeton

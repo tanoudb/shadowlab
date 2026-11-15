@@ -48,7 +48,9 @@ SOCIAL_JS = RACINE / "src" / "shadowlab" / "public" / "static" / "social.js"
 SOCIAL_CSS = RACINE / "src" / "shadowlab" / "public" / "static" / "social.css"
 # Relevée le 13/11/2026 sur le commit f4e0452 ; mise à jour le 14/11/2026 pour la durée de cookie réglable par profil
 # (seul changement : `duree_s=duree_cookie_de(sceau)` aux quatre créations de cookie de défi, aucune page ne change).
-EMPREINTE_SITE_APP = "d22967b4fe55baf385d474f8226663f65a5d8a89568f696d1b2e747a569200de"
+# Mise à jour le 15/11/2026 (palier 2, I1) : pose du cookie `sl_visiteur` sur les réponses `/lab` du labo et monde
+# `manuel` pour `/manuel`, aucune page ne change.
+EMPREINTE_SITE_APP = "16c845b2f9751e3a2721b4ea44ece2010d732704c9d2d8ebc27c6763f79cc62e"
 # Copie littérale de la politique de sécurité du 13/11/2026 : le réseau social n'y change rien.
 CSP_ATTENDUE = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
