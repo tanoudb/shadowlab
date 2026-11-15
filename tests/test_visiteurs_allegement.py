@@ -97,9 +97,9 @@ def test_requete_suivante_d_une_session_connue_n_atteint_pas_la_base(client, reg
     appels: list[str] = []
     vrai = visiteurs.reconnaitre
 
-    def espion(cx, secret, valeur, jeton_):
+    def espion(cx, secret, valeur, jeton_, connus=None):
         appels.append(jeton_)
-        return vrai(cx, secret, valeur, jeton_)
+        return vrai(cx, secret, valeur, jeton_, connus)
 
     monkeypatch.setattr(visiteurs, "reconnaitre", espion)
     assert client.get(f"/lab/?sl={jeton}").status_code == 200

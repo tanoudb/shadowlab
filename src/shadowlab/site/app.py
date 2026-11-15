@@ -91,6 +91,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             cx.close()
 
     app.state.base = base
+    connus = visiteurs.Connus()  # sessions dont la visite est déjà écrite : pas de connexion à la base pour elles
 
     @app.middleware("http")
     async def observer(request: Request, call_next):
@@ -151,8 +152,10 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         if chemin == "/lab" or chemin.startswith(
             "/lab/"
         ):  # pas `/labo` (l'interface) ; jamais dans l'application publique
-            with base() as cx:
-                visite = visiteurs.reconnaitre(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton)
+            visite = connus.retrouver(secret, request.cookies.get(visiteurs.COOKIE), jeton)
+            if visite is None:
+                with base() as cx:
+                    visite = visiteurs.reconnaitre(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton, connus)
             if visite.cookie:
                 reponse.set_cookie(
                     visiteurs.COOKIE,

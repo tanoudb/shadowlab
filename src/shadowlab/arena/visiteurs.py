@@ -63,8 +63,12 @@ def lire_cookie(secret: bytes, monde: str, valeur: str | None) -> str | None:
 
 
 def identifiant_monde(cx: sqlite3.Connection, nom: str) -> int:
-    cx.execute("INSERT OR IGNORE INTO mondes (nom, cree_le) VALUES (?, ?)", (nom, db.maintenant()))
-    return int(cx.execute("SELECT id FROM mondes WHERE nom = ?", (nom,)).fetchone()["id"])
+    """Identifiant du monde `nom`, créé s'il manque : on lit d'abord, on n'écrit que la première fois."""
+    ligne = cx.execute("SELECT id FROM mondes WHERE nom = ?", (nom,)).fetchone()
+    if ligne is None:
+        cx.execute("INSERT OR IGNORE INTO mondes (nom, cree_le) VALUES (?, ?)", (nom, db.maintenant()))
+        ligne = cx.execute("SELECT id FROM mondes WHERE nom = ?", (nom,)).fetchone()
+    return int(ligne["id"])
 
 
 def monde_de_session(cx: sqlite3.Connection, jeton: str) -> str:
@@ -74,35 +78,66 @@ def monde_de_session(cx: sqlite3.Connection, jeton: str) -> str:
     return ligne["nom"] if ligne else MONDE_HORS_PASSAGE
 
 
-def reconnaitre(cx: sqlite3.Connection, secret: bytes, valeur_cookie: str | None, jeton: str) -> Visite:
-    """Reconnaît le visiteur d'une requête et enregistre sa visite (une ligne par session, pas par requête)."""
-    monde = monde_de_session(cx, jeton) if jeton else MONDE_HORS_PASSAGE
-    monde_id = identifiant_monde(cx, monde)
-    porte = lire_cookie(secret, monde, valeur_cookie)
+def reconnaitre(
+    cx: sqlite3.Connection, secret: bytes, valeur_cookie: str | None, jeton: str, connus: Connus | None = None
+) -> Visite:
+    """Reconnaît le visiteur d'une requête et enregistre sa visite (une ligne par session, pas par requête).
+
+    Lecture d'abord : une session déjà enregistrée, ou une requête sans jeton portant un cookie valable, n'écrit rien.
+    Le monde d'une session connue est celui de sa visite (fixé à sa première requête).
+    """
     if jeton:
-        connue = cx.execute("SELECT visiteur FROM visites WHERE session_token = ?", (jeton,)).fetchone()
+        connue = cx.execute(
+            "SELECT v.visiteur, m.nom FROM visites v JOIN mondes m ON m.id = v.monde_id WHERE v.session_token = ?",
+            (jeton,),
+        ).fetchone()
         if connue:  # le visiteur d'une session est celui de sa première requête
-            visiteur = connue["visiteur"]
-            return Visite(monde, visiteur, False, None if porte == visiteur else creer_cookie(secret, monde, visiteur))
-    elif porte:
+            monde, visiteur = connue["nom"], connue["visiteur"]
+            porte = lire_cookie(secret, monde, valeur_cookie)
+            visite = Visite(
+                monde, visiteur, False, None if porte == visiteur else creer_cookie(secret, monde, visiteur)
+            )
+            if connus is not None:
+                connus.retenir(jeton, visite)
+            return visite
+    monde = monde_de_session(cx, jeton) if jeton else MONDE_HORS_PASSAGE
+    porte = lire_cookie(secret, monde, valeur_cookie)
+    if not jeton and porte:
         return Visite(monde, porte, False, None)
     neuve = porte is None
     visiteur = porte or secrets.token_hex(16)
     cx.execute(
         "INSERT OR IGNORE INTO visites (monde_id, visiteur, session_token, neuve, vue_le) VALUES (?, ?, ?, ?, ?)",
-        (monde_id, visiteur, jeton or None, int(neuve), db.maintenant()),
+        (identifiant_monde(cx, monde), visiteur, jeton or None, int(neuve), db.maintenant()),
     )
-    return Visite(monde, visiteur, neuve, creer_cookie(secret, monde, visiteur) if neuve else None)
+    visite = Visite(monde, visiteur, neuve, creer_cookie(secret, monde, visiteur) if neuve else None)
+    if jeton and connus is not None:
+        connus.retenir(jeton, Visite(monde, visiteur, False, None))
+    return visite
 
 
 class Connus:
-    """Coquille : cache des sessions déjà enregistrées (le code vient après les tests)."""
+    """Sessions déjà enregistrées, gardées en mémoire par l'application : une requête suivante avec le cookie valable
+    n'ouvre même pas de connexion à la base.
+
+    Une entrée n'est retenue qu'une fois la ligne `visites` écrite. Le cache est celui d'une application (donc d'une
+    base) ; il est borné, les plus anciennes entrées partent d'abord. Une ligne `visites` effacée pendant que
+    l'application tourne n'est pas recréée pour une session retenue (la purge de l'Arena se fait à l'arrêt).
+    """
 
     def __init__(self, maximum: int = 20000) -> None:
         self.maximum = maximum
+        self._sessions: dict[str, tuple[str, str]] = {}  # jeton → (monde, visiteur)
 
     def retrouver(self, secret: bytes, valeur_cookie: str | None, jeton: str) -> Visite | None:
-        return None
+        """La visite d'une session retenue dont le navigateur porte le bon cookie ; sinon None (la base tranche)."""
+        connue = self._sessions.get(jeton) if jeton else None
+        if connue is None:
+            return None
+        monde, visiteur = connue
+        return Visite(monde, visiteur, False, None) if lire_cookie(secret, monde, valeur_cookie) == visiteur else None
 
     def retenir(self, jeton: str, visite: Visite) -> None:
-        return None
+        if len(self._sessions) >= self.maximum and jeton not in self._sessions:
+            del self._sessions[next(iter(self._sessions))]
+        self._sessions[jeton] = (visite.monde, visite.visiteur)
