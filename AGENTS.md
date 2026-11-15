@@ -39,7 +39,7 @@ recommander des optimisations.
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
-  cross-contexte, deep Proxy, corrélation cross-session — D-48 puis D-64, en 1.1 ; `headless`, `chrome-apis`,
+  cross-contexte, deep Proxy, corrélation cross-session par monde — D-48, D-64, puis D-89, en 2.0 ; `headless`, `chrome-apis`,
   `polices` et `connection-dynamic` en 1.1 — D-66, **TLS v2 : 17 règles d'analyse
   ClientHello** — D-52, **HTTP/2 fingerprinting : 11 règles SETTINGS/WU** — D-53), honeypots (lien piège + champ piège),
   fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
@@ -146,13 +146,22 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **Palier 2 commencé** (15/11, D-87, D-88 ; exception à la règle du plan § 4, décidée par la coordination, Ethan ayant
+- **Palier 2 commencé** (15/11, D-87 à D-91 ; exception à la règle du plan § 4, décidée par la coordination, Ethan ayant
   laissé la main : « je te laisse tout continue a travailler sur d'autre chose »). **I1**, Arena : migration 10 (tables
   `mondes`, `visites`, `bannissements` vide, colonne `runs.monde_id`), cookie `sl_visiteur` signé, champ `monde` des
-  campagnes (`campagne`, `serie`, `passage`) ; aucune décision de l'Arena ne change (la corrélation reste celle de D-48
-  et D-64 jusqu'à I2). **I4**, moteur : option `identite` du moteur `noezia` (un dossier `outputs/identites/<nom>/`,
-  identité native seulement) ; aucune campagne ne s'en sert encore. Campagne de contrôle 118 : mêmes taux que la 115
-  à chaque cellule (`docs/PLAN.md` § 2). Les quatre questions de la conception restent ouvertes.
+  campagnes (`campagne`, `serie`, `passage`) ; D-87 ne change aucune décision de l'Arena. **I2**, Arena (D-89, 15/11) :
+  `correlation-session` 2.0, par monde, remplace la règle 1.1 : `empreinte_sans_memoire` (5 sessions neuves de même
+  empreinte en 24 h : 0,7 ; 10 : 1,0) et `debit_empreinte` (30 sessions en 60 min : 0,8) ; un humain qui revient n'est plus
+  compté contre lui ; `sans_ressources` ne juge plus qu'une session neuve ; le bilan d'un passage nomme enfin la corrélation.
+  **I4**, moteur : option `identite` du moteur `noezia` (un dossier `outputs/identites/<nom>/`,
+  identité native seulement). **I5**, moteur (D-90) : ordonnanceur des visites (`visites.py`, 8 h à 23 h, écart de 45 à 180 min,
+  5 à 40 pages, 120 pages par heure et 200 par jour). **I6**, moteur (D-91) : sentinelle d'identité (`ok`, `alerte` 1 h,
+  `banni` ; un 403 sur la première page veut dire `banni`). Aucune campagne ne se sert encore d'I4, I5 ni I6. Campagne de
+  contrôle 118 : mêmes taux que la 115 à chaque cellule. **Campagne 119** (niveau 06 complet, un passage par monde) :
+  `noezia` natif 30 sur 30, c'est une première visite, elle ne remplace pas le 0 sur 15 de la 101. **Campagne 120** (15
+  passages dans un seul monde) : 4 sur 15, arrêt voulu à la 5ᵉ session neuve de même empreinte. **Campagne 121** (contrôle) :
+  mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non établie (`docs/PLAN.md` § 2). Reste I3 (bannissement
+  par visiteur, profil « endurance »), puis I7. Les quatre questions de la conception restent ouvertes.
 - **1 858 tests verts** (`uv run pytest`, 15/11 à 22 h, après D-87 et D-88, rapides et intégration avec de vrais
   navigateurs et la pile Docker, 8 min 33 s), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre` (dernière fusion `9ce9066`), rien sur `master`. Base au schéma 10 (D-87).
@@ -276,14 +285,15 @@ src/shadowlab/
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
 │   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
-│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88)
+│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88) ;
+│                    #   visites.py = ordonnanceur des visites (D-90) ; sentinelle.py = aussi la sentinelle d'identité (D-91)
 ├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
 ├── scenarios.py     # 19 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
 ├── commande_recolte.py  # `shadowlab recolte` : lancer, reprendre, etat, essayer, noter (D-70)
 ├── detection.py     # 42 détecteurs
 ├── issues.py        # Classification en 6 issues
-├── correlation.py   # Corrélation cross-session : recyclage d'empreintes entre sessions
+├── correlation.py   # Corrélation cross-session 2.0 (D-89) : sessions neuves de même empreinte, par monde ; E = profil + canvas
 ├── scoring.py       # Score composite pondéré par famille de détecteur
 ├── notation.py      # Notation d'une récolte (complétude, exactitude) contre la vérité de la vitrine
 ├── diagnostic.py    # Diagnostic par signal, ablation, comparaison des configurations moteurs

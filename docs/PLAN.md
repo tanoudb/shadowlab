@@ -825,6 +825,57 @@ seul Chrome sur macOS, 15 passages par cellule, aucun humain en base. Sauvegarde
 `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ;
 la base du site public migrera au prochain redémarrage de l'application publique.
 
+### Palier 2 : I2, I5, I6, campagnes 119 à 121 (15 et 16/11)
+
+Suite du palier 2, même exception à la règle du § 4 (la coordination ; Ethan : « je te laisse tout continue a travailler
+sur d'autre chose »). **I2** (Arena : `correlation-session` 2.0, par monde, D-89, fusions `4bb19b4` et `bef7017`) ;
+**I5** (moteur : ordonnanceur des visites, D-90) et **I6** (moteur : sentinelle d'identité, D-91), fusion `2c484bc`.
+Les tests de la suite complète n'ont pas été relancés depuis les 1 858 de D-87 (une campagne tournait).
+
+**Ce que fait la règle 2.0** : l'empreinte E est un seul hachage du profil et du canvas ; `empreinte_sans_memoire` compte
+les sessions **neuves** de même E dans le même monde sur 24 h (5 : poids 0,7 ; 10 : poids 1,0) ; `debit_empreinte` compte
+au moins 30 sessions de même E commencées en 60 minutes (poids 0,8). Seuils et poids de D-48, composite inchangé. Un
+humain qui revient n'est plus compté contre lui. Une session sans monde n'est pas jugée. Le bilan d'un passage donne
+maintenant la corrélation au détecteur (avant, il disait toujours « indéterminé » : les campagnes 101 et 120 ont
+`detecte_par` vide) ; les bilans déjà en base ne sont pas recalculés.
+
+**Campagne 119** (15/11, 23 h 24 à 23 h 39, `correlation-06-mondes.yaml`, `monde: passage`) : `noezia` en identité native,
+niveau 06 complet, **30 sur 30**, borne basse de Wilson 88,6 %. C'est le niveau 06 **en première visite** : un seul
+passage par monde, donc la corrélation n'a rien à comparer. Elle ne remplace pas « 06 complet, 0 sur 15 » de la campagne
+101. La question Q1 de la conception (mesurer le 06 comme une première visite) reste ouverte, à Ethan (§ 7).
+
+**Campagne 120** (15/11, 23 h 39 à 23 h 52, `correlation-06-mondes-serie.yaml`, `monde: serie`, 15 passages dans un seul
+monde) : **4 sur 15**. Les 4 premiers passent. Du 5ᵉ au 15ᵉ, le gardien relève `empreinte_sans_memoire` (« 5 sessions
+neuves de même empreinte dans les 24 dernières heures ») et rejette la preuve de travail. Le monde 33 a 15 visites, toutes
+neuves, de 15 visiteurs : chaque passage est un navigateur neuf, sans mémoire. C'est voulu : un robot qui revient sans
+mémoire est arrêté à la 5ᵉ session. Ce qui doit le faire passer, c'est l'identité persistante (I4, I6, puis I7).
+
+**Campagne 121** (contrôle, 15/11 23 h 52 au 16/11 0 h 30, `controle-vrai-chrome.yaml`, 135 passages, niveaux 04 à 06 sans
+corrélation) : mêmes taux que les campagnes 115 et 118 à chaque cellule. Durées moyennes (chiffres de la base) :
+
+| Cellule | 115 | 118 | 121 |
+|---|---|---|---|
+| `patchright-chrome-interface` 05 | 5,8 s | 6,7 s | 6,0 s |
+| `patchright-chrome-interface` 06 sans corrélation | 4,1 s | 4,8 s | 4,1 s |
+| `noezia-natif` 04 | 15,1 s | 15,7 s | 15,0 s |
+| `noezia-natif` 05 | 30,2 s | 31,5 s | 32,2 s |
+| `noezia-natif` 06 sans corrélation | 30,1 s | 32,8 s | 31,6 s |
+
+Médianes de `noezia-natif` : 05 → 24,5 / 23,7 / 24,8 s ; 06 sans corrélation → 21,6 / 28,1 / 24,4 s. Patchright et
+`noezia-natif` 04 sont revenus au niveau de la 115 ; `noezia-natif` 05 et 06 sans corrélation non. **La cause de la hausse
+de la 118 n'est pas établie** (l'allègement d'I1 de D-89 la visait).
+
+**I5** : visites de 8 h à 23 h, écart de 45 à 180 min (log-normal, médiane 90 min), 5 à 40 pages, au plus 120 pages par heure
+glissante et 200 par jour. **I6** : états `ok`, `alerte` (identité refusée pendant 1 h) et `banni` (refusée toujours) ; un
+403 sur la première page d'un passage veut dire `banni` ; `porte_entree.duree_s` fait du défi revenu trop tôt une
+alerte. Aucune campagne ne se sert encore d'I4, I5 ni I6.
+
+Réserves : un cookie de visiteur rejoué donne des sessions « connues » que `empreinte_sans_memoire` ne juge pas
+(`debit_empreinte` et les compteurs d'I3 doivent le couvrir) ; pas de témoin aux campagnes 119 et 120 ; CAPTCHA en clés de
+test au niveau 06 ; une seule machine ; aucun humain en base ; le monde par défaut est `campagne` (un monde par campagne
+au niveau 06 complet : non mesuré). Code mort signalé, non supprimé : `enregistrer_hash` et la table `empreintes_vues` ;
+le libellé de `shadowlab rejeu` (`cli.py`, ligne 482) cite encore cette table à tort (D-89).
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -937,8 +988,10 @@ But : un seul compte connecté travaille 7 jours sans être banni.
 
 En parallèle possible : 2.1 à 2.4 (Arena) et 2.5 à 2.7 (moteur).
 
-**État au 15/11** : I1 et I4 de la conception sont faites (D-87, D-88) ; suite prévue : I2 (corrélation 2.0, qui dépend
-de I1) côté Arena, I5 et I6 côté moteur. Les quatre questions de la conception restent ouvertes (§ 7).
+**État au 16/11** : faites, avec leur décision : I1 (D-87), I4 (D-88), I2 (D-89, corrélation 2.0 par monde), I5 (D-90,
+ordonnanceur des visites) et I6 (D-91, sentinelle d'identité). Reste : I3 (Arena : bannissement par visiteur et profil
+« endurance »), puis I7 (scénario « visite », campagne « une identité qui revient », récolte avec identité), qui dépend de
+I2 à I6. Aucune campagne ne se sert encore d'I4, I5 ni I6. Les quatre questions de la conception restent ouvertes (§ 7).
 
 ### Palier 3 — Serveur et Cloudflare réel
 
@@ -1032,6 +1085,6 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains Campagne 108 (13/11) : premier blocage du moteur en identité native sur une récolte, au niveau 05, signal `trajectoire_lineaire` (2 passages sur 35 ; environ une page sur 1 000 sous le seuil sur 4 400 pages) : corrigé par D-74 (tremblement visible au pixel) et vérifié par la campagne 109 (14/11) : 0 page sur 2 015 sous la marge (30 sur 1 997 avant), niveau 05 à 35 sur 35. D-79 (14/11, fusion `8983345`) : après un défi, la première vraie page était quittée en 54 à 71 ms sans un geste (campagne 110) ; elle dure 6,2 à 10,5 s avec souris et défilement à la campagne 111, 15 sur 15 inchangé, témoin 0 sur 15 |
 | Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages de 21 pages par niveau ; 427 pages d'une seule session aux niveaux 04, 05 et 06 sans corrélation)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12 au niveau 01, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06 ; D-71 dans l'Arena, D-72 dans la commande), campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun. Parcours long : campagne 106 (427 pages aux niveaux 04 et 05, arrêt au niveau 06 : D-73 dans l'Arena), campagne 107 : 427 pages et 34 410 champs sur 34 410 aux trois niveaux ; 1 285 tests verts (fusion `d4e6d4e`). Campagne 108, 35 passages par niveau : 35 sur 35 au niveau 04, 32 sur 35 au niveau 05 (2 blocages du moteur sur `trajectoire_lineaire`, 1 erreur réseau du CAPTCHA de test), 35 sur 35 au niveau 06 sans corrélation. Campagne 109 (14/11, souris corrigée par D-74) : 34, 35 et 35 sur 35, le seul échec est un défaut de l'Arena (D-78, corrigé). Campagnes 110 et 111 (14/11, après D-78 puis D-79) : 15 sur 15 du niveau 02 au niveau 06 sans corrélation, témoin 0 sur 15. 14/11 : la récolte peut repasser la porte en cours de passe (D-83) et le cookie de l'Arena est réglable par profil (D-82) ; campagne 112 (cookie de 600 s, vitrine à 150 annonces) : 3 passages sur 3 aux niveaux 04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun, le défi revenu 1, 2 et 2 fois et repassé sans arrêt ; campagne 113 (cookie de 600 s, rallye) : 427 pages et 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois, aucun arrêt ; limite mesurée : décalage des cookies de l'Arena aux niveaux 05 et 06 (arrêt attendu vers le onzième cycle). Campagne 114 (14/11, cookie d'origine d'une heure, rallye à 683 pages) : 59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation en 75 à 81 minutes, le défi revenu une fois vers 3 600 s et repassé. Campagne 116 (15/11) : niveau 07 sans corrélation 2 sur 3 (un échec sur `duree_pages_reguliere`), niveau 07 complet 0 sur 3 (corrélation). Reste : 30 passages par niveau ; plusieurs heures d'affilée (limite de décalage des cookies aux niveaux 05 et 06) ; aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
-| Palier 2 — Une identité qui dure | **commencé (I1 et I4)** | 15/11 | Fusions `9ce9066` (I1, migration 10, D-87) et `49d9cf7` (I4, option `identite`, D-88) ; 1 858 tests verts (15/11, 22 h) ; campagne 118 : mêmes taux que la 115 à chaque cellule, tous les passages dans le monde `c118` (§ 2) |
+| Palier 2 — Une identité qui dure | **commencé (I1, I2, I4, I5, I6)** | 16/11 | Fusions `9ce9066` (I1, D-87), `49d9cf7` (I4, D-88), `2c484bc` (I5 et I6, D-90 et D-91) et `bef7017` (I2, D-89) ; 1 858 tests verts au dernier compte (15/11, 22 h, avant I2, I5 et I6) ; campagne 118 : mêmes taux que la 115 ; campagne 119 : niveau 06 complet en première visite 30 sur 30 ; campagne 120 : monde partagé 4 sur 15 (arrêt voulu à la 5ᵉ session) ; campagne 121 : mêmes taux que la 115 et la 118 (§ 2). Reste I3 puis I7 |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |
