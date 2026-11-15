@@ -82,6 +82,7 @@ class Observations:
     tls: dict[str, Any] | None = None  # empreinte relevée par le frontal de l'Arena ; absente hors Arena
     page_remplacee: bool = False  # une protection a servi sa page à la place du contenu : pas d'observateur
     correlation: dict[str, dict] | None = None  # données cross-session (rempli par le gardien)
+    visite_neuve: bool = True  # la session est une première visite de son visiteur (faux : il revient)
 
     @property
     def empreinte_js(self) -> dict[str, Any] | None:
@@ -2609,6 +2610,8 @@ class DetecteurCorrelationSession:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
+        if "sessions_neuves_24h" in obs.correlation:  # coquille : la forme 2.0 n'est pas encore lue
+            return _verdict(self.name, self.version, signaux)
         comptes = {t: d.get("nb_sessions", 1) for t, d in obs.correlation.items()}
         nb = max(comptes.values(), default=0)
         if nb >= self.SEUIL_SESSIONS:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from . import database as db
@@ -132,3 +133,45 @@ def _sessions_derniere_heure(cx: sqlite3.Connection, row: sqlite3.Row, maintenan
     compte = sum(1 for d in dates if d is not None and d >= debut)
     exact = bool(dates) and None not in dates and dates[0] < debut
     return compte, exact
+
+
+# --- Règle 2.0 : coquille (le code vient après les tests) ---------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VisiteObservee:
+    session: str
+    visiteur: str
+    neuve: bool
+    debut: datetime
+    empreinte: str | None
+
+
+@dataclass(frozen=True)
+class Correlation:
+    empreinte: str | None
+    session_neuve: bool
+    sessions_neuves_24h: int
+    debit_60min: int
+
+
+def empreinte_e(empreinte_js: dict) -> str | None:
+    return None
+
+
+def evaluer(visites: list[VisiteObservee], session: str, maintenant: datetime) -> Correlation:
+    return Correlation(None, True, 0, 0)
+
+
+def evaluer_session(cx: sqlite3.Connection, jeton: str, maintenant: datetime | None = None) -> Correlation:
+    return Correlation(None, True, 0, 0)
+
+
+def correlation_historique(
+    cx: sqlite3.Connection, jeton: str, monde_id: int | None, debut: datetime
+) -> Correlation | None:
+    return None
+
+
+def visite_neuve(cx: sqlite3.Connection, jeton: str) -> bool:
+    return True
