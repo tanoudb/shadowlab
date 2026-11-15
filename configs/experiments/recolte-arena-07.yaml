@@ -1,0 +1,35 @@
+# La récolte jugée par le niveau 07 de l'Arena, jamais mesuré pour elle.
+# Le niveau 07 reprend les détecteurs du 06 avec le seuil composite minimal (0,3), le WAF en paranoïa 4, une preuve de
+# travail de difficulté 20, une limite d'une requête par seconde et un login limité à 2 tentatives.
+#   noezia-natif : moteur `navigateur` de la récolte (vrai Chrome avec interface, identité d'origine)
+#   http         : témoin (curl-cffi)
+# Deux profils : `07scorr` (sans le détecteur correlation-session, comme les campagnes 97 à 115) et `07` complet.
+# Un passage réussi = récolte terminée, pages, enregistrements et champs à 99 % ou plus.
+# Un CAPTCHA en clés de test est servi : passages étiquetés `captcha_test`.
+# L'Arena n'est pas calibrée sur des humains à ces niveaux (trois sessions du site public au 15/11, dont une sur
+# ordinateur arrêtée de 05 à 07) : un échec ici ne dit pas à lui seul que le moteur est en faute.
+#
+#   1. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+#   2. SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml SHADOWLAB_VITRINE_TAILLE=20 \
+#        uv run shadowlab campagne configs/experiments/recolte-arena-07.yaml
+#   3. uv run shadowlab arena appliquer
+#
+# Des fenêtres de navigateur s'ouvrent à l'écran. Le site du labo (port 8770) est pris pendant la campagne.
+# 2 moteurs × 2 niveaux × 1 scénario × 3 répétitions = 12 passages (environ 25 minutes, estimation).
+experiment:
+  name: recolte_arena_07
+  description: >-
+    La récolte générale (vitrine à 20 annonces) jugée par le niveau 07 de l'Arena, sans et avec la corrélation entre
+    sessions, avec le moteur navigateur en identité native et un témoin http.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+    - curl-cffi
+  protections: ["07scorr", "07"]
+  scenarios:
+    - recolte_recette_vitrine
+  repetitions: 3
+  seed: 20261115
+  output: [json, html]

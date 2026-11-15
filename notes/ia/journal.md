@@ -3529,7 +3529,7 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `screen_position_zero` sans valeur. Rappel : ces sessions servent à juger les détecteurs, pas à régler le moteur.
 - **Fichiers** : `docs/DECISIONS.md` (D-86).
 
-## 2026-11-15 (18h50) — Claude (Fable 5.2, coordination) — Écart de la campagne 115 attribué à D-78 ; le niveau 05 ne sépare plus le moteur d'un Chrome sans comportement
+## 2026-11-15 (18h25) — Claude (Fable 5.2, coordination) — Écart de la campagne 115 attribué à D-78 ; le niveau 05 ne sépare plus le moteur d'un Chrome sans comportement
 
 - **Enquête** (sous-agent Sonnet, lecture seule, scripts dans le dossier de brouillon de la session) : rejeu hors ligne
   des relevés du témoin `patchright-chrome-interface` au niveau 05, campagnes 98 et 115, avec sept états du code. Avant

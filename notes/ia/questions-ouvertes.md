@@ -8,6 +8,13 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-15 — Deux sessions d'humains connus sur ordinateur, s'il te plaît.** Le site public a reçu trois sessions
+  (deux iPhone sous Safari, un Chrome sur Windows), toutes anonymes : on ne sait pas si un humain tenait le
+  navigateur. La session sur ordinateur déclenche deux règles de l'Arena (`trajectoire_lineaire`, souris jugée trop
+  droite ; `screen_position_zero`, fenêtre en haut à gauche). Je ne recale pas un seuil sur une session anonyme.
+  **Ce qu'il faut** : 2 minutes de navigation ordinaire sur le site public depuis ton Mac, et autant depuis le PC d'un
+  ami, en me disant l'heure, pour que je sache quelles sessions sont de vrais humains. Recommandation : le faire
+  avant tout autre partage du lien.
 - **2026-11-12 — Site public : à qui donner le lien, et faut-il un lien par canal ?** Quiconque a le lien
   peut ouvrir une session, y compris par script : rien ne prouve qu'un humain était là (relecture de
   sécurité du 12/11, 15 h). Or ces sessions servent d'étalon (« un détecteur n'est valide que s'il laisse
