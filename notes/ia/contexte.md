@@ -48,7 +48,7 @@ sur nos propres cibles (site vitrine factice, tor-i).
 - **Campagne 98** (contrôle de D-66, 135 passages, 0 panne, 16 h 19 à 16 h 52, `docs/PLAN.md` § 2) : `noezia` en
   identité native fait 15 sur 15 aux niveaux 04, 05 et 06 sans corrélation, donc 15 sur 15 aux six niveaux de
   l'objectif avec la campagne 97 ; le même Chrome sans le comportement de noezia fait 10, 5 et 0 (arrêté pour
-  `aucune_interaction`) ; le témoin 0 sur 45. Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de
+  `aucune_interaction`) ; le témoin 0 sur 45. **Révisé le 15/11** : au niveau 05, ce Chrome sans comportement n'était pas arrêté pour son comportement mais parce que la page de défi, de moins de 500 ms, était comptée comme une page lue ; depuis D-78 il passe le niveau 05 (campagne 115 : 10, 15 et 0 sur 15). Le niveau 05 ne sépare donc plus le moteur de ce témoin ; le niveau 06 le fait. Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de
   test aux niveaux 05 et 06, 06 sans corrélation, aucun humain en base, un seul Chrome sur macOS.
 - **Campagnes 100 et 101** (12/11, `docs/PLAN.md` § 2) : `noezia` en identité native, 30 passages
   par niveau de 01 à 06 sans corrélation, 179 sur 180 (06 : 29 sur 30 ; le seul échec est un blocage du WAF,

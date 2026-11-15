@@ -123,12 +123,21 @@ recommander des optimisations.
   aucun arrêt. Limite mesurée : aux niveaux 05 et 06, les cookies de l'Arena se décalent de 8 à 10 s par cycle ; la
   règle de rafale (120 s) céderait vers le onzième cycle (arrêt propre). Réserves : un passage par niveau,
   cookie raccourci, CAPTCHA en clés de test levés par le pilote, pas de corrélation, aucun humain en base.
+- **Calibrage sur les sessions du site public** (14 et 15/11) : trois sessions du site public (présumées humaines :
+  rien ne prouve qui tient le navigateur), Safari 26 et 27 sur iPhone, Chrome 157 sur Windows. Rejeu : les deux iPhone
+  étaient arrêtés de 04 à 07 par des règles pensées pour Chrome sur ordinateur. Corrigé : sonde `deep-proxy` juste sur
+  les trois moteurs (D-85), quatre règles conditionnées à la famille du navigateur et à l'appareil tactile (D-86) ; les
+  deux iPhone passent maintenant de 01 à 07. La session Chrome sur Windows est arrêtée de 05 à 07 par
+  `trajectoire_lineaire` (2 pages sur 11 sous 0,08 rad) et `screen_position_zero` (3 sessions sur 3) : **non corrigé**,
+  il faut d'abord des humains connus sur ordinateur (`docs/PLAN.md` § 7). Campagne de contrôle 115 : `noezia` natif 15
+  sur 15 aux niveaux 04 à 06 sans corrélation, `patchright` 0 sur 45 ; elle ne juge que Chrome sur ordinateur, pas ce
+  que D-86 ouvre à un robot qui se dirait tactile ou WebKit.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **1 759 tests verts** (`uv run pytest`, 14/11 à 15 h 33, après D-84, hors campagne : 1 715 rapides et 44
+- **1 807 tests verts** (`uv run pytest`, 14/11 à 19 h 55, après D-86, hors campagne : 1 763 rapides et 44
   d'intégration avec de vrais navigateurs et la pile Docker), 11 tests de
-  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `48f587a`), rien sur
+  l'interface (vitest), lint propre. Branche `niveau-authentifie-perimetre` (dernière fusion `5b58f2c`), rien sur
   `master`. Base au schéma 9 (D-68).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
@@ -143,7 +152,7 @@ recommander des optimisations.
   le niveau 02.
 - **Campagne 98** (contrôle de D-66, 135 passages, 0 panne, `docs/PLAN.md` § 2) : `noezia` en identité native fait
   15 sur 15 aux niveaux 04, 05 et 06 sans corrélation, donc aux six niveaux de l'objectif avec la 97 ; le même Chrome
-  sans le comportement de noezia fait 10, 5 et 0 (`aucune_interaction`), le témoin 0 sur 45.
+  sans le comportement de noezia fait 10, 5 et 0 (`aucune_interaction`), le témoin 0 sur 45. **Révisé le 15/11** : au niveau 05, ce Chrome sans comportement n'était pas arrêté pour son comportement mais parce que la page de défi, de moins de 500 ms, était comptée comme une page lue ; depuis D-78 il passe le niveau 05 (campagne 115 : 10, 15 et 0 sur 15). Le niveau 05 ne sépare donc plus le moteur de ce témoin ; le niveau 06 le fait.
   Réserves : 15 passages par niveau (30 exigés), CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 sans corrélation,
   aucun humain en base, un seul Chrome sur macOS.
 - **Campagnes 100 et 101** (12/11, `docs/PLAN.md` § 2) : `noezia` en identité native, 30 passages par niveau

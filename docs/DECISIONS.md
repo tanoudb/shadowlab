@@ -793,6 +793,12 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   doit être complétée à tout nouveau fichier chargé par une page ; aucun humain mesuré. Décidé par : coordination
   (travail d'un sous-agent, relu).
 
+  **Ajout du 15/11 (enquête sur la campagne 115)** : D-78 a aussi changé le sort du vrai Chrome sans comportement
+  (`patchright-chrome-interface`) au niveau 05 : 5 sur 15 à la campagne 98, 15 sur 15 à la 115. Rejeu hors ligne des
+  relevés des deux campagnes : avant D-78, 10 passages sur 15 étaient arrêtés par `comportement` (`aucune_interaction`
+  + `pages_eclair`) sur le seul relevé de la page de défi (426 à 488 ms, aucun geste) ; les 5 réussis avaient un défi
+  de 503 à 878 ms. Depuis D-78 la page de défi n'est plus une page lue : 0 arrêt. Ce témoin n'était donc pas arrêté
+  pour son comportement. Conséquence : le niveau 05 ne sépare plus le moteur de ce témoin ; le niveau 06 le fait.
 - **D-79 — 14/11/2026 — La page obtenue après un défi reçoit l'interaction humaine.** Constat (campagne 110, récolte de 21
   pages par session) : au niveau 05 (passage 34531) et au niveau 06 sans corrélation (passage 34510), la vraie page de
   liste vit 54 ms et 71 ms, sans mouvement ni défilement, alors que les pages de défi et les fiches durent 4 à 8 s ; au
@@ -949,3 +955,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   mobile de façon cohérente (points de contact, `matchMedia`, événements de toucher) profite de ces exemptions ;
   `screen_position_zero` reste à 0,28 pour ces sessions (seuil du niveau 07 : 0,3). Décidé par : coordination (travail
   d'un sous-agent, relu).
+  **Ajout du 15/11, écart de la campagne 115 attribué** : le passage du vrai Chrome sans comportement de 5 à 15 sur 15
+  au niveau 05 vient de D-78 (voir son ajout), pas de D-85 ni de D-86 : rejoués hors ligne, les relevés des campagnes 98
+  et 115 donnent les mêmes verdicts aux niveaux 04 et 05 avant et après ces deux corrections. Réserve : la campagne 115
+  ne juge que Chrome sur ordinateur ; elle ne mesure pas ce que D-86 ouvre à un robot qui se présente comme tactile ou
+  WebKit. Les sessions du site public sont présumées humaines, pas des humains connus. Une troisième session (Chrome
+  157 sur Windows, 15/11) est arrêtée de 05 à 07 par `trajectoire_lineaire` et `screen_position_zero` : non corrigé,
+  on ne recale pas un seuil sur une session anonyme.

@@ -3528,3 +3528,20 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   À corriger après l'enquête sur la campagne 115 : seuil de `trajectoire_lineaire` sans fondement humain, et
   `screen_position_zero` sans valeur. Rappel : ces sessions servent à juger les détecteurs, pas à régler le moteur.
 - **Fichiers** : `docs/DECISIONS.md` (D-86).
+
+## 2026-11-15 (18h50) — Claude (Fable 5.2, coordination) — Écart de la campagne 115 attribué à D-78 ; le niveau 05 ne sépare plus le moteur d'un Chrome sans comportement
+
+- **Enquête** (sous-agent Sonnet, lecture seule, scripts dans le dossier de brouillon de la session) : rejeu hors ligne
+  des relevés du témoin `patchright-chrome-interface` au niveau 05, campagnes 98 et 115, avec sept états du code. Avant
+  D-78 : 10 arrêts sur 15 (les mêmes passages qu'en réel à la 98) ; après la fusion de D-78 : 0 ; identique avant et
+  après D-85 et D-86. La cause des arrêts de la 98 : la page de défi (426 à 488 ms, aucun geste) comptée comme une
+  page lue.
+- **Ce que ça change** : la phrase « le même Chrome sans le comportement de noezia est arrêté au niveau 05 » était un
+  effet de durée du défi. Le niveau 05 ne distingue plus le moteur de ce témoin ; le niveau 06 oui (0 sur 15). Écrit
+  dans `AGENTS.md`, `contexte.md`, `docs/PLAN.md` (§ 2, § 7, § 8) et en ajout à D-78 et D-86.
+- **Décision de méthode** (avis du relecteur suivi) : on corrige un défaut de structure (texte d'un getter sous Safari,
+  vendor d'Apple, téléphone sans survol), on ne recale pas un seuil statistique (`trajectoire_lineaire`) sur une
+  session anonyme. Les sessions du site public sont « présumées humaines ». `screen_position_zero` sera traité avec le
+  prochain changement de l'Arena, pas seul.
+- **Demandé à Ethan** : deux sessions d'humains connus sur ordinateur (son Mac, le PC d'un ami).
+- **Tests** : suite complète du 14/11 à 19 h 55, 1 807 verts (1 763 rapides, 44 d'intégration).
