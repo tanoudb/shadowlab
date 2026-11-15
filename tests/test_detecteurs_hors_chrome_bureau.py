@@ -258,7 +258,7 @@ def test_versions_revisees(detecteur):
     )
     assert (
         c.detector_version
-        == {"langues": "1.1", "css-media": "1.1", "comportement": "2.2", "paint-timing": "1.1"}[detecteur]
+        == {"langues": "1.1", "css-media": "1.1", "comportement": "2.3", "paint-timing": "1.1"}[detecteur]
     )
 
 

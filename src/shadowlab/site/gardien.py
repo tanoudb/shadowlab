@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from urllib.parse import urlsplit
 
 from fastapi import Request
@@ -119,8 +119,9 @@ def suspicion(
     """Motifs de suspicion connus à cet instant, d'après les observations en base (voir `motifs_suspicion`)."""
     http, js = db.observations(cx, jeton)
     observations = Observations(http=http, js=js, tls=db.tls_session(cx, jeton))
+    observations.visite_neuve = correlation.visite_neuve(cx, jeton)
     if observations.empreinte_js is not None:
-        observations.correlation = correlation.correlation_session(cx, observations.empreinte_js)
+        observations.correlation = asdict(correlation.evaluer_session(cx, jeton))
     pieges = cx.execute(
         "SELECT COUNT(*) FROM decisions WHERE session_token = ? AND couche = 'honeypot' AND decision = 'declenche'",
         (jeton,),

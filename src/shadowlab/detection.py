@@ -81,7 +81,7 @@ class Observations:
     attend_js: bool = True  # faux pour un scénario sans page HTML (API JSON)
     tls: dict[str, Any] | None = None  # empreinte relevée par le frontal de l'Arena ; absente hors Arena
     page_remplacee: bool = False  # une protection a servi sa page à la place du contenu : pas d'observateur
-    correlation: dict[str, dict] | None = None  # données cross-session (rempli par le gardien)
+    correlation: dict[str, Any] | None = None  # `correlation.Correlation` en dict (rempli par le gardien)
     visite_neuve: bool = True  # la session est une première visite de son visiteur (faux : il revient)
 
     @property
@@ -682,7 +682,9 @@ class DetecteurComportement:
     """
 
     name = "comportement"
-    version = "2.2"  # 2.2 : `ratio_move_click_faible` ne vaut pas pour des clics venus du toucher
+    # 2.2 : `ratio_move_click_faible` ne vaut pas pour des clics venus du toucher ; 2.3 : `sans_ressources` seulement
+    # pour une session neuve (un visiteur connu a ses scripts en cache)
+    version = "2.3"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -692,7 +694,8 @@ class DetecteurComportement:
             return _indetermine(self.name, self.version, "aucune_requete", "aucune requête reçue")
         signaux: list[Signal] = []
 
-        if not obs.ressources:
+        # Un visiteur qui revient a ses scripts en cache : seule une session neuve doit les réclamer (palier 2 I2).
+        if not obs.ressources and obs.visite_neuve:
             signaux.append(Signal("sans_ressources", "aucun fichier CSS ou JavaScript réclamé", 0.5))
 
         rythme = _requetes_par_seconde(documents)
@@ -2587,21 +2590,23 @@ class DetecteurMetaComposite:
 
 
 class DetecteurCorrelationSession:
-    """Même profil ou même canvas vu dans plusieurs sessions de la base (`correlation.py`).
+    """Une même empreinte portée par beaucoup de visiteurs neufs, ou à un débit qu'aucune personne ne tient.
 
-    Compte des sessions (jetons), pas des visiteurs : un humain qui revient avec le même navigateur compte autant
-    de fois qu'il revient.
-    V1.1 (12/11/2026) : un fait, un signal — un seul signal de comptage, sur le plus grand des deux comptes
-    (profil, canvas), au lieu d'un signal chacun pour la même observation ; de même pour le débit. Libellés
-    conformes à ce qui est compté (« rotation de fingerprint massive » désignait une empreinte stable revue).
-    Débit compté sur les 60 dernières minutes au lieu d'une moyenne sur toute la vie du hash, aveugle sous une
-    minute et à 40 par heure pour deux sessions à 3 minutes d'écart. Seuils et poids inchangés.
+    V2.0 (15/11/2026, palier 2 I2, conception `docs/recherche/identite-qui-dure-2026-11-12.md` § 4.3) : on compte des
+    visites d'un monde (`correlation.evaluer`), plus des jetons de toute la base. Une empreinte stable n'est pas
+    suspecte : un humain qui revient garde la sienne.
+    - `empreinte_sans_memoire` : sessions neuves portant la même empreinte E dans les 24 dernières heures, celle-ci
+      comprise (≥ 5 : 0,7 ; ≥ 10 : 1,0). Ne juge qu'une session neuve : le retour d'un visiteur connu n'est jamais
+      compté contre lui.
+    - `debit_empreinte` : sessions portant E commencées dans les 60 dernières minutes (≥ 30 : 0,8), neuves ou non.
+    Seuils et poids sont ceux de D-48 (le composite ne bouge pas). Les comptes sont exacts : une ligne par visite,
+    plus de borne à 10 jetons.
+    V1.1 (12/11/2026) : un fait, un signal ; débit sur les 60 dernières minutes.
     """
 
     name = "correlation-session"
-    version = "1.1"
+    version = "2.0"
 
-    NOMS = {"profil_complet": "profil", "canvas": "canvas"}  # types de `correlation.hash_session`
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
     SEUIL_DEBIT = 30  # sessions commencées dans les 60 dernières minutes
@@ -2610,29 +2615,24 @@ class DetecteurCorrelationSession:
         if obs.correlation is None:
             return _indetermine(self.name, self.version, "pas_de_correlation", "données cross-session absentes")
         signaux: list[Signal] = []
-        if "sessions_neuves_24h" in obs.correlation:  # coquille : la forme 2.0 n'est pas encore lue
-            return _verdict(self.name, self.version, signaux)
-        comptes = {t: d.get("nb_sessions", 1) for t, d in obs.correlation.items()}
-        nb = max(comptes.values(), default=0)
-        if nb >= self.SEUIL_SESSIONS:
-            seuil, poids = (self.SEUIL_RAPIDE, 1.0) if nb >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
-            franchis = [(t, n) for t, n in comptes.items() if n >= seuil]
-            vus = " et ".join(f"{self.NOMS.get(t, t)} vu dans {n} sessions" for t, n in franchis)
-            code = max(franchis, key=lambda f: f[1])[0]  # le plus grand compte ; à égalité, le profil
-            signaux.append(Signal(f"recycling_{code}", f"{vus} de la base, celle-ci comprise (seuil {seuil})", poids))
-        debits = {t: d.get("sessions_derniere_heure", 0) for t, d in obs.correlation.items()}
-        if max(debits.values(), default=0) >= self.SEUIL_DEBIT:
-            franchis = [(t, n) for t, n in debits.items() if n >= self.SEUIL_DEBIT]
-            parties = " et ".join(
-                f"{'' if obs.correlation[t].get('derniere_heure_exacte', False) else 'au moins '}{n} sessions de même"
-                f" {self.NOMS.get(t, t)}"
-                for t, n in franchis
-            )
-            code = max(franchis, key=lambda f: f[1])[0]
+        neuves = obs.correlation.get("sessions_neuves_24h", 0)
+        if obs.correlation.get("session_neuve", True) and neuves >= self.SEUIL_SESSIONS:
+            seuil, poids = (self.SEUIL_RAPIDE, 1.0) if neuves >= self.SEUIL_RAPIDE else (self.SEUIL_SESSIONS, 0.7)
             signaux.append(
                 Signal(
-                    f"velocity_{code}",
-                    f"{parties} commencées dans les 60 dernières minutes (seuil {self.SEUIL_DEBIT})",
+                    "empreinte_sans_memoire",
+                    f"{neuves} sessions neuves de même empreinte dans les 24 dernières heures,"
+                    f" celle-ci comprise (seuil {seuil})",
+                    poids,
+                )
+            )
+        debit = obs.correlation.get("debit_60min", 0)
+        if debit >= self.SEUIL_DEBIT:
+            signaux.append(
+                Signal(
+                    "debit_empreinte",
+                    f"{debit} sessions de même empreinte commencées dans les 60 dernières minutes"
+                    f" (seuil {self.SEUIL_DEBIT})",
                     0.8,
                 )
             )
