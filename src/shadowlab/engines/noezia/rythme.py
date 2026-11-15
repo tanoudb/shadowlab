@@ -77,6 +77,17 @@ def rythme_de(recette: Recette) -> Rythme:
     return Rythme(delai, par_heure, minutes, toutes_les)  # type: ignore[arg-type]
 
 
+def tirer_lognormal(bornes: tuple[float, float, float], alea: random.Random) -> float:
+    """Tirage log-normal (minimum, médiane, maximum), borné. Partagé par la cadence d'une récolte et l'ordonnanceur des
+    visites (`visites.py`) : une seule loi pour tous les tirages de durée."""
+    minimum, mediane, maximum = bornes
+    if maximum <= 0:
+        return 0.0
+    sigma = math.log(maximum / mediane) / 2 if mediane > 0 and maximum > mediane else 0.5
+    valeur = mediane * math.exp(sigma * alea.gauss(0, 1))
+    return min(max(valeur, minimum), maximum)
+
+
 class Cadence:
     """Fait attendre ce qu'il faut avant chaque page. Horloge et sommeil sont injectables (tests)."""
 
@@ -100,12 +111,7 @@ class Cadence:
         return None if self.rythme.pause_toutes_les is None else self._alea.randint(*self.rythme.pause_toutes_les)
 
     def _tirer_delai(self) -> float:
-        minimum, mediane, maximum = self.rythme.delai_s
-        if maximum <= 0:
-            return 0.0
-        sigma = math.log(maximum / mediane) / 2 if mediane > 0 and maximum > mediane else 0.5
-        valeur = mediane * math.exp(sigma * self._alea.gauss(0, 1))
-        return min(max(valeur, minimum), maximum)
+        return tirer_lognormal(self.rythme.delai_s, self._alea)
 
     def attendre(self, crawl_delay: float | None = None) -> float:
         """Dort le temps voulu avant la prochaine page ; rend la durée dormie."""
