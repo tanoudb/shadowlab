@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import re
 import threading
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -137,6 +139,153 @@ def test_visite_journalisee(racine):
     assert len(lignes) == 1
     ligne = json.loads(lignes[0])
     assert ligne["pages"] == 3 and ligne["statut"] == "ok" and ligne["debut"] and ligne["fin"]
+
+
+# ── État de l'identité (I6) : alerte, bannissement, porte d'entrée ──────────────────────────────────
+
+
+T0 = datetime(2026, 11, 15, 10, 0, 0, tzinfo=UTC)
+
+
+def lire(racine, nom="a"):
+    return json.loads((racine / nom / "identite.json").read_text(encoding="utf-8"))
+
+
+def alerter(nom="a", quand=T0, raison="statut 429 sur /x"):
+    i = ident.ouvrir(nom)
+    i.marquer("alerte", raison, quand=quand)
+    i.liberer()
+
+
+def test_marquer_alerte_ecrit_l_etat_la_date_et_la_raison(racine):
+    i = ident.ouvrir("a")
+    i.marquer("alerte", "statut 429 sur /x", quand=T0)
+    i.liberer()
+    donnees = lire(racine)
+    assert donnees["etat"] == "alerte" and donnees["raison"] == "statut 429 sur /x"
+    assert datetime.fromisoformat(donnees["alerte_le"]) == T0
+    assert donnees["nom"] == "a" and donnees["creee_le"]  # le reste est gardé
+
+
+def test_marquer_refuse_un_verdict_inconnu(racine):
+    i = ident.ouvrir("a")
+    try:
+        with pytest.raises(ValueError):
+            i.marquer("ok", "x")
+    finally:
+        i.liberer()
+
+
+def test_alerte_refusee_avant_une_heure(racine):
+    alerter()
+    for minutes in (0, 1, 30, 59):
+        with pytest.raises(ident.IdentiteRefusee, match="alerte"):
+            ident.ouvrir("a", horloge=lambda m=minutes: T0 + timedelta(minutes=m))
+
+
+def test_alerte_acceptee_apres_une_heure(racine):
+    alerter()
+    for decalage in (timedelta(hours=1), timedelta(hours=5)):
+        ident.ouvrir("a", horloge=lambda d=decalage: T0 + d).liberer()
+
+
+def test_alerte_acceptee_avant_une_heure_avec_maintenant(racine):
+    alerter()
+    ident.ouvrir("a", horloge=lambda: T0 + timedelta(minutes=5), maintenant=True).liberer()
+
+
+def test_le_refus_pour_alerte_rend_le_verrou(racine):
+    alerter()
+    with pytest.raises(ident.IdentiteRefusee):
+        ident.ouvrir("a", horloge=lambda: T0 + timedelta(minutes=5))
+    ident.ouvrir("a", horloge=lambda: T0 + timedelta(hours=2)).liberer()  # pas « déjà utilisée »
+
+
+def test_alerte_refusee_par_le_moteur_avant_tout_lancement(racine):
+    i = ident.ouvrir("a")
+    i.marquer("alerte", "statut 429", quand=datetime.now(UTC))
+    i.liberer()
+    with pytest.raises(ident.IdentiteRefusee, match="alerte"):
+        moteur(**NATIVE, identite="a").open()
+
+
+def test_bannie_refusee_toujours(racine):
+    i = ident.ouvrir("a")
+    i.marquer("banni", "statut 403 à la première page", quand=T0)
+    i.liberer()
+    assert lire(racine)["etat"] == "banni" and lire(racine)["banni_le"]
+    for decalage in (timedelta(0), timedelta(hours=2), timedelta(days=400)):
+        for maintenant in (False, True):
+            with pytest.raises(ident.IdentiteRefusee, match="banni"):
+                ident.ouvrir("a", horloge=lambda d=decalage: T0 + d, maintenant=maintenant)
+
+
+def test_une_alerte_ne_remplace_pas_un_bannissement(racine):
+    i = ident.ouvrir("a")
+    i.marquer("banni", "403", quand=T0)
+    i.marquer("alerte", "429", quand=T0 + timedelta(hours=1))
+    i.liberer()
+    assert lire(racine)["etat"] == "banni"
+
+
+def test_fin_de_visite_reprend_le_verdict_marque(racine):
+    i = ident.ouvrir("a")
+    i.debut_visite()
+    i.marquer("alerte", "statut 429", quand=T0)
+    i.fin_visite(pages=9)
+    i.liberer()
+    ligne = json.loads((racine / "a" / "visites.jsonl").read_text(encoding="utf-8"))
+    assert ligne["statut"] == "alerte" and ligne["pages"] == 9
+
+
+def test_une_visite_sans_alerte_apres_l_attente_remet_l_etat_a_ok(racine):
+    alerter()
+    i = ident.ouvrir("a", horloge=lambda: T0 + timedelta(hours=2))
+    i.debut_visite()
+    i.fin_visite(pages=12)
+    i.liberer()
+    assert lire(racine)["etat"] == "ok" and "alerte_le" not in lire(racine)
+    ident.ouvrir("a").liberer()  # plus aucune attente
+
+
+def test_le_verdict_ne_se_reporte_pas_sur_la_visite_suivante(racine):
+    i = ident.ouvrir("a")
+    i.debut_visite()
+    i.marquer("alerte", "429", quand=T0)
+    i.fin_visite(pages=1)
+    i.debut_visite()
+    i.fin_visite(pages=2)
+    i.liberer()
+    statuts = [
+        json.loads(x)["statut"] for x in (racine / "a" / "visites.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert statuts == ["alerte", "ok"]
+
+
+def test_porte_la_date_du_passage_est_gardee(racine):
+    i = ident.ouvrir("a")
+    assert i.porte_franchie_le() is None
+    i.noter_porte(T0)
+    i.liberer()
+    j = ident.ouvrir("a")
+    try:
+        assert j.porte_franchie_le() == T0
+        assert lire(racine)["etat"] == "ok" and lire(racine)["nom"] == "a"
+    finally:
+        j.liberer()
+
+
+def test_close_session_note_le_statut_de_la_visite(racine):
+    pilote = moteur(**NATIVE, identite="a")
+    pilote._identite = ident.ouvrir("a")
+    pilote._identite.debut_visite()
+    pilote._identite.marquer("alerte", "statut 429", quand=T0)
+    pilote._contexte, pilote._page, pilote._pages_visite = MagicMock(), MagicMock(), 4
+    assert pilote.identite_courante is pilote._identite
+    pilote.close_session()
+    pilote.close()
+    ligne = json.loads((racine / "a" / "visites.jsonl").read_text(encoding="utf-8"))
+    assert ligne["statut"] == "alerte" and ligne["pages"] == 4
 
 
 def test_racine_par_defaut_sous_outputs(monkeypatch):

@@ -34,7 +34,7 @@ from .extraction import Signatures
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
 from .rythme import Cadence, rythme_de
-from .sentinelle import FENETRE, STATUTS_ALERTE, Alerte, Sentinelle, detecter_defi
+from .sentinelle import FENETRE, STATUTS_ALERTE, Alerte, Sentinelle, detecter_defi, verdict_identite
 
 NOUVEAUX_ESSAIS = 2  # sur panne réseau, 500, 502, 504 (après le premier essai), attente croissante
 STATUTS_A_RETENTER = frozenset({500, 502, 504})
@@ -184,6 +184,11 @@ class MoteurDriver:
             return None
         statut, adresse, entetes = etat_page()
         return Reponse(statut, adresse, self.driver.dom(), 0.0, None, dict(entetes))
+
+    @property
+    def identite(self):
+        """L'identité persistante du pilote (moteur `noezia` en mode `identite`), ou None."""
+        return getattr(self.driver, "identite_courante", None)
 
     def description(self) -> dict[str, Any]:
         return {
@@ -537,6 +542,7 @@ class Parcours:
         self._incrementale = not self.options.tout_refaire and passe > self._base
         self._premiere_page = not reprise and etat.compteurs(passe)["lues"] == 0  # la porte d'entrée n'y est que là
         self._porte: dict[str, Any] | None = None
+        self._alerte_en_premiere = False  # la réponse examinée est celle de la première page de la passe
         # Repasser la porte en cours de passe (option `porte_entree.repassages_max`) : passages tracés, heure du
         # dernier passage franchi, rafale en cours (heure de son premier passage, nombre de défis).
         porte = recette.porte_entree
@@ -602,9 +608,23 @@ class Parcours:
             self._courante = None
             lues += lue
             if alerte is not None:
+                self._noter_alerte_identite(alerte)
                 return "arretee", self._arret(alerte)
             if lue and lues % PAS_AFFICHAGE == 0:
                 self._progression(lues)
+
+    def _noter_alerte_identite(self, alerte: Alerte) -> None:
+        """Moteur en mode identité : l'alerte (ou le bannissement) est écrit dans l'état de l'identité. Rien d'autre :
+        aucune requête, aucune action, aucun nouvel essai."""
+        identite = getattr(self.moteur, "identite", None)
+        if identite is not None:
+            verdict = verdict_identite(alerte, self._alerte_en_premiere)
+            identite.marquer(verdict, f"{alerte.signe} : {alerte.detail}", datetime.fromisoformat(self._horodatage()))
+
+    def _noter_porte_identite(self) -> None:
+        identite = getattr(self.moteur, "identite", None)
+        if identite is not None:
+            identite.noter_porte(datetime.fromisoformat(self._horodatage()))
 
     def _arret(self, alerte: Alerte) -> dict[str, Any]:
         return {
@@ -619,6 +639,7 @@ class Parcours:
         """Lit une page. Rend (alerte éventuelle, 1 si une requête a été faite et la page notée)."""
         etat, recette = self._etat, self.recette
         quand = self._horodatage
+        self._alerte_en_premiere = False
         if _hote(page.adresse) not in self._hotes:  # défense en profondeur : jamais d'hôte hors recette
             etat.terminer_page(page, etat="interdite", decision="hors_hotes", quand=quand())
             return None, 0
@@ -651,6 +672,7 @@ class Parcours:
             self._evenement(etat, self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(page.type, "echec", page.adresse), 1
 
+        self._alerte_en_premiere = self._premiere_page
         if self._premiere_page:
             self._premiere_page = False
             reponse, alerte = self._porte_d_entree(page, reponse)
@@ -723,13 +745,20 @@ class Parcours:
         porte = self.recette.porte_entree
         defi = detecter_defi(reponse.html, reponse.entetes)
         if porte is not None and defi is None and reponse.statut in STATUTS_ALERTE:
-            return self._porte_deja_franchie(reponse), None
+            franchie = self._porte_deja_franchie(reponse)
+            if self._porte is not None and self._porte["franchie"]:
+                self._noter_porte_identite()
+            return franchie, None
         if porte is None or defi is None:
             return reponse, None
+        revenue = self._porte_revenue_trop_tot(page, reponse, defi, porte)
+        if revenue is not None:
+            return reponse, revenue
         courante, attendu = self._attendre_sans_action()
         if courante is not None:
             courante.duree_ms = reponse.duree_ms
             self._porte = {"defi": defi, "franchie": True, "attente_s": attendu}
+            self._noter_porte_identite()
             self._evenement(self._etat, self._passe, "porte_entree", self._porte)
             self._ecran(f"Porte d'entrée : défi ({defi}) validé seul après {attendu:g} s, sans action.")
             return courante, None
@@ -737,6 +766,27 @@ class Parcours:
         self._evenement(self._etat, self._passe, "porte_entree", self._porte)
         detail = f"page de défi ({defi}) toujours là après {attendu:g} s d'attente sans action"
         return reponse, Alerte("defi", detail, page.adresse, reponse.statut)
+
+    def _porte_revenue_trop_tot(self, page: Page, reponse: Reponse, defi: str, porte: Any) -> Alerte | None:
+        """Identité persistante et `porte_entree.duree_s` déclarée : le défi revenu avant la fin de sa durée veut
+        dire que le site ne reconnaît plus le visiteur (§ 5.5). Alerte tout de suite,
+        SANS attendre ni agir sur le défi."""
+        identite = getattr(self.moteur, "identite", None)
+        if identite is None or porte.duree_s is None:
+            return None
+        dernier = identite.porte_franchie_le()
+        if dernier is None:
+            return None
+        ecoule = (datetime.fromisoformat(self._horodatage()) - dernier).total_seconds()
+        if ecoule >= porte.duree_s:
+            return None
+        self._porte = {"defi": defi, "franchie": False, "attente_s": 0.0, "revenue_apres_s": ecoule}
+        self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+        detail = (
+            f"porte d'entrée revenue (défi {defi}) {ecoule / 3600:.1f} h après le dernier passage, avant les "
+            f"{porte.duree_s / 3600:g} h déclarées : le site ne reconnaît plus l'identité"
+        )
+        return Alerte("porte_revenue", detail, page.adresse, reponse.statut)
 
     def _porte_deja_franchie(self, reponse: Reponse) -> Reponse:
         """Statut d'alerte à la première page, aucun défi dans le DOM lu : le défi a pu se valider PENDANT la lecture
@@ -827,6 +877,7 @@ class Parcours:
         trace["franchie"] = True
         self._tracer_repassage(trace)
         self._dernier_passage = self._horodatage()
+        self._noter_porte_identite()
         self._rafale = (rafale[0], rafale[1] + 1) if en_rafale and rafale else (self._dernier_passage, 1)
         quel = (
             "même passage que le précédent"

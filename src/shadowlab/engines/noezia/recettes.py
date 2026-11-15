@@ -299,11 +299,15 @@ class Robots(_Modele):
 class PorteEntree(_Modele):
     """Un défi qui se valide seul est attendu SANS AUCUNE action, `attendre_s` secondes au plus : à la première page
     de la passe ; en cours de passe (un laissez-passer qui expire) seulement si `repassages_max` > 0, au plus
-    `repassages_max` fois et jamais moins de `ecart_min_s` secondes après le passage précédent (entrée comprise)."""
+    `repassages_max` fois et jamais moins de `ecart_min_s` secondes après le passage précédent (entrée comprise).
+    `duree_s` (facultative, I6) : combien de temps le site laisse passer un visiteur connu sans redemander le défi ;
+    avec une identité persistante, le même défi revenu avant cette durée est une alerte (le site ne la reconnaît
+    plus)."""
 
     attendre_s: float
     repassages_max: int = 0  # 0 : un défi en cours de passe arrête toujours
     ecart_min_s: float = 300.0
+    duree_s: float | None = None  # durée pendant laquelle le site ne redemande pas le défi à un visiteur connu
 
     @field_validator("attendre_s")
     @classmethod
@@ -317,6 +321,13 @@ class PorteEntree(_Modele):
     def repassages_positifs(cls, valeur: int) -> int:
         if valeur < 0:
             raise ValueError("repassages_max : un entier, au moins 0 (0 = jamais)")
+        return valeur
+
+    @field_validator("duree_s")
+    @classmethod
+    def duree_positive(cls, valeur: float | None) -> float | None:
+        if valeur is not None and valeur <= 0:
+            raise ValueError("duree_s : un nombre de secondes positif")
         return valeur
 
     @field_validator("ecart_min_s")

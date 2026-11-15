@@ -6,11 +6,16 @@ navigateur. Les pages de défi sont écrites à la main ici ; aucune n'est la co
 
 from __future__ import annotations
 
-import pytest
-from outils_recolte import RECETTE_VITRINE, PiloteFactice, creer_client, fabriquer, lu
+import json
+from datetime import UTC, datetime, timedelta
 
+import pytest
+from outils_recolte import QUAND, RECETTE_VITRINE, PiloteFactice, creer_client, fabriquer, lu
+
+from shadowlab.engines.noezia import identite as ident
+from shadowlab.engines.noezia import recettes
 from shadowlab.engines.noezia.etat import Etat
-from shadowlab.engines.noezia.sentinelle import Alerte, detecter_defi
+from shadowlab.engines.noezia.sentinelle import Alerte, detecter_defi, verdict_identite
 
 PAGE_ARENA = (
     "<!doctype html><html><head><title>Vérification — ShadowLab</title></head>"
@@ -296,3 +301,196 @@ def test_une_page_de_defi_ne_compte_pas_comme_page_lue(dossier, pilote):
 
 def test_message_d_alerte():
     assert "défi" in Alerte("defi", "page de défi (arena)", "http://127.0.0.1/a").message()
+
+
+# --- Mode identité (I6, § 5.5) : l'état de l'identité suit la sentinelle -----------------------------------------
+
+PAGE_REFUS = "<html><body><p>accès refusé</p></body></html>"
+PORTE_24H = "\nporte_entree:\n  attendre_s: 15\n  duree_s: 86400\n"
+LISTE = "=/lab/vitrine/annonces"  # la première page de la passe
+IL_Y_A_2_H = datetime.fromisoformat(QUAND) - timedelta(hours=2)
+IL_Y_A_25_H = datetime.fromisoformat(QUAND) - timedelta(hours=25)
+
+
+class PiloteIdentite(PiloteNavigateur):
+    """Comme `DriverNoezia` en mode identité : expose son identité, et note la visite à la fermeture de la session."""
+
+    def __init__(self, client, identite):
+        super().__init__(client)
+        self.identite_courante = identite
+        identite.debut_visite()
+
+    def close_session(self):
+        self.identite_courante.fin_visite(pages=len(self.pages_lues()))
+
+
+@pytest.fixture
+def racine(tmp_path, monkeypatch):
+    monkeypatch.setenv("SHADOWLAB_IDENTITES", str(tmp_path / "identites"))
+    return tmp_path / "identites" / "vitrine"
+
+
+@pytest.fixture
+def identite(racine):
+    ouverte = ident.ouvrir("vitrine")
+    yield ouverte
+    ouverte.liberer()
+
+
+@pytest.fixture
+def pilote_id(site, identite):
+    return PiloteIdentite(site, identite)
+
+
+def etat_identite(racine):
+    return json.loads((racine / "identite.json").read_text(encoding="utf-8"))
+
+
+def visites_notees(racine):
+    fichier = racine / "visites.jsonl"
+    return [json.loads(ligne) for ligne in fichier.read_text(encoding="utf-8").splitlines()] if fichier.exists() else []
+
+
+@pytest.mark.parametrize(
+    ("reglage", "signe"),
+    [
+        (("AN-000010", (429, PAGE_REFUS)), "statut"),
+        (("AN-000010", (403, PAGE_REFUS)), "statut"),  # un 403 après la première page n'est pas un refus franc
+        (("AN-000010", (200, PAGE_ARENA)), "defi"),  # défi en cours de visite
+        (("AN-000010", (200, PAGE_FOURNISSEUR)), "defi"),
+        (("LISTE", (429, PAGE_REFUS)), "statut"),  # un 429 dès la première page : alerte, pas bannissement
+    ],
+)
+def test_identite_un_signe_d_alerte_arrete_et_note_l_alerte(dossier, pilote_id, racine, reglage, signe):
+    fragment, reponse = reglage
+    pilote_id.reponses[LISTE if fragment == "LISTE" else fragment] = reponse
+    bilan = fabriquer(dossier, pilote_id).lancer()
+    assert bilan.code == 3 and bilan.arret["signe"] == signe
+    demandees = len(pilote_id.demandes)
+    assert not any("AN-000011" in d for d in pilote_id.demandes)  # aucune requête après le signe
+    donnees = etat_identite(racine)
+    assert donnees["etat"] == "alerte" and donnees["alerte_le"] and bilan.arret["detail"] in donnees["raison"]
+    assert [v["statut"] for v in visites_notees(racine)] == ["alerte"]
+    assert len(pilote_id.demandes) == demandees
+
+
+def test_identite_retour_a_la_connexion_alerte(dossier, pilote_id, racine):
+    pilote_id.redirections["AN-000010"] = "http://127.0.0.1:8770/lab/connexion"
+    bilan = fabriquer(dossier, pilote_id).lancer()
+    assert bilan.code == 3 and bilan.arret["signe"] == "hors_motif"
+    assert not any("AN-000011" in d for d in pilote_id.demandes)
+    assert etat_identite(racine)["etat"] == "alerte"
+    assert [v["statut"] for v in visites_notees(racine)] == ["alerte"]
+
+
+def test_identite_redirection_hors_site_alerte(dossier, pilote_id, racine):
+    pilote_id.redirections["AN-000010"] = "http://autre.example/connexion"
+    bilan = fabriquer(dossier, pilote_id).lancer()
+    assert bilan.code == 3 and bilan.arret["signe"] == "hors_site"
+    assert not any("autre.example" in u for u in pilote_id.urls)
+    assert etat_identite(racine)["etat"] == "alerte"
+
+
+def test_identite_403_des_la_premiere_page_banni_pour_toujours(dossier, pilote_id, racine, identite):
+    pilote_id.reponses[LISTE] = (403, PAGE_REFUS)
+    bilan = fabriquer(dossier, pilote_id).lancer()
+    assert bilan.code == 3 and bilan.arret["signe"] == "statut"
+    assert pilote_id.requetes_pages == 1  # une seule requête de page, le refus lui-même
+    donnees = etat_identite(racine)
+    assert donnees["etat"] == "banni" and donnees["banni_le"] and "403" in donnees["raison"]
+    assert [v["statut"] for v in visites_notees(racine)] == ["banni"]
+    identite.liberer()
+    with pytest.raises(ident.IdentiteRefusee, match="banni"):
+        ident.ouvrir("vitrine", horloge=lambda: datetime.now(UTC) + timedelta(days=400), maintenant=True)
+
+
+def test_identite_403_a_la_reprise_n_est_pas_un_bannissement(dossier, pilote_id, racine):
+    pilote_id.reponses["AN-000010"] = (429, PAGE_REFUS)
+    fabriquer(dossier, pilote_id).lancer()
+    pilote_id.reponses["AN-000010"] = (403, PAGE_REFUS)  # la première page de la reprise est refusée franchement
+    bilan = fabriquer(dossier, pilote_id).reprendre(maintenant=True)
+    assert bilan.code == 3
+    assert etat_identite(racine)["etat"] == "alerte"
+
+
+def test_identite_passe_sans_alerte_laisse_l_etat_ok(dossier, pilote_id, racine):
+    bilan = fabriquer(dossier, pilote_id).lancer()
+    assert bilan.code == 0
+    donnees = etat_identite(racine)
+    assert donnees["etat"] == "ok" and "alerte_le" not in donnees
+    assert [v["statut"] for v in visites_notees(racine)] == ["ok"]
+
+
+def test_moteur_sans_identite_n_ecrit_rien(dossier, pilote, racine):
+    pilote.reponses["AN-000010"] = (429, PAGE_REFUS)
+    assert fabriquer(dossier, pilote).lancer().code == 3
+    assert not racine.exists()
+
+
+def test_verdict_une_seule_reponse_est_un_bannissement():
+    def alerte(signe, statut):
+        return Alerte(signe, "x", "http://127.0.0.1/", statut)
+
+    assert verdict_identite(alerte("statut", 403), premiere_page=True) == "banni"
+    assert verdict_identite(alerte("statut", 403), premiere_page=False) == "alerte"
+    for statut in (401, 407, 429, 503):
+        assert verdict_identite(alerte("statut", statut), premiere_page=True) == "alerte"
+    for signe in ("defi", "hors_site", "hors_motif", "page_non_conforme", "echecs", "porte_revenue"):
+        assert verdict_identite(alerte(signe, 403 if signe == "defi" else None), premiere_page=True) == "alerte"
+
+
+# --- La porte d'entrée déclarée avec sa durée (`porte_entree.duree_s`) ---------------------------------------------
+
+
+def avec_porte_24h():
+    return RECETTE_VITRINE.read_text(encoding="utf-8") + PORTE_24H
+
+
+def test_porte_franchie_la_date_est_gardee_dans_l_identite(dossier, pilote_id, identite):
+    pilote_id.reponses[LISTE] = (200, PAGE_FOURNISSEUR)
+    vraie = pilote_id.client.get("/lab/vitrine/annonces").text
+    pilote_id.dom_apres_attente = [PAGE_FOURNISSEUR, vraie]
+    bilan = fabriquer(dossier, pilote_id, texte=avec_porte_24h()).lancer()
+    assert bilan.code == 0 and bilan.resume["porte_entree"]["franchie"] is True
+    assert identite.porte_franchie_le() == datetime.fromisoformat(QUAND)
+
+
+def test_porte_revenue_avant_24_h_est_une_alerte_sans_attente(dossier, pilote_id, racine, identite):
+    identite.noter_porte(IL_Y_A_2_H)
+    pilote_id.reponses[LISTE] = (200, PAGE_FOURNISSEUR)
+    p = fabriquer(dossier, pilote_id, texte=avec_porte_24h())
+    bilan = p.lancer()
+    assert bilan.code == 3 and bilan.arret["signe"] == "porte_revenue"
+    assert "24" in bilan.arret["detail"] or "86400" in bilan.arret["detail"]
+    assert p.horloge_factice.pauses == [] and pilote_id.relectures == 0  # aucune attente, aucune action
+    assert pilote_id.requetes_pages == 1
+    assert etat_identite(racine)["etat"] == "alerte"
+    assert identite.porte_franchie_le() == IL_Y_A_2_H  # la date du dernier vrai passage ne bouge pas
+    assert [v["statut"] for v in visites_notees(racine)] == ["alerte"]
+
+
+def test_porte_revenue_apres_24_h_est_attendue(dossier, pilote_id, racine, identite):
+    identite.noter_porte(IL_Y_A_25_H)
+    pilote_id.reponses[LISTE] = (200, PAGE_FOURNISSEUR)
+    vraie = pilote_id.client.get("/lab/vitrine/annonces").text
+    pilote_id.dom_apres_attente = [PAGE_FOURNISSEUR, vraie]
+    bilan = fabriquer(dossier, pilote_id, texte=avec_porte_24h()).lancer()
+    assert bilan.code == 0
+    assert etat_identite(racine)["etat"] == "ok"
+    assert identite.porte_franchie_le() == datetime.fromisoformat(QUAND)
+
+
+def test_porte_sans_duree_declaree_pas_de_regle_des_24_h(dossier, pilote_id, identite):
+    identite.noter_porte(IL_Y_A_2_H)
+    pilote_id.reponses[LISTE] = (200, PAGE_FOURNISSEUR)
+    vraie = pilote_id.client.get("/lab/vitrine/annonces").text
+    pilote_id.dom_apres_attente = [PAGE_FOURNISSEUR, vraie]
+    bilan = fabriquer(dossier, pilote_id, texte=avec_porte()).lancer()
+    assert bilan.code == 0
+
+
+def test_porte_duree_invalide_refusee():
+    with pytest.raises(ValueError, match="duree_s"):
+        recettes.lire_texte(
+            RECETTE_VITRINE.read_text(encoding="utf-8") + "\nporte_entree:\n  attendre_s: 5\n  duree_s: 0\n"
+        )
