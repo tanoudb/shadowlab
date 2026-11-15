@@ -93,3 +93,16 @@ def reconnaitre(cx: sqlite3.Connection, secret: bytes, valeur_cookie: str | None
         (monde_id, visiteur, jeton or None, int(neuve), db.maintenant()),
     )
     return Visite(monde, visiteur, neuve, creer_cookie(secret, monde, visiteur) if neuve else None)
+
+
+class Connus:
+    """Coquille : cache des sessions déjà enregistrées (le code vient après les tests)."""
+
+    def __init__(self, maximum: int = 20000) -> None:
+        self.maximum = maximum
+
+    def retrouver(self, secret: bytes, valeur_cookie: str | None, jeton: str) -> Visite | None:
+        return None
+
+    def retenir(self, jeton: str, visite: Visite) -> None:
+        return None
