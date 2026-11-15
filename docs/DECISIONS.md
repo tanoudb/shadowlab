@@ -962,3 +962,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   WebKit. Les sessions du site public sont présumées humaines, pas des humains connus. Une troisième session (Chrome
   157 sur Windows, 15/11) est arrêtée de 05 à 07 par `trajectoire_lineaire` et `screen_position_zero` : non corrigé,
   on ne recale pas un seuil sur une session anonyme.
+  **Ajout du 15/11, la réserve « un robot qui émule un mobile » mesurée (campagne 117, 120 passages, 0 panne)** : le vrai
+  Chrome sans comportement piloté par patchright fait 15, 10, 15 et 0 sur 15 aux niveaux 03, 04, 05 et 06 sans
+  corrélation ; le même avec le descripteur « Pixel 7 » de Playwright fait 15, 10, 0 et 0. Le déguisement ne lui fait
+  rien gagner : il est arrêté par `aucune_interaction` et `outer_eq_inner`. Limite : une seule émulation, sans vrais
+  touchers ; l'option `appareil` des pilotes Playwright et Patchright est documentée par Playwright et déclarée dans
+  `options_permises`.

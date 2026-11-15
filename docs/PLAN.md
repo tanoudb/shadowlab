@@ -740,6 +740,25 @@ branche de travail (commit `b1a40ed`). Guide : `docs/recolte.md`.
   2.1). Non corrigé : le niveau 07 n'est pas dans l'objectif de la v1 (niveaux 01 à 06), son seuil n'est pas calibré
   sur des humains, et la règle compte les pages de défi comme des pages lues. Réserves : 3 passages par cas ;
   CAPTCHA en clés de test.
+- **Campagne 117 (15/11) : un automate qui se présente comme un téléphone ne passe pas mieux.** Réserve de D-86 : ses
+  exemptions (appareil tactile, famille du navigateur) pouvaient profiter à un robot qui émule un mobile. Témoin
+  construit pour le mesurer : le vrai Chrome avec fenêtre piloté par patchright, sans comportement humain, tel quel et
+  avec le descripteur « Pixel 7 » de Playwright (option `appareil`). `temoin-mobile-emule.yaml`, 18 h 44 à 18 h 54,
+  120 passages, 0 panne :
+
+  | Niveau | Tel quel | Déguisé en téléphone |
+  |--------|----------|----------------------|
+  | 03 | 15 sur 15 | 15 sur 15 |
+  | 04 | 10 sur 15 | 10 sur 15 |
+  | 05 | 15 sur 15 | **0 sur 15** |
+  | 06 sans corrélation | 0 sur 15 | 0 sur 15 |
+
+  Le déguisement ne fait rien gagner et fait perdre le niveau 05 : il est arrêté par `aucune_interaction` et
+  `outer_eq_inner` (la fenêtre émulée a la même taille dehors et dedans), puis au niveau 06 par `outer_eq_inner` et
+  `screen_position_zero`. Limites : une seule façon d'émuler (descripteur de Playwright, un appareil), des clics de
+  souris et aucun vrai toucher (l'exemption de `ratio_move_click_faible` ne joue donc pas), un automate sans
+  comportement ; un robot qui émettrait de vrais touchers avec une fenêtre cohérente n'est pas mesuré. Tel quel, ce
+  témoin confirme la campagne 115 : 15 sur 15 au niveau 05.
 
 ## 3. Pourquoi on a perdu du temps
 

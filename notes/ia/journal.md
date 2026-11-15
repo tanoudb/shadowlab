@@ -3556,3 +3556,16 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/PLAN.md` (§ 2, § 8), `AGENTS.md`.
 - **Reste, sans Ethan** : mesurer ce que D-86 ouvre à un automate qui se présente comme un téléphone (témoin en
   émulation mobile). **Avec Ethan** : deux humains connus sur ordinateur, questions du palier 2, nom de domaine.
+
+## 2026-11-15 (19h00) — Claude (Fable 5.2, coordination) — Campagne 117 : le témoin déguisé en téléphone ne passe pas mieux
+
+- **Option `appareil`** des pilotes Playwright et Patchright (branche `temoin-mobile-emule`, sous-agent Sonnet, relu :
+  rouge sur `3c1fbbf`, 4 échecs ; fusion `de00162`) : nom d'un appareil de `playwright.devices`, validé avant le
+  lancement du navigateur, réglages du périmètre appliqués après. Suite rapide : 1 770 verts.
+- **Campagne 117** (`temoin-mobile-emule.yaml`, 18 h 44 à 18 h 54, 120 passages, 0 panne) : `patchright-chrome-interface`
+  15, 10, 15, 0 sur 15 aux niveaux 03, 04, 05, 06 sans corrélation ; `patchright-chrome-mobile` (Pixel 7) 15, 10, 0, 0.
+  Blocages du déguisé : `aucune_interaction` + `outer_eq_inner` (04, 05), `outer_eq_inner` + `screen_position_zero`
+  (06). La réserve de D-86 n'est pas confirmée pour cette émulation. Arena remise, ports libres.
+- **Fichiers** : `docs/PLAN.md` (§ 2), `docs/DECISIONS.md` (ajout à D-86), `AGENTS.md`.
+- **Suite** : plus rien d'utile sans Ethan côté moteur et Arena (humains connus sur ordinateur, questions du palier 2,
+  nom de domaine). La boucle reste en veille lente : état du site public et rejeu des nouvelles sessions.

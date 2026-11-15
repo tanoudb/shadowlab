@@ -130,8 +130,10 @@ recommander des optimisations.
   deux iPhone passent maintenant de 01 à 07. La session Chrome sur Windows est arrêtée de 05 à 07 par
   `trajectoire_lineaire` (2 pages sur 11 sous 0,08 rad) et `screen_position_zero` (3 sessions sur 3) : **non corrigé**,
   il faut d'abord des humains connus sur ordinateur (`docs/PLAN.md` § 7). Campagne de contrôle 115 : `noezia` natif 15
-  sur 15 aux niveaux 04 à 06 sans corrélation, `patchright` 0 sur 45 ; elle ne juge que Chrome sur ordinateur, pas ce
-  que D-86 ouvre à un robot qui se dirait tactile ou WebKit.
+  sur 15 aux niveaux 04 à 06 sans corrélation, `patchright` 0 sur 45 ; elle ne juge que Chrome sur ordinateur.
+  **Campagne 117** (15/11) : le même Chrome sans comportement, déguisé en téléphone (option `appareil: "Pixel 7"` des
+  pilotes Playwright et Patchright), ne passe pas mieux : 15, 10, 0 et 0 sur 15 aux niveaux 03 à 06 sans corrélation,
+  contre 15, 10, 15 et 0 tel quel. Non mesuré : un robot qui émet de vrais touchers, ou qui se dit WebKit.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
