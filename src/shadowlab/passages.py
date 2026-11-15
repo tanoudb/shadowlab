@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import secrets
 import sqlite3
+from dataclasses import asdict
+from datetime import datetime
 from typing import Any
 
 from . import correlation, issues
@@ -58,6 +60,22 @@ def demarrer(
     return int(curseur.lastrowid), jeton
 
 
+def _correlation_du_bilan(cx: sqlite3.Connection, run_id: int, jeton: str) -> dict[str, Any] | None:
+    """Ce que `correlation-session` a lu pour cette session : les visites antérieures de son monde.
+
+    Même règle que la décision du gardien (`correlation.evaluer_session`), mais figée au début de la session : des
+    passages tournent en parallèle, une session commencée après celle-ci ne compte pas contre elle. Sans monde
+    (`runs.monde_id` vide), la réponse reste indéterminée (`None`).
+    """
+    ligne = cx.execute("SELECT monde_id, started_at FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if ligne is None or ligne["monde_id"] is None:
+        return None
+    donnees = correlation.correlation_historique(
+        cx, jeton, ligne["monde_id"], datetime.fromisoformat(ligne["started_at"])
+    )
+    return asdict(donnees) if donnees else None
+
+
 def finaliser(
     cx: sqlite3.Connection,
     run_id: int,
@@ -83,6 +101,8 @@ def finaliser(
         visite_neuve=correlation.visite_neuve(cx, jeton),
         page_remplacee=any(d["decision"] in ("emis", "bloque") for d in decisions),
     )
+    if obs.empreinte_js is not None:  # comme le gardien : rien n'est jugé avant la première empreinte
+        obs.correlation = _correlation_du_bilan(cx, run_id, jeton)
     classements = classer(obs, detecteurs)
     empreinte = proprietes(obs)
     resultat = issues.evaluer(
