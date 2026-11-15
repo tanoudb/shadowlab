@@ -165,9 +165,9 @@ class _Page(BaseHTTPRequestHandler):
         vid = cookie.group(1) if cookie else __import__("uuid").uuid4().hex
         self.server.vus.append((vid, nouveau))  # type: ignore[attr-defined]
         corps = (
-            "<!doctype html><title>t</title><p id='vid'>%s</p><p id='ls'>?</p><script>"
+            "<!doctype html><title>t</title><p id='vid'>" + vid + "</p><p id='ls'>?</p><script>"
             "let v=localStorage.getItem('k');if(!v){v=crypto.randomUUID();localStorage.setItem('k',v)}"
-            "document.getElementById('ls').textContent=v</script>" % vid
+            "document.getElementById('ls').textContent=v</script>"
         ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -199,13 +199,13 @@ def _visite(nom, serveur) -> tuple[str, str]:
     try:
         pilote.start_session()
         pilote.navigate(f"http://127.0.0.1:{serveur.server_port}/")
-        html = pilote.content()
+        html = pilote.dom()
         pilote.close_session()
     finally:
         pilote.close()
     return (
-        re.search(r"id=\"vid\">([0-9a-f]+)<", html).group(1),
-        re.search(r"id=\"ls\">([0-9a-f-]+)<", html).group(1),
+        re.search(r"id=.vid.>([0-9a-f]+)<", html).group(1),
+        re.search(r"id=.ls.>([0-9a-f-]+)<", html).group(1),
     )
 
 

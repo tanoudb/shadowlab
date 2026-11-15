@@ -30,7 +30,7 @@ from ..base import (
     ResultatNavigation,
     proxy_verrou,
 )
-from . import extraction
+from . import extraction, identite
 from .analyseur import Analyseur
 from .comportement import humain, tempo
 from .comportement.clavier import SimulateurClavier
@@ -84,6 +84,9 @@ class DriverNoezia(Driver):
         # Injection ») : un vrai Chrome, et rien d'imposé à son identité.
         "channel": str,
         "identite_native": bool,
+        # Nom d'une identité persistante : un dossier (profil Chrome, état, journal, verrou) qui survit entre
+        # deux lancements. Exige identite_native et un navigateur avec interface ; aucune nouvelle tentative.
+        "identite": str,
         # Vrai : le certificat des sites visités est vérifié. Faux (défaut du labo : certificat local auto-signé) :
         # les erreurs de certificat sont ignorées. La récolte le met vrai hors du labo local.
         "verifier_tls": bool,
@@ -99,6 +102,12 @@ class DriverNoezia(Driver):
         self._config = self._construire_config(self.options)
         self._bloquer_ressources = bool(self.options.get("bloquer_ressources", False))
         self._nb_essais = max(1, int(self.options.get("nb_essais", 1)))
+        self._nom_identite: str | None = self._controler_identite(self.options)
+        if self._nom_identite is not None:
+            self._nb_essais = 1  # une identité qui revient ne réessaie jamais : un 429 n'est pas relancé
+        self._identite: identite.Identite | None = None
+        self._version_chrome: str | None = None
+        self._pages_visite = 0
         # Hôtes que le cadre principal a le droit de demander (récolte : `hotes` de la recette).
         # None : pas de garde.
         # Réglé par l'appelant, jamais une option de campagne. Ne couvre pas les sous-ressources (voir `_filtrer`).
@@ -112,6 +121,20 @@ class DriverNoezia(Driver):
         self._souris: SimulateurSouris | None = None
         self._clavier: SimulateurClavier | None = None
         self._defilement: SimulateurDefilement | None = None
+
+    @staticmethod
+    def _controler_identite(options: dict[str, Any]) -> str | None:
+        """Nom de l'identité demandée, après les refus : hors identité native, ou sans interface."""
+        if "identite" not in options:
+            return None
+        nom = identite.verifier_nom(options["identite"])
+        if options.get("identite_native") is not True:
+            raise ValueError(
+                "option identite : exige identite_native: true (un profil réécrit changerait sous le cookie)"
+            )
+        if options.get("headless", True) is not False:
+            raise ValueError("option identite : exige headless: false (un navigateur sans interface se dénonce)")
+        return nom
 
     @staticmethod
     def _construire_config(options: dict[str, Any]) -> ConfigNoezia:
@@ -158,6 +181,9 @@ class DriverNoezia(Driver):
             "bloquer_ressources": self._bloquer_ressources,
             "verifier_tls": self._verifier_tls,
         }
+        if self._nom_identite is not None:
+            conf["identite"] = self._nom_identite
+            conf["identite_age_jours"] = identite.age_jours(self._nom_identite)
         if self._profil:
             conf["profil"] = self._profil.nom
             conf["profil_os"] = self._profil.os
@@ -169,6 +195,8 @@ class DriverNoezia(Driver):
         versions = {"patchright": importlib.metadata.version("patchright")}
         if self._navigateur is not None:
             versions["chromium"] = self._navigateur.version
+        elif self._version_chrome is not None:
+            versions["chromium"] = self._version_chrome
         if self._profil:
             versions["profil"] = self._profil.nom
         return versions
@@ -187,6 +215,13 @@ class DriverNoezia(Driver):
         from patchright.sync_api import sync_playwright
 
         self._avertir_identite_native_sans_interface()
+
+        if self._nom_identite is not None:
+            # Refus avant tout lancement : identité bannie ou déjà prise. Chrome démarre à start_session().
+            self._identite = identite.ouvrir(self._nom_identite)
+            self._pw = sync_playwright().start()
+            self._profil = None
+            return
 
         # Charger ou générer un profil
         natif = self._config.identite_native
@@ -251,10 +286,30 @@ class DriverNoezia(Driver):
     def close(self) -> None:
         if self._navigateur is not None:
             self._navigateur.close()
-            self._pw.stop()
             self._navigateur = None
+        if self._pw is not None:
+            self._pw.stop()
             self._pw = None
+        if self._identite is not None:
+            self._identite.liberer()
+            self._identite = None
         self._profil = None
+
+    def _lancer_identite(self):
+        """Chrome sur le dossier de profil de l'identité, avec le verrou réseau du périmètre (après les options)."""
+        verrou = self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)
+        contexte = self._pw.chromium.launch_persistent_context(
+            user_data_dir=str(self._identite.dossier_profil),
+            channel=self._config.channel,
+            headless=False,
+            proxy=verrou,
+            no_viewport=True,
+            ignore_https_errors=not self._verifier_tls,
+        )
+        self._version_chrome = contexte.browser.version if contexte.browser else None
+        self._pages_visite = 0
+        self._identite.debut_visite({"chrome": self._version_chrome})
+        return contexte
 
     def start_session(self) -> None:
         self.mesures = MesuresSession()
@@ -264,7 +319,9 @@ class DriverNoezia(Driver):
         self.mesures.details["defis_resolus"] = []
 
         profil = self._profil
-        if profil is None:
+        if self._identite is not None:
+            self._contexte = self._lancer_identite()
+        elif profil is None:
             # Identité native : rien n'est imposé au navigateur, ni fenêtre, ni User-Agent, ni en-tête, ni
             # script d'empreinte. Seul reste ce que le périmètre exige (certificat local, filtre réseau).
             self._contexte = self._navigateur.new_context(ignore_https_errors=not self._verifier_tls, no_viewport=True)
@@ -308,7 +365,8 @@ class DriverNoezia(Driver):
         self._contexte.route("**/*", self._filtrer)
 
         # Nouvelle page
-        self._page = self._contexte.new_page()
+        pages_ouvertes = self._contexte.pages if self._identite is not None else []
+        self._page = pages_ouvertes[0] if pages_ouvertes else self._contexte.new_page()
         self._page.on("request", lambda _: self._compter("request_count"))
         self._page.on("requestfailed", lambda _: self._compter("error_count"))
         self._page.on("response", self._noter_reponse)
@@ -350,6 +408,8 @@ class DriverNoezia(Driver):
         except Exception:
             pass
         self._contexte.close()
+        if self._identite is not None:
+            self._identite.fin_visite(pages=self._pages_visite, statut="ok")
         self._contexte = None
         self._page = None
         self._souris = None
@@ -404,6 +464,7 @@ class DriverNoezia(Driver):
     def _noter_reponse(self, reponse) -> None:
         if reponse.request.is_navigation_request() and reponse.frame == self._page.main_frame:
             self._reponse = reponse
+            self._pages_visite += 1
 
     def _compter(self, champ: str) -> None:
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
