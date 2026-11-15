@@ -34,6 +34,31 @@ def test_moteur_refuse_une_redirection_hors_perimetre(reglages, moteur):
             pilote.close()
 
 
+def test_noezia_identite_refuse_une_redirection_hors_perimetre(reglages, tmp_path, monkeypatch):
+    """Le lancement persistant (option `identite`) garde le verrou de périmètre (règle du projet)."""
+    if not _chrome_installe():
+        pytest.skip("Google Chrome n'est pas installé (channel: chrome)")
+    monkeypatch.setenv("SHADOWLAB_IDENTITES", str(tmp_path / "identites"))
+    options = {"identite": "perimetre", "identite_native": True, "headless": False, "channel": "chrome"}
+    with campaigns.serveur_local(reglages):
+        pilote = registre()["noezia"](("127.0.0.1", "localhost"), options)
+        pilote.open()
+        try:
+            pilote.start_session()
+            with pytest.raises(DestinationRefusee):
+                pilote.navigate("https://example.com/")
+            sortie_bloquee = False
+            try:
+                resultat = pilote.navigate(f"{reglages.url_site}/lab/sortie")
+                sortie_bloquee = "example.com" not in resultat.url
+            except Exception:
+                sortie_bloquee = True
+            assert sortie_bloquee
+            pilote.close_session()
+        finally:
+            pilote.close()
+
+
 def test_campagne_complete_tous_moteurs(reglages, tmp_path):
     chemin = tmp_path / "c.yaml"
     chemin.write_text(
