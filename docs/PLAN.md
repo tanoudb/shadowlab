@@ -926,7 +926,7 @@ But : un seul compte connecté travaille 7 jours sans être banni.
 
 | # | Étape | Fin vérifiable |
 |---|-------|----------------|
-| 2.1 | **Arena : mémoire des visiteurs.** Migration 9 : visiteurs, bannissements, comptes. L'état est rattaché à un « monde » remis à zéro explicitement (sinon une campagne influence la suivante). Une requête sans jeton est protégée aussi | `PRAGMA user_version` = 9 ; test |
+| 2.1 | **Arena : mémoire des visiteurs.** Migration 10 (la 9 est prise par D-68 ; faite le 15/11, D-87) : visiteurs, bannissements, comptes. L'état est rattaché à un « monde » remis à zéro explicitement (sinon une campagne influence la suivante). Une requête sans jeton est protégée aussi | `PRAGMA user_version` = 10 ; test |
 | 2.2 | **Arena : bannir par cookie durable et par empreinte**, lu en tête du gardien | Test : un visiteur détecté qui revient avec un nouveau jeton reçoit 403. Campagne : playwright banni au 2ᵉ passage, 0 humain banni sur 10 |
 | 2.3 | **Arena : comptes.** Table de comptes, bannissement du compte, « nouvel appareil » | Test : un compte banni est refusé depuis un autre navigateur |
 | 2.4 | **Arena : compteurs par heure et par jour**, horloge injectable. Plus un **profil « endurance »** pour les longues exécutions : détecteurs calibrés du niveau 06, connexion, bannissement, compteurs ; une seule porte d'entrée (défi JavaScript) par cookie valable 24 h ; aucun CAPTCHA en clés de test | Test : 2 000 pages en 24 h → bannissement ; 40 pages par jour pendant 7 jours → aucun |
