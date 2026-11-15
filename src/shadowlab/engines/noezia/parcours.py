@@ -185,6 +185,11 @@ class MoteurDriver:
         statut, adresse, entetes = etat_page()
         return Reponse(statut, adresse, self.driver.dom(), 0.0, None, dict(entetes))
 
+    @property
+    def identite(self):
+        """L'identité persistante du pilote (moteur `noezia` en mode `identite`), ou None."""
+        return getattr(self.driver, "identite_courante", None)
+
     def description(self) -> dict[str, Any]:
         return {
             "nom": self.nom,

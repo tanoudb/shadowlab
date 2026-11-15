@@ -90,6 +90,15 @@ class Identite:
         with (self.dossier / "visites.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
 
+    def marquer(self, verdict: str, raison: str, quand=None) -> None:  # coquille
+        pass
+
+    def noter_porte(self, quand) -> None:  # coquille
+        pass
+
+    def porte_franchie_le(self):  # coquille
+        return None
+
     def liberer(self) -> None:
         if self._verrou is not None:
             try:
@@ -99,7 +108,7 @@ class Identite:
                 self._verrou = None
 
 
-def ouvrir(nom: str) -> Identite:
+def ouvrir(nom: str, *, horloge=None, maintenant: bool = False) -> Identite:
     """Ouvre (ou crée) l'identité : refuse si elle est bannie ou déjà utilisée par un autre lancement."""
     verifier_nom(nom)
     dossier = racine_identites() / nom

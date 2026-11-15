@@ -295,6 +295,11 @@ class DriverNoezia(Driver):
             self._identite = None
         self._profil = None
 
+    @property
+    def identite_courante(self) -> identite.Identite | None:
+        """L'identité ouverte (mode `identite`), ou None : la récolte y note l'état de la sentinelle."""
+        return self._identite
+
     def _lancer_identite(self):
         """Chrome sur le dossier de profil de l'identité, avec le verrou réseau du périmètre (après les options)."""
         verrou = self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)

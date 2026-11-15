@@ -81,6 +81,10 @@ class Alerte:
         return f"signe d'alerte ({self.detail}) sur {self.adresse}"
 
 
+def verdict_identite(alerte: Alerte, premiere_page: bool) -> str:  # coquille : le code vient au commit suivant
+    return "alerte"
+
+
 class Sentinelle:
     def __init__(self, hotes: Iterable[str]) -> None:
         self._hotes = {h.lower() for h in hotes}

@@ -304,6 +304,7 @@ class PorteEntree(_Modele):
     attendre_s: float
     repassages_max: int = 0  # 0 : un défi en cours de passe arrête toujours
     ecart_min_s: float = 300.0
+    duree_s: float | None = None
 
     @field_validator("attendre_s")
     @classmethod
