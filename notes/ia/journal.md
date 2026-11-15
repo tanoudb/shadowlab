@@ -3507,3 +3507,24 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   conditions de ces quatre règles, tests vus en échec d'abord, rien d'autre.
 - **Reste** : contrôler et fusionner, suite complète, campagne de contrôle (`controle-vrai-chrome.yaml`, à comparer à
   la campagne 98), décision D-86.
+
+## 2026-11-15 (18h30) — Claude (Fable 5.2, coordination) — D-86, campagne de contrôle 115, troisième session humaine (Chrome sur Windows)
+
+- **D-86** (branche `arena-composite-tactile`, sous-agent Sonnet, relu : rouge sur `ecfd425`, 20 échecs ; fusion
+  `5b58f2c`) : `detection.py`, aides `famille_navigateur` et `appareil_tactile`, quatre règles conditionnées.
+- **Suite complète** le 14/11 à 19 h 55 : 1 807 tests verts.
+- **Campagne 115** (`controle-vrai-chrome.yaml`, 14/11, 19 h 55 à 20 h 32, 135 passages, 0 panne), comparée à la 98 :
+  `noezia` natif 15, 15, 15 sur 15 (inchangé) ; `patchright` 0 sur 45 (inchangé) ; `patchright-chrome-interface` 10 sur 15
+  au niveau 04 et 0 sur 15 au niveau 06 (inchangés), **15 sur 15 au niveau 05 au lieu de 5 sur 15**. Au niveau 04, les
+  signaux de ses blocages sont passés de `aucune_interaction` + `pages_eclair` à `pages_eclair` +
+  `ratio_move_click_faible`. Cause non établie : un sous-agent Sonnet rejoue hors ligne les relevés des deux campagnes
+  avec le code d'avant D-78, d'avant D-85 et le code courant. Arena remise, ports libres.
+- **Site public** le 15/11 à 18 h 15 : toujours en ligne, même adresse (sessions tmux depuis le 14/11). Fréquentation :
+  14/11, 46 visites de l'accueil, 9 sessions commencées, 1 terminée ; 15/11, 3, 1, 1. Trois sessions humaines en base.
+- **Troisième session humaine** (15/11, 5 h 35, Chrome 157 sur Windows, 11 pages relevées, sonde 2 : `ua_natif` et
+  `ua_illegal_invoc` vrais). Rejeu avec le code courant : passe 01 à 04, **arrêtée de 05 à 07** par le composite :
+  `trajectoire_lineaire` (2 pages sur 11 sous le seuil de 0,08 rad : 0,066 et 0,073, 40 angles chacune ; les autres
+  pages vont de 0,085 à 0,264) et `screen_position_zero`. `screen_position_zero` se déclenche chez les 3 humains sur 3.
+  À corriger après l'enquête sur la campagne 115 : seuil de `trajectoire_lineaire` sans fondement humain, et
+  `screen_position_zero` sans valeur. Rappel : ces sessions servent à juger les détecteurs, pas à régler le moteur.
+- **Fichiers** : `docs/DECISIONS.md` (D-86).

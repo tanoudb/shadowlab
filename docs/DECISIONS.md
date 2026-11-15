@@ -928,3 +928,24 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `hover_none`, `ratio_move_click_faible`, `no_first_paint`, quatre règles pensées pour Chrome sur ordinateur) :
   correction suivante. Campagne de contrôle à faire après les deux corrections. Décidé par : coordination (travail
   d'un sous-agent, relu).
+- **D-86 — 14/11/2026 — Arena : quatre règles ne supposent plus un Chrome sur ordinateur.** Constat : `deep-proxy`
+  corrigé (D-85), les deux sessions humaines (Safari sur iPhone) restaient arrêtées de 04 à 07 par le score composite :
+  `vendor_absent` (« Apple Computer, Inc. » n'est pas « Google Inc. »), `hover_none` (un téléphone n'a pas de survol),
+  `ratio_move_click_faible` (un toucher donne un seul mouvement de souris par clic), `no_first_paint` (Safari ne donne
+  pas cette entrée). Décision : deux aides dans `detection.py`, `famille_navigateur` (chromium, webkit, gecko ou
+  inconnue : `userAgentData`, `Sec-CH-UA`, puis le User-Agent) et `appareil_tactile` (au moins deux indices parmi
+  `maxTouchPoints > 0`, `css_media` sans survol ni pointeur fin, `touchstart` relevé). `vendor_absent` compare au
+  vendor de la famille (`langues` 1.1) ; `hover_none` ne vaut pas sur un appareil tactile (`css-media` 1.1) ;
+  `ratio_move_click_faible` ne vaut pas quand les clics viennent du toucher (`comportement` 2.2) ; `no_first_paint` ne
+  vaut que pour Chromium (`paint-timing` 1.1). Aucun seuil, aucun profil, `observateur.js` inchangé. Preuve :
+  `tests/test_detecteurs_hors_chrome_bureau.py` (29 tests, 20 vus en échec avant le code), suite complète à 1 807
+  tests verts (14/11, 19 h 55) ; rejeu des deux sessions iPhone : 0 arrêtée sur 2 du niveau 01 au niveau 07 (2 sur 2 de
+  04 à 07 avant). **Campagne de contrôle 115** (`controle-vrai-chrome.yaml`, 14/11, 19 h 55 à 20 h 32, 135 passages, 0
+  panne, à comparer à la 98) : `noezia` en identité native 15 sur 15 aux niveaux 04, 05 et 06 sans corrélation
+  (inchangé) ; témoin `patchright` 0 sur 45 (inchangé) ; le vrai Chrome sans comportement (`patchright-chrome-interface`)
+  10 sur 15 au niveau 04 et 0 sur 15 au niveau 06 (inchangés), mais **15 sur 15 au niveau 05 au lieu de 5 sur 15** : écart
+  non attribué à cette date (plusieurs changements de l'Arena séparent les deux campagnes, dont D-78) ; enquête en
+  cours, à écrire en ajout ici. Limites : deux sessions humaines, un seul type d'appareil ; un robot qui émule un
+  mobile de façon cohérente (points de contact, `matchMedia`, événements de toucher) profite de ces exemptions ;
+  `screen_position_zero` reste à 0,28 pour ces sessions (seuil du niveau 07 : 0,3). Décidé par : coordination (travail
+  d'un sous-agent, relu).
