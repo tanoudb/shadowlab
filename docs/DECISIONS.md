@@ -1080,10 +1080,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   en base. Le monde par défaut est `campagne` : une campagne au niveau 06 complet partage désormais un monde par
   campagne ; non mesuré. **Code mort signalé, non supprimé** : `correlation.enregistrer_hash` et la table
   `empreintes_vues` sont encore écrits à la collecte (`site/app.py`) mais plus lus par le détecteur (`hash_session`
-  reste utile : `empreinte_e` s'en sert) ; la purge de `public/donnees.py` y touche encore ; et `shadowlab rejeu`
-  (`cli.py`, ligne 482) affiche encore « correlation-session avec la table actuelle empreintes_vues : N/M classée(s)
-  automatisée(s) — dépend de l'historique, hors du taux », alors que le chiffre vient maintenant des visites du monde de
-  chaque session : le libellé est faux. Décidé par : coordination (Ethan a laissé la main : « je te laisse tout continue
+  reste utile : `empreinte_e` s'en sert) ; la purge de `public/donnees.py` y touche encore. `shadowlab rejeu`
+  (`cli.py`) affichait encore « correlation-session avec la table actuelle empreintes_vues », alors que le chiffre vient
+  maintenant des visites antérieures du monde de chaque session : libellé corrigé le 16/11 (« visites antérieures du
+  monde de chaque session »). Décidé par : coordination (Ethan a laissé la main : « je te laisse tout continue
   a travailler sur d'autre chose »).
 - **D-90 — 15/11/2026 — Palier 2, étape I5 : l'ordonnanceur des visites (`engines/noezia/visites.py`).** Constat : la
   campagne « une identité qui revient » (I7) et la récolte ont besoin de dire quand commence la prochaine visite d'un

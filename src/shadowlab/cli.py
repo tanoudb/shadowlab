@@ -479,7 +479,7 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
         if n["correlation_historique"]:
             h = n["correlation_historique"]
             print(
-                f"  correlation-session avec la table actuelle empreintes_vues : {h['sessions']}/{h['sur']}"
+                f"  correlation-session (visites antérieures du monde de chaque session) : {h['sessions']}/{h['sur']}"
                 " classée(s) automatisée(s) — dépend de l'historique, hors du taux."
             )
     return 0

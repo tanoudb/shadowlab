@@ -874,7 +874,7 @@ Réserves : un cookie de visiteur rejoué donne des sessions « connues » que `
 (`debit_empreinte` et les compteurs d'I3 doivent le couvrir) ; pas de témoin aux campagnes 119 et 120 ; CAPTCHA en clés de
 test au niveau 06 ; une seule machine ; aucun humain en base ; le monde par défaut est `campagne` (un monde par campagne
 au niveau 06 complet : non mesuré). Code mort signalé, non supprimé : `enregistrer_hash` et la table `empreintes_vues` ;
-le libellé de `shadowlab rejeu` (`cli.py`, ligne 482) cite encore cette table à tort (D-89).
+le libellé de `shadowlab rejeu` qui citait encore cette table est corrigé (D-89).
 
 ## 3. Pourquoi on a perdu du temps
 
