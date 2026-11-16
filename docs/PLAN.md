@@ -881,6 +881,42 @@ test au niveau 06 ; une seule machine ; aucun humain en base ; le monde par déf
 au niveau 06 complet : non mesuré). Code mort signalé, non supprimé : `enregistrer_hash` et la table `empreintes_vues` ;
 le libellé de `shadowlab rejeu` qui citait encore cette table est corrigé (D-89).
 
+### Palier 2 : I3, campagnes 124 et 125 (16/11)
+
+**I3** (Arena : bannissement par visiteur et par empreinte, compteurs de pages, profil `endurance`, migration 11, D-92,
+fusion `08635e0`). Suite complète : **2 015 tests verts** (16/11, 9 min 10 s). Le bannissement est une option de profil,
+active dans `endurance` seulement : les niveaux 01 à 07 ne changent pas d'une décision.
+
+**Ce qui est en place** : un visiteur banni reçoit un 403 dans son monde, même avec un nouveau jeton ; l'empreinte E d'un
+détecté est bannie pour les seules sessions neuves du monde ; plus de 240 pages en 1 heure glissante ou plus de 2 000 en
+24 h, toutes les sessions du visiteur ensemble, et le visiteur est banni (seuils de départ du § 4.6 de la conception, pas
+des mesures). Le profil `endurance` reprend le niveau 06, avec une porte d'entrée liée au visiteur et valable 24 h, et sans
+aucun CAPTCHA. La commande `shadowlab arena bannir --visiteur <id> --monde <nom>` écrit un bannissement « manuel ».
+
+**Campagne 124** (16/11, 2 h 06 à 2 h 08, `endurance-bannissement.yaml`, monde 37, 3 passages par moteur) : `noezia` en
+identité native 3 sur 3, jamais banni ; `playwright` (témoin) 0 sur 3. Il est détecté au 1ᵉʳ passage (`botd`, `chrome-apis`,
+`headless`, `regles-http`, `regles-js`) puis banni, visiteur et E ; aux 2ᵉ et 3ᵉ passages il est refusé par l'empreinte.
+3 lignes dans `bannissements` : c'est le critère de l'étape 2.2. **Réserve** : le témoin est aussi détecté à chaque passage
+par ses propres signaux. La campagne prouve que le bannissement est écrit et lu ; elle ne prouve pas qu'il arrête un robot
+qui passerait sans lui. Ce témoin viendra de la sentinelle (`arena bannir` avec une identité persistante, I7).
+
+**Campagne 125** (contrôle, 16/11, 2 h 08 à 2 h 45, `controle-vrai-chrome.yaml`, 135 passages, niveaux 04 à 06 sans
+corrélation) : mêmes taux que les campagnes 115, 118 et 121 à chaque cellule. C'est la preuve que les niveaux 01 à 07 n'ont
+pas bougé.
+
+| Cellule | Passages réussis | Durée moyenne |
+|---|---|---|
+| `patchright` témoin, 04, 05, 06 sans corrélation | 0, 0, 0 sur 15 | 20,2 s, 20,2 s, 20,9 s |
+| `patchright-chrome-interface` 04, 05, 06 sans corrélation | 10, 15, 0 sur 15 | 1,3 s, 5,7 s, 3,6 s |
+| `noezia-natif` 04, 05, 06 sans corrélation | 15, 15, 15 sur 15 | 16,3 s, 28,0 s, 30,9 s |
+
+Réserves : le bannissement par E ne peut pas bloquer la première page d'une session neuve ; un robot qui jette ses cookies
+est un nouveau visiteur, donc ses compteurs ne s'accumulent pas (seul le bannissement par E le rattrape, après une détection) ;
+une session commencée il y a plus de 24 h n'est pas comptée ; un humain détecté au profil `endurance` est banni (le « 0 humain
+banni sur 10 » du plan passe à I8) ; l'issue d'un passage banni peut rester `extraction_reussie` si le scénario a réussi avant
+l'arrivée de l'empreinte ; une requête sans jeton reste sans protection ; l'interface n'a pas été vérifiée pour le nouveau
+profil ; aucun humain en base, une seule machine.
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.
@@ -994,9 +1030,11 @@ But : un seul compte connecté travaille 7 jours sans être banni.
 En parallèle possible : 2.1 à 2.4 (Arena) et 2.5 à 2.7 (moteur).
 
 **État au 16/11** : faites, avec leur décision : I1 (D-87), I4 (D-88), I2 (D-89, corrélation 2.0 par monde), I5 (D-90,
-ordonnanceur des visites) et I6 (D-91, sentinelle d'identité). Reste : I3 (Arena : bannissement par visiteur et profil
-« endurance »), puis I7 (scénario « visite », campagne « une identité qui revient », récolte avec identité), qui dépend de
-I2 à I6. Aucune campagne ne se sert encore d'I4, I5 ni I6. Les quatre questions de la conception restent ouvertes (§ 7).
+ordonnanceur des visites), I6 (D-91, sentinelle d'identité) et **I3 (D-92, bannissement par visiteur et profil
+« endurance », campagnes 124 et 125)**. Reste, dans la conception (§ 7) : **I7** (scénario « visite », campagne « une
+identité qui revient », récolte avec identité ; dépend de I2 à I6, donc prête), **I8** (humains qui reviennent, attend
+Ethan), **I9** (course de 7 jours, dépend de I3, I6, I7 et I8) et **I10** (comptes, migration 12 puisque la 11 est prise).
+Aucune campagne ne se sert encore d'I4, I5 ni I6. Les quatre questions de la conception restent ouvertes (§ 7).
 
 ### Palier 3 — Serveur et Cloudflare réel
 
@@ -1090,6 +1128,6 @@ Détail et recommandations : `notes/ia/questions-ouvertes.md`.
 | 1.8 Mesure témoin Cloudflare | à faire (attend le domaine) | | |
 | 1.9 Corriger le moteur | **direction mesurée** | 12/11 | Campagnes 97 et 98 (§ 2) : identité native, 15 sur 15 aux niveaux 01 à 06 sans corrélation ; l'identité réécrite fuit. Campagne 100 (12/11, § 2) : 30 passages par niveau, 179 sur 180, taux observé ≥ 90 % à chaque niveau (06 sans corrélation : 29 sur 30, le seul échec est un défaut du WAF, D-69), borne basse de Wilson sous 90 % partout, `captcha_test` aux niveaux 05 et 06. Campagne 101 (§ 2) : niveau 06 complet, 0 sur 15 (`recycling_canvas`). Reste : en faire le réglage de référence du moteur, corrélation, humains Campagne 108 (13/11) : premier blocage du moteur en identité native sur une récolte, au niveau 05, signal `trajectoire_lineaire` (2 passages sur 35 ; environ une page sur 1 000 sous le seuil sur 4 400 pages) : corrigé par D-74 (tremblement visible au pixel) et vérifié par la campagne 109 (14/11) : 0 page sur 2 015 sous la marge (30 sur 1 997 avant), niveau 05 à 35 sur 35. D-79 (14/11, fusion `8983345`) : après un défi, la première vraie page était quittée en 54 à 71 ms sans un geste (campagne 110) ; elle dure 6,2 à 10,5 s avec souris et défilement à la campagne 111, 15 sur 15 inchangé, témoin 0 sur 15 |
 | Récolte générale (commande `shadowlab recolte`, D-70) | **commande fusionnée, prouvée au niveau 01 et, en navigateur, par l'Arena jusqu'au niveau 06 sans corrélation (3 passages de 21 pages par niveau ; 427 pages d'une seule session aux niveaux 04, 05 et 06 sans corrélation)** | 13/11 | Commit de fusion `b1a40ed` (accord d'Ethan à 21 h 40) ; campagne 102 : 12 passages sur 12 au niveau 01, pages, enregistrements et champs à 100 % avec les deux moteurs sur les deux sites factices. Par l'Arena : campagnes 103 et 104 (0 sur 3 aux niveaux 04 à 06 ; D-71 dans l'Arena, D-72 dans la commande), campagne 105 : 15 passages sur 15 du niveau 02 au niveau 06 sans corrélation, 280 champs sur 280 à chacun. Parcours long : campagne 106 (427 pages aux niveaux 04 et 05, arrêt au niveau 06 : D-73 dans l'Arena), campagne 107 : 427 pages et 34 410 champs sur 34 410 aux trois niveaux ; 1 285 tests verts (fusion `d4e6d4e`). Campagne 108, 35 passages par niveau : 35 sur 35 au niveau 04, 32 sur 35 au niveau 05 (2 blocages du moteur sur `trajectoire_lineaire`, 1 erreur réseau du CAPTCHA de test), 35 sur 35 au niveau 06 sans corrélation. Campagne 109 (14/11, souris corrigée par D-74) : 34, 35 et 35 sur 35, le seul échec est un défaut de l'Arena (D-78, corrigé). Campagnes 110 et 111 (14/11, après D-78 puis D-79) : 15 sur 15 du niveau 02 au niveau 06 sans corrélation, témoin 0 sur 15. 14/11 : la récolte peut repasser la porte en cours de passe (D-83) et le cookie de l'Arena est réglable par profil (D-82) ; campagne 112 (cookie de 600 s, vitrine à 150 annonces) : 3 passages sur 3 aux niveaux 04, 05 et 06 sans corrélation, 158 pages et 2 100 champs sur 2 100 à chacun, le défi revenu 1, 2 et 2 fois et repassé sans arrêt ; campagne 113 (cookie de 600 s, rallye) : 427 pages et 34 410 champs sur 34 410 aux trois niveaux, le défi revenu 4, 5 et 4 fois, aucun arrêt ; limite mesurée : décalage des cookies de l'Arena aux niveaux 05 et 06 (arrêt attendu vers le onzième cycle). Campagne 114 (14/11, cookie d'origine d'une heure, rallye à 683 pages) : 59 257 champs sur 59 257 aux niveaux 04, 05 et 06 sans corrélation en 75 à 81 minutes, le défi revenu une fois vers 3 600 s et repassé. Campagne 116 (15/11) : niveau 07 sans corrélation 2 sur 3 (un échec sur `duree_pages_reguliere`), niveau 07 complet 0 sur 3 (corrélation). Reste : 30 passages par niveau ; plusieurs heures d'affilée (limite de décalage des cookies aux niveaux 05 et 06) ; aucun vrai site (§ 2). 1.9 et les paliers 2 à 4 restent au plan |
-| Palier 2 — Une identité qui dure | **commencé (I1, I2, I4, I5, I6)** | 16/11 | Fusions `9ce9066` (I1, D-87), `49d9cf7` (I4, D-88), `2c484bc` (I5 et I6, D-90 et D-91) , `bef7017` et `46fc745` (I2, D-89) ; 1 963 tests verts (16/11) ; campagne 118 : mêmes taux que la 115 ; campagne 119 : niveau 06 complet en première visite 30 sur 30 ; campagne 120 : monde partagé 4 sur 15 (arrêt voulu à la 5ᵉ session) ; campagne 121 : mêmes taux que la 115 et la 118 ; campagnes 122 et 123 : 4 sur 15, cause nommée au bilan (§ 2). Reste I3 puis I7 |
+| Palier 2 — Une identité qui dure | **commencé (I1 à I6)** | 16/11 | Fusions `9ce9066` (I1, D-87), `49d9cf7` (I4, D-88), `2c484bc` (I5 et I6, D-90 et D-91), `bef7017` et `46fc745` (I2, D-89), `08635e0` (I3, D-92) ; 2 015 tests verts (16/11) ; campagne 118 : mêmes taux que la 115 ; campagne 119 : niveau 06 complet en première visite 30 sur 30 ; campagne 120 : monde partagé 4 sur 15 (arrêt voulu à la 5ᵉ session) ; campagnes 122 et 123 : 4 sur 15, cause nommée au bilan ; campagne 124 : `playwright` banni, `noezia` 3 sur 3, 3 lignes dans `bannissements` ; campagne 125 : mêmes taux que la 115 (§ 2). Reste I7, puis I8 à I10 |
 | Palier 3 — Serveur et Cloudflare réel | à faire | | |
 | Palier 4 — Plusieurs identités | à faire | | |

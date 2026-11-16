@@ -93,6 +93,14 @@ sur nos propres cibles (site vitrine factice, tor-i).
   la 5ᵉ session neuve. Campagne 121 (contrôle) : mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non
   établie. Reste I3 (bannissement par visiteur, profil « endurance »), puis I7. Les quatre questions de la conception restent
   à Ethan. Disque : 17 Gio libres (sous le seuil de 25 Go).
+- **16/11, palier 2 : I3** : Arena, bannissement par visiteur (403 même avec un nouveau jeton) et par empreinte E pour les
+  sessions neuves, compteurs de pages (plus de 240 en 1 h ou 2 000 en 24 h : banni), profil `endurance` (le 06 pour un
+  visiteur qui revient, porte valable 24 h, aucun CAPTCHA), migration 11, commande `arena bannir` (D-92, fusion `08635e0`).
+  Option de profil, fausse hors `endurance` : les niveaux 01 à 07 ne bougent pas. Campagne 124 : `playwright` banni, `noezia`
+  3 sur 3, 3 lignes dans `bannissements` (le témoin est aussi détecté par ses propres signaux : la preuve reste à faire en I7).
+  Campagne 125 (contrôle) : mêmes taux que la 115. 2 015 tests verts. Reste I7 (puis I8 à I10), `test_duree_cookie`
+  (intermittent), les quatre questions du palier 2, la base publique à migrer (migrations 10 et 11). Disque : 16 Gio libres
+  (sous le seuil de 25 Go).
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native

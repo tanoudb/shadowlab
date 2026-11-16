@@ -1126,3 +1126,56 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   échec avant le code), code `99897ca`, fusion `2c484bc`. Limites : aucune campagne ne s'en sert encore ; pas de sauvegarde
   du profil ; une seule identité à la fois. Décidé par : coordination (Ethan a laissé la main : « je te laisse tout
   continue a travailler sur d'autre chose »).
+- **D-92 — 16/11/2026 — Palier 2, étape I3 : le bannissement de l'Arena et le profil « endurance ».** Constat : l'Arena
+  ne se souvenait de personne. Un robot détecté revenait avec un nouveau jeton et repartait de zéro ; le plan 2.2 et la
+  conception § 4.5 demandent qu'il soit refusé. Décision : un module `arena/bannissements.py`, lu **en tête du
+  gardien**, avant tout défi. **Par visiteur**, dans son monde : un 403, même avec un nouveau jeton. **Par empreinte E**,
+  dans le monde, pour les **seules sessions neuves** : un visiteur connu de même E n'est pas touché (sinon on bannirait
+  tous les humains d'un même modèle de machine), ni un autre monde. Tout s'écrit dans la table `bannissements`.
+  **Ce qui bannit** : une détection à la collecte de l'empreinte (visiteur et E, une seule ligne ; sans cela un scénario
+  d'une seule page ne redemande jamais de page et n'est jamais banni) ; les trois branches `fingerprinting/bloque` de
+  `controler` (`fingerprinting-differe`, `composite-differe`, pièges et règles) ; `defi_verifier` sur `rejete-empreinte`
+  (sinon un robot détecté boucle entre le défi et le rejet) ; une session neuve dont E est bannie est refusée dès la
+  collecte, et son visiteur est banni à son tour. **Ce qui ne bannit pas** : un défi émis, une preuve ratée, `suspect`
+  quand le profil ne bloque pas, le 429 de Nginx, le WAF. Un banni n'obtient pas le cookie de porte. **Compteurs de pages
+  par visiteur**, toutes ses sessions ensemble (une page au sens de D-78) : plus de 240 en 1 heure glissante, ou plus de
+  2 000 en 24 h, et le visiteur est banni, sans E. Lecture stricte : la 241ᵉ et la 2 001ᵉ page bannissent. Ce sont les
+  seuils de départ du § 4.6, pas des mesures. Un cookie de visiteur rejoué dans beaucoup de sessions en parallèle est
+  compté une seule fois, en tout : cela répond à la limite de D-89 (relecture de sécurité du 15/11). Les mondes `manuel`
+  et `hors-passage` ne sont jamais remis à zéro : aucun bannissement automatique n'y est écrit ; le bannissement manuel
+  y fonctionne. **Le bannissement est une option de profil** (`bannissement.actif`, fausse par défaut), active dans
+  `endurance` seulement : les niveaux 01 à 07 ne changent pas d'une décision. Sinon, dans un monde partagé par une
+  campagne, un seul passage détecté ferait tomber tous les suivants, et les taux mesurés ne seraient plus comparables.
+  Preuve : un test où toute lecture ou écriture de bannissement lèverait une erreur au profil 04, puis la campagne 125.
+  **Profil `endurance`** : le niveau 06 pour un visiteur qui revient. Repris du 06 : ses détecteurs (ancre YAML
+  `detecteurs_06`, donc par construction, avec `correlation-session` 2.1 par monde), le seuil composite 0,5, la
+  limitation 2/4, le WAF en blocage (paranoïa 3, seuil 3), la preuve de travail de difficulté 18 liée au TLS, les pièges,
+  le login anti-bot. Changé : la porte d'entrée (défi JavaScript) est liée au visiteur et non au jeton, valable 24 h,
+  posée avec `max-age=86400` (`duree_cookie_s: 86400`, `defi_js.par_visiteur`). Écarté : le CAPTCHA démo, Turnstile et
+  reCAPTCHA, tous éteints (le but est de ne pas déclencher un défi). `endurance` apparaît dans la liste des profils, le
+  rejeu et `/api`. **Migration 11** : deux index sur `bannissements`, `(monde_id, visiteur)` et `(monde_id, empreinte)` ;
+  aucune colonne ne change. **Commande** `shadowlab arena bannir --visiteur <id> --monde <nom>` : motif « manuel », pour
+  le témoin de la sentinelle d'identité (D-91) ; elle refuse un monde ou un visiteur inconnu (code 2) ; aucune commande ne
+  lève un bannissement. **Coût** : une session connue fait 1 lecture et 0 écriture par requête ; le bannissement et les
+  compteurs tiennent dans la même requête SQL, qui lit `observations_http` jointe à `visites`.
+  **Campagne 124** (`endurance-bannissement.yaml`, monde `campagne`, 3 passages par moteur, 16/11 de 2 h 06 à 2 h 08) :
+  `noezia` en identité native, 3 sur 3, jamais banni (son empreinte diffère de celle du témoin : la seule E bannie du
+  monde est celle de `playwright`). `playwright` (témoin) : 0 sur 3. Au 1ᵉʳ passage il est détecté (`botd`, `chrome-apis`,
+  `headless`, `regles-http`, `regles-js`) puis banni, visiteur et E ; la suite du passage est refusée par le visiteur. Aux
+  2ᵉ et 3ᵉ passages il est refusé par l'empreinte, puis son nouveau visiteur est banni. 3 lignes dans `bannissements`
+  (monde 37) : c'est le critère du plan 2.2. **Réserve** : le témoin est aussi détecté à chaque passage par ses propres
+  signaux. La campagne prouve que le bannissement est écrit et lu ; elle ne prouve pas qu'il arrête un robot qui
+  passerait sans lui. Ce sera le témoin de la sentinelle (`arena bannir` avec une identité persistante, I7).
+  **Campagne 125** (contrôle, `controle-vrai-chrome.yaml`, niveaux 04 à 06 sans corrélation, 135 passages, 16/11 de
+  2 h 08 à 2 h 45) : mêmes taux que les campagnes 115, 118 et 121 à chaque cellule. `patchright` témoin : 0 sur 15 à 04, 05
+  et 06 sans corrélation ; `patchright-chrome-interface` : 10, 15 et 0 ; `noezia` : 15, 15 et 15. Durées moyennes de
+  `noezia` : 16,3 s, 28,0 s et 30,9 s ; de `patchright-chrome-interface` : 1,3 s, 5,7 s et 3,6 s. **Limites** : le
+  bannissement par E ne peut pas bloquer la première page d'une session neuve (E n'existe pas encore) ; un robot qui jette
+  ses cookies est un nouveau visiteur, donc ses compteurs ne s'accumulent pas : seul le bannissement par E le rattrape, et
+  seulement après une détection ; une session commencée il y a plus de 24 h n'est pas comptée ; un humain détecté au profil
+  `endurance` est banni (le « 0 humain banni sur 10 » du plan passe à I8) ; l'issue d'un passage banni peut rester
+  `extraction_reussie` si le scénario a réussi avant l'arrivée de l'empreinte ; une requête sans jeton reste sans
+  protection ; l'interface (`frontend/`) n'a pas été vérifiée pour le nouveau profil ; aucun humain en base, une seule
+  machine. Preuve : `tests/test_bannissement.py`, écrit d'abord (`db87b7c`, en échec avant le code), code `2926718`,
+  fusion `08635e0` ; suite complète : 2 015 tests verts (16/11, 9 min 10 s). Décidé par : coordination (Ethan a laissé la
+  main : « je te laisse tout continue a travailler sur d'autre chose »).
