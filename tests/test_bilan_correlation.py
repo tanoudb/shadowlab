@@ -91,10 +91,57 @@ def test_quatre_sessions_neuves_anterieures_de_meme_empreinte_donnent_le_signal(
     assert "empreinte_sans_memoire" in _bilan(cx, run_id, jeton)["codes"]
 
 
-def test_premiere_session_d_un_monde_ni_indeterminee_ni_signalee():
+def test_premiere_session_d_un_monde_sans_correlation_reste_indeterminee():
+    # Aucun signal : « aucune corrélation relevée » ne prouve rien sur l'humanité (16/11). Le détecteur s'abstient,
+    # il ne dit plus « humain » (sinon `meta-composite` ajoutait `unanimite_humain` et classait la session automatisée).
     cx = _base()
     run_id, jeton = _session(cx, "m", DEBUT)
-    assert _bilan(cx, run_id, jeton) == {"classification": "humain", "codes": []}
+    assert _bilan(cx, run_id, jeton) == {"classification": "indetermine", "codes": ["aucune_correlation"]}
+
+
+def test_session_propre_n_est_pas_classee_par_meta_composite_a_cause_de_la_correlation():
+    from shadowlab.detection import Classement, DetecteurMetaComposite
+
+    cx = _base()
+    run_id, jeton = _session(cx, "m", DEBUT)
+    _bilan(cx, run_id, jeton)
+    ligne = cx.execute(
+        "SELECT classification FROM detections WHERE run_id = ? AND detector_name = 'correlation-session'", (run_id,)
+    ).fetchone()
+    assert ligne["classification"] == "indetermine"  # reste dans les abstentions
+    # Seize autres détecteurs « humain » sans signal, plus celui-ci : pas d'unanimité.
+    autres = [Classement(f"d{n}", "1", "humain", 0.6, []) for n in range(16)]
+    corr = Classement("correlation-session", "2.1", ligne["classification"], 0.0, [])
+    assert DetecteurMetaComposite().classer_depuis_resultats([*autres, corr]).classification != "automatise"
+
+
+def test_detecteur_sans_signal_repond_indetermine_aucune_correlation():
+    from shadowlab.detection import DetecteurCorrelationSession, Observations
+
+    c = DetecteurCorrelationSession().classer(
+        Observations(http=[], js=[], correlation={"session_neuve": True, "sessions_neuves_24h": 1, "debit_60min": 1})
+    )
+    assert (c.classification, [s.code for s in c.signals], c.detector_version) == (
+        "indetermine",
+        ["aucune_correlation"],
+        "2.1",
+    )
+
+
+def test_cas_avec_signal_inchanges():
+    from shadowlab.detection import DetecteurCorrelationSession, Observations
+
+    def juge(**d):
+        c = DetecteurCorrelationSession().classer(Observations(http=[], js=[], correlation=d))
+        return c.classification, [s.code for s in c.signals], c.confidence
+
+    assert juge(session_neuve=True, sessions_neuves_24h=5, debit_60min=0) == (
+        "indetermine",
+        ["empreinte_sans_memoire"],
+        0.7,
+    )
+    assert juge(session_neuve=True, sessions_neuves_24h=10, debit_60min=0)[0] == "automatise"
+    assert juge(session_neuve=False, sessions_neuves_24h=0, debit_60min=30) == ("indetermine", ["debit_empreinte"], 0.8)
 
 
 def test_session_sans_monde_reste_indeterminee():
@@ -108,7 +155,7 @@ def test_une_session_commencee_plus_tard_ne_compte_pas_contre_une_session_anteri
     run_id, jeton = _session(cx, "m", DEBUT)
     for n in range(6):
         _session(cx, "m", DEBUT + timedelta(minutes=1 + n))
-    assert _bilan(cx, run_id, jeton)["codes"] == []
+    assert _bilan(cx, run_id, jeton)["codes"] == ["aucune_correlation"]  # aucun signal relevé
 
 
 def test_un_autre_monde_ne_compte_pas():
@@ -116,4 +163,4 @@ def test_un_autre_monde_ne_compte_pas():
     for n in range(6):
         _session(cx, "autre", DEBUT - timedelta(minutes=10 - n))
     run_id, jeton = _session(cx, "m", DEBUT)
-    assert _bilan(cx, run_id, jeton)["codes"] == []
+    assert _bilan(cx, run_id, jeton)["codes"] == ["aucune_correlation"]  # aucun signal relevé
