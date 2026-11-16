@@ -36,8 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("id", type=int)
     p.add_argument("--formats", default="json,csv,html")
     p = sous.add_parser("arena", help="piloter la pile Docker de l'Anti-Bot Arena")
-    p.add_argument("action", choices=["demarrer", "appliquer", "arreter", "etat"])
+    p.add_argument("action", choices=["demarrer", "appliquer", "arreter", "etat", "bannir"])
     p.add_argument("--reconstruire", action="store_true", help="reconstruire l'image du WAF")
+    p.add_argument(
+        "--visiteur", help="bannir : identifiant du visiteur (la partie avant le point du cookie sl_visiteur)"
+    )
+    p.add_argument("--monde", help="bannir : nom du monde du visiteur (obligatoire ; ex. c119, manuel)")
     p = sous.add_parser("moteurs", help="installer les moteurs isolés et voir ce qui manque")
     p.add_argument("action", choices=["etat", "installer"])
     p.add_argument("noms", nargs="*", help="environnements à installer (tous par défaut)")
@@ -149,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.commande == "arena":
+        if args.action == "bannir":
+            return _bannir(args, reglages)
         if args.action == "etat":
             print(pile.etat(reglages))
         elif args.action == "arreter":
@@ -482,6 +488,37 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
                 f"  correlation-session (visites antérieures du monde de chaque session) : {h['sessions']}/{h['sur']}"
                 " classée(s) automatisée(s) — dépend de l'historique, hors du taux."
             )
+    return 0
+
+
+def _bannir(args: argparse.Namespace, reglages) -> int:
+    """`shadowlab arena bannir --visiteur <id> --monde <nom>` : une ligne `bannissements`, motif « manuel ».
+
+    Le monde est obligatoire : un visiteur n'existe que dans un monde. Un monde ou un visiteur inconnu est refusé
+    (code 2), jamais créé : une faute de frappe n'écrit pas un bannissement qui ne vise personne. Rien n'est démarré.
+    """
+    from . import database as db
+    from .arena import bannissements
+
+    if not args.visiteur or not args.monde:
+        print("Refus : `arena bannir` exige --visiteur et --monde.", file=sys.stderr)
+        raise SystemExit(2)
+    cx = db.ouvrir(reglages.base_donnees)
+    try:
+        monde = cx.execute("SELECT id FROM mondes WHERE nom = ?", (args.monde,)).fetchone()
+        if monde is None:
+            print(f"Refus : monde inconnu : {args.monde}", file=sys.stderr)
+            return 2
+        vu = cx.execute(
+            "SELECT 1 FROM visites WHERE monde_id = ? AND visiteur = ? LIMIT 1", (monde["id"], args.visiteur)
+        ).fetchone()
+        if vu is None:
+            print(f"Refus : visiteur inconnu dans le monde {args.monde} : {args.visiteur}", file=sys.stderr)
+            return 2
+        cree = bannissements.bannir(cx, args.monde, visiteur=args.visiteur, motif=bannissements.MOTIF_MANUEL)
+    finally:
+        cx.close()
+    print(f"Visiteur {args.visiteur} {'banni' if cree else 'déjà banni'} dans le monde {args.monde}.")
     return 0
 
 

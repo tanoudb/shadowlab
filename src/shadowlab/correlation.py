@@ -189,6 +189,11 @@ def _premiere_empreinte(cx: sqlite3.Connection, jeton: str) -> str | None:
     return _e_du_texte(ligne["payload"]) if ligne else None
 
 
+def empreinte_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
+    """E de la première empreinte reçue de cette session (une lecture indexée), ou None si elle n'est pas arrivée."""
+    return _premiere_empreinte(cx, jeton)
+
+
 def _evaluer_dans(
     cx: sqlite3.Connection, jeton: str, monde_id: int, propre: VisiteObservee, maintenant: datetime
 ) -> Correlation:

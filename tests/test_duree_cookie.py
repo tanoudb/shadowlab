@@ -49,7 +49,8 @@ def test_sans_reglage_la_duree_reste_3600_s(monkeypatch):
 
 def test_les_profils_existants_gardent_3600_s_par_defaut():
     tous = profils.charger()
-    assert all(p.duree_cookie_s == 3600 for _, p in tous)
+    assert all(p.duree_cookie_s == 3600 for code, p in tous if code != "endurance")
+    assert tous.de("endurance").duree_cookie_s == 24 * 3600  # une porte par visiteur, valable 24 h (I3)
 
 
 def _entetes(reglages, profil: str) -> dict[str, str]:

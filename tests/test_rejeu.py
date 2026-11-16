@@ -231,6 +231,7 @@ def test_cdp_arrete_aux_seuls_niveaux_qui_le_listent(cx):
         "05",
         "06",
         "07",
+        "endurance",  # I3 : les détecteurs du 06
     }
 
 
@@ -593,6 +594,12 @@ def test_meme_verdict_que_l_arena(client, reglages, monkeypatch, tmp_path):
                 "x-shadowlab-session": jeton,
                 "x-shadowlab-ja4": "",
             }
+            if profils.charger().de(code).defi_js.par_visiteur:  # `endurance` : la porte est liée au visiteur (I3)
+                client.get(f"/lab/vitrine?sl={jeton}", headers=sceau)  # première requête : la visite et son cookie
+                visiteur = client.cookies.get("sl_visiteur").split(".")[0]
+                client.cookies.set(
+                    gardien.COOKIE_DEFI, defis.creer_cookie(secret, "defi-visiteur", f"manuel:{visiteur}", "")
+                )
             frontal(jeton, "/lab/vitrine", cookies=())
             frontal(jeton, "/lab/static/observateur.js")
             assert client.get(f"/lab/vitrine?sl={jeton}", headers=sceau).status_code == 200
@@ -614,7 +621,13 @@ def test_meme_verdict_que_l_arena(client, reglages, monkeypatch, tmp_path):
             ).fetchone()
             assert v["moment"]["type"] == "empreinte" and v["motifs"] == json.loads(ligne["motifs"])
     bloquees = sorted(code for code, b in arena.values() if b)
-    assert bloquees == ["04", "05", "06", "07"]  # les sessions à empreinte CDP, là où `cdp` est consulté et bloque
+    assert bloquees == [
+        "04",
+        "05",
+        "06",
+        "07",
+        "endurance",
+    ]  # les sessions à empreinte CDP, là où `cdp` est consulté et bloque
     cx.close()
 
 
