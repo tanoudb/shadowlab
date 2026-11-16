@@ -134,14 +134,15 @@ def test_un_refus_de_l_arena_a_la_premiere_page_est_un_bannissement_et_rien_n_es
     """La vraie page de refus (`data-arena="blocage"`) n'est pas un défi à attendre : c'est un refus franc."""
     ouverte = ident.ouvrir("sentinelle-essai")
     pilote = ChromeAvecIdentite(site, ouverte)
-    pilote.reponses["=/lab/vitrine/annonces"] = (403, pages.page_blocage())
+    pilote.reponses["annonces?sl="] = (403, pages.page_blocage())  # la liste, avec le jeton du passage
+    pilote.statut_actuel = 403  # le navigateur y est toujours : la page n'a pas changé seule
     try:
         issue = visiter(pilote, jeton, pages=6)
     finally:
         ouverte.liberer()
     assert issue.success is False
     assert pilote.requetes_pages == 1  # le refus lui-même, aucune requête après
-    assert pilote.relectures == 0  # aucune attente : ce n'est pas une porte
+    assert pilote.relectures <= 1  # au plus un regard sur place (sans requête ni attente) : ce n'est pas une porte
     assert issue.details["identite"]["etat"] == "banni"
     assert issue.details["arret"]["statut"] == 403
     assert json.loads((racine / "sentinelle-essai" / "identite.json").read_text())["etat"] == "banni"
@@ -198,7 +199,9 @@ def test_start_session_relit_l_etat_avant_de_lancer_chrome(racine, monkeypatch):
     """Pas de navigateur ici : si l'état est relu, Chrome n'est jamais lancé pour une identité bannie."""
     from shadowlab.engines.noezia.moteur import DriverNoezia
 
-    pilote = DriverNoezia(("127.0.0.1",), {"identite_native": True, "headless": False, "channel": "chrome", "identite": "a"})
+    pilote = DriverNoezia(
+        ("127.0.0.1",), {"identite_native": True, "headless": False, "channel": "chrome", "identite": "a"}
+    )
     pilote._identite = ident.ouvrir("a")
     try:
         pilote._identite.marquer("banni", "403 dès la première page")

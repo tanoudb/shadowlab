@@ -325,6 +325,7 @@ class DriverNoezia(Driver):
 
         profil = self._profil
         if self._identite is not None:
+            self._identite.verifier_etat()  # avant Chrome : une identité bannie depuis la visite d'avant ne revient pas
             self._contexte = self._lancer_identite()
         elif profil is None:
             # Identité native : rien n'est imposé au navigateur, ni fenêtre, ni User-Agent, ni en-tête, ni

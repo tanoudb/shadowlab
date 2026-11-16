@@ -5,6 +5,7 @@ absente) ne vaut jamais « tenu ». Les données sont celles que la campagne lai
 scénario), `visites`, `observations_js` (empreinte E), `decisions`, `observations_http`, `bannissements`.
 """
 
+# ruff: noqa: E501  (requêtes SQL et configurations YAML en ligne)
 from __future__ import annotations
 
 import json
@@ -42,14 +43,23 @@ def visite(cx, experiment_id, label, rang, *, reussie=True, visiteur="v1", e="E1
     nom_monde = monde(experiment_id, label)
     moteur = db.engine_id(cx, "noezia", "{}", "navigateur", {"label": label})
     scenario = db.scenario_id(cx, "visite", "visite")
-    run_id, jeton = passages.demarrer(cx, experiment_id, moteur, scenario, rang, "automatise", "endurance", monde=nom_monde)
+    run_id, jeton = passages.demarrer(
+        cx, experiment_id, moteur, scenario, rang, "automatise", "endurance", monde=nom_monde
+    )
     details = {"identite": {"nom": label, "etat": identite} if identite else None}
     if arret:
         details["arret"] = {"signe": "statut", "statut": 403}
     drapeaux = {"challenges_emis": defi, "details_scenario": details}
     cx.execute(
         "UPDATE runs SET status = ?, success = ?, issue = ?, drapeaux = ?, completed_at = ? WHERE id = ?",
-        ("erreur" if erreur else ("reussi" if reussie else "echec"), int(reussie), "x", json.dumps(drapeaux), AVANT, run_id),
+        (
+            "erreur" if erreur else ("reussi" if reussie else "echec"),
+            int(reussie),
+            "x",
+            json.dumps(drapeaux),
+            AVANT,
+            run_id,
+        ),
     )
     if visiteur:
         cx.execute(
@@ -97,11 +107,24 @@ def soiree_reussie(cx, x):
     visite(cx, x, "temoin-sentinelle", 1, visiteur="s1", e="E3", defi=1)
     visite(cx, x, "temoin-sentinelle", 2, visiteur="s1", e="E3")
     bannir(cx, x, "temoin-sentinelle", visiteur="s1")
-    visite(cx, x, "temoin-sentinelle", 3, visiteur="s1", e="E3", reussie=False, bloque=True, arret=True, identite="banni")
+    visite(
+        cx, x, "temoin-sentinelle", 3, visiteur="s1", e="E3", reussie=False, bloque=True, arret=True, identite="banni"
+    )
     for n in (4, 5, 6):  # identité bannie : refusée avant tout lancement de Chrome, aucune requête
         visite(cx, x, "temoin-sentinelle", n, visiteur=None, e=None, reussie=False, identite=None)
     for n in range(1, 5):
-        visite(cx, x, "temoin-classique", n, visiteur=f"p{n}", e="E4", reussie=False, bloque=True, arret=True, identite=None)
+        visite(
+            cx,
+            x,
+            "temoin-classique",
+            n,
+            visiteur=f"p{n}",
+            e="E4",
+            reussie=False,
+            bloque=True,
+            arret=True,
+            identite=None,
+        )
 
 
 def statuts(rapport, bras):
@@ -159,28 +182,43 @@ def test_une_soiree_reussie_tient_tous_les_criteres(base):
 def test_chaque_critere_peut_ne_pas_etre_tenu(base, defaut, bras, critere):
     cx, x = base
     soiree_reussie(cx, x)
-    run = f"(SELECT r.id FROM runs r JOIN engines e ON e.id = r.engine_id WHERE r.experiment_id = {x}" " AND json_extract(e.configuration, '$.label') = ? AND r.repetition = ?)"
+    run = (
+        f"(SELECT r.id FROM runs r JOIN engines e ON e.id = r.engine_id WHERE r.experiment_id = {x}"
+        " AND json_extract(e.configuration, '$.label') = ? AND r.repetition = ?)"
+    )
     jeton = f"(SELECT session_token FROM runs WHERE id = {run})"
 
     if defaut == "visiteur":  # le sujet change de visiteur à la 7e visite
         cx.execute(f"UPDATE visites SET visiteur = 'autre' WHERE session_token = {jeton}", ("sujet", 7))
     elif defaut == "empreinte":
-        cx.execute(f"UPDATE observations_js SET payload = ? WHERE session_token = {jeton}", (json.dumps({"navigateur": {"userAgent": "X"}}), "sujet", 7))
+        cx.execute(
+            f"UPDATE observations_js SET payload = ? WHERE session_token = {jeton}",
+            (json.dumps({"navigateur": {"userAgent": "X"}}), "sujet", 7),
+        )
     elif defaut == "echec":
         cx.execute(f"UPDATE runs SET success = 0, status = 'echec' WHERE id = {run}", ("sujet", 12))
     elif defaut == "defi_tard":
-        cx.execute(f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.challenges_emis', 1) WHERE id = {run}", ("sujet", 5))
+        cx.execute(
+            f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.challenges_emis', 1) WHERE id = {run}", ("sujet", 5)
+        )
     elif defaut == "pas_de_defi":
-        cx.execute(f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.challenges_emis', 0) WHERE id = {run}", ("sujet", 1))
+        cx.execute(
+            f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.challenges_emis', 0) WHERE id = {run}", ("sujet", 1)
+        )
     elif defaut == "alerte":
-        cx.execute(f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.details_scenario.identite.etat', 'alerte') WHERE id = {run}", ("sujet", 9))
+        cx.execute(
+            f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.details_scenario.identite.etat', 'alerte') WHERE id = {run}",
+            ("sujet", 9),
+        )
     elif defaut == "banni":
         bannir(cx, x, "sujet", visiteur="v1", motif="debit:pages_par_heure")
     elif defaut == "arret_tardif":  # arrêté seulement à la 6e visite
         cx.execute(f"UPDATE runs SET success = 1, status = 'reussi' WHERE id = {run}", ("temoin-negatif", 5))
         cx.execute(f"DELETE FROM decisions WHERE session_token = {jeton}", ("temoin-negatif", 5))
     elif defaut == "jamais_arrete":
-        cx.execute(f"UPDATE runs SET success = 1, status = 'reussi' WHERE experiment_id = {x} AND engine_id IN (SELECT id FROM engines WHERE json_extract(configuration, '$.label') = 'temoin-negatif')")
+        cx.execute(
+            f"UPDATE runs SET success = 1, status = 'reussi' WHERE experiment_id = {x} AND engine_id IN (SELECT id FROM engines WHERE json_extract(configuration, '$.label') = 'temoin-negatif')"
+        )
     elif defaut == "pas_banni":
         cx.execute("DELETE FROM bannissements WHERE motif LIKE 'detecte:%'")
     elif defaut == "requetes_apres":
@@ -192,13 +230,21 @@ def test_chaque_critere_peut_ne_pas_etre_tenu(base, defaut, bras, critere):
     elif defaut == "pas_de_bannissement":
         cx.execute("DELETE FROM bannissements WHERE motif = 'manuel'")
     elif defaut == "refus_trop_tot":  # le refus est vu à la 2e visite, pas à la 3e
-        cx.execute(f"INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs) SELECT session_token, '{AVANT}', 'bannissement', 'bloque', '/', '[]' FROM runs WHERE id = {run}", ("temoin-sentinelle", 2))
+        cx.execute(
+            f"INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs) SELECT session_token, '{AVANT}', 'bannissement', 'bloque', '/', '[]' FROM runs WHERE id = {run}",
+            ("temoin-sentinelle", 2),
+        )
     elif defaut == "identite_alerte":
-        cx.execute(f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.details_scenario.identite.etat', 'alerte') WHERE id = {run}", ("temoin-sentinelle", 3))
+        cx.execute(
+            f"UPDATE runs SET drapeaux = json_set(drapeaux, '$.details_scenario.identite.etat', 'alerte') WHERE id = {run}",
+            ("temoin-sentinelle", 3),
+        )
     elif defaut == "classique_passe":
         cx.execute(f"UPDATE runs SET success = 1, status = 'reussi' WHERE id = {run}", ("temoin-classique", 2))
     elif defaut == "classique_par_l_outil":
-        cx.execute("DELETE FROM decisions WHERE session_token IN (SELECT session_token FROM runs WHERE engine_id IN (SELECT id FROM engines WHERE json_extract(configuration, '$.label') = 'temoin-classique'))")
+        cx.execute(
+            "DELETE FROM decisions WHERE session_token IN (SELECT session_token FROM runs WHERE engine_id IN (SELECT id FROM engines WHERE json_extract(configuration, '$.label') = 'temoin-classique'))"
+        )
 
     rapport = soiree.bilan(cx, x)
     assert statuts(rapport, bras)[critere] == "non tenu", rapport["bras"][bras]["criteres"][critere]

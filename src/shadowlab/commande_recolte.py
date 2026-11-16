@@ -22,6 +22,8 @@ from . import campaigns, notation
 from .config import Reglages
 from .engines.curl_cffi_engine import DriverCurlCffi
 from .engines.noezia.etat import Etat
+from .engines.noezia.identite import IdentiteRefusee
+from .engines.noezia.identite import verifier_nom as verifier_nom_identite
 from .engines.noezia.navigateur import MoteurNavigateur
 from .engines.noezia.parcours import (
     Moteur,
@@ -71,11 +73,28 @@ def _moteur_disponible(nom: str) -> str:
     return nom
 
 
-def construire_moteur(nom: str, recette: Recette, reglages: Reglages) -> Moteur:
-    """Le moteur de la passe. Il se construit avec le périmètre du labo (`SHADOWLAB_HOTES_AUTORISES`)."""
+def _controler_identite(nom_moteur: str, identite: str | None) -> None:
+    """`--identite` ne va qu'avec le moteur navigateur, et son nom doit être valide : sinon un refus (code 2)."""
+    if identite is None:
+        return
+    if nom_moteur != "navigateur":
+        raise RefusParcours(
+            "--identite ne va qu'avec le moteur navigateur (`--moteur navigateur`) : un client HTTP n'a pas de profil"
+        )
+    try:
+        verifier_nom_identite(identite)
+    except ValueError as erreur:
+        raise RefusParcours(str(erreur)) from erreur
+
+
+def construire_moteur(nom: str, recette: Recette, reglages: Reglages, identite: str | None = None) -> Moteur:
+    """Le moteur de la passe. Il se construit avec le périmètre du labo (`SHADOWLAB_HOTES_AUTORISES`).
+
+    `identite` : une identité persistante (§ 5.6), moteur `navigateur` seulement ; le nom est contrôlé avant tout."""
     _moteur_disponible(nom)
+    _controler_identite(nom, identite)
     if nom == "navigateur":  # le vrai Chrome en identité native ; rien n'est lancé avant `ouvrir()`
-        return MoteurNavigateur.depuis(recette, reglages)
+        return MoteurNavigateur.depuis(recette, reglages, identite=identite)
     local = all(_est_local(h) for h in recette.hotes)
     pilote = DriverCurlCffi(
         reglages.hotes_autorises,
@@ -98,6 +117,21 @@ def site_du_labo(recette: Recette, reglages: Reglages) -> Iterator[None]:
         if not tournait:
             print("Site du labo démarré (il ne tournait pas).", flush=True)
         yield
+
+
+def _moteur(nom: str, recette: Recette, reglages: Reglages, identite: str | None) -> Moteur:
+    """`construire_moteur`, avec l'identité seulement quand il y en a une (le moteur reste appelé comme avant sans)."""
+    _controler_identite(nom, identite)
+    if identite is None:
+        return construire_moteur(nom, recette, reglages)
+    return construire_moteur(nom, recette, reglages, identite=identite)
+
+
+def identite_de_la_passe(passe: dict[str, Any]) -> str | None:
+    """L'identité persistante dont la passe s'est servie (gardée dans les options du moteur au lancement), ou None :
+    une reprise doit être le même visiteur, pas un nouveau."""
+    moteur = passe.get("moteur") or {}
+    return (moteur.get("options") or {}).get("identite") or (moteur.get("configuration") or {}).get("identite")
 
 
 def _lire_recette(chemin: Path) -> tuple[Recette, str]:
@@ -140,6 +174,9 @@ def executer(args: argparse.Namespace, reglages: Reglages) -> int:
     }
     try:
         return actions[args.action](args, reglages)
+    except IdentiteRefusee as erreur:  # bannie, en alerte depuis moins d'une heure, ou prise : un refus, aucune requête
+        _err(f"Refus : {_lignes_nettoyees(str(erreur))}")
+        return 2
     except (RefusParcours, RecetteInvalide) as erreur:
         texte = _lignes_nettoyees(str(erreur))
         _err(texte if isinstance(erreur, RecetteInvalide) else f"Refus : {texte}")
@@ -166,7 +203,7 @@ def _lancer(args: argparse.Namespace, reglages: Reglages) -> int:
         ignorer_robots=args.ignorer_robots,
     )
     dossier = _dossier(args, reglages, recette.nom)
-    moteur = construire_moteur(nom_moteur, recette, reglages)  # ne touche pas au réseau
+    moteur = _moteur(nom_moteur, recette, reglages, args.identite)  # ne touche pas au réseau
     parcours = Parcours(
         recette, texte, str(chemin.resolve()), moteur, dossier, options, options_reprise=_options_reprise(args)
     )
@@ -199,7 +236,9 @@ def _reprendre(args: argparse.Namespace, reglages: Reglages) -> int:
         print(f"Recette d'origine absente ({chemin}) : copie gardée au début de la passe.", flush=True)
         texte = passe["texte_recette"]
         recette = lire_texte(texte, source="copie de la passe")
-    moteur = construire_moteur(passe["moteur"]["nom"], recette, reglages)
+    moteur = _moteur(
+        passe["moteur"]["nom"], recette, reglages, identite_de_la_passe(passe)
+    )  # la passe garde son identité
     parcours = Parcours(
         recette, texte, passe["chemin_recette"], moteur, dossier, options_reprise=_options_reprise(args)
     )

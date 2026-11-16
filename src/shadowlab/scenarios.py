@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import random
 import time
@@ -14,7 +15,7 @@ from parsel import Selector
 
 from .config import RACINE
 from .engines.base import Driver, FonctionIndisponible, RefusProtection, ResultatNavigation
-from .engines.noezia.parcours import MoteurDriver, Parcours
+from .engines.noezia.parcours import MoteurDriver, Options, Parcours, RefusParcours
 from .engines.noezia.recettes import PorteEntree, Recette, lire_texte
 from .notation import noter_recolte
 from .site import pages, vitrine
@@ -31,6 +32,10 @@ PORTE_ENTREE_PASSAGE_S = 15
 # 10 min : 5 repassages).
 PORTE_REPASSAGES_PASSAGE = 10
 PORTE_ECART_MIN_PASSAGE_S = 300
+# Scénario `visite` (palier 2, I7) : pages lues par visite par défaut, et durée pendant laquelle l'Arena (profil
+# `endurance`, `duree_cookie_s`) ne redemande pas le défi à un visiteur connu : un défi revenu avant est une alerte.
+PAGES_PAR_VISITE = 15
+DUREE_PORTE_VISITE_S = 86400
 
 
 @dataclass
@@ -655,9 +660,10 @@ def _moteur_de_recolte(d: Driver) -> str:
     )
 
 
-def recette_du_passage(nom: str, base: str) -> tuple[Recette, str]:
+def recette_du_passage(nom: str, base: str, duree_porte_s: float | None = None) -> tuple[Recette, str]:
     """La recette `configs/recettes/<nom>.yaml` pointée vers l'entrée du passage (`base`, ex. l'Arena), avec le
-    paramètre `sl` ignoré dans les adresses canoniques. Rend la recette et le texte du fichier."""
+    paramètre `sl` ignoré dans les adresses canoniques. Rend la recette et le texte du fichier.
+    `duree_porte_s` : la durée de la porte d'entrée déclarée (I6), pour une identité qui revient."""
     chemin = RACINE / "configs" / "recettes" / f"{nom}.yaml"
     texte = chemin.read_text(encoding="utf-8")
     recette = lire_texte(texte, source=str(chemin))
@@ -677,42 +683,80 @@ def recette_du_passage(nom: str, base: str) -> tuple[Recette, str]:
             attendre_s=PORTE_ENTREE_PASSAGE_S,
             repassages_max=PORTE_REPASSAGES_PASSAGE,
             ecart_min_s=PORTE_ECART_MIN_PASSAGE_S,
+            duree_s=duree_porte_s,
         )
     recette = recette.model_copy(update=reglages)
     return recette, texte
 
 
-def _recolter_avec_recette(
-    d: Driver, base: str, jeton: str, rng: random.Random, recette_nom: str, verite: str
-) -> Issue:
-    """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage, puis le note."""
+def _lancer_parcours(
+    d: Driver,
+    base: str,
+    jeton: str,
+    rng: random.Random,
+    recette_nom: str,
+    nom_moteur: str,
+    *,
+    options: Options | None = None,
+    duree_porte_s: float | None = None,
+    noter: Callable[[Any, Any], Any] | None = None,
+) -> tuple[Any, Any]:
+    """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage (le pilote du passage est
+    le moteur de récolte : porte d'entrée, sentinelle, identité persistante). Rend le bilan et ce que `noter(dossier,
+    bilan)` en a tiré, appelé tant que l'état de la passe existe."""
     import tempfile
     from pathlib import Path
 
-    from . import commande_recolte
-    from .config import charger
-    from .engines.noezia.etat import Etat
-
-    nom_moteur = _moteur_de_recolte(d)
-    reglages = charger()
-    recette, texte = recette_du_passage(recette_nom, base)
+    recette, texte = recette_du_passage(recette_nom, base, duree_porte_s)
     moteur = _MoteurDuPassage(d, nom_moteur, jeton)
     avant = getattr(d, "hotes_navigation", None)
     if nom_moteur == "navigateur":  # garde du cadre principal : seuls les hôtes de la recette
         d.hotes_navigation = tuple(h.lower() for h in recette.hotes)  # type: ignore[attr-defined]
     try:
         with tempfile.TemporaryDirectory(prefix="shadowlab-recolte-") as dossier:
-            parcours = Parcours(recette, texte, recette_nom, moteur, Path(dossier), ecran=lambda _: None, alea=rng)
+            parcours = Parcours(
+                recette, texte, recette_nom, moteur, Path(dossier), options, ecran=lambda _: None, alea=rng
+            )
             bilan = parcours.lancer()
-            etat = Etat(Path(dossier) / "etat.sqlite3")
-            try:
-                note = commande_recolte.evaluer_passe(etat, bilan.passe, verite, reglages)
-            finally:
-                etat.fermer()
+            note = noter(Path(dossier), bilan) if noter else None
     finally:
         if nom_moteur == "navigateur":
             d.hotes_navigation = avant  # type: ignore[attr-defined]
+    return bilan, note
+
+
+def _repassages_de_la_porte(bilan: Any) -> dict[str, Any]:
+    """La porte repassée en cours de passe : le nombre, puis chaque défi vu (rang de page, attente, écart depuis le
+    passage précédent, franchi ou non, rafale, borne qui a refusé)."""
     repassages = bilan.resume.get("porte_repassages") or {}
+    return {
+        "porte_repassages": repassages.get("nombre", 0),
+        "porte_repassages_liste": [
+            {cle: p.get(cle) for cle in ("rang", "attente_s", "ecart_s", "franchie", "rafale", "refus")}
+            for p in repassages.get("passages", [])
+        ],
+    }
+
+
+def _recolter_avec_recette(
+    d: Driver, base: str, jeton: str, rng: random.Random, recette_nom: str, verite: str
+) -> Issue:
+    """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage, puis le note."""
+    from . import commande_recolte
+    from .config import charger
+    from .engines.noezia.etat import Etat
+
+    nom_moteur = _moteur_de_recolte(d)
+    reglages = charger()
+
+    def noter(dossier: Any, bilan: Any) -> dict[str, Any]:
+        etat = Etat(dossier / "etat.sqlite3")
+        try:
+            return commande_recolte.evaluer_passe(etat, bilan.passe, verite, reglages)
+        finally:
+            etat.fermer()
+
+    bilan, note = _lancer_parcours(d, base, jeton, rng, recette_nom, nom_moteur, noter=noter)
     details: dict[str, Any] = {
         "moteur": nom_moteur,
         "recette": recette_nom,
@@ -721,17 +765,84 @@ def _recolter_avec_recette(
         "pages_faites": bilan.resume["pages"]["faites"],
         "pages_en_echec": bilan.resume["pages"]["echecs"],
         "recolte": note,
-        # La porte repassée en cours de passe : le nombre, puis chaque défi vu (rang de page, attente, écart depuis
-        # le passage précédent, franchi ou non, rafale, borne qui a refusé).
-        "porte_repassages": repassages.get("nombre", 0),
-        "porte_repassages_liste": [
-            {cle: p.get(cle) for cle in ("rang", "attente_s", "ecart_s", "franchie", "rafale", "refus")}
-            for p in repassages.get("passages", [])
-        ],
+        **_repassages_de_la_porte(bilan),
     }
     if bilan.arret:
         details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
     return Issue(note["reussi"] and bilan.statut == "terminee", details)
+
+
+def _visiteur_vu(jeton: str) -> dict[str, Any]:
+    """Le visiteur de la session tel que l'Arena l'a enregistré (table `visites`) : son identifiant, jamais le cookie
+    signé `<visiteur>.<signature>`. Vide si l'Arena n'a rien vu (niveau sans Arena, aucune page demandée)."""
+    from . import database as db
+    from .config import charger
+
+    cx = db.ouvrir(charger().base_donnees)
+    try:
+        ligne = cx.execute(
+            "SELECT m.nom, v.visiteur, v.neuve FROM visites v JOIN mondes m ON m.id = v.monde_id"
+            " WHERE v.session_token = ?",
+            (jeton,),
+        ).fetchone()
+    finally:
+        cx.close()
+    if ligne is None:
+        return {"visiteur": None, "monde": None, "visite_neuve": None}
+    return {"visiteur": ligne["visiteur"], "monde": ligne["nom"], "visite_neuve": bool(ligne["neuve"])}
+
+
+def _identite_du_pilote(d: Driver) -> dict[str, Any] | None:
+    """Nom et état de l'identité persistante du pilote après la visite (écrit par la sentinelle), ou None."""
+    identite = getattr(d, "identite_courante", None)
+    if identite is None:
+        return None
+    return {"nom": identite.nom, "etat": identite.etat().get("etat")}
+
+
+def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PAGES_PAR_VISITE) -> Issue:
+    """Une visite de la vitrine par un visiteur qui peut revenir : la liste, puis des fiches, `pages` pages au plus.
+
+    C'est le parcours de la récolte (`recette_du_passage('vitrine')`, `Options(pages_max=pages)`) : porte d'entrée,
+    sentinelle et identité persistante du pilote, sans rien dupliquer. Tout pilote convient (le témoin classique
+    aussi) : aucun solveur de CAPTCHA, aucun clic sur un défi, le profil `endurance` n'a pas de CAPTCHA. Une visite
+    arrêtée est un résultat (jamais une exception) : le visiteur vu par l'Arena et l'état de l'identité sont notés
+    dans tous les cas, pour que le bilan de la soirée les lise dans la base.
+    """
+    nom_moteur = "navigateur" if d.runtime == "navigateur" else "http"
+    details: dict[str, Any] = {"moteur": nom_moteur, "recette": "vitrine", "pages_demandees": pages}
+    succes = False
+    try:
+        bilan, _ = _lancer_parcours(
+            d,
+            base,
+            jeton,
+            rng,
+            "vitrine",
+            nom_moteur,
+            options=Options(pages_max=pages),
+            duree_porte_s=DUREE_PORTE_VISITE_S,
+        )
+        faites, echecs = bilan.resume["pages"]["faites"], bilan.resume["pages"]["echecs"]
+        details.update(
+            statut=bilan.statut, arret=bilan.arret, pages_faites=faites, pages_en_echec=echecs,
+            **_repassages_de_la_porte(bilan),
+        )  # fmt: skip
+        if bilan.arret:
+            details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
+        succes = bilan.statut in ("limitee", "terminee") and faites >= 1 and echecs == 0
+    except RefusParcours as exc:  # robots.txt inaccessible, par exemple : la visite n'a rien lu
+        details.update(statut="refusee", arret=None, pages_faites=0, pages_en_echec=0, refus=str(exc))
+    details.update(_visiteur_vu(jeton))
+    details["identite"] = _identite_du_pilote(d)
+    return Issue(succes, details)
+
+
+def avec_pages(pages: int) -> Scenario:
+    """Le scénario `visite` pour `pages` pages au plus (même nom et même description que celui du registre : c'est
+    la même ligne `scenarios` dans la base)."""
+    modele = SCENARIOS["visite"]
+    return Scenario(modele.name, modele.description, modele.attend_js, functools.partial(visite, pages=pages))
 
 
 def recolte_recette_vitrine(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:
@@ -780,6 +891,12 @@ SCENARIOS: dict[str, Scenario] = {
             "Récolte générale (recette) du site de rallye, notée en pages, enregistrements et champs",
             True,
             recolte_recette_rallye,
+        ),
+        Scenario(
+            "visite",
+            "Visite de la vitrine par un visiteur qui revient (la liste, puis des fiches), visiteur noté",
+            True,
+            visite,
         ),
         Scenario(
             "extraction_adaptative",

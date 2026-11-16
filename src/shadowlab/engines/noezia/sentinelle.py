@@ -30,7 +30,9 @@ ECHECS_MAX = 5
 NON_CONFORMES_MAX = 3
 
 
-_ARENA = re.compile(r"<body\b[^>]*\sdata-arena\s*=", re.IGNORECASE)
+# Une page de l'Arena est un défi, sauf la page de refus (`blocage`) : elle ne se valide pas seule, il n'y a rien à
+# attendre. Reconnue comme un défi, elle ferait attendre la porte d'entrée, et un refus franc deviendrait une alerte.
+_ARENA = re.compile(r"<body\b[^>]*\sdata-arena\s*=\s*(?![\"']?blocage[\"'\s>])", re.IGNORECASE)
 _FORMULAIRE_DEFI = re.compile(r"<form\b[^>]*\bid\s*=\s*[\"']challenge-form[\"']", re.IGNORECASE)
 _CADRE_CLOUDFLARE = re.compile(
     r"<(?:iframe|script)\b[^>]*\bsrc\s*=\s*[\"'][^\"']*challenges\.cloudflare\.com", re.IGNORECASE

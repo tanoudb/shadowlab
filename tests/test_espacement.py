@@ -4,6 +4,7 @@ Horloge et sommeil injectables : aucune attente réelle. La campagne tourne ici 
 aucune Arena) ; le passage est remplacé par une fonction qui note ce qu'il reçoit.
 """
 
+# ruff: noqa: E501  (requêtes SQL et configurations YAML en ligne)
 from __future__ import annotations
 
 import random
@@ -170,7 +171,9 @@ def test_campagne_de_la_soiree_valide(tmp_path, reglages):
 
 
 def test_n_pages_par_visite_se_regle(tmp_path, reglages):
-    e = campagne(tmp_path, reglages, extra="  pages_par_visite: 3\n  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n")
+    e = campagne(
+        tmp_path, reglages, extra="  pages_par_visite: 3\n  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n"
+    )
     assert e.pages_par_visite == 3
 
 
@@ -253,7 +256,11 @@ def faux_pilote():
     from shadowlab.engines import registre
 
     class PiloteFactice(registre()["httpx"]):
-        def __init__(self, hotes, options=None):  # les options de la campagne (identité…) sont celles du vrai moteur
+        @classmethod
+        def controler_options(cls, options):  # les options de la campagne (identité…) sont celles du vrai moteur
+            pass
+
+        def __init__(self, hotes, options=None):
             super().__init__(hotes, {})
 
         def open(self):
@@ -294,7 +301,14 @@ class Passages:
         cx.execute(
             "INSERT INTO runs (experiment_id, engine_id, scenario_id, repetition, session_token, truth, started_at,"
             " status, success, protection) VALUES (?, ?, ?, ?, ?, 'automatise', '2026-11-16', 'reussi', 1, ?)",
-            (experiment_id, engine_id, scenario_id, repetition, f"t-{engine_id}-{repetition}", protection),
+            (
+                experiment_id,
+                engine_id,
+                scenario_id,
+                repetition,
+                f"t-{engine_id}-{scenario_id}-{repetition}",
+                protection,
+            ),
         )
         return {"pages_faites": 15}
 
@@ -317,7 +331,7 @@ def test_chaque_bras_a_son_monde_meme_deux_entrees_noezia(tmp_path, reglages, mo
     experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="")
     mondes = {}
     for label in ("sujet", "temoin-negatif", "temoin-sentinelle", "temoin-classique"):
-        passages = Passages(reglages)
+        passages = Passages(reglages, ecrire_visite=visite_du_visiteur)
         monkeypatch.setattr(campaigns, "_passage", passages)
         assert campaigns.executer_unite(reglages, experiment_id, rang_de(experience, label)) == "termine"
         assert len({a["monde"] for a in passages.appels}) == 1  # un seul monde pour toutes les visites du bras
@@ -336,9 +350,17 @@ def test_les_visites_par_entree_remplacent_les_repetitions(tmp_path, reglages, m
 
 def test_sans_espacement_la_campagne_tourne_comme_avant(tmp_path, reglages, monkeypatch):
     """Sans le champ : aucune cadence construite, aucun sommeil, le scénario est celui du registre, pas de bannissement."""
-    experience, cx, experiment_id = preparer(
-        tmp_path, reglages, monkeypatch, extra="", engines="\n    - {name: playwright, label: seul}\n"
+    experience = lire(
+        ecrire(
+            tmp_path,
+            "experiment:\n  name: ancienne\n  engines: [playwright]\n  scenarios: [static_html, api_json]\n"
+            "  repetitions: 3\n  seed: 1\n",
+        ),
+        reglages,
     )
+    cx = db.ouvrir(reglages.base_donnees)
+    experiment_id = campaigns.creer(cx, experience, reglages)
+    monkeypatch.setattr(campaigns, "registre", lambda: {"playwright": faux_pilote()})
 
     def interdit(*_, **__):
         raise AssertionError("aucune cadence sans le champ `espacement`")
@@ -349,17 +371,21 @@ def test_sans_espacement_la_campagne_tourne_comme_avant(tmp_path, reglages, monk
     passages = Passages(reglages)
     monkeypatch.setattr(campaigns, "_passage", passages)
     assert campaigns.executer_unite(reglages, experiment_id, 0) == "termine"
-    assert [a["repetition"] for a in passages.appels] == list(range(1, 25))
-    assert all(a["scenario"] is SCENARIOS["visite"] for a in passages.appels)
+    assert sorted(a["repetition"] for a in passages.appels) == [1, 1, 2, 2, 3, 3]
+    assert all(a["scenario"] is SCENARIOS[a["scenario"].name] for a in passages.appels)  # pas de scénario refait
 
 
 def test_l_espacement_fixe_est_applique_entre_deux_visites_d_un_bras(tmp_path, reglages, monkeypatch):
-    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 10}\n  concurrency: 4\n")
+    experience, cx, experiment_id = preparer(
+        tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 10}\n  concurrency: 4\n"
+    )
     horloge = Horloge()
     passages = Passages(reglages, horloge)
     monkeypatch.setattr(campaigns, "_passage", passages)
     rang = rang_de(experience, "temoin-classique")
-    assert campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
+    assert (
+        campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
+    )
     debuts = [a["quand"] for a in passages.appels]
     assert len(debuts) == 4
     assert [(b - a).total_seconds() for a, b in zip(debuts, debuts[1:], strict=False)] == [600, 600, 600]
@@ -367,7 +393,9 @@ def test_l_espacement_fixe_est_applique_entre_deux_visites_d_un_bras(tmp_path, r
 
 def test_chaque_bras_a_son_rythme_et_ils_tournent_en_parallele(tmp_path, reglages, monkeypatch):
     """Deux bras en même temps (fils), chacun à son écart : les visites de l'un tombent entre celles de l'autre."""
-    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 0.005}\n  concurrency: 4\n")
+    experience, cx, experiment_id = preparer(
+        tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 0.005}\n  concurrency: 4\n"
+    )
     verrou = threading.Lock()
     passages = []
 
@@ -387,7 +415,7 @@ def test_chaque_bras_a_son_rythme_et_ils_tournent_en_parallele(tmp_path, reglage
     [f.join(60) for f in fils]
     duree = time.monotonic() - debut
     par_bras = {}
-    for monde, repetition, quand in passages:
+    for monde, _, quand in passages:
         par_bras.setdefault(monde, []).append(quand)
     assert len(par_bras) == 2
     # chaque bras est espacé (0,3 s entre deux visites)...
@@ -405,17 +433,23 @@ def visite_du_visiteur(cx, monde, repetition):
 
     cx.execute(
         "INSERT INTO visites (monde_id, visiteur, session_token, neuve, vue_le) VALUES (?, 'v1', ?, ?, ?)",
-        (visiteurs.identifiant_monde(cx, monde), f"s-{repetition}", int(repetition == 1), db.maintenant()),
+        (visiteurs.identifiant_monde(cx, monde), f"s-{monde}-{repetition}", int(repetition == 1), db.maintenant()),
     )
 
 
-def test_bannir_avant_visite_ecrit_la_ligne_avant_la_visite_voulue_dans_le_monde_du_bras(tmp_path, reglages, monkeypatch):
-    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n")
+def test_bannir_avant_visite_ecrit_la_ligne_avant_la_visite_voulue_dans_le_monde_du_bras(
+    tmp_path, reglages, monkeypatch
+):
+    experience, cx, experiment_id = preparer(
+        tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n"
+    )
     horloge = Horloge()
     passages = Passages(reglages, horloge, ecrire_visite=visite_du_visiteur)
     monkeypatch.setattr(campaigns, "_passage", passages)
     rang = rang_de(experience, "temoin-sentinelle")
-    assert campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
+    assert (
+        campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
+    )
     # la base contenait 0 bannissement aux visites 1 et 2, 1 à partir de la 3e
     assert [a["bannissements"] for a in passages.appels] == [0, 0, 1, 1, 1, 1]
     monde = f"c{experiment_id}:temoin-sentinelle:endurance"
@@ -427,12 +461,17 @@ def test_bannir_avant_visite_ecrit_la_ligne_avant_la_visite_voulue_dans_le_monde
 
 
 def test_bannir_sans_visiteur_connu_arrete_le_bras_sans_le_cacher(tmp_path, reglages, monkeypatch):
-    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n")
+    experience, cx, experiment_id = preparer(
+        tmp_path, reglages, monkeypatch, extra="  espacement: {mode: fixe, minutes: 1}\n  concurrency: 4\n"
+    )
     horloge = Horloge()
     passages = Passages(reglages, horloge)  # aucune ligne `visites` écrite : l'Arena n'a vu personne
     monkeypatch.setattr(campaigns, "_passage", passages)
     rang = rang_de(experience, "temoin-sentinelle")
-    assert campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "interrompu"
+    assert (
+        campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir)
+        == "interrompu"
+    )
     assert [a["repetition"] for a in passages.appels] == [1, 2]  # la 3e visite n'a pas eu lieu
     assert cx.execute("SELECT COUNT(*) FROM bannissements").fetchone()[0] == 0
 

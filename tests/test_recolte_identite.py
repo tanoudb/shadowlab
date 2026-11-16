@@ -3,7 +3,8 @@
 Pilote factice qui se comporte comme `DriverNoezia` en mode identité (il ouvre vraiment l'identité : verrou, refus d'une
 identité bannie ou en alerte, état écrit par la sentinelle). Ce que ces tests prouvent : la même identité sert deux
 passes, une identité refusée donne le code 2 sans aucune requête, la sentinelle l'écrit `banni`, la reprise la
-retrouve. Ce qu'ils ne prouvent pas : que Chrome rende le même VISITEUR à l'Arena (cookie `sl_visiteur`) : cela demande un
+retrouve. Ce qu'ils ne prouvent pas : que Chrome rende le même VISITEUR à l'Arena (cookie `sl_visiteur`) : cela
+demande un
 vrai Chrome sur le site du labo, voir `tests/test_moteur_navigateur.py` pour l'état de ce chantier.
 """
 
@@ -43,7 +44,9 @@ class PiloteChrome(PiloteFactice):
         return {"identite": self.nom}
 
     def open(self):
-        self._identite = ident.ouvrir(self.nom)  # comme `DriverNoezia.open` : refuse bannie, alerte récente, verrou pris
+        self._identite = ident.ouvrir(
+            self.nom
+        )  # comme `DriverNoezia.open` : refuse bannie, alerte récente, verrou pris
 
     def start_session(self):
         self._identite.debut_visite()
@@ -79,7 +82,7 @@ def demandes(site, racine, monkeypatch):
 
     def construire(nom, recette, reglages, identite=None):
         notes["identites"].append((nom, identite))
-        pilote = PiloteChrome(site, identite or "")
+        pilote = PiloteChrome(site, identite) if identite else PiloteFactice(site)
         notes["personnaliser"](pilote)
         notes["pilotes"].append(pilote)
         return MoteurDriver(pilote, nom)
@@ -154,7 +157,8 @@ def test_une_identite_prise_par_un_autre_lancement_est_un_refus(demandes, racine
         assert lancer("--moteur", "navigateur", "--identite", "vitrine-suivi") == 2
     finally:
         autre.liberer()
-    assert "verrou" in capsys.readouterr().err or "utilisée" in capsys.readouterr().err
+    erreur = capsys.readouterr().err
+    assert "verrou" in erreur or "utilisée" in erreur
 
 
 def test_la_sentinelle_ecrit_l_etat_de_l_identite_pendant_la_recolte(demandes, racine):
@@ -179,6 +183,7 @@ def test_la_reprise_retrouve_l_identite_de_la_passe(demandes, racine):
 
 def test_identite_de_la_passe():
     assert commande_recolte.identite_de_la_passe({"moteur": {"options": {"identite": "x", "headless": False}}}) == "x"
+    assert commande_recolte.identite_de_la_passe({"moteur": {"configuration": {"identite": "y"}}}) == "y"
     assert commande_recolte.identite_de_la_passe({"moteur": {"options": {"headless": False}}}) is None
     assert commande_recolte.identite_de_la_passe({"moteur": {"nom": "http"}}) is None
 
@@ -187,7 +192,9 @@ def test_le_vrai_moteur_navigateur_recoit_l_identite_sans_lancer_chrome(racine, 
     recette = lire_texte(RECETTE_VITRINE.read_text(encoding="utf-8"))
     moteur = commande_recolte.construire_moteur("navigateur", recette, reglages, identite="vitrine-suivi")
     options = moteur.driver.options
-    assert options["identite"] == "vitrine-suivi" and options["identite_native"] is True and options["headless"] is False
+    assert (
+        options["identite"] == "vitrine-suivi" and options["identite_native"] is True and options["headless"] is False
+    )
     assert moteur.description()["options"]["identite"] == "vitrine-suivi"
     with pytest.raises(RefusParcours, match="navigateur"):
         commande_recolte.construire_moteur("http", recette, reglages, identite="vitrine-suivi")

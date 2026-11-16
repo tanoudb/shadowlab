@@ -1,0 +1,54 @@
+# Palier 2, I7 : essai de la mécanique de la soirée (identite-soiree.yaml), pour la valider avant les cinq heures.
+#
+# Les mêmes quatre bras, au profil `endurance`, chacun dans son monde ; les visites sont espacées de 1 minute et lisent
+# 3 pages. Le témoin de sentinelle fait 6 visites, banni avant la 3e (de quoi voir le refus, puis les trois visites
+# refusées sans requête). Le témoin négatif en fait 6 aussi, pour atteindre sa 5e visite (avec 3 visites son critère
+# resterait « non mesuré »). Le sujet fait 3 visites, le témoin classique 3.
+# Ce que l'essai montre : un seul visiteur et une seule empreinte pour le sujet, le défi JavaScript à la 1re visite
+# seulement, le 403 puis zéro page pour la sentinelle, le bannissement du témoin négatif. Il ne dit rien de l'allure
+# humaine ni de la durée : 3 visites ne valent pas 24.
+# Les identités de l'essai ont leurs propres noms (la sentinelle est bannie) : à ne pas reprendre pour la soirée.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer
+#   2. Vitrine d'au moins 3 annonces (500 par défaut).
+#   3. Pour recommencer l'essai : changer les suffixes `essai-…-1`. Rien d'autre sur le Mac pendant la campagne.
+#
+# Commande (des fenêtres de Chrome s'ouvrent) :
+#   uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml
+# Durée estimée : environ 10 à 15 minutes (le bras le plus long fait 6 visites : 5 écarts de 1 minute, plus 6 visites de
+# 20 à 30 s ; le sujet, 3 visites).
+# Bilan : uv run shadowlab soiree bilan <n° de la campagne>   (« visites réussies » du sujet : 3 sur 24 prévues n'est
+# pas le critère de la soirée ; l'essai se lit critère par critère, pas sur le verdict d'ensemble).
+experiment:
+  name: identite_soiree_essai
+  description: >-
+    Essai de la soirée : 3 visites espacées de 1 minute, 3 pages, mêmes bras ; sentinelle et témoin négatif à 6 visites.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      visites: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sujet-1}
+    - name: noezia
+      label: temoin-negatif
+      visites: 6
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: noezia
+      label: temoin-sentinelle
+      visites: 6
+      bannir_avant_visite: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sentinelle-1}
+    - name: playwright
+      label: temoin-classique
+      visites: 3
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 3
+  pages_par_visite: 3
+  espacement: {mode: fixe, minutes: 1}
+  concurrency: 4
+  monde: serie
+  seed: 20261116
+  output: [json, html]
