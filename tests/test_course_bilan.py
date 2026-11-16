@@ -142,9 +142,10 @@ NOTES_OK = [
 ]
 
 
-def course_tenue(cx, x, reglages):
+def course_tenue(cx, x, reglages, sentinelle_refusees=(4, 5, 6)):
     """12 visites du sujet sur 7 jours (porte revenue chaque fois plus de 24 h après la précédente), 188 non faites
-    (échéance), témoins le 1er jour."""
+    (échéance), témoins le 1er jour. `sentinelle_refusees` : les visites de la sentinelle refusées par l'outil après son
+    bannissement (avant I9 : lancées, puis refusées sans requête ; depuis, plus lancées du tout)."""
     moments = (
         [3600 * h for h in (0.5, 2.5, 5)]
         + [JOUR + 3600 * h for h in (1, 3, 6)]
@@ -173,7 +174,7 @@ def course_tenue(cx, x, reglages):
         arret=True,
         identite="banni",
     )
-    for n in (4, 5, 6):
+    for n in sentinelle_refusees:
         visite_course(
             cx, x, "temoin-sentinelle", n, 1800 + 600 * n, visiteur=None, e=None, reussie=False, identite=None
         )
@@ -345,6 +346,60 @@ def test_une_reprise_apres_l_echeance_ne_double_pas_les_visites_non_faites(base,
     sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
     assert sujet["visites_non_faites_echeance"] == 188
     assert "188 non faite(s)" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
+
+
+def note_identite(genre, bras, **champs):
+    return {"genre": genre, "bras": bras, "protection": "endurance", "constatee": heure(3600), **champs}
+
+
+def test_le_temoin_de_sentinelle_sans_ses_visites_4_a_6_garde_tous_ses_criteres(base, reglages):
+    """Identité bannie à la 3e visite : les visites 4 à 6 ne sont plus lancées (une ligne `bannie`, 3 restantes). Les
+    critères de la sentinelle, de la course comme de la soirée, ne lisent ni ces visites ni leur absence."""
+    from shadowlab import soiree
+
+    cx, x = base
+    course_tenue(cx, x, reglages, sentinelle_refusees=())
+    notes(reglages, x, [note_identite("bannie", "temoin-sentinelle", repetition=4, restantes=3)])
+    rapport = course.bilan(cx, x, dossier(reglages, x))
+    sentinelle = rapport["bras"]["temoin-sentinelle"]
+    assert set(statuts(rapport, "temoin-sentinelle").values()) == {"tenu"}, sentinelle["criteres"]
+    assert sentinelle["visites_faites"] == 3 and sentinelle["visites_non_faites_bannie"] == 3
+    assert rapport["verdict"] == "tenu"
+    assert set(statuts(soiree.bilan(cx, x), "temoin-sentinelle").values()) == {"tenu"}
+
+
+def test_les_attentes_d_alerte_sont_comptees_a_part_et_aucune_alerte_n_est_pas_tenue(base, reglages):
+    """Une ligne `attente_alerte` par créneau non lancé ; une reprise pendant l'attente peut la réécrire (même
+    `alerte_le`) : comptée une fois. Ce ne sont pas des visites faites ; une alerte a eu lieu : critère non tenu."""
+    cx, x = base
+    course_tenue(cx, x, reglages)
+    a1, a2 = heure(JOUR), heure(3 * JOUR)
+    notes(
+        reglages,
+        x,
+        [
+            note_identite("attente_alerte", "sujet", alerte_le=a1, prevue=heure(JOUR + 60), fin=heure(JOUR + 3600)),
+            note_identite("attente_alerte", "sujet", alerte_le=a1, prevue=heure(JOUR + 60), fin=heure(JOUR + 3600)),
+            note_identite(
+                "attente_alerte", "sujet", alerte_le=a2, prevue=heure(3 * JOUR + 60), fin=heure(3 * JOUR + 3600)
+            ),
+        ],
+    )
+    sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
+    assert sujet["attentes_alerte"] == 2 and sujet["visites_faites"] == 12
+    assert sujet["visites_manquees"] == {"nombre": 2, "par_motif": {"retard": 1, "infrastructure": 1}, "essais": 4}
+    assert sujet["criteres"]["aucune_alerte"]["statut"] == "non tenu"
+    assert "2 attente(s) d'alerte" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
+    assert sujet["criteres"]["visites_manquees_a_part"]["statut"] == "tenu"  # un relevé, pas un jugement
+
+
+def test_le_sujet_banni_compte_ses_visites_non_faites_a_part(base, reglages):
+    cx, x = base
+    course_tenue(cx, x, reglages)
+    notes(reglages, x, [note_identite("bannie", "sujet", repetition=13, restantes=188)])
+    sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
+    assert sujet["visites_non_faites_bannie"] == 188 and sujet["visites_faites"] == 12
+    assert "188 non faite(s) (identité bannie)" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
 
 
 def test_sous_commande_course_bilan(base, reglages, capsys):
