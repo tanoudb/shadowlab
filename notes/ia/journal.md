@@ -3634,3 +3634,9 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/DECISIONS.md` (D-93), `docs/PLAN.md` (§ 2, § 4, § 8), `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code touché.
 - **Décisions** : l'Arena ne change pas ; on corrige le moteur (lecture moins linéaire, durées de page plus dispersées), sans numéro de décision pour l'instant.
 - **Reste** : correction du moteur et décision associée ; relancer la soirée avec de nouvelles identités ; I8, I9, I10.
+
+## 2026-11-16 (11h25) — Claude (Fable 5.2, coordination) — Deux nouvelles sessions du site public, rejouées
+- **Fait** : `public sessions` puis `rejeu --base outputs/public/public.sqlite3` (lecture seule, pendant la soirée en cours : rien de lourd). 6 sessions en base, 62 chargements de l'accueil, 13 sessions commencées, 5 terminées.
+- **Mesuré** : `c7c5142c` (16/11 10 h 09 UTC, Chrome 157 sur Mac Intel, 3 min 42 s, 10 pages) passe de 01 à 04, arrêtée de 05 à 07 et en `endurance` dès la 4ᵉ page par `composite` 0,85 (`trajectoire_lineaire` à 0,039 rad et `navigation_lineaire`) ; aussi classée par `scroll` (`deltas_uniformes`, `scroll_timing_regulier`). `0b1a476b` (10 h 12 UTC, Edge 157 sur Windows, 29 s, 2 pages) passe partout. Sessions présumées humaines : qui tenait la souris n'est pas établi (question posée à Ethan).
+- **Vu en passant** : la base publique est déjà au schéma 11 (tables `mondes`, `visites`, `bannissements` vides), alors que les notes disent « au prochain redémarrage » ; aucune erreur dans le journal de l'application, les deux sessions du jour sont bien enregistrées.
+- **Reste** : si Ethan confirme un humain connu sur ordinateur dans un vrai Chrome, la condition du 15/11 pour corriger `trajectoire_lineaire` est remplie (à passer à la session de calibrage) ; aucune règle changée ici.
