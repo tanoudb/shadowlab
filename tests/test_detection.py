@@ -157,12 +157,12 @@ def _comportement(**kw):
 
 
 def test_entropie_trajectoire_lineaire_detectee():
-    """Angles proches de 0 = trajectoire en ligne droite → détection."""
-    angles = [0.01] * 15
-    delais = [float(i * 20 + 5) for i in range(20)]
+    """Angles proches de 0 sur trois pages = ligne droite → détection (D-95 : la session, pas une page)."""
+    angles = [0.01] * 22
+    delais = [float(i * 20 + 5) for i in range(25)]
     obs = Observations(
         http=[requete(entetes_navigateur())],
-        js=[empreinte(), _comportement(delais_souris_ms=delais, angles_segments=angles)],
+        js=[empreinte()] + [_comportement(delais_souris_ms=delais, angles_segments=angles) for _ in range(3)],
     )
     v = verdicts(obs)
     assert v["entropie-interaction"] == "automatise"
