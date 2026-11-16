@@ -25,6 +25,7 @@ class Reglages:
     vitrine_taille: int  # nombre d'annonces du site vitrine
     rallye_graine: int  # graine du site de résultats de rallye (contenu connu)
     rallye_taille: int  # nombre de rallyes du site de résultats de rallye
+    projet_arena: str = "shadowlab-arena"  # projet Docker Compose de l'Arena (un par dossier, ex. la course)
 
     @property
     def url_site(self) -> str:
@@ -109,6 +110,7 @@ def charger() -> Reglages:
         concurrence_max=int(os.environ.get("SHADOWLAB_CONCURRENCE_MAX", "4")),
         port_arena=int(os.environ.get("SHADOWLAB_PORT_ARENA", "8743")),
         port_aval=int(os.environ.get("SHADOWLAB_PORT_AVAL", "8781")),
+        projet_arena=os.environ.get("SHADOWLAB_ARENA_PROJET") or "shadowlab-arena",
         vitrine_graine=int(os.environ.get("SHADOWLAB_VITRINE_GRAINE", "20261111")),
         vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
         rallye_graine=int(os.environ.get("SHADOWLAB_RALLYE_GRAINE", "20261112")),
