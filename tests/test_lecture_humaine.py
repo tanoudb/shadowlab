@@ -510,3 +510,51 @@ def test_la_recolte_generale_n_a_pas_de_lecture_humaine(monkeypatch):
     )
     scenarios.recolte_recette_vitrine(pilote, "http://127.0.0.1:8770", "ab" * 16, random.Random(1))
     assert prises["options"] is None
+
+
+# ── Une relecture respecte robots.txt, son délai et le périmètre des hôtes (D-70) ────────────────────────
+
+
+class RobotsFactice:
+    """Remplace `robots.Robots` : permis la première fois pour la liste, refusé ensuite si `refuser_la_relecture`."""
+
+    def __init__(self, crawl_delay=None, refuser_la_relecture=False):
+        self.crawl_delay = crawl_delay
+        self._refuser = refuser_la_relecture
+        self._vues = 0
+
+    def permis(self, chemin):
+        if chemin.split("?")[0] == LISTE:
+            self._vues += 1
+            return not (self._refuser and self._vues > 1)
+        return True
+
+
+def _parcours_avec_robots(dossier, pilote, robots, pages=3):
+    parcours = fabriquer(dossier, pilote, options=Options(pages_max=pages, lecture=LectureHumaine()))
+    parcours._robots_de = lambda adresse: robots
+    return parcours
+
+
+def test_une_relecture_interdite_par_robots_n_est_pas_demandee(site, dossier):
+    pilote = PiloteLecture(site)
+    parcours = _parcours_avec_robots(dossier, pilote, RobotsFactice(refuser_la_relecture=True))
+    bilan = parcours.lancer()
+    assert bilan.statut == "limitee" and _chemins(pilote).count(LISTE) == 1
+    assert pilote.requetes_pages == 3  # la page prévue au retour est lue autrement : une fiche de plus
+
+
+def test_une_relecture_attend_le_delai_de_robots(site, dossier):
+    pilote = PiloteLecture(site)
+    parcours = _parcours_avec_robots(dossier, pilote, RobotsFactice(crawl_delay=1000))
+    parcours.lancer()
+    assert _chemins(pilote).count(LISTE) == 2  # liste, fiche, liste revue
+    assert len([p for p in parcours.horloge_factice.pauses if p >= 900]) == 2  # la fiche ET la relecture
+
+
+def test_une_relecture_vers_un_autre_hote_n_est_pas_demandee(site, dossier):
+    pilote = PiloteLecture(site)
+    parcours = fabriquer(dossier, pilote, options=Options(pages_max=3, lecture=LectureHumaine()))
+    pilote.pendant = lambda: setattr(parcours, "_hotes", {"autre.test"}) if pilote.requetes_pages == 2 else None
+    parcours.lancer()
+    assert _chemins(pilote).count(LISTE) == 1 and pilote.requetes_pages == 2

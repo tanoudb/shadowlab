@@ -1,0 +1,38 @@
+# Essai de la lecture humaine (campagne 128 : le sujet de la soirée était banni à sa 4e visite sur le score composite
+# 0,65 = `duree_pages_reguliere` + `navigation_lineaire`). Un seul bras, le sujet : 8 visites de 15 pages espacées de
+# 1 minute, profil `endurance`, une identité neuve.
+#
+# Critères (lus dans la base) : 8 visites réussies sur 8 ; aucune décision `composite` ni `composite-differe` ;
+# aucun bannissement dans le monde ; au plus 29 pages comptées par l'Arena par visite (15 documents + 14 appels de
+# données) ; le CV des durées de page de chaque visite (relevés `comportement` de `observations_js`) et le nombre de
+# pages distinctes.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer
+#   2. Le nom d'identité est à usage unique (une identité bannie ne sert plus) : un nouveau nom pour recommencer
+#      (`rythme-essai-2`…). Ne jamais recopier un dossier de `outputs/identites/`.
+#   3. Rien d'autre ne tourne sur le Mac (CPU, durées).
+#
+# Commande (une fenêtre de Chrome s'ouvre à chaque visite) :
+#   uv run shadowlab campagne configs/experiments/identite-rythme-essai.yaml
+# Durée estimée : 15 à 20 minutes (8 visites d'environ 2 minutes, 7 écarts de 1 minute).
+experiment:
+  name: identite_rythme_essai
+  description: >-
+    Essai de la lecture humaine : une identité persistante, 8 visites de 15 pages espacées de 1 minute, profil
+    endurance (durées de page dispersées, retours à la liste, refus d'une ressource vu par la sentinelle).
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      options: {headless: false, channel: chrome, identite_native: true, identite: rythme-essai-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 8
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 1}
+  concurrency: 1
+  monde: serie
+  seed: 20261116
+  output: [json, html]
