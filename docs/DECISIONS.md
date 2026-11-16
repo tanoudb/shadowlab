@@ -253,9 +253,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Coefficients initiaux : transport 1.0, empreinte 0.7, intégrité 1.2, cohérence 0.8, comportement 1.0,
   corrélation 1.5. À calibrer sur données réelles (D-10).
 - **D-48 — 11/11/2026 — Corrélation cross-session (correlation.py, migration 8).** Hash SHA-256 tronqué
-  du profil navigateur et du canvas ; table empreintes_vues ; détecteur correlation-session qui signale le
+  du profil navigateur et du canvas ; ~~table empreintes_vues ; détecteur correlation-session qui signale le
   recyclage de fingerprint (≥5 sessions identiques) et la vélocité anormale (≥30 sessions/h avec le même
-  hash). Coefficient famille corrélation : 1.5 (le signal le plus fort). 41 détecteurs au total.
+  hash).~~ **(Règle 1.1 remplacée par D-89 : règle 2.0, par monde ; seuils et poids repris.)** Coefficient famille corrélation : 1.5 (le signal le plus fort). 41 détecteurs au total.
 - **D-49 — 11/11/2026 — Niveau 07 « État de l'art ».** Tous les 41 détecteurs, seuil composite 0.3,
   WAF paranoia 4, rate limit 1 req/s, honeypots, Turnstile + reCAPTCHA, connexion à 2 tentatives max.
   Objectif : équivalent Cloudflare Enterprise Bot Management en local.
@@ -388,20 +388,21 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Chromium 156 piloté sans réglage annonce 32 sur ce poste (campagne 94) : tout humain sur une machine de 16
   Go ou plus était classé. Détecteur en 1.1. Décidé par : coordination.
 - **D-64 — 12/11/2026 — `correlation-session` 1.1 : un seul signal par fait, des libellés justes, un débit sur
-  60 minutes (révise le calcul de D-48).** Le détecteur lit toujours les deux comptes de `empreintes_vues`
+  60 minutes (révise le calcul de D-48).** ~~Le détecteur lit toujours les deux comptes de `empreintes_vues`
   (profil, canvas ; types et historique inchangés). Il n'émet plus qu'un signal de comptage, sur le plus grand
   des deux, et qu'un signal de débit. Avant, le profil et le canvas d'une même session donnaient chacun leur
   signal : 5 sessions identiques faisaient 0,7 + 0,7, « automatisé » à elles seules. Les libellés disent ce
   qui est compté (« profil vu dans N sessions de la base ») ; « rotation de fingerprint massive » désignait
   une empreinte stable. Le débit compte, pour chaque hash, les sessions commencées dans les 60 dernières
   minutes, au lieu de diviser le compte par la vie du hash (0 sous une minute, 40 par heure pour deux
-  sessions à 3 minutes). Seuils et poids inchangés. Écarté : une empreinte combinée profil + canvas, proposée
+  sessions à 3 minutes).~~ **(Règle 1.1 remplacée par D-89 ; l'empreinte combinée écartée ci-dessous est
+  celle que D-89 retient.)** Seuils et poids inchangés. Écarté : une empreinte combinée profil + canvas, proposée
   par l'analyse puis signalée par la relecture de sécurité (un moteur qui bruite son canvas à chaque session
   n'aurait plus jamais été revu). Pourquoi : aux campagnes 93 et 94, NOEZIA était classé au niveau 07 dès le
   3ᵉ passage par un débit faux (`docs/recherche/correlation-entre-sessions-2026-11-12.md`). Effet aux niveaux
   06 et 07 : de 5 à 9 sessions, le détecteur seul dit « indéterminé » ; la session reste bloquée par le
-  composite (0,7 × 1,5), sous le motif `composite` ; dès 10, rien ne change. Limites : la table ne garde que
-  10 jetons par hash, donc le débit ne décide plus seul. Inchangé, et à reprendre avec la mémoire des
+  composite (0,7 × 1,5), sous le motif `composite` ; dès 10, rien ne change. Limites : ~~la table ne garde que
+  10 jetons par hash, donc le débit ne décide plus seul~~ (table remplacée par D-89 : une ligne par visite, comptes exacts). Inchangé, et à reprendre avec la mémoire des
   visiteurs du palier 2 : un humain qui revient cinq fois reste classé ; le canvas seul, commun aux machines
   du même modèle, classe encore. Décidé par : coordination (travail d'un sous-agent Opus, repris et relu).
 - **D-65 — 12/11/2026 — Site public, seconde relecture : journal, limites par adresse, `debugger`, nettoyage
@@ -1031,3 +1032,87 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Limites : essayé avec le cookie d'une page locale, pas encore avec `sl_visiteur` ; pas d'état `alerte` ni de
   sentinelle d'identité (I6) ; pas de sauvegarde du profil ; `identite.json` ne porte ni « hôtes visés » ni « machine »
   (§ 5.2 de la conception) ; aucune campagne ne s'en sert encore. Décidé par : coordination.
+- **D-89 — 15/11/2026 — Palier 2, étape I2 : `correlation-session` 2.0, par monde (remplace la règle 1.1 de D-48 et D-64).**
+  Constat : en 1.1, la règle comptait des sessions de toute la base. Un humain qui revient 5 fois était classé comme un
+  robot qui recycle son empreinte, et une campagne influençait la suivante (campagne 101 : niveau 06 complet à 0 sur 15).
+  Les visiteurs et les mondes de D-87 permettent de compter des **visites dans un monde**. Décision (conception
+  `docs/recherche/identite-qui-dure-2026-11-12.md` § 4.3) : l'empreinte **E** est un seul hachage de `profil_complet` et
+  de `canvas` (`correlation.empreinte_e` ; un canvas en échec n'entre pas). Deux signaux. `empreinte_sans_memoire` :
+  sessions **neuves** (premier passage d'un visiteur dans le monde) de même E, commencées dans les 24 dernières heures,
+  dans le même monde, celle-ci comprise ; à partir de 5, poids 0,7 ; à partir de 10, poids 1,0 ; elle ne juge qu'une
+  session neuve. `debit_empreinte` : au moins 30 sessions de même E commencées dans les 60 dernières minutes, dans le
+  même monde, neuves ou non ; poids 0,8. Seuils et poids de D-48 inchangés, composite inchangé (version du détecteur 2.0).
+  Une session sans monde n'est pas jugée : le rejeu des sessions d'avant I1 ne juge rien (`correlation_historique`
+  rend `None`). Le rejeu ne voit que les visites antérieures du monde de la session ; sa ligne de `shadowlab rejeu`
+  donne le nombre de sessions classées « automatisé » parmi celles qui ont un monde. **Allègement d'I1** (cause
+  possible de la hausse des durées de la campagne 118, non prouvée) : `visiteurs.reconnaitre` lit d'abord et n'écrit que
+  la première fois ; une session déjà connue n'écrit plus rien ; l'application tient un cache des sessions connues
+  (`visiteurs.Connus`, 20 000 entrées au plus, les plus anciennes partent d'abord) qui évite même d'ouvrir une
+  connexion à la base. **`comportement` 2.3**, après la relecture de sécurité du 15/11 : `sans_ressources` ne juge
+  qu'une session neuve, ou un visiteur connu dont aucune session antérieure du même monde n'a chargé les ressources
+  (`/lab/static`) ; sans cela un cookie de visiteur rejoué aurait dispensé un robot qui ne charge jamais les ressources
+  (`correlation.visite_neuve`). **Bilan d'un passage** (16/11) : avant, `passages.finaliser` ne donnait jamais la
+  corrélation au détecteur ; dans le bilan de chaque passage `correlation-session` valait « indéterminé », même quand le
+  gardien avait refusé la session pour elle (les campagnes 101 et 120 ont `detecte_par` vide ; le défaut date de D-48).
+  Maintenant `correlation_historique` lit les visites antérieures du monde, avec un jugement figé au début de la
+  session (des passages tournent en parallèle). L'issue ne change pas (`challenge_non_valide`, la cause affichée reste
+  le défi) ; seuls les drapeaux changent : `classe_automatise` vrai ; `detecte_par` = `composite` de 5 à 9 sessions
+  neuves, `correlation-session` à partir de 10. Les bilans déjà en base ne sont pas recalculés. Preuve : tests écrits
+  d'abord, en échec avant le code (`tests/test_correlation_v2.py`, `5e225f1` puis `c63b10c` ;
+  `tests/test_visiteurs_allegement.py`, `34776cd` puis `6515485` ; `sans_ressources`, `3d6283f` puis `b492174` ;
+  `tests/test_bilan_correlation.py`, `853228b` puis `ff237ee`), fusions `4bb19b4` et `bef7017`.
+  **Campagne 119** (15/11, 23 h 24 à 23 h 39, `configs/experiments/correlation-06-mondes.yaml`, `monde: passage`) :
+  `noezia` en identité native, niveau 06 complet, **30 sur 30**, borne basse de Wilson 88,6 %. C'est le niveau 06 **en
+  première visite** : un seul passage par monde, donc la corrélation n'a rien à comparer. Elle ne remplace pas « 06
+  complet, 0 sur 15 » de la campagne 101 ; la question Q1 de la conception (mesurer le 06 comme une première visite)
+  reste ouverte, à Ethan. **Campagne 120** (15/11, 23 h 39 à 23 h 52, `correlation-06-mondes-serie.yaml`, `monde:
+  serie`, 15 passages dans un seul monde) : **4 sur 15**. Les 4 premiers passent ; du 5ᵉ au 15ᵉ, le gardien relève
+  `empreinte_sans_memoire` (« 5 sessions neuves de même empreinte dans les 24 dernières heures ») et rejette la preuve
+  de travail (`defi-js`, `rejete-empreinte`). Le monde 33 a 15 visites, toutes neuves, de 15 visiteurs : chaque passage
+  est un navigateur neuf, sans mémoire. C'est le comportement voulu : un robot qui revient sans mémoire est arrêté à la
+  5ᵉ session ; ce qui doit le faire passer, c'est l'identité persistante (I4, I6, puis I7). **Campagne 121** (contrôle,
+  15/11 23 h 52 au 16/11 0 h 30, `controle-vrai-chrome.yaml`, sans corrélation) : mêmes taux que les campagnes 115 et 118
+  à chaque cellule (durées dans `docs/PLAN.md` § 2) ; patchright et `noezia` au niveau 04 sont revenus au niveau de la
+  115, `noezia` aux niveaux 05 et 06 sans corrélation non : **la cause de la hausse de la 118 n'est pas établie**.
+  Limites : un cookie de visiteur rejoué donne des sessions « connues » que `empreinte_sans_memoire` ne juge pas ;
+  `debit_empreinte` et les compteurs par visiteur d'I3 doivent le couvrir (conception § 4.3 ; relecture de sécurité du
+  15/11). Pas de témoin aux campagnes 119 et 120. CAPTCHA en clés de test au niveau 06. Une seule machine, aucun humain
+  en base. Le monde par défaut est `campagne` : une campagne au niveau 06 complet partage désormais un monde par
+  campagne ; non mesuré. **Code mort signalé, non supprimé** : `correlation.enregistrer_hash` et la table
+  `empreintes_vues` sont encore écrits à la collecte (`site/app.py`) mais plus lus par le détecteur (`hash_session`
+  reste utile : `empreinte_e` s'en sert) ; la purge de `public/donnees.py` y touche encore. `shadowlab rejeu`
+  (`cli.py`) affichait encore « correlation-session avec la table actuelle empreintes_vues », alors que le chiffre vient
+  maintenant des visites antérieures du monde de chaque session : libellé corrigé le 16/11 (« visites antérieures du
+  monde de chaque session »). Décidé par : coordination (Ethan a laissé la main : « je te laisse tout continue
+  a travailler sur d'autre chose »).
+- **D-90 — 15/11/2026 — Palier 2, étape I5 : l'ordonnanceur des visites (`engines/noezia/visites.py`).** Constat : la
+  campagne « une identité qui revient » (I7) et la récolte ont besoin de dire quand commence la prochaine visite d'un
+  visiteur régulier et combien de pages elle lit. Décision : une seule source pour les deux (conception § 5.4). Elle ne
+  lit aucune page et ne fait aucune requête ; ce qui se passe dans la visite reste le rythme `prudent` de `rythme.py`.
+  Valeurs de départ, des estimations de ce qu'un humain fait, pas des valeurs réglées sur l'Arena : visites de 8 h à 23 h
+  (heure du poste) ; écart de 45 à 180 min entre deux visites, tirage log-normal de médiane 90 min, compté de la **fin**
+  de la visite précédente au début de la suivante ; première visite du matin décalée de 0 à 90 min (jamais 8 h pile) ;
+  5 à 40 pages par visite, médiane 15 ; au plus 120 pages sur toute heure glissante (une visite finie dans l'heure
+  précédente compte en entier) et 200 par jour. Un plafond réduit les pages de la visite, ou repousse la visite (à la
+  fin de l'heure, au lendemain) s'il en reste moins que le minimum. Une visite doit finir dans la plage : la dernière
+  heure de début est la fin de plage moins 30 min (`duree_visite_max_min`) ; l'ordonnanceur ne coupe pas une visite qui
+  déborde. Horloge et sommeil injectables ; l'état est en mémoire, `rejouer` reprend les visites déjà faites.
+  `rythme.tirer_lognormal` est devenu public : une seule loi pour la cadence de la récolte et pour l'ordonnanceur.
+  Preuve : `tests/test_visites.py`, écrit d'abord (`8338d6b`, en échec avant le code), code `ab4de92`, fusion `2c484bc`.
+  Limites : aucune campagne ni récolte ne s'en sert encore (I7) ; valeurs non mesurées. Décidé par : coordination
+  (Ethan a laissé la main : « je te laisse tout continue a travailler sur d'autre chose »).
+- **D-91 — 15/11/2026 — Palier 2, étape I6 : la sentinelle d'identité.** Constat : la sentinelle de la récolte s'arrête
+  au premier signe d'alerte, mais ne dit rien à l'identité persistante de D-88, qui pourrait resservir tout de suite.
+  Décision (conception § 5.5) : `sentinelle.verdict_identite` classe l'alerte : `banni` pour un 403 sur la **première
+  page** d'un passage, `alerte` pour tout autre signe (429 et autres statuts, défi en cours de passe, hors site, porte
+  d'entrée revenue trop tôt…). Elle ne fait que classer : aucune requête, aucune action. `parcours.py` écrit le verdict
+  dans l'identité (`identite.marquer`, avec `alerte_le` ou `banni_le` et la raison). États : `ok` ; `alerte` : l'identité
+  est refusée pendant 1 h (`identite.ATTENTE_ALERTE_S`), sauf option `maintenant` ; `banni` : refusée toujours, et rien ne
+  l'efface. Une visite `ok` finie sur une identité qui sortait d'une alerte la remet à `ok`. Nouveau signe, `porte_revenue` :
+  la recette peut déclarer `porte_entree.duree_s` (facultative, `recettes.py`), le temps pendant lequel le site ne
+  redemande pas le défi à un visiteur connu ; avec une identité persistante, le même défi revenu avant cette durée est
+  une alerte immédiate, sans attente ni action sur le défi ; l'heure du dernier défi franchi est gardée dans l'identité
+  (`porte_franchie_le`). Preuve : `tests/test_sentinelle.py` et `tests/test_identite.py`, écrits d'abord (`81f9cbc`, en
+  échec avant le code), code `99897ca`, fusion `2c484bc`. Limites : aucune campagne ne s'en sert encore ; pas de sauvegarde
+  du profil ; une seule identité à la fois. Décidé par : coordination (Ethan a laissé la main : « je te laisse tout
+  continue a travailler sur d'autre chose »).
