@@ -15,8 +15,10 @@ def port_libre() -> int:
 
 @pytest.fixture
 def reglages(tmp_path, monkeypatch):
-    """Réglages isolés : base et sorties temporaires, port libre (transmis au site lancé à part)."""
+    """Réglages isolés : base, sorties et identités temporaires, port libre (transmis au site lancé à part). La campagne
+    lit l'état des identités persistantes par leur nom : un test ne doit jamais lire celles de `outputs/identites`."""
     monkeypatch.setenv("SHADOWLAB_SORTIES", str(tmp_path / "sorties"))
+    monkeypatch.setenv("SHADOWLAB_IDENTITES", str(tmp_path / "identites"))
     monkeypatch.setenv("SHADOWLAB_BASE", str(tmp_path / "sorties" / "test.sqlite3"))
     monkeypatch.setenv("SHADOWLAB_PORT", str(port_libre()))
     monkeypatch.setenv("SHADOWLAB_PORT_ARENA", str(port_libre()))

@@ -1,8 +1,8 @@
 # Palier 2, I7 : essai de la mécanique de la soirée (identite-soiree.yaml), pour la valider avant les cinq heures.
 #
 # Les mêmes quatre bras, au profil `endurance`, chacun dans son monde ; les visites sont espacées de 1 minute et lisent
-# 3 pages. Le témoin de sentinelle fait 6 visites, banni avant la 3e (de quoi voir le refus, puis les trois visites
-# refusées sans requête). Le témoin négatif en fait 6 aussi, pour atteindre sa 5e visite (avec 3 visites son critère
+# 3 pages. Le témoin de sentinelle a 6 visites prévues, banni avant la 3e (de quoi voir le refus ; les trois suivantes
+# ne sont pas lancées, ligne `bannie` du relevé). Le témoin négatif en fait 6 aussi, pour atteindre sa 5e visite (avec 3 visites son critère
 # resterait « non mesuré »). Le sujet fait 3 visites, le témoin classique 3.
 # Ce que l'essai montre : un seul visiteur et une seule empreinte pour le sujet, le défi JavaScript à la 1re visite
 # seulement, le 403 puis zéro page pour la sentinelle, le bannissement du témoin négatif. Il ne dit rien de l'allure

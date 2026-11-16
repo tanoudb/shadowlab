@@ -47,6 +47,7 @@ from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre
 from .engines.base import FonctionIndisponible, RefusProtection
+from .engines.noezia import identite as module_identite
 from .engines.noezia.identite import IdentiteRefusee
 from .issues import CAUSE_PANNE_ARENA
 from .mesures import PIDS_EXCLUS, Echantillonneur
@@ -451,7 +452,9 @@ def ecrire_note(reglages: Reglages, experiment_id: int, ligne: dict[str, Any]) -
 
     Genres : `manquee` (visite manquée : motif `retard` ou `infrastructure`, heure prévue, heure constatée, clé du
     créneau, essai), `interrompue` (visite coupée en plein milieu par un arrêt brutal : début, dernière requête vue par
-    l'Arena, pages), `echeance` (la course est finie pour le bras : répétitions restantes, non faites)."""
+    l'Arena, pages), `echeance` (la course est finie pour le bras : répétitions restantes, non faites),
+    `attente_alerte` (identité du bras en alerte : heure prévue, fin de l'attente, `alerte_le` ; aucune visite avant),
+    `bannie` (identité du bras bannie : plus aucune visite, répétitions restantes, non faites)."""
     fichier = dossier_campagne(reglages, experiment_id) / FICHIER_CADENCE
     fichier.parent.mkdir(parents=True, exist_ok=True)
     with fichier.open("a", encoding="utf-8") as flux:
@@ -720,6 +723,50 @@ def _fin_de_course(noter, cadence, horloge, experience: Experience, moteur_cfg: 
     return "termine"
 
 
+def _premiere_a_faire(experience: Experience, moteur_cfg: MoteurConfig, protection: str, faits) -> int | None:
+    """La première répétition du bras qui n'est pas encore dans la base (None : tout est fait)."""
+    for repetition, ordre in _plan(experience, moteur_cfg, protection):
+        if any((moteur_cfg.nom_affiche, protection, nom, repetition) not in faits for nom in ordre):
+            return repetition
+    return None
+
+
+def _identite_avant_creneau(
+    nom: str, cadence, noter, horloge, experience: Experience, moteur_cfg: MoteurConfig, repetition: int
+) -> str | None:
+    """Avant chaque créneau d'un bras espacé qui a une identité persistante (I9, § 5.5) : l'état noté de l'identité,
+    lu sans verrou. Rend `bannie` (plus aucune visite : une note avec les répétitions restantes, non faites, comme à
+    l'échéance), `alerte` (aucune visite avant la fin de l'attente : la cadence le note et planifie à partir de cette
+    fin, dans la plage) ou None (la visite peut avoir lieu). Aucune requête, aucun passage en base."""
+    donnees = module_identite.lire_etat(nom)
+    if not donnees:
+        return None
+    maintenant = (horloge or datetime.now)()
+    if donnees.get("etat") == "banni":
+        restantes = experience.visites_de(moteur_cfg) - repetition + 1
+        noter(
+            {
+                "genre": "bannie",
+                "identite": nom,
+                "banni_le": donnees.get("banni_le"),
+                "raison": donnees.get("raison"),
+                "constatee": maintenant.astimezone().isoformat(timespec="seconds"),
+                "repetition": repetition,
+                "restantes": restantes,
+            }
+        )
+        # warning : une identité déjà bannie au lancement (suffixe réutilisé) ne laisse plus aucune ligne d'erreur
+        journal.warning("%s : identité %s bannie, %d visite(s) non faite(s)", moteur_cfg.nom_affiche, nom, restantes)
+        return "bannie"
+    fin = module_identite.fin_d_alerte(donnees, maintenant.astimezone())
+    if fin is None or espacement_mod.au_cadran(fin, maintenant) <= maintenant:
+        return None
+    details = {"identite": nom, "alerte_le": donnees.get("alerte_le"), "raison": donnees.get("raison")}
+    cadence.reporter_alerte(fin, {**details, "repetition": repetition})
+    journal.info("%s : identité %s en alerte, aucune visite avant %s", moteur_cfg.nom_affiche, nom, fin.isoformat())
+    return "alerte"
+
+
 def executer_unite(
     reglages: Reglages,
     experiment_id: int,
@@ -745,6 +792,43 @@ def executer_unite(
             base = reglages.url_arena
         dossier_artefacts = reglages.sorties / "artefacts" / str(experiment_id)
         arret = fichier_arret(reglages)
+        label = moteur_cfg.nom_affiche
+        reglages_visite = _reglages_visite(reglages, experiment_id, moteur_cfg, protection)
+        reglage_espacement = moteur_cfg.espacement or experience.espacement
+        cadence = noter = None
+        if reglage_espacement is not None:
+            noter = _noteur(reglages, experiment_id, label, protection)
+            cadence = espacement_mod.Cadence(
+                reglage_espacement,
+                horloge=horloge,
+                dormir=dormir,
+                graine=f"{experience.seed}:{label}:{protection}",
+                depart=datetime.fromisoformat(ligne["created_at"]),
+                faites=_visites_du_bras(cx, reglages, experiment_id, label, protection),
+                notes=[
+                    n
+                    for n in lire_notes(reglages, experiment_id)
+                    if n.get("bras") == label and n.get("protection") == protection
+                ],
+                noter=noter,
+            )
+        # Identité persistante d'un bras espacé (I9) : son état est lu avant chaque créneau. Avant d'ouvrir le pilote
+        # aussi : le moteur refuse de s'ouvrir sur une identité bannie ou en alerte, et ce refus écrivait toutes les
+        # répétitions restantes en erreur (« démarrage impossible »). En alerte, on attend donc la fin de l'attente (le
+        # premier créneau est pris avant l'ouverture) ; bannie, le bras est fini sans rien écrire dans `runs`.
+        nom_identite = moteur_cfg.options.get("identite") if cadence is not None else None
+        premier = None
+        a_faire = _premiere_a_faire(experience, moteur_cfg, protection, faits) if nom_identite else None
+        if nom_identite and a_faire is not None:
+            etat = _identite_avant_creneau(nom_identite, cadence, noter, horloge, experience, moteur_cfg, a_faire)
+            if etat == "bannie":
+                return "termine"
+            if etat == "alerte":
+                premier = cadence.attendre(interrompre=arret.exists)
+                if premier is None:
+                    return "interrompu"
+                if premier.echeance:
+                    return _fin_de_course(noter, cadence, horloge, experience, moteur_cfg, a_faire)
         pilote = classe(reglages.hotes_autorises, moteur_cfg.options)
         try:
             pilote.open()
@@ -758,26 +842,6 @@ def executer_unite(
             versions = pilote.versions()
             engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
             journal.info("moteur %s (%s) %s", moteur_cfg.nom_affiche, protection, versions)
-            label = moteur_cfg.nom_affiche
-            reglages_visite = _reglages_visite(reglages, experiment_id, moteur_cfg, protection)
-            reglage_espacement = moteur_cfg.espacement or experience.espacement
-            cadence = noter = None
-            if reglage_espacement is not None:
-                noter = _noteur(reglages, experiment_id, label, protection)
-                cadence = espacement_mod.Cadence(
-                    reglage_espacement,
-                    horloge=horloge,
-                    dormir=dormir,
-                    graine=f"{experience.seed}:{label}:{protection}",
-                    depart=datetime.fromisoformat(ligne["created_at"]),
-                    faites=_visites_du_bras(cx, reglages, experiment_id, label, protection),
-                    notes=[
-                        n
-                        for n in lire_notes(reglages, experiment_id)
-                        if n.get("bras") == label and n.get("protection") == protection
-                    ],
-                    noter=noter,
-                )
             for repetition, ordre in _plan(experience, moteur_cfg, protection):
                 for nom_scenario in ordre:
                     if (moteur_cfg.nom_affiche, protection, nom_scenario, repetition) in faits:
@@ -788,11 +852,21 @@ def executer_unite(
                     creneau = None
                     if cadence is not None and noter is not None:  # une visite = un passage ; scénario `visite` seul
                         while True:
-                            creneau = cadence.attendre(interrompre=arret.exists)
-                            if creneau is None:
-                                return "interrompu"
-                            if creneau.echeance:
-                                return _fin_de_course(noter, cadence, horloge, experience, moteur_cfg, repetition)
+                            if premier is not None:  # attendu avant l'ouverture du pilote (identité en alerte)
+                                creneau, premier = premier, None
+                            else:
+                                if nom_identite and (
+                                    _identite_avant_creneau(
+                                        nom_identite, cadence, noter, horloge, experience, moteur_cfg, repetition
+                                    )
+                                    == "bannie"
+                                ):
+                                    return "termine"
+                                creneau = cadence.attendre(interrompre=arret.exists)  # en alerte : pas avant la fin
+                                if creneau is None:
+                                    return "interrompu"
+                                if creneau.echeance:
+                                    return _fin_de_course(noter, cadence, horloge, experience, moteur_cfg, repetition)
                             panne = _panne_infrastructure(reglages, protection)
                             if panne is None:
                                 break

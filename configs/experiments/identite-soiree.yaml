@@ -7,7 +7,7 @@
 #                         dès sa 5e visite, puis banni ;
 #   - temoin-sentinelle : une identité persistante dont le visiteur est BANNI par la campagne avant sa 3e visite (le même
 #                         code que `shadowlab arena bannir`) : 6 visites ; aucune page demandée après le premier 403,
-#                         identité notée `banni`, les visites 4 à 6 sont refusées avant tout lancement de Chrome ;
+#                         identité notée `banni`, les visites 4 à 6 ne sont pas lancées (ligne `bannie` du relevé) ;
 #   - temoin-classique  : `playwright` : 4 visites ; il doit rester arrêté, par l'Arena.
 # L'écart de 10 minutes est compté de la FIN d'une visite au DÉBUT de la suivante, par bras (la première visite part tout
 # de suite). Les quatre bras s'attendent chacun de leur côté : `concurrency` doit couvrir les quatre.

@@ -769,8 +769,11 @@ class Parcours:
 
     def _relire(self, cible: Page) -> tuple[Alerte | None, float, bool]:
         """Demande une page déjà lue (retour à la liste, fiche revue). Même garde que `_traiter` (périmètre, sauts,
-        sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Comme `_traiter` : jamais
-        un hôte hors recette, robots.txt revérifié, son `Crawl-delay` respecté. Rend (alerte, début, page demandée)."""
+        porte, sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Comme `_traiter` :
+        jamais un hôte hors recette, robots.txt revérifié, son `Crawl-delay` respecté, et un défi revenu en cours de
+        passe traité par `_porte_en_cours` (répétition de la course I9 : la porte de 600 s expirait sur un retour à la
+        liste, l'Arena servait son défi en 403 et la sentinelle s'arrêtait sur le statut). Rend (alerte, début, page
+        demandée)."""
         if _hote(cible.adresse) not in self._hotes:
             return None, self._horloge(), False
         crawl_delay = None
@@ -792,6 +795,10 @@ class Parcours:
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             self._evenement(self._etat, self._passe, "echec", {"adresse": cible.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut, True
+        if self._repasser:  # une relecture n'est jamais la première page : seule la porte en cours de passe s'applique
+            reponse, alerte = self._porte_en_cours(cible, reponse, relecture=True)
+            if alerte is not None:
+                return alerte, debut, True
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -1042,7 +1049,9 @@ class Parcours:
         return None, attendu
 
     # ── Repasser la porte en cours de passe (option `repassages_max`) ───
-    def _porte_en_cours(self, page: Page, reponse: Reponse) -> tuple[Reponse, Alerte | None]:
+    def _porte_en_cours(
+        self, page: Page, reponse: Reponse, *, relecture: bool = False
+    ) -> tuple[Reponse, Alerte | None]:
         """En cours de passe, la recette permettant de repasser la porte : un défi qui revient (le laissez-passer a
         expiré) est traité comme à l'entrée, SANS AUCUNE action : attente sur place (`attendre_s`), ou statut d'alerte
         périmé d'un défi franchi pendant la lecture (aucun défi dans la page, page actuelle en 2xx et sans défi).
@@ -1050,7 +1059,8 @@ class Parcours:
         (entrée comprise) ; les défis d'une même rafale (`RAFALE_PORTE_S`, `RAFALE_PORTE_MAX`) font un seul passage.
         Hors des bornes, ou avec un moteur sans JavaScript, la réponse est rendue telle quelle : la sentinelle arrête
         avec la même alerte que sans l'option. Un défi qui ne se lève pas : alerte, arrêt. Chaque défi vu ici est tracé
-        (événement `porte_repassage`, `resume.json`)."""
+        (événement `porte_repassage`, `resume.json`). `relecture` : la page est une relecture de la lecture humaine
+        (`_relire`) ; la trace le dit (`relecture: true`), son `rang` est celui de la prochaine page lue."""
         defi = detecter_defi(reponse.html, reponse.entetes)
         if defi is None and reponse.statut not in STATUTS_ALERTE:
             return reponse, None  # une page ordinaire
@@ -1073,6 +1083,9 @@ class Parcours:
             "ecart_s": _secondes(self._dernier_passage, vu),  # depuis le passage précédent, ou le début de la passe
             "rafale": en_rafale,
         }
+        if relecture:
+            trace["relecture"] = True
+        ou = f"en relecture ({page.adresse})" if relecture else f"en page {trace['rang']}"
         # Identité persistante et durée de porte déclarée : c'est la durée depuis le dernier passage (souvent la veille)
         # qui juge, pas l'écart depuis le début de la passe. Un cookie de 24 h peut expirer quelques minutes après le
         # début d'une visite : il se repasse sans alerte. Revenu bien avant : alerte tout de suite, sans attente.
@@ -1086,7 +1099,7 @@ class Parcours:
         if refus is not None:
             trace["refus"], raison = refus
             self._tracer_repassage(trace)
-            self._ecran(f"Porte : défi ({trace['defi']}) en page {trace['rang']}, pas de nouveau passage : {raison}.")
+            self._ecran(f"Porte : défi ({trace['defi']}) {ou}, pas de nouveau passage : {raison}.")
             return reponse, None
         if defi is not None:
             apparue, attendu = self._attendre_sans_action(courante)
@@ -1111,7 +1124,7 @@ class Parcours:
             else f"repassage {self._nombre_repassages()} sur {porte.repassages_max} au plus"
         )
         self._ecran(
-            f"Porte repassée en page {trace['rang']} ({quel}) : défi ({trace['defi']}) levé seul après "
+            f"Porte repassée {ou} ({quel}) : défi ({trace['defi']}) levé seul après "
             f"{trace['attente_s']:g} s, sans action, {trace['ecart_s']:g} s après le passage précédent."
         )
         return courante, None
