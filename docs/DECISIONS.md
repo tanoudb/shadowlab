@@ -1179,3 +1179,43 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   machine. Preuve : `tests/test_bannissement.py`, écrit d'abord (`db87b7c`, en échec avant le code), code `2926718`,
   fusion `08635e0` ; suite complète : 2 015 tests verts (16/11, 9 min 10 s). Décidé par : coordination (Ethan a laissé la
   main : « je te laisse tout continue a travailler sur d'autre chose »).
+- **D-93 — 16/11/2026 — Palier 2, étape I7 : le scénario « visite » et la campagne « une identité qui revient ».**
+  Constat : I3 à I6 étaient en place, mais aucune campagne ne s'en servait. La conception (§ 6.1 et § 6.2) demande une
+  soirée où une même identité revient de nombreuses fois, avec trois témoins. Décision : le **scénario `visite`** (le 20ᵉ
+  scénario, `scenarios.py`). Il entre par `?sl=`, lit au plus N pages de la vitrine (15 par défaut), passe par `Parcours`,
+  et sa porte d'entrée est déclarée valable 24 h. Il note le visiteur lu dans `visites` par le jeton de session (jamais le
+  cookie signé), le monde, si la visite est neuve, et l'état de l'identité. **Champ `espacement` des campagnes**
+  (`espacement.py`) : `fixe`, où l'écart se compte de la **fin** d'une visite au **début** de la suivante et où l'attente se
+  fait par tranches de 5 s au plus, pour que `shadowlab arreter` reste écouté ; ou `ordonnanceur`, qui appelle `visites.py`
+  (D-90). Les bras tournent en parallèle, chacun avec sa cadence : `concurrency` doit couvrir tous les bras. Sans le champ,
+  rien ne change. Champs ajoutés : `pages_par_visite`, et, par entrée, `visites` et `bannir_avant_visite` (réservé au témoin
+  de sentinelle ; il exige `identite` et `monde: serie`). **Un monde par bras** : `monde: serie` nomme le monde à partir du
+  **libellé** de l'entrée (`c<n°>:<libellé>:<niveau>`) ; deux entrées `noezia` aux libellés différents ont donc deux mondes.
+  **Bilan** : `shadowlab soiree bilan <n°> [--json]` (`soiree.py`) donne un verdict par critère du § 6.2 (tenu, non tenu,
+  non mesuré) ; code de sortie 0 si tout est tenu, 1 sinon, 2 si la campagne est inconnue. **Récolte** :
+  `recolte lancer --identite <nom>`, moteur navigateur seulement. **Deux corrections faites en route.** (1) Sentinelle :
+  la page de refus de l'Arena (`data-arena="blocage"`) était prise pour un défi ; la porte attendait 15 s, puis l'identité
+  passait en `alerte` au lieu de `banni`. Désormais, pour toute récolte, un refus en première page arrête tout de suite et
+  l'identité devient `banni`, ce que D-91 voulait. (2) Moteur : l'état de l'identité n'était lu qu'à l'ouverture, une fois
+  par unité ; il est relu avant chaque lancement de Chrome, donc une identité bannie à la visite d'avant ne revient pas.
+  **Témoin classique** : le pilote `playwright` n'avait pas `etat_page`. Devant le défi JavaScript, le parcours l'abandonnait
+  « après 0 s d'attente » : il était arrêté par l'outil, pas par l'Arena. Il a maintenant `etat_page`, avec le même contrat
+  que `noezia` ; `patchright` en hérite. Il attend le défi comme `noezia`, puis l'Arena le juge. Aucune option d'empreinte,
+  aucune requête en plus. **Essai 126** (`identite-soiree-essai.yaml`, 16/11, 3 h 38 à 3 h 46, avant le correctif du
+  témoin) : non tenu sur un seul critère, celui du témoin classique (« arrêté par l'outil, aucun refus de l'Arena ») ; tous
+  les autres sont tenus. **Essai 127** (même fichier, identités en `-2`, après le correctif, 3 h 54 à 4 h 03) : **tenu, à
+  tous les critères**. Sujet : 3 visites sur 3, 1 visiteur, 1 empreinte E ; défi émis à la 1ʳᵉ visite seulement ; aucune
+  alerte, 0 bannissement. Témoin négatif : 6 visites ; la première arrêtée est la 5ᵉ ; 2 bannissements dans son monde.
+  Sentinelle : bannie (motif manuel) ; premier refus à la 3ᵉ visite ; 0 page demandée après ; identité notée `banni`.
+  Témoin classique : 0 visite réussie sur 3, refus enregistré par l'Arena. **Soirée lancée le 16/11, résultat à venir
+  (campagne 128)** : `identite-soiree.yaml`, sujet et témoin négatif à 24 visites espacées de 10 minutes, 15 pages par
+  visite ; sentinelle à 6 visites ; témoin classique à 4 visites ; environ 5 heures. Limites : chaque visite relit les mêmes
+  pages (la liste, puis les premières fiches) : le suivi est régulier, pas varié ; une campagne reprise repart sans attendre,
+  car l'état de la cadence est en mémoire ; `recolte reprendre --maintenant` ne lève pas l'alerte d'une identité, bien que
+  le message le conseille ; `--identite` n'est lu que par `lancer` ; la récolte en plusieurs visites avec attente (§ 5.6) et
+  l'identité par défaut au nom de la recette ne sont pas faites ; « même visiteur » avec un vrai Chrome n'est vérifié que
+  par les essais, à 3 visites ; les noms d'identité sont à usage unique (la sentinelle reste bannie). Preuve : tests écrits
+  d'abord (`329f438`, en échec avant le code, puis `4b5fee2` pour le témoin), code `77bdc41` et `353ec91` (fusion `b224227`),
+  puis `1f7c7ee` (fusion `91fa5f9`) ; suite complète : 2 097 tests verts (16/11, 8 min 31 s), puis 2 055 tests rapides verts
+  après le correctif du témoin. Décidé par : coordination (Ethan a laissé la main : « je te laisse tout continue a
+  travailler sur d'autre chose »).

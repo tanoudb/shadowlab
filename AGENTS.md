@@ -157,7 +157,7 @@ recommander des optimisations.
   **I4**, moteur : option `identite` du moteur `noezia` (un dossier `outputs/identites/<nom>/`,
   identité native seulement). **I5**, moteur (D-90) : ordonnanceur des visites (`visites.py`, 8 h à 23 h, écart de 45 à 180 min,
   5 à 40 pages, 120 pages par heure et 200 par jour). **I6**, moteur (D-91) : sentinelle d'identité (`ok`, `alerte` 1 h,
-  `banni` ; un 403 sur la première page veut dire `banni`). Aucune campagne ne se sert encore d'I4, I5 ni I6. Campagne de
+  `banni` ; un 403 sur la première page veut dire `banni`). Campagne de
   contrôle 118 : mêmes taux que la 115 à chaque cellule. **Campagne 119** (niveau 06 complet, un passage par monde) :
   `noezia` natif 30 sur 30, c'est une première visite, elle ne remplace pas le 0 sur 15 de la 101. **Campagne 120** (15
   passages dans un seul monde) : 4 sur 15, arrêt voulu à la 5ᵉ session neuve de même empreinte. **Campagne 121** (contrôle) :
@@ -169,10 +169,19 @@ recommander des optimisations.
   **Campagne 124** (monde 37, 3 passages par moteur) : `noezia` natif 3 sur 3, `playwright` 0 sur 3, banni dès le 1ᵉʳ
   passage, 3 lignes dans `bannissements` ; réserve : le témoin est aussi détecté par ses propres signaux, donc elle ne prouve
   pas que le bannissement arrête un robot qui passerait sans lui (témoin de la sentinelle, I7). **Campagne 125** (contrôle) :
-  mêmes taux que la 115, la 118 et la 121 à chaque cellule. Reste I7, puis I8 à I10 (`docs/recherche/identite-qui-dure-2026-11-12.md`
-  § 7). Les quatre questions de la conception restent ouvertes.
-- **2 015 tests verts** (`uv run pytest`, 16/11, après D-92, rapides et intégration avec de vrais
-  navigateurs et la pile Docker, 9 min 10 s), 11 tests de l'interface (vitest), lint propre. Branche
+  mêmes taux que la 115, la 118 et la 121 à chaque cellule. Conception : `docs/recherche/identite-qui-dure-2026-11-12.md` § 7. **I7** (D-93, 16/11, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ : entre par `?sl=`, lit
+  au plus 15 pages de la vitrine, note le visiteur lu dans `visites`), champ `espacement` des campagnes (`fixe` : écart compté de la fin
+  d'une visite au début de la suivante, ou `ordonnanceur` : `visites.py`), un monde par bras (`monde: serie`, nom tiré du
+  libellé), `shadowlab soiree bilan <n°>` (verdict par critère du § 6.2), `recolte lancer --identite <nom>`. Corrigés en route :
+  la sentinelle prenait la page de refus de l'Arena pour un défi (l'identité passait en `alerte`, pas `banni`) ; le moteur relit
+  l'état de l'identité avant chaque lancement de Chrome ; le pilote `playwright` a maintenant `etat_page` (le témoin classique
+  attend le défi, l'Arena le juge). **Essai 126** : non tenu sur un seul critère, celui du témoin classique (arrêté par l'outil).
+  **Essai 127** (3 visites) : tenu à tous les critères (sujet 3 sur 3, 1 visiteur, 1 empreinte E ; témoin négatif arrêté à la 5ᵉ
+  visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 3, refus de l'Arena). **Soirée lancée le 16/11, résultat
+  à venir (campagne 128)** : sujet et témoin négatif à 24 visites espacées de 10 minutes. Reste I8 (humains qui reviennent, attend
+  Ethan), I9 (7 jours) et I10 (comptes). Les quatre questions de la conception restent ouvertes.
+- **2 097 tests verts** (`uv run pytest`, 16/11, après I7, rapides et intégration avec de vrais
+  navigateurs et la pile Docker, 8 min 31 s ; 2 055 tests rapides verts après le correctif du témoin), 11 tests de l'interface (vitest), lint propre. Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
@@ -278,6 +287,9 @@ uv run shadowlab public frequentation | sessions            # visites et session
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
 uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
 uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
+uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml  # I7 : 4 bras, 3 visites (environ 15 min) ; renommer les identités (`-2`, `-3`…) avant de relancer, une identité bannie ne sert plus
+uv run shadowlab soiree bilan <n°> [--json]                # verdict par critère de la soirée (0 tout tenu, 1 sinon, 2 campagne inconnue) ; la soirée est `identite-soiree.yaml` (campagne 128, environ 5 h)
+uv run shadowlab recolte lancer <recette> --moteur navigateur --identite <nom>  # même profil Chrome, donc même visiteur, d'une passe à l'autre (lu par `lancer` seulement)
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
@@ -301,7 +313,9 @@ src/shadowlab/
 │                    #   visites.py = ordonnanceur des visites (D-90) ; sentinelle.py = aussi la sentinelle d'identité (D-91)
 ├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
-├── scenarios.py     # 19 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
+├── scenarios.py     # 20 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
+├── espacement.py    # Écart entre deux visites d'un bras (`fixe` ou `ordonnanceur`, D-93)
+├── soiree.py        # Bilan de la soirée « une identité qui revient » : `shadowlab soiree bilan` (D-93)
 ├── commande_recolte.py  # `shadowlab recolte` : lancer, reprendre, etat, essayer, noter (D-70)
 ├── detection.py     # 42 détecteurs
 ├── issues.py        # Classification en 6 issues
