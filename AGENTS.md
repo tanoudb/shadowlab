@@ -146,7 +146,7 @@ recommander des optimisations.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
-- **Palier 2 commencé** (15/11, D-87 à D-91 ; exception à la règle du plan § 4, décidée par la coordination, Ethan ayant
+- **Palier 2 commencé** (15/11, D-87 à D-92 ; exception à la règle du plan § 4, décidée par la coordination, Ethan ayant
   laissé la main : « je te laisse tout continue a travailler sur d'autre chose »). **I1**, Arena : migration 10 (tables
   `mondes`, `visites`, `bannissements` vide, colonne `runs.monde_id`), cookie `sl_visiteur` signé, champ `monde` des
   campagnes (`campagne`, `serie`, `passage`) ; D-87 ne change aucune décision de l'Arena. **I2**, Arena (D-89, 15/11) :
@@ -161,11 +161,19 @@ recommander des optimisations.
   contrôle 118 : mêmes taux que la 115 à chaque cellule. **Campagne 119** (niveau 06 complet, un passage par monde) :
   `noezia` natif 30 sur 30, c'est une première visite, elle ne remplace pas le 0 sur 15 de la 101. **Campagne 120** (15
   passages dans un seul monde) : 4 sur 15, arrêt voulu à la 5ᵉ session neuve de même empreinte. **Campagne 121** (contrôle) :
-  mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non établie (`docs/PLAN.md` § 2). Reste I3 (bannissement
-  par visiteur, profil « endurance »), puis I7. Les quatre questions de la conception restent ouvertes.
-- **1 963 tests verts** (`uv run pytest`, 16/11 à 1 h, après D-89 à D-91, rapides et intégration avec de vrais
-  navigateurs et la pile Docker, 8 min 58 s), 11 tests de l'interface (vitest), lint propre. Branche
-  `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 10 (D-87).
+  mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non établie (`docs/PLAN.md` § 2). **I3**, Arena (D-92,
+  16/11) : bannissement lu en tête du gardien, par visiteur (403 même avec un nouveau jeton) et par empreinte E pour les seules
+  sessions neuves du monde ; compteurs de pages par visiteur (plus de 240 en 1 h ou 2 000 en 24 h : banni) ; option de profil
+  `bannissement.actif`, vraie dans le seul profil `endurance` (le 06 pour un visiteur qui revient : porte d'entrée par
+  visiteur valable 24 h, aucun CAPTCHA) ; les niveaux 01 à 07 ne changent pas d'une décision. Migration 11 (deux index).
+  **Campagne 124** (monde 37, 3 passages par moteur) : `noezia` natif 3 sur 3, `playwright` 0 sur 3, banni dès le 1ᵉʳ
+  passage, 3 lignes dans `bannissements` ; réserve : le témoin est aussi détecté par ses propres signaux, donc elle ne prouve
+  pas que le bannissement arrête un robot qui passerait sans lui (témoin de la sentinelle, I7). **Campagne 125** (contrôle) :
+  mêmes taux que la 115, la 118 et la 121 à chaque cellule. Reste I7, puis I8 à I10 (`docs/recherche/identite-qui-dure-2026-11-12.md`
+  § 7). Les quatre questions de la conception restent ouvertes.
+- **2 015 tests verts** (`uv run pytest`, 16/11, après D-92, rapides et intégration avec de vrais
+  navigateurs et la pile Docker, 9 min 10 s), 11 tests de l'interface (vitest), lint propre. Branche
+  `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :
@@ -238,6 +246,7 @@ recommander des optimisations.
 | 05 | Protection avancée | 35 détecteurs, PoW lié au TLS (difficulté 15), Turnstile + reCAPTCHA v2 (test keys), WAF paranoia 2, login anti-bot |
 | 06 | Défense multicouche | 41 détecteurs dont corrélation cross-session, honeypots, WAF paranoia 3, PoW difficulté 18, login anti-bot |
 | 07 | État de l'art | Mêmes détecteurs que 06, seuil composite minimal (0,3), WAF paranoia 4, PoW difficulté 20, limite 1 requête/s, login limité à 2 tentatives |
+| endurance | Le 06 pour un visiteur qui revient | Détecteurs, seuil composite 0,5, WAF paranoia 3, PoW difficulté 18 et login du 06 ; porte d'entrée (défi JavaScript) liée au visiteur, valable 24 h ; aucun CAPTCHA ; bannissement par visiteur et par empreinte, au-delà de 240 pages/h ou 2 000 pages/24 h (D-92) |
 
 Source exacte : `configs/arena/profils.yaml` (`shadowlab arena appliquer` régénère Nginx et Coraza à partir de lui).
 
@@ -267,6 +276,8 @@ uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 uv run shadowlab public frequentation | sessions            # visites et sessions par jour ; sessions par taille (repérer un abus)
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
+uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
+uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
@@ -282,7 +293,7 @@ Prérequis : Python 3.12, `uv`, Node 22 (`mise`), Google Chrome (Selenium), Chro
 ## Carte du code
 ```
 src/shadowlab/
-├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker) ; visiteurs.py = visiteurs et mondes (D-87)
+├── arena/           # Anti-Bot Arena (frontal TLS, profils, défis, CAPTCHA, pile Docker) ; visiteurs.py = visiteurs et mondes (D-87) ; bannissements.py = bannissement par visiteur, par empreinte et par débit de pages (D-92)
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
 │   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
@@ -359,8 +370,8 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Un vrai Chrome n'a pas un JA4 unique : quand il reprend sa session TLS, son ClientHello porte l'extension
   `pre_shared_key` en plus (`t13d1517h2_…` devient `t13d1518h2_…`). Tout ce qui lie quelque chose au TLS doit
   passer par l'empreinte de liaison (`tls.ja4_liaison`, D-73), pas par le JA4 exact.
-- La base du site public passe par le même `database.MIGRATIONS` : elle reçoit la migration 10 (tables vides, colonne
-  `runs.monde_id`) **au prochain redémarrage de l'application publique** (non relancée au 15/11). Sauvegardes avant la
+- La base du site public passe par le même `database.MIGRATIONS` : elle reçoit les migrations 10 (tables vides, colonne
+  `runs.monde_id`) **et 11** (deux index sur `bannissements`) **au prochain redémarrage de l'application publique** (non relancée au 15/11). Sauvegardes avant la
   migration 10 : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` (labo, schéma 9) et
   `outputs/public/public-avant-migration10-2026-11-15.sqlite3`.
 - Le navigateur garde les scripts de `/lab/static` en cache une heure : après une modification, vérifier avec
