@@ -3647,3 +3647,9 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Décisions** : D-94 et D-95 (coordination). D-95 révise, pour ces deux règles, la décision du 15/11 « aucune règle ne change ». Piège corrigé : la base du site public est déjà au schéma 11 (vérifié le 16/11).
 - **Vérifié** (coordination) : 2 169 tests verts après la fusion du calibrage, lint propre ; campagne de contrôle 132 identique à la 115, la 118, la 121 et la 125 dans les 9 cellules (`patchright` sans tête toujours pris par `screen_position_zero`, 45 sur 45).
 - **Reste** : I8, I9, I10 ; molette à crans ; confirmer `23a7b8a2`.
+
+## 2026-11-16 (15h22) — Claude (Fable 5.2, coordination) — Contrôle du calibrage (D-95) et septième session du site public
+- Contrôlé en lecture seule : `soiree bilan 131` rend TENU (sujet 24 visites réussies sur 24) ; campagne 132 (contrôle de D-95) : `noezia` natif 15 sur 15 aux niveaux 04, 05 et 06 sans corrélation, moteur `patchright` (ses deux libellés réunis) 10, 15 et 0 sur 30, comme les campagnes 115, 118, 121 et 125 ; suite complète code 0, lint propre.
+- Rejeu de la base publique (7 sessions) : `c7c5142c` n'est plus arrêtée à aucun niveau, cinq autres non plus ; `414f351a` (navigateur intégré d'une application) reste arrêtée de 03 à 07, comme décidé le 15/11.
+- Septième session `a00a06bc` (16/11, 13 h 54 UTC, non terminée, 9 requêtes, 1 empreinte, 1 envoi `trace`) : se dit Safari 17 sur iPhone (iOS 17.0) ; arrêtée de 04 à 07 et en `endurance` par le score composite (1,01 au niveau 04) : `outer_eq_inner`, `devices_vide`, `polices_os_manquantes`, plus `screen_position_zero` au niveau 06. Les deux iPhone déjà vus passent : sans doute pas un vrai iPhone, non établi. Session anonyme : aucune règle ne change.
+- Reste : I8 (attend Ethan), I9 (7 jours), I10 (comptes).
