@@ -31,6 +31,7 @@ from ..base import Driver
 from .etat import Etat, Page, canonique
 from .export import FORMAT_CSV, ecrire_exports
 from .extraction import Signatures
+from .lecture import LectureHumaine, PlanDeLecture
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
 from .rythme import Cadence, rythme_de
@@ -143,6 +144,11 @@ class Moteur(Protocol):
 
     def description(self) -> dict[str, Any]: ...
 
+    # Facultatifs (le parcours les cherche avec `getattr`) :
+    #   regler_lecture(legere: bool) : la prochaine page est parcourue vite (interaction légère) ou lue en entier ;
+    #   refus_ressources() -> list[(adresse, statut)] : les 403 reçus depuis le dernier appel pour des ressources de
+    #   la page (photo, appel de données) du même hôte, que la sentinelle traite comme un refus.
+
 
 class MoteurDriver:
     """Un `engines.base.Driver` vu comme un `Moteur`. `verifier` (périmètre) est appelé avant chaque requête."""
@@ -185,6 +191,17 @@ class MoteurDriver:
         statut, adresse, entetes = etat_page()
         return Reponse(statut, adresse, self.driver.dom(), 0.0, None, dict(entetes))
 
+    def regler_lecture(self, legere: bool) -> None:
+        """Dit au pilote comment lire la prochaine page : vite (interaction légère) ou en entier. Sans effet pour un
+        pilote qui n'a pas ce réglage (`lecture_legere`)."""
+        if hasattr(self.driver, "lecture_legere"):
+            self.driver.lecture_legere = legere
+
+    def refus_ressources(self) -> list[tuple[str, int]]:
+        """Les 403 reçus pour des ressources de la page depuis le dernier appel (rien si le pilote ne les relève)."""
+        relever = getattr(self.driver, "refus_ressources", None)
+        return list(relever()) if relever is not None else []
+
     @property
     def identite(self):
         """L'identité persistante du pilote (moteur `noezia` en mode `identite`), ou None."""
@@ -209,6 +226,9 @@ class Options:
     sans: tuple[str, ...] = ()
     tout_refaire: bool = False
     ignorer_robots: bool = False
+    # Lecture humaine (`lecture.py`) : durées de page dispersées et retours à la liste pris sur le budget de pages.
+    # Éteinte par défaut : seul le scénario `visite` l'allume ; la récolte générale ne change pas.
+    lecture: LectureHumaine | None = None
 
 
 @dataclass
@@ -317,6 +337,13 @@ class Parcours:
         self._courante: Page | None = None
         self._options_reprise = options_reprise
         self._decalage = 0  # pages déjà lues au début d'une reprise : `--pages-max N` en lit N de plus
+        # Lecture humaine (`Options.lecture`) : plan de la visite, pages revues, attente cumulée.
+        self._plan: PlanDeLecture | None = None
+        self._liste: Page | None = None  # la dernière page du type de départ (la liste) lue
+        self._feuilles: list[Page] = []  # les autres pages lues, dans l'ordre
+        self._relectures: list[dict[str, Any]] = []
+        self._pause_totale = 0.0
+        self._duree_voulue = 0.0
 
     def _commande_reprendre(self, *options: str) -> str:
         """La commande qui retrouve CETTE récolte (`--sortie` compris s'il a servi), avec les `options` en plus."""
@@ -550,6 +577,8 @@ class Parcours:
         self._repassages: list[dict[str, Any]] = []
         self._dernier_passage = ""
         self._rafale: tuple[str, int] | None = None
+        self._plan = PlanDeLecture(self.options.lecture, self._alea) if self.options.lecture is not None else None
+        self._liste, self._feuilles, self._relectures, self._pause_totale = None, [], [], 0.0
         if self._repasser:
             self._relire_les_passages(etat, passe)
         self._annoncer(etat, passe, reprise)
@@ -598,20 +627,118 @@ class Parcours:
         limite = self._pages_max()
         lues = etat.compteurs(passe)["lues"]
         while True:
+            alerte = self._controler_ressources()  # un refus reçu pendant la page, avant toute nouvelle navigation
+            if alerte is not None:
+                self._noter_alerte_identite(alerte)
+                return "arretee", self._arret(alerte)
             if limite is not None and lues >= limite:
                 return "limitee", None
             page = etat.prochaine(passe)
             if page is None:
                 return "terminee", None
             self._courante = page
+            debut = self._horloge()
+            self._regler_lecture()
             alerte, lue = self._traiter(page)
             self._courante = None
             lues += lue
             if alerte is not None:
                 self._noter_alerte_identite(alerte)
                 return "arretee", self._arret(alerte)
+            if lue and self._plan is not None:
+                alerte, ajout = self._apres_la_page(page, debut, lues, limite)
+                lues += ajout
+                if alerte is not None:
+                    self._noter_alerte_identite(alerte)
+                    return "arretee", self._arret(alerte)
             if lue and lues % PAS_AFFICHAGE == 0:
                 self._progression(lues)
+
+    # ── Sentinelle : ressources de la page ──────────────────────────────
+    def _controler_ressources(self) -> Alerte | None:
+        """Un 403 reçu pour une photo ou un appel de données du même hôte est un refus (au même titre que celui de la
+        page) : la passe s'arrête avant toute nouvelle navigation. Sur la première page de la passe, c'est un
+        bannissement (`verdict_identite`)."""
+        relever = getattr(self.moteur, "refus_ressources", None)
+        return None if relever is None else self._sentinelle.examiner_ressources(relever())
+
+    # ── Lecture humaine (`lecture.py`) ──────────────────────────────────
+    def _regler_lecture(self) -> None:
+        """Choisit la durée de la page qui va être lue et dit au moteur de la parcourir vite ou en entier."""
+        if self._plan is None:
+            return
+        self._duree_voulue = self._plan.duree_suivante()
+        regler = getattr(self.moteur, "regler_lecture", None)
+        if regler is not None:
+            regler(self._plan.legere(self._duree_voulue))
+
+    def _attendre_la_lecture(self, debut: float) -> None:
+        """Reste sur la page jusqu'à la durée choisie (le moteur en a déjà passé une partie à lire et à bouger)."""
+        reste = self._duree_voulue - (self._horloge() - debut)
+        if reste > 0:
+            self._pause_totale += reste
+            self._dormir(reste)
+
+    def _apres_la_page(self, page: Page, debut: float, lues: int, limite: int | None) -> tuple[Alerte | None, int]:
+        """Attend la fin de la lecture, puis, parfois, revient à la liste ou revoit une fiche : une vraie requête, prise
+        sur le budget de pages. Rend (alerte éventuelle, nombre de pages demandées en plus : 0 ou 1)."""
+        assert self._plan is not None
+        self._attendre_la_lecture(debut)
+        if page.type == self.recette.depart[0].type:
+            self._liste = page
+            return None, 0
+        self._feuilles.append(page)
+        action = self._plan.action(len(self._feuilles), None if limite is None else limite - lues)
+        if action == "liste":
+            cible = self._liste
+        elif action == "revoir" and len(self._feuilles) >= 2:
+            cible = self._plan.feuille_a_revoir(self._feuilles)
+        else:
+            cible = None
+        if cible is None:
+            return None, 0
+        alerte = self._controler_ressources()
+        if alerte is not None:
+            return alerte, 0
+        alerte, debut = self._relire(cible)
+        if alerte is None:
+            self._attendre_la_lecture(debut)
+        return alerte, 1
+
+    def _relire(self, cible: Page) -> tuple[Alerte | None, float]:
+        """Demande une page déjà lue (retour à la liste, fiche revue). Même garde que `_traiter` (périmètre, sauts,
+        sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Rend (alerte, début)."""
+        self._alerte_en_premiere = False
+        self._regler_lecture()
+        self._cadence.attendre(None)
+        debut = self._horloge()
+        try:
+            reponse = self._lire(cible.adresse)
+        except DestinationRefusee as erreur:
+            return Alerte("hors_site", f"hors périmètre : {erreur}", cible.adresse), debut
+        except _SautRefuse as refus:
+            return refus.alerte, debut
+        except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
+            self._evenement(self._etat, self._passe, "echec", {"adresse": cible.adresse, "erreur": str(erreur)})
+            return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut
+        reussie = reponse.statut is not None and 200 <= reponse.statut < 300
+        dans_le_motif = True
+        if reussie:
+            cible_finale = chemin_et_parametres(reponse.adresse_finale, self._ignores)
+            dans_le_motif = re.search(self.recette.pages[cible.type].url, cible_finale) is not None  # regex-recette
+        alerte = self._sentinelle.examiner(
+            type_page=cible.type,
+            adresse=cible.adresse,
+            statut=reponse.statut,
+            adresse_finale=reponse.adresse_finale,
+            dans_le_motif=dans_le_motif,
+            html=reponse.html,
+            entetes=reponse.entetes,
+        )
+        if alerte is not None:
+            return alerte, debut
+        self._relectures.append({"adresse": cible.adresse, "type": cible.type, "statut": reponse.statut})
+        return self._sentinelle.noter(cible.type, "ok" if reussie else "echec", cible.adresse), debut
 
     def _noter_alerte_identite(self, alerte: Alerte) -> None:
         """Moteur en mode identité : l'alerte (ou le bannissement) est écrit dans l'état de l'identité. Rien d'autre :
@@ -1112,6 +1239,12 @@ class Parcours:
             "alertes_lecture": etat.alertes_lecture(passe),
             "arret": arret,
         }
+        if self._plan is not None:
+            resume["lecture_humaine"] = {
+                "relectures": len(self._relectures),
+                "pages": self._relectures,
+                "attente_s": round(self._pause_totale, 1),
+            }
         if len(origines) > 1:
             resume["robots_origines"] = origines
         return resume

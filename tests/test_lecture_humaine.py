@@ -22,10 +22,10 @@ from urllib.parse import urlsplit
 
 import pytest
 from outils_recolte import Horloge, creer_client, fabriquer, lu
-from shadowlab.engines.noezia.lecture import LectureHumaine, PlanDeLecture
 from test_sentinelle import PiloteNavigateur
 
 from shadowlab import detection, scenarios
+from shadowlab.engines.noezia.lecture import LectureHumaine, PlanDeLecture
 from shadowlab.engines.noezia.moteur import DriverNoezia
 from shadowlab.engines.noezia.parcours import MoteurDriver, Options
 
@@ -221,7 +221,8 @@ class PiloteLecture(PiloteNavigateur):
         self.refus: list[tuple[str, int]] = []
 
     def navigate(self, url):
-        self.modes.append(self.lecture_legere)
+        if not url.endswith("/robots.txt"):
+            self.modes.append(self.lecture_legere)
         return super().navigate(url)
 
     def refus_ressources(self):

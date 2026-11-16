@@ -112,6 +112,11 @@ class DriverNoezia(Driver):
         # None : pas de garde.
         # Réglé par l'appelant, jamais une option de campagne. Ne couvre pas les sous-ressources (voir `_filtrer`).
         self.hotes_navigation: tuple[str, ...] | None = None
+        # Lecture rapide de la prochaine page (réglée par le parcours, `lecture.py`) : l'interaction légère au lieu de
+        # l'interaction complète. Faux par défaut : aucun autre appelant ne change.
+        self.lecture_legere = False
+        # 403 reçus pour des ressources de la page (photo, appel de données) du même hôte (`refus_ressources`).
+        self._refus_ressources: list[tuple[str, int]] = []
         self._signatures = extraction.Signatures(RACINE / "outputs" / "signatures_adaptatives.json")
         self._profil: ProfilNavigateur | None = None
         self._pw = None
@@ -471,6 +476,29 @@ class DriverNoezia(Driver):
         if reponse.request.is_navigation_request() and reponse.frame == self._page.main_frame:
             self._reponse = reponse
             self._pages_visite += 1
+        elif reponse.status == 403 and self._meme_hote(reponse.url):
+            self._refus_ressources.append((reponse.url, 403))
+
+    def _meme_hote(self, url: str) -> bool:
+        """`url` est-elle sur le même hôte que la page affichée ?"""
+        try:
+            hote_page = (urlsplit(self._page.url).hostname or "").lower()
+        except Exception:  # noqa: BLE001 — page fermée
+            return False
+        return bool(hote_page) and (urlsplit(url).hostname or "").lower() == hote_page
+
+    def refus_ressources(self) -> list[tuple[str, int]]:
+        """Les 403 reçus pour des ressources de la page (photo, appel de données du même hôte) depuis le dernier appel.
+
+        L'API synchrone de Playwright ne livre ses événements que pendant un appel : un appel léger les fait arriver
+        avant de lire la liste."""
+        if self._page is not None:
+            try:
+                self._page.evaluate("0")
+            except Exception:  # noqa: BLE001 — page fermée ou en navigation : on rend ce qu'on a
+                pass
+        refus, self._refus_ressources = self._refus_ressources, []
+        return refus
 
     def _compter(self, champ: str) -> None:
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
@@ -519,6 +547,7 @@ class DriverNoezia(Driver):
 
     def navigate(self, url: str) -> ResultatNavigation:
         self.verifier(url)
+        self._refus_ressources = []  # ceux de la page d'avant ont déjà été lus (ou n'ont plus de sens)
         debut = time.perf_counter()
         # Mode rapide : DOM prêt suffit (on n'attend pas les ressources, déjà coupées).
         attente = "domcontentloaded" if self._bloquer_ressources else "load"
@@ -531,7 +560,7 @@ class DriverNoezia(Driver):
 
         # Interaction post-chargement (comportement humain)
         if self._config.interaction_post_page:
-            self._interaction_post_chargement()
+            self._interaction_selon_lecture()
 
         # Détection et résolution des défis de l'Arena
         if self.options.get("resoudre_defis", True):
@@ -539,9 +568,17 @@ class DriverNoezia(Driver):
             self._resoudre_defis()
             # D-79 : la page finale, arrivée après un défi, n'a encore reçu aucun geste.
             if self._config.interaction_post_page and len(self.mesures.details["defis_resolus"]) > deja:
-                self._interaction_post_chargement()
+                self._interaction_selon_lecture()
 
         return ResultatNavigation(status, self._page.url, duree)
+
+    def _interaction_selon_lecture(self) -> None:
+        """Page parcourue vite (`lecture_legere`) : l'interaction légère, mesurée à 2,8 s au lieu de 7,2 s ; sinon
+        l'interaction complète."""
+        if self.lecture_legere:
+            self._interaction_post_clic_navigation()
+        else:
+            self._interaction_post_chargement()
 
     def _interaction_post_chargement(self) -> None:
         """Simule un humain qui vient d'arriver sur la page."""
