@@ -8,6 +8,13 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-16 — La session Windows `23a7b8a2` (14/11, Chrome sur Windows) est-elle un humain connu ?** D-95 a corrigé quatre règles
+  avec `c7c5142c` seule ; `23a7b8a2` passe maintenant aussi de 05 à 07. Si tu la connais, `navigation_lineaire` et le seuil de
+  `trajectoire_lineaire` s'appuient sur deux humains connus au lieu d'un. Recommandation : confirmer si c'est vrai ; sinon, dis-le.
+- **2026-11-16 — Molette à crans : faut-il un humain connu avec une souris à molette crantée avant de toucher `deltas_uniformes` et
+  `scroll_regulier` ?** Une vraie molette à crans envoie des deltas de ±100 tous égaux : les deux règles la signalent encore, et
+  les deltas de `c7c5142c` (petits entiers variés) font penser à un pavé tactile ou à un défilement doux ; non établi. Recommandation : oui, une session de 2 minutes avec une souris à
+  molette crantée, dans Google Chrome, avant de changer ces règles.
 - **2026-11-15 (mis à jour le 15/11 à 19 h 30) — Deux sessions d'humains connus sur ordinateur, s'il te plaît.** La
   quatrième session du site public n'était pas « Chrome 156 sur Mac » : c'est le navigateur intégré de l'application
   Claude (Chromium embarqué), et on ne sait pas si elle était conduite à la main. Elle ne compte donc pas comme humain

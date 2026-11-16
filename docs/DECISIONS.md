@@ -1244,3 +1244,66 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   qui juge) ; on corrige le moteur pendant une visite, avec un ordre de lecture moins linéaire (retour à la liste) et des
   durées de page plus dispersées, sans dépasser le nombre de pages qu'une visite compte aujourd'hui. Puis on relance la
   soirée avec de nouvelles identités. La décision sera écrite avec la correction.
+- **D-94 — 16/11/2026 — Lecture humaine de la visite et refus d'une ressource par la sentinelle (moteur).**
+  **Cause.** La soirée du 16/11 (campagne 128) n'a pas tenu : le sujet est arrêté à la 4ᵉ visite par le score 0,65
+  (`duree_pages_reguliere` et `navigation_lineaire`), puis banni ; la sentinelle est arrêtée dès la 2ᵉ visite de la même
+  façon. On corrige le moteur, pas l'Arena. Le réglage se fait sur les données du labo (campagne 128), jamais sur les
+  sessions du site public. **Décision.** (1) Option `Options.lecture` du moteur `noezia`, éteinte par défaut, allumée par le
+  scénario `visite` (`engines/noezia/lecture.py`, `parcours.py`, `moteur.py`) : durées de page log-normales (minimum 1,5 s,
+  médiane 4,5 s, maximum 30 s) tirées par blocs de trois pour que chaque début de visite soit dispersé ; une page sous 5 s est
+  parcourue vite (interaction légère) ; retour obligatoire à la liste après la première fiche, puis retours et fiches déjà lues
+  revues au hasard, pris sur le budget de pages de la visite, jamais en plus. (2) Sentinelle (`sentinelle.py`) : un 403 sur une
+  ressource ou un appel de données du même hôte arrête avant toute navigation (banni sur la première page, sinon alerte).
+  (3) Une relecture respecte `robots.txt`, son `Crawl-delay` et les hôtes de la recette (D-70). Preuve : tests écrits d'abord
+  (`d9549c2`, en échec avant le code), code `3145957`, test `a378418`, correctif `7827fa1`, fusion `6a751e5`.
+  **Essai 129** (`configs/experiments/identite-rythme-essai.yaml`, sujet seul) : 8 visites sur 8 réussies, 1 visiteur, 1
+  empreinte E, défi à la 1ʳᵉ visite seulement, aucune alerte. Le bilan dit « non mesuré » pour les témoins : normal, l'essai n'en
+  a pas. **Essai 130** (`identite-soiree-essai.yaml`, 3 visites) : tenu à tous les critères. Sujet : 3 sur 3. Témoin négatif :
+  arrêté à la 5ᵉ visite, 2 bannissements. Sentinelle : refus à la 3ᵉ visite comme voulu, 0 page après le refus, identité notée
+  `banni`. Témoin classique : 0 sur 3, refus de l'Arena. **Soirée 131** (`identite-soiree.yaml`, 16/11, de 9 h 53 à 14 h 32) :
+  **TENUE à tous les critères.** Sujet : 24 visites réussies sur 24, 1 visiteur, 1 empreinte E, défi émis à la 1ʳᵉ visite
+  seulement, aucune alerte, 0 bannissement ; durée moyenne d'une visite : 122 s. Témoin négatif : arrêté à la 5ᵉ visite comme
+  attendu, 20 bannissements dans son monde. Sentinelle : refus à la 3ᵉ visite comme voulu, 0 page demandée après le refus,
+  identité notée `banni`. Témoin classique : 0 visite réussie sur 4, refus de l'Arena. **Réserves.** Une seule soirée, une
+  machine, un Chrome sur macOS. Profil `endurance` sans CAPTCHA. Aucun humain qui revient (I8). L'Arena est la nôtre, et le
+  rythme a été réglé contre ses propres détecteurs. Décidé par : coordination.
+- **D-95 — 16/11/2026 — Calibrage de quatre règles sur un humain connu (Arena, détecteurs).**
+  **Origine.** La coordination a demandé à Ethan : « Tu sais qui a fait ces deux sessions ? ». Il a répondu : « Oui, je les
+  connais ». Les deux sont `c7c5142c` et `0b1a476b` (Edge 157 sur Windows, 16/11, 29 s, 2 pages : elle passe partout, trop
+  courte pour juger). `23a7b8a2` n'en fait pas partie, elle reste non confirmée. La session `c7c5142c` du site public (16/11, Chrome 157 sur Mac, 10 pages), est donc un humain connu,
+  sur ordinateur, dans un vrai Chrome. Elle était arrêtée de 05 à 07 et en `endurance` dès la 4ᵉ page par le score composite
+  0,85 : `trajectoire_lineaire` (poids 0,6) plus `navigation_lineaire` (0,25). Elle était aussi signalée par `deltas_uniformes`
+  et `scroll_timing_regulier`. La condition posée le 15/11 (« sera corrigée dès qu'un humain connu sur ordinateur… ») est donc
+  remplie. **Méthode.** Pour chaque règle : un défaut de construction se corrige ; un seuil statistique se dit tel quel, avec
+  le nombre d'humains connus. **Aucun seuil chiffré ne change.** **Les quatre règles corrigées** (défauts de construction) :
+  (1) `trajectoire_lineaire` (détecteur `entropie-interaction`, 1.1 → 1.2). Défaut : une seule page sous 0,08 suffisait. Chez
+  cet humain, 5 relevés de page sur 17 sont sous 0,08, mais la moyenne cumulée de la session ne descend jamais sous 0,095
+  environ. La règle juge maintenant la moyenne des angles de toute la session, sur les pages d'au moins 10 angles ; il en
+  faut au moins 3, et 60 angles en tout. Seuil 0,08 et poids 0,6 inchangés. Un seul signal par session. (2) `deltas_uniformes`
+  (détecteur `scroll`, 1 → 1.1). Défaut : des petits deltas entiers (pavé tactile, défilement doux) ont peu de valeurs
+  différentes, sans être un pas fixe. Il faut maintenant qu'au moins 90 % des deltas aient la même valeur. (3)
+  `scroll_timing_regulier` (même détecteur). Défaut : Chrome envoie `scroll` une fois par image (16,7 ms) pendant un geste
+  continu, donc tout humain paraît régulier. Plus aucune conclusion quand le délai médian est sous deux images (33 ms). (4)
+  `screen_position_zero` (détecteur `position-fenetre`, 1 → 1.1). Défaut : une fenêtre agrandie sous Windows est à 0,0. La règle
+  ne vaut plus que sans barre de navigateur (hauteur extérieure moins hauteur intérieure sous 40 px). Sans relevé de fenêtre,
+  elle s'applique comme avant. **`navigation_lineaire`** : c'est un seuil, pas un défaut ; inchangé. Les 4 premières pages de
+  cet humain sont vraiment distinctes, et son poids de 0,25 n'arrête personne seul. Un seul humain connu en juge (deux si Ethan
+  confirme `23a7b8a2`). **Tests.** `tests/test_detecteurs_calibrage_humain.py` : 26 tests, données fabriquées, aucune donnée de
+  visiteur ; 9 échouaient sur l'ancien code. `tests/test_detection.py` est ajusté : le robot à trajectoire droite fait
+  maintenant 3 pages de 22 angles. **Rejeu de la base publique** (lecture seule) : `c7c5142c` passe de 01 à 07 et en
+  `endurance` ; `23a7b8a2` (Chrome sur Windows, 14/11, non confirmée comme humain connu) passe maintenant aussi de 05 à 07 ;
+  `414f351a` (navigateur intégré de l'application Claude) est toujours arrêtée dès 03, par `chrome-apis` et `comportement` :
+  inchangé ; les autres sessions passent comme avant. **Campagne 108** (labo, lecture seule) : l'ancienne règle arrêtait 3
+  passages du moteur (34332 au niveau 04, 34342 et 34366 au niveau 05) ; il y avait 3 pages sur 2 134 sous 0,08, pour des
+  moyennes cumulées de 0,695, 0,780 et 0,572 ; la nouvelle règle n'en arrête aucun. **Robots toujours pris.** Dans les
+  campagnes 115 et 117, `patchright` sans tête (45 passages) et `patchright-chrome-mobile` (85 passages) n'ont aucune barre de
+  navigateur et sont à 0,0 : `screen_position_zero` les arrête toujours. Les vrais Chrome ont une barre d'au moins 40 px et ne
+  sont pas à 0,0. **Campagne de contrôle 132** (16/11, `controle-vrai-chrome.yaml`, le fichier de la 115, niveaux 04, 05 et 06 sans corrélation, 135 passages) : mêmes taux que la 115, la 118, la 121 et la 125, dans les 9 cellules. `noezia` natif : 15, 15 et 15 sur 15. `patchright` : 0, 0 et 0 sur 15. Chrome sans comportement (`patchright-chrome-interface`) : 10, 15 et 0 sur 15. `screen_position_zero` (`position-fenetre` 1.1) se déclenche toujours sur les 45 passages de `patchright` sans tête, comme dans la 125. `trajectoire_lineaire`, `deltas_uniformes` et `scroll_timing_regulier` ne se déclenchent sur aucun des 135 passages, ni dans la 125 ni dans la 132. La campagne ne juge donc pas ces trois règles : seul le robot fabriqué des tests montre qu'elles prennent encore un robot. Les nouvelles versions des détecteurs (1.2, 1.1 et 1.1) sont enregistrées dans les passages. **Limites.** Un robot qui trace des droites
+  sur une ou deux pages seulement, ou qui mélange droites et courbes, passe. Un pas de molette presque fixe (moins de 90 %
+  identiques) échappe à `deltas_uniformes`. Un défilement par `requestAnimationFrame` échappe à `scroll_timing_regulier`. Une
+  fausse hauteur extérieure échappe à `screen_position_zero` (`outer_eq_inner` devrait encore le prendre ; non testé). La marge
+  de l'humain est mince : 0,095 contre un seuil de 0,08, avec un seul humain connu sur ordinateur. Non traité, question
+  ouverte : une vraie molette à crans (deltas de ±100 tous égaux) est toujours signalée par `deltas_uniformes` et
+  `scroll_regulier`. Révise, pour ces deux règles, la décision du 15/11 « aucune règle ne change ». Décidé par : coordination, à
+  la demande de la session de coordination ; Ethan a laissé la main : « je te laisse tout continue a travailler sur d'autre
+  chose ».

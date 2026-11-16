@@ -35,12 +35,12 @@ recommander des optimisations.
   - Aucun résultat de mesure inventé.
   - CAPTCHA providers en mode test (test keys) ≠ victoire contre un vrai CAPTCHA : le distinguer dans les résultats.
 
-## État (14/11/2026)
+## État (16/11/2026)
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
   cross-contexte, deep Proxy, corrélation cross-session par monde — D-48, D-64, puis D-89, en 2.1 ; `headless`, `chrome-apis`,
-  `polices` et `connection-dynamic` en 1.1 — D-66, **TLS v2 : 17 règles d'analyse
+  `polices` et `connection-dynamic` en 1.1 — D-66 ; `entropie-interaction` 1.2, `scroll` 1.1 et `position-fenetre` 1.1 — D-95, **TLS v2 : 17 règles d'analyse
   ClientHello** — D-52, **HTTP/2 fingerprinting : 11 règles SETTINGS/WU** — D-53), honeypots (lien piège + champ piège),
   fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
   niveaux 05-07). Score composite pondéré par famille (D-47).
@@ -143,6 +143,12 @@ recommander des optimisations.
   attend le prochain changement de l'Arena. À surveiller : un humain qui arrive par un navigateur intégré à une
   application est arrêté dès le niveau 03 ; à trancher quand un humain connu arrivera ainsi. Détail :
   `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`.
+  **Mise à jour du 16/11 (D-95)** : Ethan connaît la session `c7c5142c` (Chrome 157 sur Mac, 10 pages) : c'est un humain
+  connu, sur ordinateur, dans un vrai Chrome. (1) `trajectoire_lineaire` et `screen_position_zero` sont corrigées, ainsi
+  que les deux règles de `scroll` (`deltas_uniformes`, `scroll_timing_regulier`) ; aucun seuil chiffré ne change.
+  `c7c5142c` et la session Windows `23a7b8a2` (pas confirmée comme humain connu) passent maintenant de 05 à 07.
+  (2) Le navigateur intégré à une application (`414f351a`) reste arrêté dès 03. (3) La molette à crans (deltas de ±100
+  tous égaux) reste signalée par `deltas_uniformes` et `scroll_regulier` : à trancher.
 - **Rejeu des sessions humaines** (D-56) : `shadowlab rejeu` refait la décision de chaque niveau sur les
   sessions humaines enregistrées (même code que l'Arena, `gardien.motifs_suspicion`) et donne, par niveau,
   les humains arrêtés et le détecteur responsable. Aucune session humaine en base au 12/11.
@@ -169,7 +175,7 @@ recommander des optimisations.
   **Campagne 124** (monde 37, 3 passages par moteur) : `noezia` natif 3 sur 3, `playwright` 0 sur 3, banni dès le 1ᵉʳ
   passage, 3 lignes dans `bannissements` ; réserve : le témoin est aussi détecté par ses propres signaux, donc elle ne prouve
   pas que le bannissement arrête un robot qui passerait sans lui (témoin de la sentinelle, I7). **Campagne 125** (contrôle) :
-  mêmes taux que la 115, la 118 et la 121 à chaque cellule. Conception : `docs/recherche/identite-qui-dure-2026-11-12.md` § 7. **I7** (D-93, 16/11, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ : entre par `?sl=`, lit
+  mêmes taux que la 115, la 118 et la 121 à chaque cellule (puis **campagne 132**, 16/11, après D-95 : mêmes taux, 135 passages). Conception : `docs/recherche/identite-qui-dure-2026-11-12.md` § 7. **I7** (D-93, 16/11, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ : entre par `?sl=`, lit
   au plus 15 pages de la vitrine, note le visiteur lu dans `visites`), champ `espacement` des campagnes (`fixe` : écart compté de la fin
   d'une visite au début de la suivante, ou `ordonnanceur` : `visites.py`), un monde par bras (`monde: serie`, nom tiré du
   libellé), `shadowlab soiree bilan <n°>` (verdict par critère du § 6.2), `recolte lancer --identite <nom>`. Corrigés en route :
@@ -178,10 +184,17 @@ recommander des optimisations.
   attend le défi, l'Arena le juge). **Essai 126** : non tenu sur un seul critère, celui du témoin classique (arrêté par l'outil).
   **Essai 127** (3 visites) : tenu à tous les critères (sujet 3 sur 3, 1 visiteur, 1 empreinte E ; témoin négatif arrêté à la 5ᵉ
   visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 3, refus de l'Arena). **Soirée du 16/11 (campagne 128) : non
-  tenue.** Le sujet fait 3 visites réussies sur 24 : arrêté à la 4ᵉ par le score 0,65 (`duree_pages_reguliere` et `navigation_lineaire`), puis banni ; la sentinelle est arrêtée dès la 2ᵉ de la même façon ; témoins négatif et classique tenus. Cause : rythme trop régulier et linéaire pendant une visite ; on corrige le moteur (pas l'Arena), puis on relance. Détail : D-93, `docs/PLAN.md` § 2. Reste I8 (humains qui reviennent, attend
-  Ethan), I9 (7 jours) et I10 (comptes). Les quatre questions de la conception restent ouvertes.
-- **2 097 tests verts** (`uv run pytest`, 16/11, après I7, rapides et intégration avec de vrais
-  navigateurs et la pile Docker, 8 min 31 s ; 2 055 tests rapides verts après le correctif du témoin), 11 tests de l'interface (vitest), lint propre. Branche
+  tenue.** Le sujet fait 3 visites réussies sur 24 : arrêté à la 4ᵉ par le score 0,65 (`duree_pages_reguliere` et `navigation_lineaire`), puis banni ; la sentinelle est arrêtée dès la 2ᵉ de la même façon ; témoins négatif et classique tenus. Cause : rythme trop régulier et linéaire pendant une visite ; on corrige le moteur (pas l'Arena), puis on relance. Détail : D-93, `docs/PLAN.md` § 2.
+  **Correction D-94** (16/11) : lecture humaine de la visite (`lecture.py` : durées de page dispersées, retour à la liste) et
+  refus d'une ressource vu par la sentinelle ; l'Arena ne change pas. **Essai 129** (sujet seul) : 8 visites sur 8 réussies,
+  1 visiteur, 1 empreinte E, aucune alerte. **Essai 130** (3 visites) : tenu à tous les critères. **Soirée 131 (16/11, de 9 h 53
+  à 14 h 32) : TENUE à tous les critères.** Sujet : 24 visites réussies sur 24, 1 visiteur, 1 empreinte E, défi émis à la 1ʳᵉ visite
+  seulement, aucune alerte, 0 bannissement, 122 s en moyenne par visite. Témoin négatif arrêté à la 5ᵉ visite (20 bannissements dans
+  son monde) ; sentinelle : refus à la 3ᵉ visite, 0 page demandée après, identité `banni` ; témoin classique : 0 visite sur 4, refus de
+  l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
+  contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
+  questions de la conception restent ouvertes.
+- **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
@@ -288,7 +301,8 @@ scripts/site-public-tunnel.sh                              # site public en lign
 uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
 uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
 uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml  # I7 : 4 bras, 3 visites (environ 15 min) ; renommer les identités (`-2`, `-3`…) avant de relancer, une identité bannie ne sert plus
-uv run shadowlab soiree bilan <n°> [--json]                # verdict par critère de la soirée (0 tout tenu, 1 sinon, 2 campagne inconnue) ; la soirée est `identite-soiree.yaml` (campagne 128, environ 5 h)
+uv run shadowlab campagne configs/experiments/identite-rythme-essai.yaml  # D-94 : essai 129 de la lecture humaine, sujet seul, 8 visites de 15 pages ; 15 à 20 min ; changer le nom d'identité (`rythme-essai-2`…) avant de relancer
+uv run shadowlab soiree bilan <n°> [--json]                # verdict par critère de la soirée (0 tout tenu, 1 sinon, 2 campagne inconnue) ; la soirée est `identite-soiree.yaml` (campagne 131, tenue, environ 4 h 40)
 uv run shadowlab recolte lancer <recette> --moteur navigateur --identite <nom>  # même profil Chrome, donc même visiteur, d'une passe à l'autre (lu par `lancer` seulement)
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
@@ -310,7 +324,8 @@ src/shadowlab/
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
 │   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
 │                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88) ;
-│                    #   visites.py = ordonnanceur des visites (D-90) ; sentinelle.py = aussi la sentinelle d'identité (D-91)
+│                    #   visites.py = ordonnanceur des visites (D-90) ; sentinelle.py = aussi la sentinelle d'identité (D-91) ;
+│                    #   lecture.py = lecture humaine d'une visite : durées de page log-normales tirées par blocs de trois, retours à la liste (D-94)
 ├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
 ├── campaigns.py     # Exécution matricielle des campagnes
 ├── scenarios.py     # 20 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
@@ -385,7 +400,8 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
   `pre_shared_key` en plus (`t13d1517h2_…` devient `t13d1518h2_…`). Tout ce qui lie quelque chose au TLS doit
   passer par l'empreinte de liaison (`tls.ja4_liaison`, D-73), pas par le JA4 exact.
 - La base du site public passe par le même `database.MIGRATIONS` : elle reçoit les migrations 10 (tables vides, colonne
-  `runs.monde_id`) **et 11** (deux index sur `bannissements`) **au prochain redémarrage de l'application publique** (non relancée au 15/11). Sauvegardes avant la
+  `runs.monde_id`) **et 11** (deux index sur `bannissements`). **Déjà faites** : vérifié le 16/11, `PRAGMA user_version` vaut 11
+  et les tables `mondes`, `visites` et `bannissements` y sont. Sauvegardes avant la
   migration 10 : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` (labo, schéma 9) et
   `outputs/public/public-avant-migration10-2026-11-15.sqlite3`.
 - Le navigateur garde les scripts de `/lab/static` en cache une heure : après une modification, vérifier avec
