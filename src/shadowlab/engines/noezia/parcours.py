@@ -700,27 +700,38 @@ class Parcours:
         alerte = self._controler_ressources()
         if alerte is not None:
             return alerte, 0
-        alerte, debut = self._relire(cible)
+        alerte, debut, demandee = self._relire(cible)
+        if not demandee:
+            return None, 0  # interdite par robots.txt ou hors des hôtes : rien n'a été demandé, rien n'est compté
         if alerte is None:
             self._attendre_la_lecture(debut)
         return alerte, 1
 
-    def _relire(self, cible: Page) -> tuple[Alerte | None, float]:
+    def _relire(self, cible: Page) -> tuple[Alerte | None, float, bool]:
         """Demande une page déjà lue (retour à la liste, fiche revue). Même garde que `_traiter` (périmètre, sauts,
-        sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Rend (alerte, début)."""
+        sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Comme `_traiter` : jamais
+        un hôte hors recette, robots.txt revérifié, son `Crawl-delay` respecté. Rend (alerte, début, page demandée)."""
+        if _hote(cible.adresse) not in self._hotes:
+            return None, self._horloge(), False
+        crawl_delay = None
+        if not self.options.ignorer_robots:
+            robots = self._robots_de(cible.adresse)
+            if not robots.permis(_chemin_et_requete(cible.adresse)):
+                return None, self._horloge(), False
+            crawl_delay = robots.crawl_delay
         self._alerte_en_premiere = False
         self._regler_lecture()
-        self._cadence.attendre(None)
+        self._cadence.attendre(crawl_delay)
         debut = self._horloge()
         try:
             reponse = self._lire(cible.adresse)
         except DestinationRefusee as erreur:
-            return Alerte("hors_site", f"hors périmètre : {erreur}", cible.adresse), debut
+            return Alerte("hors_site", f"hors périmètre : {erreur}", cible.adresse), debut, True
         except _SautRefuse as refus:
-            return refus.alerte, debut
+            return refus.alerte, debut, True
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             self._evenement(self._etat, self._passe, "echec", {"adresse": cible.adresse, "erreur": str(erreur)})
-            return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut
+            return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut, True
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -736,9 +747,9 @@ class Parcours:
             entetes=reponse.entetes,
         )
         if alerte is not None:
-            return alerte, debut
+            return alerte, debut, True
         self._relectures.append({"adresse": cible.adresse, "type": cible.type, "statut": reponse.statut})
-        return self._sentinelle.noter(cible.type, "ok" if reussie else "echec", cible.adresse), debut
+        return self._sentinelle.noter(cible.type, "ok" if reussie else "echec", cible.adresse), debut, True
 
     def _noter_alerte_identite(self, alerte: Alerte) -> None:
         """Moteur en mode identité : l'alerte (ou le bannissement) est écrit dans l'état de l'identité. Rien d'autre :

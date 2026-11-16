@@ -516,29 +516,34 @@ def test_la_recolte_generale_n_a_pas_de_lecture_humaine(monkeypatch):
 
 
 class RobotsFactice:
-    """Remplace `robots.Robots` : permis la première fois pour la liste, refusé ensuite si `refuser_la_relecture`."""
+    """Remplace `robots.Robots` : la liste est refusée dès la 2e page demandée si `refuser_la_relecture`."""
 
-    def __init__(self, crawl_delay=None, refuser_la_relecture=False):
+    def __init__(self, reel, pilote, crawl_delay=None, refuser_la_relecture=False):
+        self._reel = reel
+        self._pilote = pilote
         self.crawl_delay = crawl_delay
         self._refuser = refuser_la_relecture
-        self._vues = 0
+
+    def __getattr__(self, nom):  # le reste (état, résumé) vient du vrai `Robots`
+        return getattr(self._reel, nom)
 
     def permis(self, chemin):
         if chemin.split("?")[0] == LISTE:
-            self._vues += 1
-            return not (self._refuser and self._vues > 1)
+            return not (self._refuser and self._pilote.requetes_pages >= 2)  # la liste est permise à la 1re lecture
         return True
 
 
-def _parcours_avec_robots(dossier, pilote, robots, pages=3):
+def _parcours_avec_robots(dossier, pilote, pages=3, **reglages):
     parcours = fabriquer(dossier, pilote, options=Options(pages_max=pages, lecture=LectureHumaine()))
-    parcours._robots_de = lambda adresse: robots
+    reel = parcours._robots_de
+    faux = {}
+    parcours._robots_de = lambda adresse: faux.setdefault(adresse, RobotsFactice(reel(adresse), pilote, **reglages))
     return parcours
 
 
 def test_une_relecture_interdite_par_robots_n_est_pas_demandee(site, dossier):
     pilote = PiloteLecture(site)
-    parcours = _parcours_avec_robots(dossier, pilote, RobotsFactice(refuser_la_relecture=True))
+    parcours = _parcours_avec_robots(dossier, pilote, refuser_la_relecture=True)
     bilan = parcours.lancer()
     assert bilan.statut == "limitee" and _chemins(pilote).count(LISTE) == 1
     assert pilote.requetes_pages == 3  # la page prévue au retour est lue autrement : une fiche de plus
@@ -546,7 +551,7 @@ def test_une_relecture_interdite_par_robots_n_est_pas_demandee(site, dossier):
 
 def test_une_relecture_attend_le_delai_de_robots(site, dossier):
     pilote = PiloteLecture(site)
-    parcours = _parcours_avec_robots(dossier, pilote, RobotsFactice(crawl_delay=1000))
+    parcours = _parcours_avec_robots(dossier, pilote, crawl_delay=1000)
     parcours.lancer()
     assert _chemins(pilote).count(LISTE) == 2  # liste, fiche, liste revue
     assert len([p for p in parcours.horloge_factice.pauses if p >= 900]) == 2  # la fiche ET la relecture
