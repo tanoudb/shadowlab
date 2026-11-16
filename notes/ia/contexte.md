@@ -81,8 +81,7 @@ sur nos propres cibles (site vitrine factice, tor-i).
   (D-87, fusion `9ce9066`) ; **I4** moteur, identité persistante, option `identite` (D-88, fusion `49d9cf7`). 1 858 tests
   verts. Campagne de contrôle 118 : mêmes taux que la 115 à chaque cellule, durées un peu plus longues (cause non établie,
   à reprendre avec I2). Sauvegardes : `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et
-  `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ; la base du site public migre au prochain redémarrage de
-  l'application publique. Les quatre questions de la conception restent à Ethan.
+  `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ; la base du site public est déjà au schéma 11 (vérifié le 16/11). Les quatre questions de la conception restent à Ethan.
 - **15 et 16/11, palier 2 : I2, I5, I6, campagnes 119 à 121** : **I2** Arena, `correlation-session` 2.0 par monde (D-89,
   fusion `bef7017`) : un humain qui revient n'est plus compté contre lui ; `sans_ressources` ne juge qu'une session neuve ;
   le bilan d'un passage nomme la corrélation ; version 2.1 le 16/11 (sans signal : « indéterminé », pour que
@@ -99,7 +98,7 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Option de profil, fausse hors `endurance` : les niveaux 01 à 07 ne bougent pas. Campagne 124 : `playwright` banni, `noezia`
   3 sur 3, 3 lignes dans `bannissements` (le témoin est aussi détecté par ses propres signaux : la preuve reste à faire en I7).
   Campagne 125 (contrôle) : mêmes taux que la 115. 2 015 tests verts. Reste I7 (puis I8 à I10), `test_duree_cookie`
-  (intermittent), les quatre questions du palier 2, la base publique à migrer (migrations 10 et 11). Disque : 16 Gio libres
+  (intermittent), les quatre questions du palier 2, la base publique (déjà au schéma 11, vérifié le 16/11). Disque : 16 Gio libres
   (sous le seuil de 25 Go).
 - **16/11, palier 2 : I7** (D-93, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ), champ `espacement` des
   campagnes, un monde par bras, `shadowlab soiree bilan <n°>`, `recolte lancer --identite`. Corrigés : la sentinelle prenait le
@@ -107,7 +106,7 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Essai 126 : non tenu sur un critère (témoin classique, arrêté par l'outil). Essai 127 : tenu à tous les critères (3 visites).
   2 097 tests verts. **Soirée du 16/11 (campagne 128) : non tenue** (sujet 3 visites réussies sur 24, arrêté à la 4ᵉ par le rythme, puis banni ; témoins négatif et classique tenus). À faire : corriger le moteur (ordre de lecture moins linéaire, durées de page plus dispersées), puis relancer avec de nouvelles identités. Détail : D-93.
   Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours, question 4), I10 (comptes, migration 12), `test_duree_cookie`
-  (intermittent), la base publique (migrations 10 et 11 au prochain redémarrage de l'application publique), le disque.
+  (intermittent), la base publique (déjà au schéma 11, vérifié le 16/11), le disque.
 - **16/11, soir : D-94 et D-95.** Moteur corrigé (`lecture.py` : durées de page dispersées, retour à la liste ; sentinelle : refus d'une
   ressource). Essais 129 et 130, puis **soirée 131 tenue à tous les critères** (sujet 24 visites sur 24, 1 visiteur, 1 empreinte E,
   0 bannissement ; témoin négatif arrêté à la 5ᵉ visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 4). L'étape I7 est

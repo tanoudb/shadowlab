@@ -13,7 +13,7 @@ Ce qui attend Ethan.
   `trajectoire_lineaire` s'appuient sur deux humains connus au lieu d'un. Recommandation : confirmer si c'est vrai ; sinon, dis-le.
 - **2026-11-16 — Molette à crans : faut-il un humain connu avec une souris à molette crantée avant de toucher `deltas_uniformes` et
   `scroll_regulier` ?** Une vraie molette à crans envoie des deltas de ±100 tous égaux : les deux règles la signalent encore, et
-  `c7c5142c` n'en a pas (pavé tactile ou défilement doux). Recommandation : oui, une session de 2 minutes avec une souris à
+  les deltas de `c7c5142c` (petits entiers variés) font penser à un pavé tactile ou à un défilement doux ; non établi. Recommandation : oui, une session de 2 minutes avec une souris à
   molette crantée, dans Google Chrome, avant de changer ces règles.
 - **2026-11-15 (mis à jour le 15/11 à 19 h 30) — Deux sessions d'humains connus sur ordinateur, s'il te plaît.** La
   quatrième session du site public n'était pas « Chrome 156 sur Mac » : c'est le navigateur intégré de l'application

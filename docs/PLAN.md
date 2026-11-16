@@ -795,6 +795,8 @@ page sous 0,08, la forme « une page suffit » est prouvée arrêter un humain e
 du seuil attend le critère de 1.7. `screen_position_zero` : inchangée, elle ne change aucun verdict aujourd'hui ; à
 traiter avec le prochain changement de l'Arena. Détail : `docs/recherche/calibrage-sessions-publiques-2026-11-15.md`.
 
+**Mise à jour du 16/11 (D-95)** : un humain connu sur ordinateur est arrivé (`c7c5142c`) ; `trajectoire_lineaire`, `screen_position_zero` et deux règles de `scroll` sont corrigées (voir la section D-95 plus bas). Le registre D-86 n'est pas modifié.
+
 ### Palier 2 commencé (15/11) : I1 et I4, campagne de contrôle 118
 
 Le palier 1 attend Ethan (1.7 : des humains connus sur ordinateur ; 1.8 : un domaine). Le 15/11 au soir, Ethan : « je te
@@ -823,7 +825,7 @@ Lecture : I1 ne change aucune décision de l'Arena, et les taux le confirment. L
 atteint 11 pendant la campagne. À reprendre avec I2 (n'écrire qu'à la première requête d'une session). Réserves : un
 seul Chrome sur macOS, 15 passages par cellule, aucun humain en base. Sauvegardes avant la migration 10 :
 `outputs/shadowlab-avant-migration10-2026-11-15.sqlite3.gz` et `outputs/public/public-avant-migration10-2026-11-15.sqlite3` ;
-la base du site public migrera au prochain redémarrage de l'application publique.
+la base du site public est déjà au schéma 11 (vérifié le 16/11).
 
 ### Palier 2 : I2, I5, I6, campagnes 119 à 121 (15 et 16/11)
 
@@ -1179,7 +1181,7 @@ n'existent pas ; rien ne l'importe). À supprimer avec l'accord d'Ethan ; le pal
 | Mise en ligne de l'application publique (`docs/site-public.md`) : une machine qui fait tourner une application Python derrière un mandataire HTTPS, un domaine à lui derrière Cloudflare gratuit, et son contact à afficher sur la page d'information (`SHADOWLAB_PUBLIC_CONTACT`). Voie courte demandée le 12/11 : tunnel depuis le poste, `scripts/site-public-tunnel.sh`, à lancer par lui (lien temporaire, ne couvre pas 1.8) | 1.6, 1.8 |
 | **Dès maintenant** : 5 sessions humaines en local (10 minutes), fenêtre visible, sur `http://127.0.0.1:8770/manuel` après `uv run shadowlab site`, en visitant aussi `/lab/vitrine` (la liste, une fiche). Arrêter le site, puis `uv run shadowlab rejeu` : il dit, niveau par niveau, si `cdp` et les autres détecteurs arrêtent les humains, donc si les niveaux 04 à 07 valent quelque chose | 1.7, 1.9 |
 | Au moins 10 sessions humaines (lui et des amis) sur le site public | 1.7 |
-| **Deux sessions d'humains connus sur ordinateur** (15/11, mis à jour le 15/11 à 19 h 30) : refaire 2 minutes **dans Google Chrome lui-même** (coller le lien dans Chrome ; ne pas cliquer le lien dans l'application Claude, qui l'ouvre dans son navigateur intégré), un seul clic sur le bouton d'entrée, navigation ordinaire à la souris, et dire l'heure ; et l'heure de la session faite depuis le PC d'un ami. La session `414f351a` reste en base, étiquetée « humain » comme tout ce que le site reçoit : ni supprimée ni ré-étiquetée. Sans humain connu on ne recale pas `trajectoire_lineaire` ni `screen_position_zero` | 1.7 |
+| **Deux sessions d'humains connus sur ordinateur** (15/11, mis à jour le 15/11 à 19 h 30) : refaire 2 minutes **dans Google Chrome lui-même** (coller le lien dans Chrome ; ne pas cliquer le lien dans l'application Claude, qui l'ouvre dans son navigateur intégré), un seul clic sur le bouton d'entrée, navigation ordinaire à la souris, et dire l'heure ; et l'heure de la session faite depuis le PC d'un ami. La session `414f351a` reste en base, étiquetée « humain » comme tout ce que le site reçoit : ni supprimée ni ré-étiquetée. **Depuis le 16/11 : un humain connu sur ordinateur (`c7c5142c`), et quatre règles recalées (D-95) ; `navigation_lineaire` reste un seuil, jugé avec un seul humain** | 1.7 |
 | **Avant d'annoncer le site public (Reddit, amis)** : un nom d'hôte stable (tunnel nommé sur un domaine à lui, pas le tunnel rapide dont l'adresse change à chaque lancement) ; une règle de limitation de débit chez Cloudflare devant le site ; régler `SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR` ; regarder le site lui-même sur son téléphone (Safari et iPhone jamais essayés) ; dire s'il garde le nom « Mosaïk Démo » | 1.6, 1.7 |
 | Accord pour supprimer `pool.py` | 2.5 |
 | Un serveur Linux x86_64 avec Docker, et un proxy résidentiel | 3.2, 3.3, 3.4 |

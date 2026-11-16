@@ -1269,7 +1269,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   rythme a été réglé contre ses propres détecteurs. Décidé par : coordination.
 - **D-95 — 16/11/2026 — Calibrage de quatre règles sur un humain connu (Arena, détecteurs).**
   **Origine.** La coordination a demandé à Ethan : « Tu sais qui a fait ces deux sessions ? ». Il a répondu : « Oui, je les
-  connais ». Une des deux, la session `c7c5142c` du site public (16/11, Chrome 157 sur Mac, 10 pages), est donc un humain connu,
+  connais ». Les deux sont `c7c5142c` et `0b1a476b` (Edge 157 sur Windows, 16/11, 29 s, 2 pages : elle passe partout, trop
+  courte pour juger). `23a7b8a2` n'en fait pas partie, elle reste non confirmée. La session `c7c5142c` du site public (16/11, Chrome 157 sur Mac, 10 pages), est donc un humain connu,
   sur ordinateur, dans un vrai Chrome. Elle était arrêtée de 05 à 07 et en `endurance` dès la 4ᵉ page par le score composite
   0,85 : `trajectoire_lineaire` (poids 0,6) plus `navigation_lineaire` (0,25). Elle était aussi signalée par `deltas_uniformes`
   et `scroll_timing_regulier`. La condition posée le 15/11 (« sera corrigée dès qu'un humain connu sur ordinateur… ») est donc
