@@ -1307,3 +1307,45 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `scroll_regulier`. Révise, pour ces deux règles, la décision du 15/11 « aucune règle ne change ». Décidé par : coordination, à
   la demande de la session de coordination ; Ethan a laissé la main : « je te laisse tout continue a travailler sur d'autre
   chose ».
+- **D-96 — 16/11/2026 — Course de 7 jours (I9) avant les humains qui reviennent (I8), et ses règles.**
+  **Ce qu'a dit Ethan.** À la question « Je lance l'essai sur 7 jours (étape I9) ? Le Mac ouvrira des fenêtres Chrome par
+  moments pendant toute la semaine, comme pendant la soirée. », Ethan a répondu : « Oui ». C'est aussi sa réponse à la
+  question 4 de la conception (§ 10). Ce n'est pas une réponse aux questions 1 à 3. **Exception à l'ordre du § 7.** I9
+  dépendait de I3, I6, I7 et I8 ; elle part avant I8. Pourquoi : la seule suite prévue de I8 est de monter les seuils
+  (conception, I8 : « Sinon les seuils montent… avant I9 »). Une course réussie contre les règles d'aujourd'hui, plus
+  sévères, reste donc valable. Réserves : une course ratée serait ambiguë, et les règles de retour de l'Arena ne sont pas
+  validées sur des humains. Sans compte connecté (recommandation de la question 2, comme la soirée). I8 reste à faire en
+  parallèle ; il attend Ethan.
+  **Isolation.** La course tourne dans une copie figée du code : un git worktree détaché à une étiquette, sous
+  `.courses/i9/`, à la racine du projet. Elle a ses propres ports : site 8760, frontal TLS 8753, Nginx 8761. Elle a sa
+  base, ses sorties et ses identités sous `.courses/i9/outputs/`. Elle a son projet Docker `shadowlab-course-i9` et son
+  image `shadowlab-coraza:shadowlab-course-i9`. La composition et `arena/pile.py` lisent `SHADOWLAB_ARENA_PROJET` ; sans
+  la variable, rien ne change. **Preuve, pendant la répétition** : dans le dossier principal, `arena appliquer` avec puis
+  sans `SHADOWLAB_PROFILS_EXTRA`, une campagne courte (133) et la suite complète (2 244 tests verts) n'ont rien changé aux
+  conteneurs ni aux fichiers générés de la course (`scripts/course.sh empreinte`). Les conteneurs du dossier principal,
+  eux, ont bien été recréés.
+  **Le dossier, et pourquoi là.** Hors de `.claude/worktrees/` : l'archivage d'une session supprime ce dossier. Dans le
+  projet : la règle « pas de `rm -rf` hors du projet » le couvre, et ce n'est pas un nouveau projet sous `~/dev`. Caché et
+  ignoré par git (`/.courses/`). Vérifié le 16/11 : la consolidation du soir ne parcourt que les projets Basic Memory qui
+  ont un `notes/ia/`, et l'index du cerveau ne lit que `notes/` et `docs/` à la racine du projet ; le dossier n'est donc
+  ni consolidé ni indexé. **Exempté de la règle « retirer un worktree fusionné »** jusqu'au bilan de la course : un
+  worktree détaché à une étiquette passe toujours `merge-base --is-ancestor`.
+  **Règles de la course** (`course.py`, `espacement.py`). (1) Visite manquée : créneau pris plus de 10 min en retard
+  (`RETARD_MAX_MIN`), ou réveil hors plage ; elle n'est pas jouée, elle est notée `retard`, puis on replanifie. (2) Panne
+  de l'Arena ou du site avant une visite : notée `infrastructure`, réessayée 5 min plus tard
+  (`REESSAI_INFRASTRUCTURE_MIN`), identité intacte, le créneau compté une fois. (3) Les notes vont dans
+  `<sorties>/campagnes/<n°>/cadence.jsonl`. (4) La cadence reprend les visites faites (base, plus les visites coupées
+  notées `interrompue`) par `Ordonnanceur.rejouer`, sans modifier l'ordonnanceur. (5) Échéance `jours: 7`, comptée de la
+  création de l'expérience. (6) La porte n'est jugée trop tôt que sous la durée du profil moins 60 s
+  (`TOLERANCE_PORTE_S`). (7) Récolte incrémentale portée par le scénario `visite`, avec un dossier durable par bras
+  (`campagnes/<n°>/recolte/<libellé>-<protection>/`), pas par `recolte lancer`, qui vise le site sans jeton, donc sans
+  profil de l'Arena. (8) Vitrine de 300 annonces. (9) Témoins négatif, de sentinelle et classique à 10 min d'intervalle le
+  premier jour. (10) Bilan : `shadowlab course bilan <n°>` (`scripts/course.sh bilan <n°>`), un verdict par critère du
+  § 6.3.
+  **Disque.** Ce qu'a écrit la soirée 131 : environ 18 Mo en base, 4 Mo de journaux de l'Arena et 100 Mo par profil
+  d'identité. Estimation pour la course : environ 1 Go, second `.venv` compris (533 Mo). Mesures : 12 Gio libres à
+  15 h 43, 9,8 Gio après la préparation du dossier. Rien à supprimer pour la course. La règle globale demande 25 Go
+  libres. Dans le projet, ce qui pèse n'est pas un cache : des sauvegardes de la base (603, 129 et 80 Mo) et des identités
+  archivées (565 Mo). C'est à Ethan de décider.
+  **Répétition** : [À COMPLÉTER : répétition]. **Lancement** : étiquette `course-i9` sur [À COMPLÉTER : commit de lancement].
+  Lancée seulement quand la coordination le dit. Décidé par : coordination, sur le « Oui » d'Ethan.

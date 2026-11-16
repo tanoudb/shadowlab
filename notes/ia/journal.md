@@ -3661,3 +3661,10 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Vérifié** : 2 183 tests rapides verts, lint propre. Le bilan de la soirée (128, 131) ne change pas (test figé).
 - **Décision** : aucune prise (texte proposé à la coordination).
 - **Reste** : la répétition (environ 1 h 30) dans un vrai Chrome, puis la course ; rien n'est vérifié contre l'Arena réelle.
+
+## 2026-11-16 (soir) — Claude (Sonnet 5.5, sous-agent) — D-96 : course de 7 jours (I9) avant I8, documentation
+- **Fait** : D-96 écrite (« Oui » d'Ethan, exception à l'ordre du § 7, isolation, dossier `.courses/i9/`, règles de la course, disque). `AGENTS.md` : état, règle (exception aux tests pendant la course, interdits), commandes `scripts/course.sh`, carte du code, 2 244 tests. `docs/PLAN.md` : § 4 et § 8. `contexte.md`.
+- **Fichiers** : `docs/DECISIONS.md`, `docs/PLAN.md`, `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code, test ni configuration touché ; aucun test, aucune commande `shadowlab`.
+- **Vérifié dans le code** : 10 min de retard (`RETARD_MAX_MIN`), réessai 5 min, tolérance de la porte 60 s, ports et projet Docker de `i9.env`, `/.courses/` dans `.gitignore`.
+- **Décision** : D-96 (coordination, sur le « Oui » d'Ethan).
+- **Reste** : deux marqueurs `[À COMPLÉTER : répétition]` et `[À COMPLÉTER : commit de lancement]` à remplir après la répétition et au lancement ; I8, I10 ; le bilan de la course.

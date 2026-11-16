@@ -194,7 +194,11 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
-- **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
+- **Course de 7 jours (I9)** (D-96, 16/11) : préparée, répétition [À COMPLÉTER : répétition], non lancée. Ethan a dit « Oui » à la
+  question 4 de la conception ; I9 part avant I8. Elle tourne dans une copie figée du code, `.courses/i9/` (ports 8760, 8753 et
+  8761, projet Docker `shadowlab-course-i9`, base et identités à part), dans la session tmux `course-i9`. Bilan du § 6.3 :
+  `shadowlab course bilan <n°>`. Lancée seulement quand la coordination le dit.
+- **2 244 tests verts** (`uv run pytest`, 16/11, après la fusion de la course, 9 min 13 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
@@ -298,6 +302,12 @@ uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 uv run shadowlab public frequentation | sessions            # visites et sessions par jour ; sessions par taille (repérer un abus)
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
+scripts/course.sh etat                                  # course I9 (D-96), depuis le dossier principal : session, conteneurs, santé, journal
+scripts/course.sh reprendre <n°>                           # après un redémarrage du Mac ; la base de la course numérote ses campagnes à partir de 1
+scripts/course.sh bilan <n°>                               # bilan du § 6.3 (0 tout tenu, 1 sinon, 2 campagne inconnue)
+scripts/course.sh arreter                                  # arrêt d'urgence de la course (crée `ARRET` dans ses sorties)
+scripts/course.sh empreinte                                # preuve d'isolation : conteneurs et fichiers générés de la course, à comparer avant/après
+COURSE_ENV=configs/courses/i9-repetition.env scripts/course.sh demarrer configs/experiments/identite-7-jours-repetition.yaml  # la répétition (environ 1 h 30)
 uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
 uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
 uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml  # I7 : 4 bras, 3 visites (environ 15 min) ; renommer les identités (`-2`, `-3`…) avant de relancer, une identité bannie ne sert plus
@@ -331,6 +341,7 @@ src/shadowlab/
 ├── scenarios.py     # 20 scénarios de test (dont recolte_recette_vitrine et recolte_recette_rallye)
 ├── espacement.py    # Écart entre deux visites d'un bras (`fixe` ou `ordonnanceur`, D-93)
 ├── soiree.py        # Bilan de la soirée « une identité qui revient » : `shadowlab soiree bilan` (D-93)
+├── course.py        # Bilan de la course de 7 jours (I9, § 6.3) : `shadowlab course bilan` (D-96)
 ├── commande_recolte.py  # `shadowlab recolte` : lancer, reprendre, etat, essayer, noter (D-70)
 ├── detection.py     # 42 détecteurs
 ├── issues.py        # Classification en 6 issues
@@ -360,7 +371,8 @@ configs/             # Profils Arena + campagnes YAML ; recettes/ = une recette 
 docker/              # Coraza WAF + Nginx (Docker Compose)
 docs/                # Architecture, décisions, recherche ; recolte.md = guide de la commande de récolte
 moteurs_isoles/      # pyproject.toml par environnement isolé
-scripts/             # site-public-tunnel.sh (site public en ligne par tunnel Cloudflare)
+scripts/             # site-public-tunnel.sh (site public en ligne par tunnel Cloudflare) ; course.sh (course I9, dossier isolé)
+                     # configs/courses/ = environnement de la course (i9.env) et de sa répétition
 tests/               # tests Python (pytest)
 ```
 **Plan de travail unique : `docs/PLAN.md`** (objectif, état mesuré, étapes, règles) — à lire avant de coder.
@@ -380,6 +392,9 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Schéma : ajouter une migration à la fin de `database.MIGRATIONS`, ne jamais modifier une migration passée.
 - Données de détection affichées par `textContent` dans le tableau de bord (jamais `innerHTML`).
 - Ne pas lancer de tests ni de travaux lourds pendant une campagne de mesure : ils faussent CPU et durées.
+- **Course I9 (D-96)** : pendant la course, les tests et les campagnes du dossier principal restent permis, car elle ne mesure ni
+  processeur ni durée (§ 6.3) ; c'est une exception à la règle ci-dessus. Ne jamais toucher : la session tmux `course-i9`, le projet
+  Docker `shadowlab-course-i9`, les ports 8760, 8753 et 8761, le dossier `.courses/`. Ne jamais retirer `.courses/i9` avant le bilan.
 - Récolte générale (D-70) : une recette qui vise un site qui n'est pas à nous porte une ligne `autorisation`
   (D-30) ; `robots.txt` est respecté par défaut ; aucune redirection vers un autre hôte n'est suivie ; la
   commande ne clique jamais sur un défi d'un site tiers et n'a aucun solveur de CAPTCHA. Une valeur douteuse
