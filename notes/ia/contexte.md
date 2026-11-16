@@ -108,6 +108,13 @@ sur nos propres cibles (site vitrine factice, tor-i).
   2 097 tests verts. **Soirée du 16/11 (campagne 128) : non tenue** (sujet 3 visites réussies sur 24, arrêté à la 4ᵉ par le rythme, puis banni ; témoins négatif et classique tenus). À faire : corriger le moteur (ordre de lecture moins linéaire, durées de page plus dispersées), puis relancer avec de nouvelles identités. Détail : D-93.
   Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours, question 4), I10 (comptes, migration 12), `test_duree_cookie`
   (intermittent), la base publique (migrations 10 et 11 au prochain redémarrage de l'application publique), le disque.
+- **16/11, soir : D-94 et D-95.** Moteur corrigé (`lecture.py` : durées de page dispersées, retour à la liste ; sentinelle : refus d'une
+  ressource). Essais 129 et 130, puis **soirée 131 tenue à tous les critères** (sujet 24 visites sur 24, 1 visiteur, 1 empreinte E,
+  0 bannissement ; témoin négatif arrêté à la 5ᵉ visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 4). L'étape I7 est
+  close. D-95 : la session `c7c5142c` est un humain connu sur ordinateur ; quatre règles de l'Arena corrigées (`trajectoire_lineaire`,
+  `deltas_uniformes`, `scroll_timing_regulier`, `screen_position_zero`), elle passe de 01 à 07 ; `23a7b8a2` aussi de 05 à 07 ;
+  `414f351a` reste arrêtée dès 03. La base publique est déjà au schéma 11 (vérifié). Reste I8, I9, I10, la molette à crans, deux
+  chiffres à compléter (tests, campagne de contrôle de D-95). Détail : `docs/DECISIONS.md`, `docs/PLAN.md` § 2.
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native
