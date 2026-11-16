@@ -14,13 +14,13 @@ from types import SimpleNamespace
 
 import pytest
 from outils_recolte import PiloteFactice, creer_client, fabriquer
+from test_sentinelle import PAGE_ARENA, PiloteNavigateur, avec_porte
 
 from shadowlab import campaigns
 from shadowlab.engines import registre
 from shadowlab.engines.noezia.moteur import DriverNoezia
 from shadowlab.engines.patchright_engine import DriverPatchright
 from shadowlab.engines.playwright_engine import DriverPlaywright
-from test_sentinelle import PAGE_ARENA, PiloteNavigateur, avec_porte
 
 
 def _pilote_simule(cls, statut=200, adresse="http://127.0.0.1:8770/lab/x", entetes=None):
@@ -48,7 +48,7 @@ def test_etat_page_sans_reponse_rend_statut_none_et_adresse_courante():
 
 
 class PlaywrightSansNavigateur(DriverPlaywright):
-    """Le vrai `DriverPlaywright` (donc son `etat_page`), mais la page vient d'un pilote factice : ni réseau ni Chromium."""
+    """Le vrai `DriverPlaywright` (donc son `etat_page`), la page venant d'un pilote factice : ni réseau ni Chromium."""
 
     def __init__(self, client):
         super().__init__(("*",))
