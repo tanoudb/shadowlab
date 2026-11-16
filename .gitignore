@@ -19,5 +19,8 @@ notes/ia/archives/etat-*
 frontend/node_modules/
 frontend/dist/
 
+# Dossiers de course isolés (scripts/course.sh)
+/.courses/
+
 # Secrets locaux (ne jamais commiter)
 .env

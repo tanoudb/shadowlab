@@ -1,13 +1,13 @@
 # Pile de l'Anti-Bot Arena. Se pilote par `shadowlab arena demarrer | appliquer | arreter`, qui génère d'abord
 # les configurations dans SHADOWLAB_ARENA_DIR. Rien n'écoute en dehors de 127.0.0.1.
-name: shadowlab-arena
+name: ${SHADOWLAB_ARENA_PROJET:-shadowlab-arena}
 services:
   coraza:
     build: ./coraza
-    image: shadowlab-coraza:local
+    image: ${SHADOWLAB_ARENA_IMAGE:-shadowlab-coraza:local}
     restart: unless-stopped
     environment:
-      AMONT_DEFAUT: "8770"
+      AMONT_DEFAUT: "${SHADOWLAB_PORT:-8770}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

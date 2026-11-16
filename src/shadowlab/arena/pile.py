@@ -10,6 +10,7 @@ from pathlib import Path
 from ..config import RACINE, Reglages
 from . import profils as module_profils
 
+PROJET_DEFAUT = "shadowlab-arena"
 COMPOSE = RACINE / "docker" / "arena" / "docker-compose.yml"
 
 
@@ -29,13 +30,19 @@ def generer(reglages: Reglages) -> Path:
 
 
 def _compose(reglages: Reglages, *arguments: str, delai: int = 600) -> subprocess.CompletedProcess:
+    # Le projet et l'image portent le nom du dossier de travail : deux dossiers ne partagent aucun conteneur.
+    projet = reglages.projet_arena
+    image = "shadowlab-coraza:local" if projet == PROJET_DEFAUT else f"shadowlab-coraza:{projet}"
     environnement = {
         **os.environ,
         "SHADOWLAB_ARENA_DIR": str(reglages.dossier_arena.resolve()),
         "SHADOWLAB_PORT_AVAL": str(reglages.port_aval),
+        "SHADOWLAB_PORT": str(reglages.port),  # amont de Coraza : le site de ce dossier
+        "SHADOWLAB_ARENA_PROJET": projet,
+        "SHADOWLAB_ARENA_IMAGE": image,
     }
     return subprocess.run(
-        ["docker", "compose", "-f", str(COMPOSE), *arguments],
+        ["docker", "compose", "-p", projet, "-f", str(COMPOSE), *arguments],
         env=environnement,
         capture_output=True,
         text=True,
