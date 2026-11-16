@@ -15,6 +15,7 @@ s'arrête après le passage en cours et peut être reprise.
 
 from __future__ import annotations
 
+import json
 import logging
 import multiprocessing
 import platform
@@ -78,6 +79,9 @@ class MoteurConfig(BaseModel):
     # Témoin de la sentinelle d'identité : avant cette visite, le visiteur du bras est banni dans son monde (le même
     # code que `shadowlab arena bannir`). Réservé à une entrée qui a une identité persistante.
     bannir_avant_visite: int | None = Field(default=None, ge=1)
+    # Espacement propre à CE bras (I9) : il remplace celui de la campagne (ex. témoins à intervalle fixe pendant que le
+    # sujet suit l'ordonnanceur).
+    espacement: espacement_mod.Espacement | None = None
 
     @property
     def nom_affiche(self) -> str:
@@ -177,7 +181,7 @@ class Experience(BaseModel):
     @model_validator(mode="after")
     def visites_et_espacement(self) -> Experience:
         nb_unites = len(self.engines) * len(self.protections)
-        if self.espacement is not None:
+        if self.espacement is not None or any(m.espacement is not None for m in self.engines):
             if self.scenarios != ["visite"]:
                 raise ValueError("espacement : une visite est un passage, `scenarios` doit être [visite]")
             if self.concurrency < nb_unites:
@@ -425,6 +429,120 @@ def _degrader_si_moteur_absent(cx, experiment_id: int, statut: str) -> str:
     return "termine_incomplet" if n else "termine"
 
 
+FICHIER_CADENCE = "cadence.jsonl"
+
+
+def dossier_campagne(reglages: Reglages, experiment_id: int) -> Path:
+    """Les sorties durables d'une campagne (I9) : notes de la cadence (`cadence.jsonl`), état des récoltes par bras."""
+    return reglages.sorties / "campagnes" / str(experiment_id)
+
+
+def ecrire_note(reglages: Reglages, experiment_id: int, ligne: dict[str, Any]) -> None:
+    """Ajoute une ligne à `cadence.jsonl` (une seule écriture, en ajout : plusieurs bras peuvent écrire à la fois).
+
+    Genres : `manquee` (visite manquée : motif `retard` ou `infrastructure`, heure prévue, heure constatée, clé du
+    créneau, essai), `interrompue` (visite coupée en plein milieu par un arrêt brutal : début, dernière requête vue par
+    l'Arena, pages), `echeance` (la course est finie pour le bras : répétitions restantes, non faites)."""
+    fichier = dossier_campagne(reglages, experiment_id) / FICHIER_CADENCE
+    fichier.parent.mkdir(parents=True, exist_ok=True)
+    with fichier.open("a", encoding="utf-8") as flux:
+        flux.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+
+
+def lire_notes(reglages: Reglages, experiment_id: int) -> list[dict[str, Any]]:
+    """Les lignes de `cadence.jsonl` (vide si le fichier n'existe pas ; une ligne illisible est ignorée)."""
+    fichier = dossier_campagne(reglages, experiment_id) / FICHIER_CADENCE
+    if not fichier.exists():
+        return []
+    notes = []
+    for ligne in fichier.read_text(encoding="utf-8").splitlines():
+        try:
+            notes.append(json.loads(ligne))
+        except ValueError:
+            continue
+    return notes
+
+
+def _avec_espacement(experience: Experience) -> bool:
+    return experience.espacement is not None or any(m.espacement is not None for m in experience.engines)
+
+
+def preparer_reprise(cx, reglages: Reglages, experiment_id: int) -> None:
+    """Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
+
+    Dans une campagne espacée (I9), une visite coupée en plein milieu a pourtant eu lieu côté Arena : avant d'effacer,
+    elle est notée dans `cadence.jsonl` (genre `interrompue` : début, dernière requête vue par l'Arena, pages au sens de
+    D-78). La cadence la rejoue : l'écart et les plafonds par heure et par jour en tiennent compte."""
+    ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+    if ligne is not None and _avec_espacement(Experience.model_validate_json(ligne["configuration"])):
+        coupees = cx.execute(
+            "SELECT r.session_token, r.started_at, r.repetition, r.protection,"
+            " json_extract(e.configuration, '$.label') AS label FROM runs r JOIN engines e ON e.id = r.engine_id"
+            " WHERE r.experiment_id = ? AND r.status = 'en_cours' ORDER BY r.id",
+            (experiment_id,),
+        ).fetchall()
+        pages_sql = f"COALESCE(SUM(CASE WHEN {bannissements.clause_pages()} THEN 1 ELSE 0 END), 0)"
+        for r in coupees:
+            derniere, pages = cx.execute(
+                f"SELECT MAX(h.received_at), {pages_sql} FROM observations_http h WHERE h.session_token = ?",
+                (r["session_token"],),
+            ).fetchone()
+            ecrire_note(
+                reglages,
+                experiment_id,
+                {
+                    "genre": "interrompue",
+                    "bras": r["label"],
+                    "protection": r["protection"],
+                    "repetition": r["repetition"],
+                    "debut": r["started_at"],
+                    "fin": derniere or r["started_at"],
+                    "pages": int(pages or 0),
+                },
+            )
+    cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
+
+
+def _pages_de_la_visite(details: dict[str, Any]) -> int:
+    """Pages demandées par une visite (relectures comprises), telles que le scénario `visite` les note."""
+    if details.get("pages_visite") is not None:
+        return int(details["pages_visite"])
+    return int(details.get("pages_faites") or 0) + int(details.get("relectures") or 0)
+
+
+def _visites_du_bras(cx, reglages: Reglages, experiment_id: int, label: str, protection: str) -> list[tuple]:
+    """Les visites déjà faites par le bras (début, fin, pages lues) : ses passages finis dans la base, plus ses visites
+    coupées en plein milieu (`cadence.jsonl`). Heures telles qu'écrites (la cadence les ramène à son cadran)."""
+    faites: list[tuple] = []
+    for r in cx.execute(
+        "SELECT r.started_at, r.completed_at, r.drapeaux FROM runs r JOIN engines e ON e.id = r.engine_id"
+        " WHERE r.experiment_id = ? AND json_extract(e.configuration, '$.label') = ? AND r.protection = ?"
+        " AND r.status IN ('reussi', 'echec', 'erreur') ORDER BY r.id",
+        (experiment_id, label, protection),
+    ):
+        try:
+            details = (json.loads(r["drapeaux"] or "{}") or {}).get("details_scenario") or {}
+        except ValueError:
+            details = {}
+        details = details if isinstance(details, dict) else {}
+        faites.append((r["started_at"], r["completed_at"] or r["started_at"], _pages_de_la_visite(details)))
+    for note in lire_notes(reglages, experiment_id):
+        if note.get("genre") == "interrompue" and note.get("bras") == label and note.get("protection") == protection:
+            faites.append((note["debut"], note["fin"], int(note.get("pages") or 0)))
+    return faites
+
+
+def _panne_infrastructure(reglages: Reglages, protection: str) -> str | None:
+    """Avant une visite espacée : la chaîne de l'Arena (`arena.pile.sante`, hors niveau de base) et le site du labo
+    (`/lab/sante`) répondent-ils ? Rend la panne (texte), ou None. Une panne n'est pas une alerte : la visite n'est pas
+    lancée, l'identité ne change pas (la sentinelle, elle, prend un 503 pour une alerte, PENDANT une visite)."""
+    if protection != BASELINE and not pile.sante(reglages):
+        return "chaîne de l'Arena injoignable (arena.pile.sante)"
+    if not _identite_site(reglages):
+        return "site du labo injoignable (/lab/sante)"
+    return None
+
+
 def executer(reglages: Reglages, experiment_id: int) -> str:
     """Exécute (ou reprend) une campagne. Renvoie son état final."""
     cx = db.ouvrir(reglages.base_donnees)
@@ -435,8 +553,7 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
     verifier_url(experience.base_url or reglages.url_site, reglages.hotes_autorises)
     if experience.protections != [BASELINE]:
         verifier_url(reglages.url_arena, reglages.hotes_autorises)
-    # Un passage resté « en cours » (coupure) est rejoué : on retire sa trace incomplète.
-    cx.execute("DELETE FROM runs WHERE experiment_id = ? AND status = 'en_cours'", (experiment_id,))
+    preparer_reprise(cx, reglages, experiment_id)
     cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (experiment_id,))
     ordre = unites(experience)
     journal.info("Ordre d'exécution : %d unités, seed %s", len(ordre), experience.seed)
@@ -548,6 +665,37 @@ def _bannir_avant_visite(cx, monde: str, label: str, visite: int) -> bool:
     return True
 
 
+def _noteur(reglages: Reglages, experiment_id: int, label: str, protection: str) -> Callable[[dict[str, Any]], None]:
+    """Écrit les notes de la cadence d'un bras. Le fichier existe dès le départ du bras (le bilan distingue « aucune
+    visite manquée » de « aucune note lue »)."""
+    fichier = dossier_campagne(reglages, experiment_id) / FICHIER_CADENCE
+    fichier.parent.mkdir(parents=True, exist_ok=True)
+    fichier.touch()
+
+    def noter(ligne: dict[str, Any]) -> None:
+        ecrire_note(reglages, experiment_id, {"bras": label, "protection": protection, **ligne})
+
+    return noter
+
+
+def _fin_de_course(noter, cadence, horloge, experience: Experience, moteur_cfg: MoteurConfig, repetition: int) -> str:
+    """L'échéance est passée : plus aucune visite ne commence. Les répétitions restantes ne sont ni des échecs ni des
+    visites manquées : « non faites (échéance) », notées une fois. Le bras est fini (`termine`)."""
+    restantes = experience.visites_de(moteur_cfg) - repetition + 1
+    echeance = cadence.echeance
+    noter(
+        {
+            "genre": "echeance",
+            "echeance": echeance.astimezone().isoformat(timespec="seconds") if echeance else None,
+            "constatee": (horloge or datetime.now)().astimezone().isoformat(timespec="seconds"),
+            "repetition": repetition,
+            "restantes": restantes,
+        }
+    )
+    journal.info("%s : échéance passée, %d visite(s) non faite(s)", moteur_cfg.nom_affiche, restantes)
+    return "termine"
+
+
 def executer_unite(
     reglages: Reglages,
     experiment_id: int,
@@ -561,7 +709,9 @@ def executer_unite(
     `horloge` et `dormir` ne servent qu'à l'espacement des visites (champ `espacement`) : injectables pour les tests."""
     cx = db.ouvrir(reglages.base_donnees)
     try:
-        ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
+        ligne = cx.execute(
+            "SELECT configuration, created_at FROM experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
         experience = Experience.model_validate_json(ligne["configuration"])
         moteur_cfg, protection = unites(experience)[rang]
         faits = _deja_faits(cx, experiment_id)
@@ -584,11 +734,25 @@ def executer_unite(
             versions = pilote.versions()
             engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
             journal.info("moteur %s (%s) %s", moteur_cfg.nom_affiche, protection, versions)
-            cadence = (
-                espacement_mod.Cadence(experience.espacement, horloge=horloge, dormir=dormir)
-                if experience.espacement is not None
-                else None
-            )
+            label = moteur_cfg.nom_affiche
+            reglage_espacement = moteur_cfg.espacement or experience.espacement
+            cadence = noter = None
+            if reglage_espacement is not None:
+                noter = _noteur(reglages, experiment_id, label, protection)
+                cadence = espacement_mod.Cadence(
+                    reglage_espacement,
+                    horloge=horloge,
+                    dormir=dormir,
+                    graine=f"{experience.seed}:{label}:{protection}",
+                    depart=datetime.fromisoformat(ligne["created_at"]),
+                    faites=_visites_du_bras(cx, reglages, experiment_id, label, protection),
+                    notes=[
+                        n
+                        for n in lire_notes(reglages, experiment_id)
+                        if n.get("bras") == label and n.get("protection") == protection
+                    ],
+                    noter=noter,
+                )
             for repetition, ordre in _plan(experience, moteur_cfg, protection):
                 for nom_scenario in ordre:
                     if (moteur_cfg.nom_affiche, protection, nom_scenario, repetition) in faits:
@@ -597,10 +761,18 @@ def executer_unite(
                         return "interrompu"
                     scenario = SCENARIOS[nom_scenario]
                     creneau = None
-                    if cadence is not None:  # une visite = un passage ; seul le scénario `visite` est admis (validé)
-                        creneau = cadence.attendre(interrompre=arret.exists)
-                        if creneau is None:
-                            return "interrompu"
+                    if cadence is not None and noter is not None:  # une visite = un passage ; scénario `visite` seul
+                        while True:
+                            creneau = cadence.attendre(interrompre=arret.exists)
+                            if creneau is None:
+                                return "interrompu"
+                            if creneau.echeance:
+                                return _fin_de_course(noter, cadence, horloge, experience, moteur_cfg, repetition)
+                            panne = _panne_infrastructure(reglages, protection)
+                            if panne is None:
+                                break
+                            journal.warning("%s : visite non lancée, %s ; nouvel essai dans 5 min", label, panne)
+                            cadence.manquer(creneau, "infrastructure", panne)
                         scenario = avec_pages(creneau.pages or experience.pages_par_visite)
                     elif nom_scenario == "visite":
                         scenario = avec_pages(experience.pages_par_visite)
@@ -631,7 +803,7 @@ def executer_unite(
                         monde=monde,
                     )
                     if cadence is not None and creneau is not None:
-                        cadence.terminer(creneau, int((details or {}).get("pages_faites") or 0))
+                        cadence.terminer(creneau, _pages_de_la_visite(details or {}))
                     if protection != BASELINE and _arena_en_panne(cx, experiment_id):
                         journal.error(
                             "Arena injoignable sur %d passages de suite : campagne arrêtée. "
