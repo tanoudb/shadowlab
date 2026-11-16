@@ -127,14 +127,15 @@ def test_la_porte_revenue_apres_sa_duree_sur_une_relecture_est_repassee_sans_ale
     p, bilan = lancer(tmp_path / "r", pilote, lecture)
 
     assert bilan.code == 0 and bilan.statut == "limitee", bilan.arret
-    assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() == instant(vu) > avant
+    attente = 1.0 if forme == "defi_qui_se_leve" else 0.0  # le défi se lève après une seconde d'attente sans action
+    assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() == instant(vu + attente) > avant
     resume = lu(tmp_path / "r")
     repassages = resume["porte_repassages"]
     assert repassages["nombre"] == 1 and len(repassages["passages"]) == 1
     passage = repassages["passages"][0]
     assert passage["adresse"] == adresse and passage["franchie"] is True and passage["relecture"] is True
     assert passage["defi"] == ("arena" if forme == "defi_qui_se_leve" else "statut 403")
-    assert passage["attente_s"] == (1.0 if forme == "defi_qui_se_leve" else 0.0)
+    assert passage["attente_s"] == attente
     assert {"adresse": adresse, "statut": 200} in [
         {k: r[k] for k in ("adresse", "statut")} for r in resume["lecture_humaine"]["pages"]
     ]
@@ -158,7 +159,7 @@ def test_la_porte_revenue_avant_sa_duree_sur_une_relecture_donne_l_alerte_porte_
 
     assert bilan.code == 3 and bilan.arret["signe"] == "porte_revenue", bilan.arret
     assert bilan.arret["adresse"] == adresse
-    assert p.horloge_factice.pauses == [] and pilote.relectures == 0  # aucune attente, aucun regard sur le défi
+    assert p.horloge_factice.pauses == []  # aucune attente sur le défi (un seul regard sur place, comme en page lue)
     assert pilote.requetes_pages == rang  # rien demandé après
     assert identite.etat()["etat"] == "alerte" and identite.porte_franchie_le() == avant
     passage = lu(tmp_path / "r")["porte_repassages"]["passages"][0]
