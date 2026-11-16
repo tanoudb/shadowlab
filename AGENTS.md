@@ -175,7 +175,7 @@ recommander des optimisations.
   **Campagne 124** (monde 37, 3 passages par moteur) : `noezia` natif 3 sur 3, `playwright` 0 sur 3, banni dès le 1ᵉʳ
   passage, 3 lignes dans `bannissements` ; réserve : le témoin est aussi détecté par ses propres signaux, donc elle ne prouve
   pas que le bannissement arrête un robot qui passerait sans lui (témoin de la sentinelle, I7). **Campagne 125** (contrôle) :
-  mêmes taux que la 115, la 118 et la 121 à chaque cellule. Conception : `docs/recherche/identite-qui-dure-2026-11-12.md` § 7. **I7** (D-93, 16/11, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ : entre par `?sl=`, lit
+  mêmes taux que la 115, la 118 et la 121 à chaque cellule (puis **campagne 132**, 16/11, après D-95 : mêmes taux, 135 passages). Conception : `docs/recherche/identite-qui-dure-2026-11-12.md` § 7. **I7** (D-93, 16/11, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ : entre par `?sl=`, lit
   au plus 15 pages de la vitrine, note le visiteur lu dans `visites`), champ `espacement` des campagnes (`fixe` : écart compté de la fin
   d'une visite au début de la suivante, ou `ordonnanceur` : `visites.py`), un monde par bras (`monde: serie`, nom tiré du
   libellé), `shadowlab soiree bilan <n°>` (verdict par critère du § 6.2), `recolte lancer --identite <nom>`. Corrigés en route :
@@ -194,8 +194,7 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
-- **[À COMPLÉTER : nombre de tests]** (`uv run pytest`, 16/11, après D-94 et D-95 ; 2 097 tests verts après I7, rapides et intégration avec de vrais
-  navigateurs et la pile Docker, 8 min 31 s), 11 tests de l'interface (vitest), lint propre. Branche
+- **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au

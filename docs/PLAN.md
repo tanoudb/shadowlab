@@ -996,7 +996,7 @@ conclusion sous 33 ms) et `screen_position_zero` (seulement sans barre de naviga
 seuil : inchangé. Rejeu de la base publique : `c7c5142c` passe de 01 à 07 et en `endurance` ; `23a7b8a2` (Windows, pas confirmée)
 passe aussi de 05 à 07 ; `414f351a` reste arrêtée dès 03. Campagne 108 : les 3 passages arrêtés par l'ancienne règle ne le sont
 plus. Robots toujours pris : `patchright` sans tête (45 passages) et `patchright-chrome-mobile` (85), par `screen_position_zero`.
-Campagne de contrôle : [À COMPLÉTER : campagne de contrôle]. Non traité : la molette à crans. Marge mince (0,095 contre 0,08,
+**Campagne de contrôle 132** (16/11, `controle-vrai-chrome.yaml`, le fichier de la 115, niveaux 04, 05 et 06 sans corrélation, 135 passages) : mêmes taux que la 115, la 118, la 121 et la 125, dans les 9 cellules. `noezia` natif : 15, 15 et 15 sur 15. `patchright` : 0, 0 et 0 sur 15. Chrome sans comportement (`patchright-chrome-interface`) : 10, 15 et 0 sur 15. `screen_position_zero` (`position-fenetre` 1.1) se déclenche toujours sur les 45 passages de `patchright` sans tête, comme dans la 125. `trajectoire_lineaire`, `deltas_uniformes` et `scroll_timing_regulier` ne se déclenchent sur aucun des 135 passages, ni dans la 125 ni dans la 132. La campagne ne juge donc pas ces trois règles : seul le robot fabriqué des tests montre qu'elles prennent encore un robot. Les nouvelles versions des détecteurs (1.2, 1.1 et 1.1) sont enregistrées dans les passages. Non traité : la molette à crans. Marge mince (0,095 contre 0,08,
 un seul humain connu sur ordinateur).
 
 ## 3. Pourquoi on a perdu du temps
