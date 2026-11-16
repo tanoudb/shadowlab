@@ -51,6 +51,11 @@ RAFALE_PORTE_MAX = 4
 REDIRECTIONS = frozenset({301, 302, 303, 307, 308})
 REDIRECTIONS_MAX = 5  # sauts suivis un à un, chacun contrôlé avant d'être demandé
 PASSES_NON_FINIES = ("en_cours", "arretee", "interrompue", "limitee")
+# Porte déclarée avec sa durée (`porte_entree.duree_s`, identité persistante) : le défi revenu au plus TOLERANCE_PORTE_S
+# avant la fin de cette durée est encore attendu. L'heure du passage est notée par le moteur quelques secondes APRÈS la
+# pose du cookie par le site (défi validé, page rechargée, puis relue) : sans marge, un cookie de 24 h qui expire
+# pendant une visite, à l'heure exacte, serait pris pour un oubli du visiteur. Au-delà de la marge, c'est une alerte.
+TOLERANCE_PORTE_S = 60
 
 
 class _SautRefuse(Exception):
@@ -229,6 +234,10 @@ class Options:
     # Lecture humaine (`lecture.py`) : durées de page dispersées et retours à la liste pris sur le budget de pages.
     # Éteinte par défaut : seul le scénario `visite` l'allume ; la récolte générale ne change pas.
     lecture: LectureHumaine | None = None
+    # Chaque lancement (`lancer` ou `reprendre`) est une visite neuve d'un navigateur relancé (scénario `visite` à état
+    # durable, I9) : sa première page passe par la porte d'entrée (attente sans action, porte revenue trop tôt), et un
+    # 403 y vaut bannissement, comme à la première page d'une passe. Éteinte par défaut : une reprise reste une reprise.
+    entree_a_chaque_lancement: bool = False
 
 
 @dataclass
@@ -407,6 +416,9 @@ class Parcours:
                 sans=tuple(gardees.get("sans", ())),
                 ignorer_robots=bool(gardees.get("ignorer_robots", False)),
                 tout_refaire=bool(gardees.get("tout_refaire", False)),  # une passe « tout refaire » reste complète
+                # la façon de lire et la porte à chaque lancement sont celles de CE lancement (non gardées dans l'état)
+                lecture=self.options.lecture,
+                entree_a_chaque_lancement=self.options.entree_a_chaque_lancement,
             )
             self._controles(reprise=True)
             self.moteur.ouvrir()
@@ -420,6 +432,29 @@ class Parcours:
             etat.fermer()
             self.moteur.fermer()
             verrou.liberer()
+
+    def visiter(self, pages_max: int) -> Bilan:
+        """Une visite d'une récolte qui dure (scénario `visite` à état durable, I9) : au plus `pages_max` pages.
+
+        Aucune passe, ou la dernière finie : une nouvelle passe (incrémentale dès la deuxième, D-70). Sinon la dernière
+        passe reprend là où elle s'est arrêtée (`limitee` le plus souvent, `arretee` après une alerte : l'identité garde
+        sa propre attente d'une heure). Une reprise qui finit la passe sans rien lire (il ne restait que des pages déjà
+        lues, évitées) enchaîne une nouvelle passe dans la même visite, pour ne pas faire une visite vide."""
+        etat = Etat(self.dossier / "etat.sqlite3")
+        try:
+            derniere = etat.derniere_passe()
+        finally:
+            etat.fermer()
+        if derniere is None or derniere["statut"] not in PASSES_NON_FINIES:
+            self.options.pages_max = pages_max
+            return self.lancer()
+        bilan = self.reprendre(maintenant=True, pages_max=pages_max)
+        lancement = bilan.resume["lancement"]
+        if bilan.statut == "terminee" and lancement["pages"] == 0 and lancement["relectures"] == 0:
+            self.options.pages_max = pages_max
+            self.options.tout_refaire = False
+            return self.lancer()
+        return bilan
 
     def _evenement(self, etat: Etat, passe: int, genre: str, detail: Mapping[str, Any]) -> None:
         """Un événement de la passe : dans l'état, et dans le journal du labo (niveau DEBUG, fichier seulement)."""
@@ -567,7 +602,15 @@ class Parcours:
         # redemandées que si la recette le dit (`revisiter`). Aucune passe d'avant, ou --tout-refaire : tout est lu.
         self._base = etat.passe_de_base()
         self._incrementale = not self.options.tout_refaire and passe > self._base
-        self._premiere_page = not reprise and etat.compteurs(passe)["lues"] == 0  # la porte d'entrée n'y est que là
+        depart = etat.compteurs(passe)
+        self._lues_debut, self._echecs_debut = (
+            depart["lues"],
+            depart["echecs"],
+        )  # ce que CE lancement a lu (`lancement`)
+        # La porte d'entrée : première page de la passe, ou de chaque lancement (`entree_a_chaque_lancement`).
+        self._premiere_page = (not reprise and depart["lues"] == 0) or (
+            reprise and self.options.entree_a_chaque_lancement
+        )
         self._porte: dict[str, Any] | None = None
         self._alerte_en_premiere = False  # la réponse examinée est celle de la première page de la passe
         # Repasser la porte en cours de passe (option `porte_entree.repassages_max`) : passages tracés, heure du
@@ -579,6 +622,8 @@ class Parcours:
         self._rafale: tuple[str, int] | None = None
         self._plan = PlanDeLecture(self.options.lecture, self._alea) if self.options.lecture is not None else None
         self._liste, self._feuilles, self._relectures, self._pause_totale = None, [], [], 0.0
+        if self._plan is not None and reprise:  # une visite qui reprend la passe revient à la dernière liste lue
+            self._liste = self._derniere_liste(etat, passe)
         if self._repasser:
             self._relire_les_passages(etat, passe)
         self._annoncer(etat, passe, reprise)
@@ -679,18 +724,33 @@ class Parcours:
             self._pause_totale += reste
             self._dormir(reste)
 
+    def _derniere_liste(self, etat: Etat, passe: int) -> Page | None:
+        """La dernière page du type de départ (la liste) lue avec succès dans la passe, ou None."""
+        type_liste = self.recette.depart[0].type
+        for ligne in reversed(etat.lignes_pages(passe)):
+            if ligne["type"] == type_liste and ligne["etat"] == "faite" and ligne["decision"] == "ok":
+                return Page(ligne["id"], ligne["passe"], ligne["adresse"], ligne["type"], ligne["canon"])
+        return None
+
     def _apres_la_page(self, page: Page, debut: float, lues: int, limite: int | None) -> tuple[Alerte | None, int]:
         """Attend la fin de la lecture, puis, parfois, revient à la liste ou revoit une fiche : une vraie requête, prise
-        sur le budget de pages. Rend (alerte éventuelle, nombre de pages demandées en plus : 0 ou 1)."""
+        sur le budget de pages. Rend (alerte éventuelle, nombre de pages demandées en plus : 0 ou 1).
+
+        Dans une passe incrémentale, les fiches déjà lues sont évitées : une visite ne lit presque que des listes.
+        Une page de liste (sauf la première) s'y lit alors comme une fiche, et le retour se fait à la page de liste
+        d'avant : sans cela, une suite de pages de liste toutes distinctes serait une navigation linéaire."""
         assert self._plan is not None
         self._attendre_la_lecture(debut)
+        retour = self._liste
         if page.type == self.recette.depart[0].type:
-            self._liste = page
-            return None, 0
+            precedente, self._liste = self._liste, page
+            if not self._incrementale or precedente is None or precedente.canon == page.canon:
+                return None, 0
+            retour = precedente
         self._feuilles.append(page)
         action = self._plan.action(len(self._feuilles), None if limite is None else limite - lues)
         if action == "liste":
-            cible = self._liste
+            cible = retour
         elif action == "revoir" and len(self._feuilles) >= 2:
             cible = self._plan.feuille_a_revoir(self._feuilles)
         else:
@@ -909,22 +969,41 @@ class Parcours:
         """Identité persistante et `porte_entree.duree_s` déclarée : le défi revenu avant la fin de sa durée veut
         dire que le site ne reconnaît plus le visiteur (§ 5.5). Alerte tout de suite,
         SANS attendre ni agir sur le défi."""
+        ecoule = self._ecoule_depuis_la_porte()
+        if ecoule is None or not self._trop_tot(ecoule):
+            return None
+        self._porte = {"defi": defi, "franchie": False, "attente_s": 0.0, "revenue_apres_s": ecoule}
+        self._evenement(self._etat, self._passe, "porte_entree", self._porte)
+        return Alerte(
+            "porte_revenue", self._detail_porte_revenue("porte d'entrée", defi, ecoule), page.adresse, reponse.statut
+        )
+
+    def _ecoule_depuis_la_porte(self) -> float | None:
+        """Secondes depuis le dernier passage de la porte, lu dans l'identité persistante ; None sans identité, sans
+        durée déclarée (`porte_entree.duree_s`) ou sans passage connu : la règle de durée ne s'applique pas."""
         identite = getattr(self.moteur, "identite", None)
-        if identite is None or porte.duree_s is None:
+        porte = self.recette.porte_entree
+        if identite is None or porte is None or porte.duree_s is None:
             return None
         dernier = identite.porte_franchie_le()
         if dernier is None:
             return None
-        ecoule = (datetime.fromisoformat(self._horodatage()) - dernier).total_seconds()
-        if ecoule >= porte.duree_s:
-            return None
-        self._porte = {"defi": defi, "franchie": False, "attente_s": 0.0, "revenue_apres_s": ecoule}
-        self._evenement(self._etat, self._passe, "porte_entree", self._porte)
-        detail = (
-            f"porte d'entrée revenue (défi {defi}) {ecoule / 3600:.1f} h après le dernier passage, avant les "
-            f"{porte.duree_s / 3600:g} h déclarées : le site ne reconnaît plus l'identité"
+        return (datetime.fromisoformat(self._horodatage()) - dernier).total_seconds()
+
+    def _trop_tot(self, ecoule: float) -> bool:
+        """La porte revient-elle avant sa durée déclarée, marge de `TOLERANCE_PORTE_S` comprise ?"""
+        porte = self.recette.porte_entree
+        assert porte is not None and porte.duree_s is not None
+        return ecoule < porte.duree_s - TOLERANCE_PORTE_S
+
+    def _detail_porte_revenue(self, quoi: str, defi: str, ecoule: float) -> str:
+        porte = self.recette.porte_entree
+        assert porte is not None and porte.duree_s is not None
+        return (
+            f"{quoi} revenue (défi {defi}) {ecoule / 3600:.1f} h ({ecoule:g} s) après le dernier passage, avant les "
+            f"{porte.duree_s / 3600:g} h déclarées ({porte.duree_s:g} s, marge {TOLERANCE_PORTE_S} s) : le site ne "
+            "reconnaît plus l'identité"
         )
-        return Alerte("porte_revenue", detail, page.adresse, reponse.statut)
 
     def _porte_deja_franchie(self, reponse: Reponse) -> Reponse:
         """Statut d'alerte à la première page, aucun défi dans le DOM lu : le défi a pu se valider PENDANT la lecture
@@ -994,7 +1073,16 @@ class Parcours:
             "ecart_s": _secondes(self._dernier_passage, vu),  # depuis le passage précédent, ou le début de la passe
             "rafale": en_rafale,
         }
-        refus = None if en_rafale else self._refus_repassage(trace["ecart_s"])
+        # Identité persistante et durée de porte déclarée : c'est la durée depuis le dernier passage (souvent la veille)
+        # qui juge, pas l'écart depuis le début de la passe. Un cookie de 24 h peut expirer quelques minutes après le
+        # début d'une visite : il se repasse sans alerte. Revenu bien avant : alerte tout de suite, sans attente.
+        ecoule = None if en_rafale else self._ecoule_depuis_la_porte()
+        if ecoule is not None and self._trop_tot(ecoule):
+            trace.update(refus="duree_s", revenue_apres_s=ecoule)
+            self._tracer_repassage(trace)
+            detail = self._detail_porte_revenue("porte", trace["defi"], ecoule)
+            return reponse, Alerte("porte_revenue", detail, page.adresse, reponse.statut)
+        refus = None if en_rafale else self._refus_repassage(trace["ecart_s"], ecart=ecoule is None)
         if refus is not None:
             trace["refus"], raison = refus
             self._tracer_repassage(trace)
@@ -1028,16 +1116,17 @@ class Parcours:
         )
         return courante, None
 
-    def _refus_repassage(self, ecart: float) -> tuple[str, str] | None:
-        """(borne, raison) si la porte ne doit pas être repassée : maximum atteint, ou défi revenu trop tôt."""
+    def _refus_repassage(self, ecart_s: float, *, ecart: bool = True) -> tuple[str, str] | None:
+        """(borne, raison) si la porte ne doit pas être repassée : maximum atteint, ou défi revenu trop tôt (`ecart` :
+        l'écart minimal s'applique ; faux quand la durée déclarée de la porte a déjà jugé)."""
         porte = self.recette.porte_entree
         assert porte is not None
         faits = self._nombre_repassages()
         if faits >= porte.repassages_max:
             return "repassages_max", f"déjà {faits} repassage(s), le maximum de la recette ({porte.repassages_max})"
-        if ecart < porte.ecart_min_s:
+        if ecart and ecart_s < porte.ecart_min_s:
             return "ecart_min_s", (
-                f"défi revenu {ecart:g} s après le passage précédent, moins que les {porte.ecart_min_s:g} s exigées"
+                f"défi revenu {ecart_s:g} s après le passage précédent, moins que les {porte.ecart_min_s:g} s exigées"
             )
         return None
 
@@ -1249,6 +1338,13 @@ class Parcours:
             "porte_repassages": self._bilan_repassages(),
             "alertes_lecture": etat.alertes_lecture(passe),
             "arret": arret,
+            # Ce que CE lancement a demandé (une visite d'une récolte qui dure) : pages de la passe lues (échecs
+            # compris), échecs, relectures de la lecture humaine. Passe neuve : les compteurs de la passe.
+            "lancement": {
+                "pages": c["lues"] - self._lues_debut,
+                "echecs": c["echecs"] - self._echecs_debut,
+                "relectures": len(self._relectures),
+            },
         }
         if self._plan is not None:
             resume["lecture_humaine"] = {

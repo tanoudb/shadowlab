@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from parsel import Selector
 
@@ -35,6 +35,7 @@ PORTE_REPASSAGES_PASSAGE = 10
 PORTE_ECART_MIN_PASSAGE_S = 300
 # Scénario `visite` (palier 2, I7) : pages lues par visite par défaut, et durée pendant laquelle l'Arena (profil
 # `endurance`, `duree_cookie_s`) ne redemande pas le défi à un visiteur connu : un défi revenu avant est une alerte.
+# Valeur par défaut hors campagne seulement : une campagne passe la durée de son profil (I9, `campaigns.py`).
 PAGES_PAR_VISITE = 15
 DUREE_PORTE_VISITE_S = 86400
 # Lecture humaine de la visite (`engines/noezia/lecture.py`) : durées de page dispersées, retours à la liste. Allumée
@@ -642,8 +643,12 @@ class _MoteurDuPassage(MoteurDriver):
         pass
 
     def lire(self, adresse: str):  # noqa: ANN201 — `Reponse` du parcours
-        if "sl" not in parse_qs(urlsplit(adresse).query):  # un seul `sl` : deux jetons = aucune session
-            adresse = _avec_jeton(adresse, self._jeton)
+        # Un seul `sl`, celui DE CE passage : deux jetons = aucune session, et une adresse gardée d'une visite d'avant
+        # (état durable, I9) peut porter l'ancien jeton. Il est remplacé, jamais gardé.
+        morceaux = urlsplit(adresse)
+        if parse_qs(morceaux.query).get("sl") != [self._jeton]:
+            requete = urlencode([(n, v) for n, v in parse_qsl(morceaux.query, keep_blank_values=True) if n != "sl"])
+            adresse = _avec_jeton(urlunsplit(morceaux._replace(query=requete)), self._jeton)
         return super().lire(adresse)
 
 
@@ -704,11 +709,18 @@ def _lancer_parcours(
     options: Options | None = None,
     duree_porte_s: float | None = None,
     noter: Callable[[Any, Any], Any] | None = None,
+    dossier_durable: Any = None,
 ) -> tuple[Any, Any]:
     """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage (le pilote du passage est
     le moteur de récolte : porte d'entrée, sentinelle, identité persistante). Rend le bilan et ce que `noter(dossier,
-    bilan)` en a tiré, appelé tant que l'état de la passe existe."""
+    bilan)` en a tiré, appelé tant que l'état de la passe existe.
+
+    Sans `dossier_durable`, l'état vit dans un dossier temporaire : chaque passage repart de zéro (passe neuve). Avec,
+    l'état y reste d'un passage à l'autre et le passage est une visite (`Parcours.visiter`) : il reprend la passe en
+    cours, dans la limite de `options.pages_max`, ou en commence une nouvelle (incrémentale) quand la précédente est
+    finie."""
     import tempfile
+    from contextlib import nullcontext
     from pathlib import Path
 
     recette, texte = recette_du_passage(recette_nom, base, duree_porte_s)
@@ -716,12 +728,20 @@ def _lancer_parcours(
     avant = getattr(d, "hotes_navigation", None)
     if nom_moteur == "navigateur":  # garde du cadre principal : seuls les hôtes de la recette
         d.hotes_navigation = tuple(h.lower() for h in recette.hotes)  # type: ignore[attr-defined]
+    lieu = (
+        nullcontext(str(dossier_durable))
+        if dossier_durable is not None
+        else tempfile.TemporaryDirectory(prefix="shadowlab-recolte-")
+    )
     try:
-        with tempfile.TemporaryDirectory(prefix="shadowlab-recolte-") as dossier:
+        with lieu as dossier:
             parcours = Parcours(
                 recette, texte, recette_nom, moteur, Path(dossier), options, ecran=lambda _: None, alea=rng
             )
-            bilan = parcours.lancer()
+            if dossier_durable is not None:
+                bilan = parcours.visiter((options or Options()).pages_max or PAGES_PAR_VISITE)
+            else:
+                bilan = parcours.lancer()
             note = noter(Path(dossier), bilan) if noter else None
     finally:
         if nom_moteur == "navigateur":
@@ -804,7 +824,49 @@ def _identite_du_pilote(d: Driver) -> dict[str, Any] | None:
     return {"nom": identite.nom, "etat": identite.etat().get("etat")}
 
 
-def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PAGES_PAR_VISITE) -> Issue:
+def noter_recolte_durable(dossier: Any) -> dict[str, Any]:
+    """La récolte cumulée d'un état durable (`etat.sqlite3`, toutes passes) notée contre `vitrine.verite()` : annonces
+    retrouvées sur attendues, champs exacts sur TOUS les champs attendus (ceux des annonces manquantes comptent comme
+    faux : une récolte à moitié faite ne peut pas avoir 100 % de champs exacts). Graine et taille de la vitrine lues
+    dans la configuration du passage (`SHADOWLAB_VITRINE_GRAINE`, `SHADOWLAB_VITRINE_TAILLE`)."""
+    from pathlib import Path
+
+    from .config import charger
+    from .engines.noezia.etat import Etat
+
+    reglages = charger()
+    verite = vitrine.verite(reglages.vitrine_graine, reglages.vitrine_taille)
+    etat = Etat(Path(dossier) / "etat.sqlite3")
+    try:
+        note = noter_recolte(etat.enregistrements("annonces"), verite)
+        passes = (etat.derniere_passe() or {}).get("numero", 0)
+    finally:
+        etat.fermer()
+    total = sum(len(a) for a in verite["annonces"])
+    attendues = note["annonces_attendues"]
+    return {
+        "graine": reglages.vitrine_graine,
+        "taille": reglages.vitrine_taille,
+        "passes": passes,
+        "annonces_attendues": attendues,
+        "annonces_retrouvees": note["annonces_retrouvees"],
+        "annonces": note["annonces_retrouvees"] / attendues if attendues else 0.0,
+        "champs_attendus": total,
+        "champs_exacts": note["champs_exacts"],
+        "champs": note["champs_exacts"] / total if total else 0.0,
+        "erreurs_par_champ": note["erreurs_par_champ"],
+    }
+
+
+def visite(
+    d: Driver,
+    base: str,
+    jeton: str,
+    rng: random.Random,
+    pages: int = PAGES_PAR_VISITE,
+    duree_porte_s: float | None = DUREE_PORTE_VISITE_S,
+    dossier_recolte: Any = None,
+) -> Issue:
     """Une visite de la vitrine par un visiteur qui peut revenir : la liste, puis des fiches, `pages` pages au plus.
 
     C'est le parcours de la récolte (`recette_du_passage('vitrine')`, `Options(pages_max=pages)`) : porte d'entrée,
@@ -812,6 +874,18 @@ def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PA
     aussi) : aucun solveur de CAPTCHA, aucun clic sur un défi, le profil `endurance` n'a pas de CAPTCHA. Une visite
     arrêtée est un résultat (jamais une exception) : le visiteur vu par l'Arena et l'état de l'identité sont notés
     dans tous les cas, pour que le bilan de la soirée les lise dans la base.
+
+    `duree_porte_s` : la durée pendant laquelle l'Arena ne redemande pas le défi au visiteur (la campagne la tire du
+    profil : `duree_cookie_s` d'un profil à porte par visiteur, 86 400 s pour `endurance`, 600 s pour `endurancecourt` ;
+    None : pas de règle de durée). `dossier_recolte` (course de 7 jours, I9) : l'état de la récolte vit dans ce dossier
+    durable, propre au bras ; chaque visite reprend la passe là où la précédente s'est arrêtée (sa première page passe
+    la porte d'entrée, un navigateur relancé), puis, la liste et toutes les fiches lues, commence une passe
+    incrémentale (D-70). La lecture humaine (D-94) reste active et prend sur le budget de la visite. La récolte cumulée
+    est notée à chaque visite (`recolte`, contre `vitrine.verite()`).
+
+    Pourquoi ce scénario et pas `shadowlab recolte lancer --identite` : `recolte lancer` vise le site en direct, sans
+    jeton de passage, donc sans profil de l'Arena (une requête sans jeton reçoit le profil sans session) ; la course
+    doit être jugée par le profil `endurance`, ce que seul un passage de campagne donne (`?sl=`, puis le cookie).
     """
     nom_moteur = "navigateur" if d.runtime == "navigateur" else "http"
     humain = d.name == "noezia"
@@ -821,40 +895,57 @@ def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PA
         "pages_demandees": pages,
         "lecture_humaine": humain,
         "relectures": 0,
+        "duree_porte_s": duree_porte_s,
+        "recolte_durable": dossier_recolte is not None,
     }
     succes = False
     try:
-        bilan, _ = _lancer_parcours(
+        options = Options(
+            pages_max=pages,
+            lecture=LECTURE_HUMAINE_VISITE if humain else None,
+            entree_a_chaque_lancement=dossier_recolte is not None,
+        )
+        bilan, note = _lancer_parcours(
             d,
             base,
             jeton,
             rng,
             "vitrine",
             nom_moteur,
-            options=Options(pages_max=pages, lecture=LECTURE_HUMAINE_VISITE if humain else None),
-            duree_porte_s=DUREE_PORTE_VISITE_S,
+            options=options,
+            duree_porte_s=duree_porte_s,
+            noter=(lambda dossier, _bilan: noter_recolte_durable(dossier)) if dossier_recolte is not None else None,
+            dossier_durable=dossier_recolte,
         )
-        faites, echecs = bilan.resume["pages"]["faites"], bilan.resume["pages"]["echecs"]
+        lancement = bilan.resume["lancement"]
+        lues, echecs, relectures = lancement["pages"], lancement["echecs"], lancement["relectures"]
         details.update(
-            statut=bilan.statut, arret=bilan.arret, pages_faites=faites, pages_en_echec=echecs,
-            relectures=(bilan.resume.get("lecture_humaine") or {}).get("relectures", 0),
+            statut=bilan.statut, arret=bilan.arret, pages_faites=lues - echecs, pages_en_echec=echecs,
+            relectures=relectures, pages_visite=lues + relectures, passe=bilan.passe,
+            incrementale=bilan.resume["incrementale"]["active"], porte_entree=bilan.resume.get("porte_entree"),
             **_repassages_de_la_porte(bilan),
         )  # fmt: skip
+        if note is not None:
+            details["recolte"] = note
         if bilan.arret:
             details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
-        succes = bilan.statut in ("limitee", "terminee") and faites >= 1 and echecs == 0
+        succes = bilan.statut in ("limitee", "terminee") and lues - echecs >= 1 and echecs == 0
     except RefusParcours as exc:  # robots.txt inaccessible, par exemple : la visite n'a rien lu
-        details.update(statut="refusee", arret=None, pages_faites=0, pages_en_echec=0, refus=str(exc))
+        details.update(statut="refusee", arret=None, pages_faites=0, pages_en_echec=0, pages_visite=0, refus=str(exc))
     details.update(_visiteur_vu(jeton))
     details["identite"] = _identite_du_pilote(d)
     return Issue(succes, details)
 
 
-def avec_pages(pages: int) -> Scenario:
+def avec_pages(
+    pages: int, *, duree_porte_s: float | None = DUREE_PORTE_VISITE_S, dossier_recolte: Any = None
+) -> Scenario:
     """Le scénario `visite` pour `pages` pages au plus (même nom et même description que celui du registre : c'est
-    la même ligne `scenarios` dans la base)."""
+    la même ligne `scenarios` dans la base), avec la durée de porte du profil et, pour la course, le dossier durable
+    de la récolte du bras."""
     modele = SCENARIOS["visite"]
-    return Scenario(modele.name, modele.description, modele.attend_js, functools.partial(visite, pages=pages))
+    executer = functools.partial(visite, pages=pages, duree_porte_s=duree_porte_s, dossier_recolte=dossier_recolte)
+    return Scenario(modele.name, modele.description, modele.attend_js, executer)
 
 
 def recolte_recette_vitrine(d: Driver, base: str, jeton: str, rng: random.Random) -> Issue:

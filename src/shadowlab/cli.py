@@ -129,6 +129,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=["bilan"])
     p.add_argument("campagne", type=int, help="numéro de la campagne")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
+    p = sous.add_parser("course", help="bilan de la course de 7 jours « une identité qui dure » (base et relevé)")
+    p.add_argument("action", choices=["bilan"])
+    p.add_argument("campagne", type=int, help="numéro de la campagne")
+    p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
@@ -239,6 +243,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.commande == "soiree":
         return _soiree(args, reglages)
+    if args.commande == "course":
+        return _course(args, reglages)
 
     if args.commande == "rejeu":
         return _rejeu(args, reglages)
@@ -521,6 +527,27 @@ def _soiree(args: argparse.Namespace, reglages) -> int:
         cx.close()
     print(json_mod.dumps(rapport, ensure_ascii=False, indent=2) if args.format_json else soiree.texte(rapport))
     return 0 if rapport["verdict"] == soiree.TENU else 1
+
+
+def _course(args: argparse.Namespace, reglages) -> int:
+    """`shadowlab course bilan <n°>` : lit la base et le relevé de la cadence, n'écrit rien. Mêmes codes que la soirée :
+    0 si tout est tenu, 1 sinon (un critère non tenu ou non mesuré), 2 si la campagne n'existe pas."""
+    import json as json_mod
+
+    from . import course
+    from . import database as db
+    from .campaigns import dossier_campagne
+
+    cx = db.ouvrir(reglages.base_donnees)
+    try:
+        rapport = course.bilan(cx, args.campagne, dossier_campagne(reglages, args.campagne))
+    except LookupError as erreur:
+        print(f"Erreur : {erreur}", file=sys.stderr)
+        return 2
+    finally:
+        cx.close()
+    print(json_mod.dumps(rapport, ensure_ascii=False, indent=2) if args.format_json else course.texte(rapport))
+    return 0 if rapport["verdict"] == course.TENU else 1
 
 
 def _bannir(args: argparse.Namespace, reglages) -> int:

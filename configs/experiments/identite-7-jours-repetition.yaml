@@ -1,0 +1,78 @@
+# Palier 2, I9 : répétition de la course de 7 jours (identite-7-jours.yaml), environ 1 h 30, avant de la lancer.
+#
+# Les mêmes quatre bras, chacun dans son monde, au profil `endurancecourt` : celui d'`endurance`, la porte valable
+# 600 s au lieu de 24 h (configs/arena/profils-endurance-court.yaml ; aucun seuil ni aucune règle ne change). Le sujet
+# suit l'ordonnanceur avec la plage 0-24 h et des écarts de 1 à 4 min (médiane 2) ; les plafonds de pages ne changent pas
+# (5 à 40 par visite, médiane 15 ; 120 par heure glissante ; 200 par jour) ; échéance 0,06 jour (86 min 24 s).
+# Vitrine de 30 annonces (SHADOWLAB_VITRINE_TAILLE=30) : 2 pages de liste et 30 fiches, 32 pages par passe complète.
+#
+# Graine 20275777 : la 1re visite du sujet a 5 pages au plus, la 2e 40, tirées par l'ordonnanceur (aucun plafond ne les
+# impose). Vérifié par tests/test_course_configs.py, avec le vrai code de la campagne en temps simulé : en lisant toutes
+# les pages prévues, 12 visites avec des visites de 1 min plus 15 s par page (pages prévues 5, 40, 9, 18, 7, 12, 7, 22, 5,
+# 5, 9, 6 ; le plafond par heure réduit la 8e et la 9e), 11 avec 1 min 30 plus 20 s par page. Ce sont des budgets, pas
+# des pages lues : sur le site factice des tests (vitrine de 30 annonces, lecture instantanée, trois tirages), la 1re
+# visite lit 5 pages, la 2e reprend la passe et la finit en 33 à 36 pages (dont 5 à 8 relectures), jamais 40 ; chaque
+# visite suivante est une passe incrémentale de 3 pages (les 2 pages de liste, un retour). Les visites réelles sont donc
+# plus courtes et plus nombreuses que ces budgets. Une 1re visite de 40 aurait lu 38 à 40 pages, mais la passe n'aurait
+# plus été reprise d'une visite à l'autre : la reprise compte davantage pour la course.
+# Témoins réduits : espacement fixe de 1 min, 3 pages ; négatif et sentinelle 6 visites (bannie avant la 3e), classique 3.
+#
+# Ce que la répétition doit montrer avant les 7 jours (bilan : `uv run shadowlab course bilan <n°>`, code 0) :
+#   - le sujet : au moins 10 visites aux créneaux de l'ordonnanceur, aucun bannissement, aucune alerte, un seul visiteur et
+#     une seule empreinte E ; la passe reprise d'une visite à l'autre, puis des passes incrémentales ; au moins 99 % des
+#     annonces et des champs exacts à la fin ; la porte revenue toutes les 600 s environ (au début et au milieu d'une
+#     visite), repassée sans alerte, jamais plus tôt ; l'échéance qui arrête le bras sans échec (relevé : `echeance`) ;
+#   - les témoins tenus comme à la soirée ;
+#   - une coupure en cours de route (facultatif) : `shadowlab arreter` puis `reprendre`, visite coupée notée, cadence
+#     reprise sans visite en trop.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, AVEC le profil court :
+#        SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-court.yaml uv run shadowlab arena appliquer
+#   2. Identités à usage unique : pour recommencer, changer les suffixes (`course-repetition-sujet-2`…).
+#   3. À lancer avant 22 h : aucune visite ne commence entre 23 h 30 et minuit (marge de fin de plage de 30 min) ; la
+#      suivante partirait après minuit, décalée de 0 à 90 min.
+#
+# Commande (la variable aussi : la campagne lit le profil `endurancecourt` pour la durée de la porte) :
+#   SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-court.yaml SHADOWLAB_VITRINE_TAILLE=30 caffeinate -i \
+#     uv run shadowlab campagne configs/experiments/identite-7-jours-repetition.yaml
+# Reprise éventuelle : la même ligne avec `uv run shadowlab reprendre <n°>`.
+# Après la répétition, sans la variable : uv run shadowlab arena appliquer
+experiment:
+  name: identite_7_jours_repetition
+  description: >-
+    Répétition de la course de 7 jours : profil endurancecourt (porte de 600 s), ordonnanceur 0-24 h à écarts de 1 à
+    4 min, échéance 0,06 jour, vitrine de 30 annonces ; témoins réduits.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: course-repetition-sujet-1}
+    - name: noezia
+      label: temoin-negatif
+      visites: 6
+      espacement: {mode: fixe, minutes: 1}
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: noezia
+      label: temoin-sentinelle
+      visites: 6
+      bannir_avant_visite: 3
+      espacement: {mode: fixe, minutes: 1}
+      options: {headless: false, channel: chrome, identite_native: true, identite: course-repetition-sentinelle-1}
+    - name: playwright
+      label: temoin-classique
+      visites: 3
+      espacement: {mode: fixe, minutes: 1}
+  protections: [endurancecourt]
+  scenarios: [visite]
+  repetitions: 200
+  pages_par_visite: 3  # les témoins (espacement fixe) ; le sujet lit les pages que lui donne l'ordonnanceur
+  espacement:
+    mode: ordonnanceur
+    jours: 0.06
+    reglages: {plage: [0, 24], ecart_min_min: 1, ecart_med_min: 2, ecart_max_min: 4}
+  concurrency: 4
+  monde: serie
+  seed: 20275777
+  output: [json, html]

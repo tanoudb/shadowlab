@@ -1,0 +1,86 @@
+# Profil `endurancecourt` : le profil `endurance` de configs/arena/profils.yaml à l'identique, sauf `duree_cookie_s: 600`
+# (la porte d'entrée liée au visiteur vaut 600 s au lieu de 86 400 s) et `description`. Généré à partir de profils.yaml
+# (l'ancre `detecteurs_06` y est développée : un fichier de profils supplémentaires ne voit pas les ancres de l'autre).
+# À régénérer si `endurance` change ; tests/test_course_visite.py vérifie qu'ils ne diffèrent que par ces deux champs.
+# Pourquoi : la répétition de la course de 7 jours (configs/experiments/identite-7-jours-repetition.yaml, environ 1 h 30)
+# doit voir la porte revenir plusieurs fois, au début et au milieu d'une visite, sans attendre 24 h.
+# Chargé par SHADOWLAB_PROFILS_EXTRA (un seul fichier) : `shadowlab arena appliquer` AVEC la variable avant la répétition,
+# la campagne (et toute reprise) AVEC la variable, puis `shadowlab arena appliquer` SANS elle après.
+endurancecourt:
+  bannissement:
+    actif: true
+    pages_par_heure: 240
+    pages_par_jour: 2000
+  captcha:
+    actif: false
+  connexion:
+    actif: true
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 18
+    lier_tls: true
+    par_visiteur: true
+  description: 'Niveau 06 pour un visiteur qui revient : une porte par visiteur (24 h), bannissement, aucun CAPTCHA ; porte
+    de 600 s au lieu de 24 h (répétition de la course de 7 jours)'
+  duree_cookie_s: 600
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.5
+  honeypots:
+    actif: true
+  limitation:
+    debit: 2
+    rafale: 4
+  nom: Endurance
+  recaptcha:
+    actif: false
+  turnstile:
+    actif: false
+  waf:
+    mode: blocage
+    paranoia: 3
+    seuil: 3

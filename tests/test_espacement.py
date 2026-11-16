@@ -26,6 +26,12 @@ from shadowlab.scenarios import SCENARIOS
 DEPART = datetime(2026, 11, 16, 20, 0, 0)
 
 
+@pytest.fixture(autouse=True)
+def infrastructure_saine(monkeypatch):
+    """Ni Arena ni site dans ces tests : la sonde d'avant visite (I9) les dit joignables."""
+    monkeypatch.setattr(campaigns, "_panne_infrastructure", lambda reglages, protection: None, raising=False)
+
+
 class Horloge:
     """Horloge factice : `dormir` fait avancer le temps sans attendre."""
 
@@ -49,7 +55,7 @@ class Horloge:
 
 def cadence(horloge, mode="fixe", **champs):
     reglage = espacement.Espacement(mode=mode, **champs)
-    return espacement.Cadence(reglage, horloge=horloge.now, dormir=horloge.dormir, alea=random.Random(3))
+    return espacement.Cadence(reglage, horloge=horloge.now, dormir=horloge.dormir, graine=3)
 
 
 def test_fixe_la_premiere_visite_part_tout_de_suite():
@@ -91,7 +97,8 @@ def test_ordonnanceur_est_celui_de_visites_py():
     """`mode: ordonnanceur` appelle l'ordonnanceur de l'étape I5 : mêmes visites, avec la même graine."""
     horloge = Horloge()
     c = cadence(horloge, mode="ordonnanceur")
-    ordonnanceur = visites.Ordonnanceur(alea=random.Random(3), horloge=horloge.now, dormir=horloge.dormir)
+    # une graine par visite : la graine du bras, puis le nombre de visites faites et de notes (créneau recalculable)
+    ordonnanceur = visites.Ordonnanceur(alea=random.Random("3:0:0"), horloge=horloge.now, dormir=horloge.dormir)
     attendu = ordonnanceur.prochaine()
     creneau = c.attendre()
     assert (creneau.debut, creneau.pages) == (attendu.debut, attendu.pages)

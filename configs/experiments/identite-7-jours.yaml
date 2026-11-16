@@ -1,0 +1,91 @@
+# Palier 2, I9 : la course de 7 jours « une identité qui dure » (docs/recherche/identite-qui-dure-2026-11-12.md § 6.3).
+#
+# Quatre bras, chacun dans SON monde (`monde: serie` : `c<n°>:<libellé>:endurance`), au profil `endurance` (porte
+# JavaScript liée au visiteur, valable 24 h ; bannissement ; aucun CAPTCHA) :
+#   - sujet             : `noezia` en identité native, identité persistante `course-sujet-1`, au rythme de l'ordonnanceur
+#                         du § 5.4 tel quel (`espacement` de la campagne, aucun réglage : 8 h à 23 h, écart de 45 à
+#                         180 min, médiane 90, 5 à 40 pages, médiane 15, 120 pages par heure glissante, 200 par jour),
+#                         pendant 7 jours (`jours: 7`, comptés de la création de la campagne). Sa récolte dure d'une
+#                         visite à l'autre (`recolte_incrementale`) : chaque visite reprend la passe là où la précédente
+#                         s'est arrêtée, la passe finie, la suivante est incrémentale (la liste relue, les fiches déjà
+#                         lues jamais). `repetitions: 200` n'est qu'un plafond : c'est l'échéance qui finit la course ;
+#   - temoin-negatif    : le même Chrome, sans identité (cookies jetés à chaque visite), 6 visites : 5 sessions neuves de
+#                         même empreinte en 24 h, il doit être pris à la 5e, puis banni ;
+#   - temoin-sentinelle : identité `course-sentinelle-1`, son visiteur banni par la campagne avant sa 3e visite (même code
+#                         que `shadowlab arena bannir`), 6 visites ; aucune page après le premier 403, identité `banni` ;
+#   - temoin-classique  : `playwright`, 4 visites ; arrêté à chaque visite, par l'Arena.
+# Espacement choisi pour les témoins : fixe, 10 min de la fin d'une visite au début de la suivante (celui de la soirée) ;
+# ils finissent dans la première heure ou les deux premières, donc le premier jour ; le sujet continue seul.
+#
+# Taille de la vitrine : SHADOWLAB_VITRINE_TAILLE=300. Calcul : à la soirée 131, le sujet a lu 285 pages en 24 visites de
+# 15 pages au plus, dont 75 relectures : 210 pages distinctes, 8,75 par visite. Ici l'ordonnanceur donne environ 17 pages
+# au plus par visite (simulation en temps simulé sur 7 jours, visites d'1 min plus 9 s par page : 61 à 65 visites selon
+# la graine et l'heure de départ, 1 018 à 1 144 pages prévues), soit environ 10 pages distinctes par visite au même taux.
+# Une première passe de 300 annonces fait 15 pages de liste et 300 fiches, 315 pages : environ 32 visites, elle finit
+# vers le milieu de la course ; la seconde moitié fait des passes incrémentales. Critère : au moins 99 % des annonces et
+# 99 % des champs exacts à la fin, notés contre `vitrine.verite()` (même graine et même taille au lancement et à la
+# reprise : SHADOWLAB_VITRINE_TAILLE=300 dans les deux commandes).
+#
+# Préalables :
+#   1. Répétition faite et tenue : configs/experiments/identite-7-jours-repetition.yaml (environ 1 h 30).
+#   2. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer          # le profil `endurance` est dans configs/arena/profils.yaml
+#   3. Identités à usage unique (la sentinelle sera bannie) : pour recommencer, changer les suffixes (`course-sujet-2`,
+#      `course-sentinelle-2`) ; ne jamais recopier un dossier de `outputs/identites/`.
+#   4. Le Mac reste branché et éveillé (`caffeinate` ci-dessous) ; rien de lourd à côté pendant 7 jours (CPU, durées).
+#      Une visite manquée (Mac endormi, processus arrêté, créneau pris plus de 10 min en retard) n'est pas jouée : elle est
+#      notée à part (motif `retard`) ; une panne de la chaîne de l'Arena ou du site aussi (motif `infrastructure`,
+#      réessai 5 min après), sans toucher à l'identité.
+#
+# Commande, seule dans sa session tmux (une fenêtre de Chrome s'ouvre à chaque visite des trois bras navigateur) :
+#   SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab campagne configs/experiments/identite-7-jours.yaml
+# Après une coupure (redémarrage, arrêt) : `SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab reprendre <n°>`.
+#   La cadence relit les visites faites dans la base (écart, plafonds) ; une visite coupée en plein milieu est notée
+#   `interrompue`, puis rejouée ; l'échéance reste comptée de la création de la campagne.
+# Arrêt d'urgence : `uv run shadowlab arreter` (écouté pendant l'attente ; après le passage en cours).
+#
+# Relevés durables (sous `outputs/`, ou SHADOWLAB_SORTIES) :
+#   campagnes/<n°>/cadence.jsonl                     visites manquées, interrompues, échéance
+#   campagnes/<n°>/recolte/sujet-endurance/          état de la récolte du sujet (etat.sqlite3)
+# Bilan, lu dans la base et le relevé (code 0 si tout est tenu, 1 sinon, 2 campagne inconnue) :
+#   uv run shadowlab course bilan <n° de la campagne>
+# Critère (§ 6.3) : aucun bannissement, aucune alerte en 7 jours ; toutes les visites faites abouties ; le même visiteur
+# et la même empreinte E ; la porte revenue seulement après 24 h (tolérance 60 s) ; au moins 99 % des annonces et des
+# champs exacts à la fin ; les visites manquées comptées à part ; témoins négatif, de sentinelle et classique tenus le
+# premier jour.
+experiment:
+  name: identite_7_jours
+  description: >-
+    Course de 7 jours du palier 2 : une identité persistante qui revient au rythme de l'ordonnanceur (profil endurance,
+    un monde par bras) et récolte la vitrine d'une visite à l'autre ; témoins négatif, de sentinelle et classique le
+    premier jour.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: course-sujet-1}
+    - name: noezia
+      label: temoin-negatif
+      visites: 6
+      espacement: {mode: fixe, minutes: 10}
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: noezia
+      label: temoin-sentinelle
+      visites: 6
+      bannir_avant_visite: 3
+      espacement: {mode: fixe, minutes: 10}
+      options: {headless: false, channel: chrome, identite_native: true, identite: course-sentinelle-1}
+    - name: playwright
+      label: temoin-classique
+      visites: 4
+      espacement: {mode: fixe, minutes: 10}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 200
+  pages_par_visite: 15  # les témoins (espacement fixe) ; le sujet lit les pages que lui donne l'ordonnanceur
+  espacement: {mode: ordonnanceur, jours: 7}
+  concurrency: 4
+  monde: serie
+  seed: 20261117
+  output: [json, html]
