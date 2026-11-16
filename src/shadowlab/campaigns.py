@@ -25,8 +25,9 @@ import sys
 import time
 import traceback
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -36,17 +37,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from . import __version__, passages
 from . import database as db
-from .arena import pile, visiteurs
+from . import espacement as espacement_mod
+from .arena import bannissements, pile, visiteurs
 from .arena import profils as module_profils
 from .arena.profils import BASELINE, normaliser
 from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre
 from .engines.base import FonctionIndisponible, RefusProtection
+from .engines.noezia.identite import IdentiteRefusee
 from .issues import CAUSE_PANNE_ARENA
 from .mesures import PIDS_EXCLUS, Echantillonneur
 from .perimetre import verifier_url
-from .scenarios import SCENARIOS
+from .scenarios import PAGES_PAR_VISITE, SCENARIOS, avec_pages
 
 journal = logging.getLogger("shadowlab.campagne")
 
@@ -70,6 +73,11 @@ class MoteurConfig(BaseModel):
     name: str
     label: str | None = None  # pour comparer deux configurations du même moteur
     options: dict[str, Any] = Field(default_factory=dict)
+    # Nombre de visites (passages) de CE bras, à la place de `repetitions` : la soirée en veut 24, 24, 6 et 4.
+    visites: int | None = Field(default=None, ge=1, le=10_000)
+    # Témoin de la sentinelle d'identité : avant cette visite, le visiteur du bras est banni dans son monde (le même
+    # code que `shadowlab arena bannir`). Réservé à une entrée qui a une identité persistante.
+    bannir_avant_visite: int | None = Field(default=None, ge=1)
 
     @property
     def nom_affiche(self) -> str:
@@ -101,6 +109,9 @@ class Experience(BaseModel):
     concurrency: int = Field(default=1, ge=1)
     limites: Limites = Field(default_factory=Limites)
     monde: Literal["passage", "serie", "campagne"] = "campagne"  # portée du monde de l'Arena (arena/visiteurs.py)
+    # Espacement des visites d'un bras (I7) : sans lui, les passages s'enchaînent comme avant.
+    espacement: espacement_mod.Espacement | None = None
+    pages_par_visite: int = Field(default=PAGES_PAR_VISITE, ge=1, le=500)  # scénario `visite` : pages lues au plus
     base_url: str | None = None
     screenshots_on_failure: bool = True
 
@@ -162,6 +173,38 @@ class Experience(BaseModel):
         if inconnues:
             raise ValueError(f"métriques inconnues : {', '.join(sorted(inconnues))}")
         return metriques
+
+    @model_validator(mode="after")
+    def visites_et_espacement(self) -> Experience:
+        nb_unites = len(self.engines) * len(self.protections)
+        if self.espacement is not None:
+            if self.scenarios != ["visite"]:
+                raise ValueError("espacement : une visite est un passage, `scenarios` doit être [visite]")
+            if self.concurrency < nb_unites:
+                raise ValueError(
+                    f"espacement : `concurrency` doit couvrir tous les bras ({nb_unites}), sinon ils tourneraient "
+                    f"l'un après l'autre (reçu {self.concurrency})"
+                )
+        for moteur in self.engines:
+            if moteur.bannir_avant_visite is None:
+                continue
+            if "identite" not in moteur.options:
+                raise ValueError(f"bannir_avant_visite ({moteur.nom_affiche}) : il faut l'option `identite`")
+            if self.monde != "serie":
+                raise ValueError(
+                    "bannir_avant_visite : le monde doit être `serie` (un monde par bras, le même à chaque visite)"
+                )
+            if moteur.bannir_avant_visite > (moteur.visites or self.repetitions):
+                raise ValueError(
+                    f"bannir_avant_visite ({moteur.nom_affiche}) : visite {moteur.bannir_avant_visite} non prévue"
+                )
+        return self
+
+    def visites_de(self, moteur: MoteurConfig) -> int:
+        return moteur.visites or self.repetitions
+
+    def total_passages(self) -> int:
+        return sum(self.visites_de(m) for m in self.engines) * len(self.protections) * len(self.scenarios)
 
 
 class FichierCampagne(BaseModel):
@@ -324,7 +367,7 @@ def unites(experience: Experience) -> list[tuple[MoteurConfig, str]]:
 
 def _plan(experience: Experience, moteur: MoteurConfig, protection: str) -> Iterator[tuple[int, list[str]]]:
     rng = random.Random(f"{experience.seed}:{moteur.nom_affiche}:{protection}")
-    for repetition in range(1, experience.repetitions + 1):
+    for repetition in range(1, experience.visites_de(moteur) + 1):
         ordre = list(experience.scenarios)
         rng.shuffle(ordre)
         yield repetition, ordre
@@ -485,8 +528,37 @@ def _moteur_indisponible(cx, experiment_id, experience, moteur_cfg, protection, 
             )  # fmt: skip
 
 
-def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
-    """Exécute un couple (moteur, protection). Renvoie `termine` ou `interrompu`."""
+def _bannir_avant_visite(cx, monde: str, label: str, visite: int) -> bool:
+    """Bannit le visiteur du bras dans son monde, avant sa visite `visite` (témoin de la sentinelle d'identité).
+
+    Même code que `shadowlab arena bannir`. Faux (et rien d'écrit) si aucun visiteur n'est connu dans le monde : la
+    campagne s'arrête alors sur ce bras plutôt que de continuer sans le témoin.
+    """
+    visiteur = bannissements.dernier_visiteur(cx, monde)
+    if visiteur is None:
+        journal.error(
+            "%s : aucun visiteur connu dans le monde %s, impossible de le bannir avant la visite %d",
+            label,
+            monde,
+            visite,
+        )
+        return False
+    bannissements.bannir_visiteur_connu(cx, monde, visiteur)
+    journal.info("%s : visiteur %s banni dans le monde %s avant la visite %d", label, visiteur, monde, visite)
+    return True
+
+
+def executer_unite(
+    reglages: Reglages,
+    experiment_id: int,
+    rang: int,
+    *,
+    horloge: Callable[[], datetime] | None = None,
+    dormir: Callable[[float], None] | None = None,
+) -> str:
+    """Exécute un couple (moteur, protection). Renvoie `termine` ou `interrompu`.
+
+    `horloge` et `dormir` ne servent qu'à l'espacement des visites (champ `espacement`) : injectables pour les tests."""
     cx = db.ouvrir(reglages.base_donnees)
     try:
         ligne = cx.execute("SELECT configuration FROM experiments WHERE id = ?", (experiment_id,)).fetchone()
@@ -512,6 +584,11 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
             versions = pilote.versions()
             engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
             journal.info("moteur %s (%s) %s", moteur_cfg.nom_affiche, protection, versions)
+            cadence = (
+                espacement_mod.Cadence(experience.espacement, horloge=horloge, dormir=dormir)
+                if experience.espacement is not None
+                else None
+            )
             for repetition, ordre in _plan(experience, moteur_cfg, protection):
                 for nom_scenario in ordre:
                     if (moteur_cfg.nom_affiche, protection, nom_scenario, repetition) in faits:
@@ -519,12 +596,24 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                     if arret.exists():
                         return "interrompu"
                     scenario = SCENARIOS[nom_scenario]
+                    creneau = None
+                    if cadence is not None:  # une visite = un passage ; seul le scénario `visite` est admis (validé)
+                        creneau = cadence.attendre(interrompre=arret.exists)
+                        if creneau is None:
+                            return "interrompu"
+                        scenario = avec_pages(creneau.pages or experience.pages_par_visite)
+                    elif nom_scenario == "visite":
+                        scenario = avec_pages(experience.pages_par_visite)
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
                     graine = f"{experience.seed}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
                     monde = visiteurs.nom_monde(
                         experience.monde, experiment_id, moteur_cfg.nom_affiche, protection, nom_scenario, repetition
                     )
-                    _passage(
+                    if moteur_cfg.bannir_avant_visite == repetition and not _bannir_avant_visite(
+                        cx, monde, moteur_cfg.nom_affiche, repetition
+                    ):
+                        return "interrompu"
+                    details = _passage(
                         cx,
                         reglages,
                         experience,
@@ -541,6 +630,8 @@ def executer_unite(reglages: Reglages, experiment_id: int, rang: int) -> str:
                         engine_version=db.j(versions),
                         monde=monde,
                     )
+                    if cadence is not None and creneau is not None:
+                        cadence.terminer(creneau, int((details or {}).get("pages_faites") or 0))
                     if protection != BASELINE and _arena_en_panne(cx, experiment_id):
                         journal.error(
                             "Arena injoignable sur %d passages de suite : campagne arrêtée. "
@@ -593,7 +684,8 @@ def _passage(
     dossier_artefacts,
     engine_version: str = "",
     monde: str | None = None,
-) -> None:
+) -> dict[str, Any]:
+    """Un passage ; rend les détails du scénario (la cadence en lit les pages lues)."""
     profil = module_profils.charger().de(protection)
     protection_config = (
         db.j(
@@ -637,6 +729,10 @@ def _passage(
                 pilote.wait_for_element("#observation-envoyee", timeout_ms=5000)
         except FonctionIndisponible as exc:  # une limite du moteur, pas une panne
             succes, details = False, {"fonction_indisponible": str(exc)}
+        except (
+            IdentiteRefusee
+        ) as exc:  # l'identité ne peut plus servir (bannie, alerte récente) : zéro requête, un résultat
+            succes, details = False, {"identite_refusee": str(exc), "pages_faites": 0}
         except RefusProtection as exc:  # les décisions enregistrées disent quelle couche a refusé
             succes, details = False, {"refus": str(exc)}
         except Exception as exc:  # une erreur de moteur est un résultat, pas une panne de la campagne
@@ -684,3 +780,4 @@ def _passage(
     journal.info("%s · %s · rép. %d : %s (%.0f ms)", pilote.name, scenario.name, repetition, statut, duree)
     if echantillon.depassement:
         raise MemoryError(f"plafond mémoire dépassé ({reglages.memoire_max_mo} Mo)")
+    return details

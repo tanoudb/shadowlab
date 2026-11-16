@@ -60,7 +60,7 @@ def depassement(pages_heure: int, pages_jour: int, seuils: Bannissement) -> str 
     return None
 
 
-def _clause_pages() -> str:
+def clause_pages() -> str:
     """La définition de `Observations.documents` en SQL, construite à partir de ses constantes (jamais recopiée).
 
     Une requête de page n'est ni un échange technique (`CHEMINS_TECHNIQUES`) ni une ressource de page
@@ -81,7 +81,7 @@ _COMPTE = (
     " FROM visites v JOIN observations_http h ON h.session_token = v.session_token"
     f" WHERE v.monde_id = {_MONDE} AND v.visiteur = :visiteur"
     " AND v.vue_le >= :jour AND v.vue_le <= :maintenant AND h.received_at >= :jour AND h.received_at <= :maintenant"
-    f" AND {_clause_pages()}"
+    f" AND {clause_pages()}"
 )
 _JOINTURE_BAN = (
     f" LEFT JOIN bannissements b ON b.monde_id = {_MONDE} AND (b.expire_le IS NULL OR b.expire_le > :maintenant)"
@@ -147,6 +147,37 @@ def bannir(
         ),
     )
     return cree.rowcount > 0
+
+
+class BannissementRefuse(ValueError):
+    """Un bannissement manuel que le monde ou le visiteur rend impossible (inconnu : une faute de frappe ne bannit
+    personne)."""
+
+
+def dernier_visiteur(cx: sqlite3.Connection, monde: str) -> str | None:
+    """Le visiteur le plus récent vu dans `monde`, ou None (monde inconnu, ou personne n'y est encore venu)."""
+    ligne = cx.execute(
+        "SELECT v.visiteur FROM visites v JOIN mondes m ON m.id = v.monde_id"
+        " WHERE m.nom = ? ORDER BY v.id DESC LIMIT 1",
+        (monde,),
+    ).fetchone()
+    return ligne["visiteur"] if ligne else None
+
+
+def bannir_visiteur_connu(cx: sqlite3.Connection, monde: str, visiteur: str, *, motif: str = MOTIF_MANUEL) -> bool:
+    """Bannissement manuel d'un visiteur DÉJÀ VU dans son monde : `shadowlab arena bannir` et `bannir_avant_visite`
+    d'une campagne passent tous deux ici. Refuse (`BannissementRefuse`) un monde ou un visiteur inconnu, sans rien
+    créer.
+    Vrai si une ligne est écrite, faux si le visiteur était déjà banni."""
+    ligne = cx.execute("SELECT id FROM mondes WHERE nom = ?", (monde,)).fetchone()
+    if ligne is None:
+        raise BannissementRefuse(f"monde inconnu : {monde}")
+    vu = cx.execute(
+        "SELECT 1 FROM visites WHERE monde_id = ? AND visiteur = ? LIMIT 1", (ligne["id"], visiteur)
+    ).fetchone()
+    if vu is None:
+        raise BannissementRefuse(f"visiteur inconnu dans le monde {monde} : {visiteur}")
+    return bannir(cx, monde, visiteur=visiteur, motif=motif)
 
 
 @dataclass

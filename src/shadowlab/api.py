@@ -510,7 +510,7 @@ async def valider(request: Request) -> dict:
             raise ValueError(f"concurrence {experience.concurrency} > plafond {reglages.concurrence_max}")
     except (yaml.YAMLError, ValidationError, ValueError) as erreur:
         return {"valide": False, "erreur": str(erreur)}
-    total = len(experience.engines) * len(experience.protections) * len(experience.scenarios) * experience.repetitions
+    total = experience.total_passages()
     return {
         "valide": True,
         "nom": experience.name,
@@ -528,7 +528,7 @@ def _progression(cx, experiment_id: int) -> dict:
     if ligne is None:
         raise LookupError(f"expérience {experiment_id} introuvable")
     experience = campaigns.Experience.model_validate_json(ligne["configuration"])
-    total = len(experience.engines) * len(experience.protections) * len(experience.scenarios) * experience.repetitions
+    total = experience.total_passages()
     par_statut = {
         r["status"]: r["n"]
         for r in cx.execute(

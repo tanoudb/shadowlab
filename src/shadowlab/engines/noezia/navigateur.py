@@ -41,10 +41,12 @@ CHARGE_DE_LUI_MEME = (
 )
 
 
-def options_navigateur(recette: Recette) -> dict[str, Any]:
-    """Les options du moteur : identité native, comportement humain gardé, TLS et défis selon que le site est local."""
+def options_navigateur(recette: Recette, identite: str | None = None) -> dict[str, Any]:
+    """Les options du moteur : identité native, comportement humain gardé, TLS et défis selon que le site est local.
+    `identite` : le nom d'une identité persistante (palier 2, § 5.6) : le même profil Chrome, donc le même visiteur,
+    d'une passe à l'autre."""
     local = all(_est_local(h) for h in recette.hotes)
-    return {
+    options = {
         "headless": False,
         "channel": "chrome",
         "identite_native": True,
@@ -52,6 +54,9 @@ def options_navigateur(recette: Recette) -> dict[str, Any]:
         "verifier_tls": not local,  # un site qui n'est pas à nous : le certificat est vérifié
         "resoudre_defis": local,  # jamais de clic sur un défi d'un site tiers
     }
+    if identite is not None:
+        options["identite"] = identite
+    return options
 
 
 class MoteurNavigateur(MoteurDriver):
@@ -69,9 +74,11 @@ class MoteurNavigateur(MoteurDriver):
         driver.hotes_navigation = tuple(h.lower() for h in hotes_recette)
 
     @classmethod
-    def depuis(cls, recette: Recette, reglages: Reglages, *, empecher_veille: bool = True) -> MoteurNavigateur:
+    def depuis(
+        cls, recette: Recette, reglages: Reglages, *, empecher_veille: bool = True, identite: str | None = None
+    ) -> MoteurNavigateur:
         """Construit le moteur (aucun navigateur lancé) avec le périmètre du labo (`SHADOWLAB_HOTES_AUTORISES`)."""
-        pilote = DriverNoezia(reglages.hotes_autorises, options_navigateur(recette))
+        pilote = DriverNoezia(reglages.hotes_autorises, options_navigateur(recette, identite))
         return cls(pilote, tuple(recette.hotes), empecher_veille=empecher_veille)
 
     def ouvrir(self) -> None:

@@ -1,0 +1,65 @@
+# Palier 2, I7 : la soirée « une identité qui revient » (docs/recherche/identite-qui-dure-2026-11-12.md § 6.1 et § 6.2).
+#
+# Quatre bras, chacun dans SON monde (`monde: serie` nomme le monde par libellé : `c<n°>:<libellé>:endurance`), au profil
+# `endurance` (une porte JavaScript par visiteur valable 24 h, bannissement, aucun CAPTCHA), tous en même temps :
+#   - sujet             : `noezia` en identité native avec une identité persistante : 24 visites, 15 pages de la vitrine ;
+#   - temoin-negatif    : le même Chrome, sans identité (cookies jetés à chaque visite) : 24 visites ; il doit être pris
+#                         dès sa 5e visite, puis banni ;
+#   - temoin-sentinelle : une identité persistante dont le visiteur est BANNI par la campagne avant sa 3e visite (le même
+#                         code que `shadowlab arena bannir`) : 6 visites ; aucune page demandée après le premier 403,
+#                         identité notée `banni`, les visites 4 à 6 sont refusées avant tout lancement de Chrome ;
+#   - temoin-classique  : `playwright` : 4 visites ; il doit rester arrêté, par l'Arena.
+# L'écart de 10 minutes est compté de la FIN d'une visite au DÉBUT de la suivante, par bras (la première visite part tout
+# de suite). Les quatre bras s'attendent chacun de leur côté : `concurrency` doit couvrir les quatre.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer          # le profil `endurance` est dans configs/arena/profils.yaml
+#   2. Vitrine d'au moins 15 annonces (500 par défaut ; `SHADOWLAB_VITRINE_TAILLE` pour la changer).
+#   3. Les noms d'identité ci-dessous sont à usage unique : l'identité de la sentinelle sera bannie, et une identité bannie
+#      ne sert plus jamais. Pour recommencer, changer les suffixes (`soiree-sujet-2`, `soiree-sentinelle-2`) ; ne jamais
+#      recopier un dossier de `outputs/identites/` (deux identités avec le même cookie).
+#   4. Le Mac reste éveillé 5 heures (`caffeinate` ci-dessous), rien d'autre ne tourne dessus (CPU, durées).
+#
+# Commande (une fenêtre de Chrome s'ouvre à chaque visite des trois bras navigateur) :
+#   caffeinate -i uv run shadowlab campagne configs/experiments/identite-soiree.yaml
+# Durée estimée : 4 h 30 à 5 h (23 écarts de 10 min = 3 h 50, plus 24 visites d'environ 2 min : 15 pages à environ 7 s ;
+# le superviseur retarde le lancement d'un bras si le CPU dépasse 85 %).
+# Arrêt d'urgence : `uv run shadowlab arreter` (écouté pendant l'attente ; après le passage en cours).
+#
+# Bilan, lu dans la base (code 0 si tout est tenu) :
+#   uv run shadowlab soiree bilan <n° de la campagne>
+# Critère (§ 6.2) : sujet 24 visites sur 24, le même visiteur et la même empreinte E côté Arena, défi JavaScript vu à la
+# première visite seulement, aucune alerte ; témoin négatif arrêté à la 5e visite puis banni ; témoin de sentinelle :
+# 0 page après le premier 403 et identité `banni`.
+# Essai de la mécanique avant la soirée : configs/experiments/identite-soiree-essai.yaml (environ 15 minutes).
+experiment:
+  name: identite_soiree
+  description: >-
+    Soirée du palier 2 : une identité persistante qui revient 24 fois (profil endurance, un monde par bras), son témoin
+    négatif sans identité, une identité bannie exprès avant sa 3e visite, et playwright.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sujet-1}
+    - name: noezia
+      label: temoin-negatif
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: noezia
+      label: temoin-sentinelle
+      visites: 6
+      bannir_avant_visite: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sentinelle-1}
+    - name: playwright
+      label: temoin-classique
+      visites: 4
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 24
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 10}
+  concurrency: 4
+  monde: serie
+  seed: 20261116
+  output: [json, html]

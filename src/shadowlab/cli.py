@@ -86,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("adresse", nargs="?", help="essayer : adresse de la page, ou fichier .html")
     p.add_argument("--moteur", choices=["http", "navigateur"], help="remplace le moteur de la recette")
     p.add_argument(
+        "--identite",
+        metavar="NOM",
+        help="lancer : identité persistante (moteur navigateur) : le même profil Chrome, donc le même visiteur, d'une "
+        "passe à l'autre ; la reprise la retrouve",
+    )
+    p.add_argument(
         "--tranche", action="append", default=[], metavar="NOM=VALEUR", help="valeur d'une variable de la recette"
     )
     p.add_argument(
@@ -119,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         help="identifiant de la session (avec `supprimer`), numéro du message ou `tous` (avec `effacer-message`)",
     )
+    p = sous.add_parser("soiree", help="bilan de la soirée « une identité qui revient » (lu dans la base)")
+    p.add_argument("action", choices=["bilan"])
+    p.add_argument("campagne", type=int, help="numéro de la campagne")
+    p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
@@ -177,8 +187,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.commande == "valider":
         experience = campaigns.lire(args.fichier, reglages)
-        total = len(experience.engines) * len(experience.protections) * len(experience.scenarios)
-        total *= experience.repetitions
+        total = experience.total_passages()
         print(f"Valide : {experience.name} — {total} passages, graine {experience.seed}")
         return 0
 
@@ -227,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
         from . import commande_recolte
 
         return commande_recolte.executer(args, reglages)
+
+    if args.commande == "soiree":
+        return _soiree(args, reglages)
 
     if args.commande == "rejeu":
         return _rejeu(args, reglages)
@@ -491,6 +503,26 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
     return 0
 
 
+def _soiree(args: argparse.Namespace, reglages) -> int:
+    """`shadowlab soiree bilan <n°>` : lit la base, n'écrit rien. Code 0 si tout est tenu, 1 sinon (un critère non tenu
+    ou non mesuré), 2 si la campagne n'existe pas."""
+    import json as json_mod
+
+    from . import database as db
+    from . import soiree
+
+    cx = db.ouvrir(reglages.base_donnees)
+    try:
+        rapport = soiree.bilan(cx, args.campagne)
+    except LookupError as erreur:
+        print(f"Erreur : {erreur}", file=sys.stderr)
+        return 2
+    finally:
+        cx.close()
+    print(json_mod.dumps(rapport, ensure_ascii=False, indent=2) if args.format_json else soiree.texte(rapport))
+    return 0 if rapport["verdict"] == soiree.TENU else 1
+
+
 def _bannir(args: argparse.Namespace, reglages) -> int:
     """`shadowlab arena bannir --visiteur <id> --monde <nom>` : une ligne `bannissements`, motif « manuel ».
 
@@ -505,17 +537,10 @@ def _bannir(args: argparse.Namespace, reglages) -> int:
         raise SystemExit(2)
     cx = db.ouvrir(reglages.base_donnees)
     try:
-        monde = cx.execute("SELECT id FROM mondes WHERE nom = ?", (args.monde,)).fetchone()
-        if monde is None:
-            print(f"Refus : monde inconnu : {args.monde}", file=sys.stderr)
-            return 2
-        vu = cx.execute(
-            "SELECT 1 FROM visites WHERE monde_id = ? AND visiteur = ? LIMIT 1", (monde["id"], args.visiteur)
-        ).fetchone()
-        if vu is None:
-            print(f"Refus : visiteur inconnu dans le monde {args.monde} : {args.visiteur}", file=sys.stderr)
-            return 2
-        cree = bannissements.bannir(cx, args.monde, visiteur=args.visiteur, motif=bannissements.MOTIF_MANUEL)
+        cree = bannissements.bannir_visiteur_connu(cx, args.monde, args.visiteur)
+    except bannissements.BannissementRefuse as refus:
+        print(f"Refus : {refus}", file=sys.stderr)
+        return 2
     finally:
         cx.close()
     print(f"Visiteur {args.visiteur} {'banni' if cree else 'déjà banni'} dans le monde {args.monde}.")

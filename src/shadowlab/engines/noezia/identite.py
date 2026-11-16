@@ -77,6 +77,25 @@ def age_jours(nom: str) -> int:
     return max(0, (datetime.now(UTC) - creee).days)
 
 
+def controler_etat(
+    nom: str, donnees: dict[str, Any], horloge: Callable[[], datetime], *, maintenant: bool = False
+) -> None:
+    """La règle d'admission d'une identité, à l'ouverture comme avant chaque visite : bannie, jamais ; en alerte,
+    pas avant `ATTENTE_ALERTE_S` (sauf `maintenant`). Lève `IdentiteRefusee`."""
+    etat = donnees.get("etat", "ok")
+    if etat == "banni":
+        raise IdentiteRefusee(f"identité {nom!r} bannie : elle ne sert plus jamais")
+    if etat == "alerte" and not maintenant:
+        depuis = _date(donnees.get("alerte_le"))
+        ecoule = (horloge() - depuis).total_seconds() if depuis else 0.0
+        if ecoule < ATTENTE_ALERTE_S:
+            reste = int((ATTENTE_ALERTE_S - ecoule) // 60) + 1
+            raise IdentiteRefusee(
+                f"identité {nom!r} en alerte ({donnees.get('raison', 'raison inconnue')}) : "
+                f"attendre encore {reste} min, ou `--maintenant`"
+            )
+
+
 class Identite:
     """Une identité ouverte : verrou pris, état vérifié. `liberer()` rend le verrou."""
 
@@ -98,6 +117,11 @@ class Identite:
 
     def etat(self) -> dict[str, Any]:
         return json.loads(self.fichier.read_text(encoding="utf-8"))
+
+    def verifier_etat(self) -> None:
+        """Relit l'état et refuse si l'identité ne peut plus servir (bannie, alerte récente) : à appeler avant chaque
+        lancement de Chrome, l'état ayant pu changer depuis `ouvrir` (une visite d'avant l'a marquée)."""
+        controler_etat(self.nom, self.etat(), self._horloge)
 
     def debut_visite(self, details: dict[str, Any] | None = None) -> None:
         self._visite = {"debut": _maintenant(), **(details or {})}
@@ -170,19 +194,7 @@ def ouvrir(nom: str, *, horloge: Callable[[], datetime] | None = None, maintenan
     try:
         fichier = dossier / "identite.json"
         if fichier.exists():
-            donnees = json.loads(fichier.read_text(encoding="utf-8"))
-            etat = donnees.get("etat", "ok")
-            if etat == "banni":
-                raise IdentiteRefusee(f"identité {nom!r} bannie : elle ne sert plus jamais")
-            if etat == "alerte" and not maintenant:
-                depuis = _date(donnees.get("alerte_le"))
-                ecoule = (horloge() - depuis).total_seconds() if depuis else 0.0
-                if ecoule < ATTENTE_ALERTE_S:
-                    reste = int((ATTENTE_ALERTE_S - ecoule) // 60) + 1
-                    raise IdentiteRefusee(
-                        f"identité {nom!r} en alerte ({donnees.get('raison', 'raison inconnue')}) : "
-                        f"attendre encore {reste} min, ou `--maintenant`"
-                    )
+            controler_etat(nom, json.loads(fichier.read_text(encoding="utf-8")), horloge, maintenant=maintenant)
         else:
             fichier.write_text(
                 json.dumps({"nom": nom, "creee_le": _maintenant(), "etat": "ok"}, ensure_ascii=False, indent=2),
