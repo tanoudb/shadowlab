@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import statistics
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from importlib.metadata import entry_points
@@ -24,6 +25,8 @@ PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délai
 PAGES_MIN_TRAJECTOIRE = 3
 ANGLES_MIN_PAGE = 10
 ANGLES_MIN_SESSION = 60
+PART_PAS_FIXE = 0.9  # `deltas_uniformes` : part des deltas de même grandeur qui fait un pas fixe
+CADRE_MIN_PX = 40  # barre d'onglets et d'adresse : `outerHeight` - `innerHeight` d'un navigateur avec fenêtre
 IMAGE_MS = 1000 / 60  # `scroll` part une fois par image pendant un geste continu : 16,7 ms à 60 Hz
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
@@ -940,6 +943,12 @@ class DetecteurCoherenceProfonde:
         return _verdict(self.name, self.version, signaux)
 
 
+def _difference(a: Any, b: Any) -> float | None:
+    """a - b si les deux sont des nombres, sinon None."""
+    nombres = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (a, b))
+    return a - b if nombres else None
+
+
 def _plus_longue_pause(releve: dict[str, Any], delais: list[float]) -> float | None:
     """Plus grand délai entre deux mouvements de souris sur toute la page ; None si le relevé ne le dit pas.
 
@@ -1078,10 +1087,14 @@ class DetecteurScroll:
     Un humain scrolle avec des deltas variables (trackpad : bell-curve ; molette : ticks discrets
     mais avec variation). Un robot utilise souvent des deltas identiques (ex: 120px à chaque tick)
     ou des intervalles trop réguliers.
+    V1.1 (16/11/2026, D-95) : `deltas_uniformes` vise un pas fixe (presque tous les deltas de même grandeur), et non
+    un petit nombre de valeurs : une molette lente ou un pavé tactile donne de petits entiers (7 valeurs sur 50
+    chez un humain connu). `scroll_timing_regulier` ne conclut plus sur des délais calés sur l'image : Chrome envoie
+    `scroll` une fois par image pendant un geste continu, et l'observateur ne garde que les 50 premiers délais.
     """
 
     name = "scroll"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1102,7 +1115,9 @@ class DetecteurScroll:
                 # Deltas tous identiques → robot avec pas fixe
                 uniques = len(set(round(d, 1) for d in deltas))
                 ratio = uniques / len(deltas)
-                if ratio < 0.15 and len(deltas) > 10:
+                # (V1.1) un pas fixe : une même grandeur (au signe près) pour presque tous les deltas
+                dominante = max(Counter(round(abs(d), 1) for d in deltas).values()) / len(deltas)
+                if ratio < 0.15 and len(deltas) > 10 and dominante >= PART_PAS_FIXE:
                     signaux.append(
                         Signal("deltas_uniformes", f"wheel deltas : {ratio:.0%} uniques ({uniques}/{len(deltas)})", 0.7)
                     )
@@ -1122,7 +1137,9 @@ class DetecteurScroll:
 
                 m_s = statistics.mean(delais)
                 s_s = statistics.stdev(delais) if len(delais) > 1 else 0
-                if m_s > 0:
+                # (V1.1) des délais d'une à deux images sont ceux d'un geste continu : pas de conclusion
+                cale_sur_l_image = statistics.median(delais) < 2 * IMAGE_MS
+                if m_s > 0 and not cale_sur_l_image:
                     cv_s = s_s / m_s
                     if cv_s < 0.1:
                         signaux.append(
@@ -1707,10 +1724,16 @@ class DetecteurStackTrace:
 
 
 class DetecteurPositionFenetre:
-    """Détecte les fenêtres headless (screenX/Y à 0, memory incohérente)."""
+    """Détecte les fenêtres headless (screenX/Y à 0, memory incohérente).
+
+    V1.1 (16/11/2026, D-95) : `screen_position_zero` ne vaut plus quand la fenêtre a un cadre de navigateur
+    (`outerHeight` d'au moins 40 px de plus que `innerHeight`) : une fenêtre agrandie sous Windows a (0, 0)
+    (Edge 157, humain connu) ; un navigateur sans tête n'a pas de cadre (`outer` = `inner`). Sans relevé de la
+    fenêtre, la règle vaut comme avant.
+    """
 
     name = "position-fenetre"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1721,7 +1744,10 @@ class DetecteurPositionFenetre:
         pm = p.get("performance_memory") or {}
         signaux: list[Signal] = []
 
-        if pm.get("screenX") == 0 and pm.get("screenY") == 0:
+        fenetre = p.get("fenetre") or {}
+        hauteur_cadre = _difference(fenetre.get("outerHeight"), fenetre.get("innerHeight"))
+        a_un_cadre = hauteur_cadre is not None and hauteur_cadre >= CADRE_MIN_PX
+        if pm.get("screenX") == 0 and pm.get("screenY") == 0 and not a_un_cadre:
             signaux.append(
                 Signal(
                     "screen_position_zero",
