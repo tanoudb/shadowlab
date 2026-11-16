@@ -1207,9 +1207,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   tous les critères**. Sujet : 3 visites sur 3, 1 visiteur, 1 empreinte E ; défi émis à la 1ʳᵉ visite seulement ; aucune
   alerte, 0 bannissement. Témoin négatif : 6 visites ; la première arrêtée est la 5ᵉ ; 2 bannissements dans son monde.
   Sentinelle : bannie (motif manuel) ; premier refus à la 3ᵉ visite ; 0 page demandée après ; identité notée `banni`.
-  Témoin classique : 0 visite réussie sur 3, refus enregistré par l'Arena. **Soirée lancée le 16/11, résultat à venir
-  (campagne 128)** : `identite-soiree.yaml`, sujet et témoin négatif à 24 visites espacées de 10 minutes, 15 pages par
-  visite ; sentinelle à 6 visites ; témoin classique à 4 visites ; environ 5 heures. Limites : chaque visite relit les mêmes
+  Témoin classique : 0 visite réussie sur 3, refus enregistré par l'Arena. **Soirée (campagne 128) : voir le dernier
+  paragraphe.** Elle est configurée dans `identite-soiree.yaml` : sujet et témoin négatif à 24 visites espacées de 10
+  minutes, 15 pages par visite ; sentinelle à 6 visites ; témoin classique à 4 visites. Limites : chaque visite relit les mêmes
   pages (la liste, puis les premières fiches) : le suivi est régulier, pas varié ; une campagne reprise repart sans attendre,
   car l'état de la cadence est en mémoire ; `recolte reprendre --maintenant` ne lève pas l'alerte d'une identité, bien que
   le message le conseille ; `--identite` n'est lu que par `lancer` ; la récolte en plusieurs visites avec attente (§ 5.6) et
@@ -1219,3 +1219,28 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   puis `1f7c7ee` (fusion `91fa5f9`) ; suite complète : 2 097 tests verts (16/11, 8 min 31 s), puis 2 055 tests rapides verts
   après le correctif du témoin. Décidé par : coordination (Ethan a laissé la main : « je te laisse tout continue a
   travailler sur d'autre chose »).
+  **Soirée, campagne 128 (16/11) : non tenue** (`shadowlab soiree bilan 128`, code 1). Profil `endurance`, 4 bras, un monde
+  par bras, visites espacées de 10 minutes ; lancée à 4 h 03, finie vers 8 h 20. **Sujet** (`noezia` natif, identité
+  `soiree-sujet-1`) : 24 visites faites, **3 réussies**. À la visite 4 (4 h 40), l'Arena l'arrête sur le score composite 0,65
+  (seuil 0,5 de l'`endurance`), fait de deux signaux du détecteur `comportement` : `duree_pages_reguliere` (CV des durées de
+  page 0,19, seuil 0,2) et `navigation_lineaire` (pages toutes distinctes, aucun retour en arrière). Dans l'`endurance`, un
+  arrêt bannit le visiteur (D-92) : les photos de la fiche suivante, puis la fiche AN-000005, reçoivent un 403 ; l'identité
+  passe en `alerte` (1 h). Visites 5 à 9 : l'outil refuse de lancer Chrome. Visite 10 : 403 dès la première page, identité
+  `banni`. Visites 11 à 24 : refusées par l'outil. Critères : visites réussies non tenu ; même visiteur et même empreinte E non
+  tenus (19 et 20 visites sans visiteur ou sans E noté, faute d'avoir été faites) ; défi seulement à la 1ʳᵉ visite tenu ;
+  aucune alerte non tenu (visites 4 et 10, 1 bannissement dans le monde). **Témoin négatif** (même moteur, profil neuf à chaque
+  visite) : 4 visites réussies, arrêté à la 5ᵉ comme prévu (5ᵉ session neuve de même empreinte en 24 h), puis banni (20
+  bannissements dans son monde) : tenu. **Témoin de sentinelle** (identité `soiree-sentinelle-1`, bannissement manuel prévu
+  avant la visite 3) : arrêté dès la visite 2 par la même règle que le sujet (score 0,65 : CV 0,20 et `navigation_lineaire`),
+  avant le bannissement prévu ; identité en `alerte`, visites 3 à 6 refusées par l'outil, jamais `banni`. Le bannissement
+  manuel est bien écrit. Après le refus de ses photos, le moteur a demandé encore une fiche (et l'appel de données de la fiche
+  en cours) : le bilan compte 2 pages après le premier refus. Tous les critères sont non tenus, sauf « bannissement écrit ».
+  **Témoin classique** (`playwright`) : 0 visite réussie sur 4, refusé par l'Arena : tenu. **Lecture** : la soirée a fait ce
+  qu'elle devait. Sur une longue série, le rythme du moteur pendant une visite est trop régulier et trop linéaire.
+  `navigation_lineaire` se lève à presque chaque visite (la récolte va de fiche en fiche sans revenir à la liste) ; un second
+  signal faible suffit (CV des durées de page sous 0,2, environ une visite sur quatre à six) pour dépasser 0,5, et le
+  bannissement est définitif. Le même signal avait déjà coûté un passage au niveau 07 (campagne 116). Les essais courts (124
+  et 127, 3 visites) ne l'avaient pas montré. **Suite décidée par la coordination** : on ne touche pas à l'Arena (c'est elle
+  qui juge) ; on corrige le moteur pendant une visite, avec un ordre de lecture moins linéaire (retour à la liste) et des
+  durées de page plus dispersées, sans dépasser le nombre de pages qu'une visite compte aujourd'hui. Puis on relance la
+  soirée avec de nouvelles identités. La décision sera écrite avec la correction.

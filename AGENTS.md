@@ -177,8 +177,8 @@ recommander des optimisations.
   l'état de l'identité avant chaque lancement de Chrome ; le pilote `playwright` a maintenant `etat_page` (le témoin classique
   attend le défi, l'Arena le juge). **Essai 126** : non tenu sur un seul critère, celui du témoin classique (arrêté par l'outil).
   **Essai 127** (3 visites) : tenu à tous les critères (sujet 3 sur 3, 1 visiteur, 1 empreinte E ; témoin négatif arrêté à la 5ᵉ
-  visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 3, refus de l'Arena). **Soirée lancée le 16/11, résultat
-  à venir (campagne 128)** : sujet et témoin négatif à 24 visites espacées de 10 minutes. Reste I8 (humains qui reviennent, attend
+  visite ; sentinelle bannie, 0 page après le refus ; `playwright` 0 sur 3, refus de l'Arena). **Soirée du 16/11 (campagne 128) : non
+  tenue.** Le sujet fait 3 visites réussies sur 24 : arrêté à la 4ᵉ par le score 0,65 (`duree_pages_reguliere` et `navigation_lineaire`), puis banni ; la sentinelle est arrêtée dès la 2ᵉ de la même façon ; témoins négatif et classique tenus. Cause : rythme trop régulier et linéaire pendant une visite ; on corrige le moteur (pas l'Arena), puis on relance. Détail : D-93, `docs/PLAN.md` § 2. Reste I8 (humains qui reviennent, attend
   Ethan), I9 (7 jours) et I10 (comptes). Les quatre questions de la conception restent ouvertes.
 - **2 097 tests verts** (`uv run pytest`, 16/11, après I7, rapides et intégration avec de vrais
   navigateurs et la pile Docker, 8 min 31 s ; 2 055 tests rapides verts après le correctif du témoin), 11 tests de l'interface (vitest), lint propre. Branche

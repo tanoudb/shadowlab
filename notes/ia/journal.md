@@ -3628,3 +3628,9 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fait** : vidéo verticale de 20 s (1080 × 1920, 30 images/s, sans son), en français et en anglais, composée par un sous-agent Sonnet (HyperFrames 0.9.12 déjà en cache, rien d'installé) et rendue à 8 h 21, après la fin de la campagne en cours. Contrôlée sur 9 images : textes lisibles, barre de « Jamais ce que vous tapez » et « 2 minutes » corrects, aucun nom de projet. Envoyée à Ethan.
 - **Fichiers** : `outputs/video-tiktok/` (hors git) : `humain-ou-robot-fr.mp4`, `human-or-bot-en.mp4`, `render.sh [adresse]` pour refaire le rendu avec une adresse affichée, `film/variables-fr.json` et `-en.json` pour les textes.
 - **Reste** : la vidéo finit par « Lien en bio » sans adresse (celle du tunnel rapide est trop longue à taper) ; un nom de domaine court reste à décider par Ethan ; non regardée en entier en mouvement, ni essayée dans TikTok.
+
+## 2026-11-16 (9h) — Claude (Sonnet 5.5) — Résultat de la soirée, campagne 128
+- **Fait** : soirée non tenue. Sujet 3 visites réussies sur 24 (arrêté à la 4ᵉ, score 0,65 : `duree_pages_reguliere` + `navigation_lineaire`, puis banni) ; sentinelle arrêtée dès la 2ᵉ ; témoins négatif et classique tenus.
+- **Fichiers** : `docs/DECISIONS.md` (D-93), `docs/PLAN.md` (§ 2, § 4, § 8), `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code touché.
+- **Décisions** : l'Arena ne change pas ; on corrige le moteur (lecture moins linéaire, durées de page plus dispersées), sans numéro de décision pour l'instant.
+- **Reste** : correction du moteur et décision associée ; relancer la soirée avec de nouvelles identités ; I8, I9, I10.
