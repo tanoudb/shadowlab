@@ -39,7 +39,7 @@ recommander des optimisations.
 - **Arena opérationnelle** : frontal TLS (JA3/JA4) → Nginx (rate limit) → Coraza WAF + OWASP CRS → site
   FastAPI. **7 niveaux progressifs** (01 baseline → 07 état de l'art, D-49). JS proof-of-work, demo CAPTCHA,
   FingerprintJS 5.3.0, BotD 2.0, 42 détecteurs (dont AudioContext, polices, Math, DOMRect, iframe
-  cross-contexte, deep Proxy, corrélation cross-session par monde — D-48, D-64, puis D-89, en 2.0 ; `headless`, `chrome-apis`,
+  cross-contexte, deep Proxy, corrélation cross-session par monde — D-48, D-64, puis D-89, en 2.1 ; `headless`, `chrome-apis`,
   `polices` et `connection-dynamic` en 1.1 — D-66, **TLS v2 : 17 règles d'analyse
   ClientHello** — D-52, **HTTP/2 fingerprinting : 11 règles SETTINGS/WU** — D-53), honeypots (lien piège + champ piège),
   fingerprinting actif, Turnstile Cloudflare (test keys, niveaux 05-07), reCAPTCHA v2 Google (test keys,
@@ -152,7 +152,8 @@ recommander des optimisations.
   campagnes (`campagne`, `serie`, `passage`) ; D-87 ne change aucune décision de l'Arena. **I2**, Arena (D-89, 15/11) :
   `correlation-session` 2.0, par monde, remplace la règle 1.1 : `empreinte_sans_memoire` (5 sessions neuves de même
   empreinte en 24 h : 0,7 ; 10 : 1,0) et `debit_empreinte` (30 sessions en 60 min : 0,8) ; un humain qui revient n'est plus
-  compté contre lui ; `sans_ressources` ne juge plus qu'une session neuve ; le bilan d'un passage nomme enfin la corrélation.
+  compté contre lui ; `sans_ressources` ne juge plus qu'une session neuve ; le bilan d'un passage nomme enfin la corrélation ; en 2.1 (16/11),
+  sans signal elle répond « indéterminé » (campagne 123 : 4 sur 15 en monde partagé, cause nommée au bilan).
   **I4**, moteur : option `identite` du moteur `noezia` (un dossier `outputs/identites/<nom>/`,
   identité native seulement). **I5**, moteur (D-90) : ordonnanceur des visites (`visites.py`, 8 h à 23 h, écart de 45 à 180 min,
   5 à 40 pages, 120 pages par heure et 200 par jour). **I6**, moteur (D-91) : sentinelle d'identité (`ok`, `alerte` 1 h,
@@ -162,9 +163,9 @@ recommander des optimisations.
   passages dans un seul monde) : 4 sur 15, arrêt voulu à la 5ᵉ session neuve de même empreinte. **Campagne 121** (contrôle) :
   mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non établie (`docs/PLAN.md` § 2). Reste I3 (bannissement
   par visiteur, profil « endurance »), puis I7. Les quatre questions de la conception restent ouvertes.
-- **1 858 tests verts** (`uv run pytest`, 15/11 à 22 h, après D-87 et D-88, rapides et intégration avec de vrais
-  navigateurs et la pile Docker, 8 min 33 s), 11 tests de l'interface (vitest), lint propre. Branche
-  `niveau-authentifie-perimetre` (dernière fusion `9ce9066`), rien sur `master`. Base au schéma 10 (D-87).
+- **1 963 tests verts** (`uv run pytest`, 16/11 à 1 h, après D-89 à D-91, rapides et intégration avec de vrais
+  navigateurs et la pile Docker, 8 min 58 s), 11 tests de l'interface (vitest), lint propre. Branche
+  `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 10 (D-87).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
   niveau 05 sur le signal `trajectoire_lineaire` (campagne 108). Banc de mesure sans navigateur :

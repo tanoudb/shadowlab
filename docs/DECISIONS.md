@@ -1057,7 +1057,17 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Maintenant `correlation_historique` lit les visites antérieures du monde, avec un jugement figé au début de la
   session (des passages tournent en parallèle). L'issue ne change pas (`challenge_non_valide`, la cause affichée reste
   le défi) ; seuls les drapeaux changent : `classe_automatise` vrai ; `detecte_par` = `composite` de 5 à 9 sessions
-  neuves, `correlation-session` à partir de 10. Les bilans déjà en base ne sont pas recalculés. Preuve : tests écrits
+  neuves, `correlation-session` à partir de 10. Les bilans déjà en base ne sont pas recalculés. **Version 2.1 (16/11,
+  `6de26a0` puis `733f25d`, fusion `46fc745`)** : sans aucun signal, le détecteur répond « indéterminé »
+  (`aucune_correlation`), plus « humain ». Une absence de corrélation ne prouve rien sur l'humanité de la session.
+  Pourquoi : la campagne 122 (16/11, 0 h 48 à 1 h 01, `correlation-06-mondes-serie.yaml`, en 2.0) a montré l'effet de
+  bord du bilan nommé. `meta-composite` y voyait 42 détecteurs « humain » (`unanimite_humain`) et classait
+  « automatisée » chacune des 4 sessions réussies. Avant, l'indétermination permanente de `correlation-session` bloquait
+  cette unanimité : `meta-composite` n'apparaît dans aucun `detecte_par` de passage réussi des campagnes en base. Aucun
+  effet sur la décision de l'Arena : « indéterminé » sans signal et « humain » sans signal pèsent 0, et
+  `meta-composite` n'entre dans aucun profil. Contrôle, **campagne 123** (16/11, 1 h 18 à 1 h 30, même fichier, en 2.1) :
+  4 sur 15, comme les 120 et 122. Les 4 réussis ont `detecte_par` vide. Du 5ᵉ au 9ᵉ passage, `detecte_par` vaut
+  `composite` ; du 10ᵉ au 15ᵉ, `correlation-session`. Preuve : tests écrits
   d'abord, en échec avant le code (`tests/test_correlation_v2.py`, `5e225f1` puis `c63b10c` ;
   `tests/test_visiteurs_allegement.py`, `34776cd` puis `6515485` ; `sans_ressources`, `3d6283f` puis `b492174` ;
   `tests/test_bilan_correlation.py`, `853228b` puis `ff237ee`), fusions `4bb19b4` et `bef7017`.

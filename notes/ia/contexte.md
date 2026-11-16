@@ -85,7 +85,9 @@ sur nos propres cibles (site vitrine factice, tor-i).
   l'application publique. Les quatre questions de la conception restent à Ethan.
 - **15 et 16/11, palier 2 : I2, I5, I6, campagnes 119 à 121** : **I2** Arena, `correlation-session` 2.0 par monde (D-89,
   fusion `bef7017`) : un humain qui revient n'est plus compté contre lui ; `sans_ressources` ne juge qu'une session neuve ;
-  le bilan d'un passage nomme la corrélation. **I5** ordonnanceur des visites (D-90) et **I6** sentinelle d'identité (D-91),
+  le bilan d'un passage nomme la corrélation ; version 2.1 le 16/11 (sans signal : « indéterminé », pour que
+  `meta-composite` ne classe plus « automatisée » une session propre ; campagnes 122 et 123 : 4 sur 15). 1 963 tests verts.
+  **I5** ordonnanceur des visites (D-90) et **I6** sentinelle d'identité (D-91),
   fusion `2c484bc` ; aucune campagne ne s'en sert encore. Campagne 119 (06 complet, un passage par monde) : 30 sur 30, c'est
   une première visite, pas le 0 sur 15 de la 101. Campagne 120 (15 passages dans un seul monde) : 4 sur 15, arrêt voulu à
   la 5ᵉ session neuve. Campagne 121 (contrôle) : mêmes taux que la 115 et la 118 ; cause de la hausse de durée de la 118 non
