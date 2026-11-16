@@ -155,7 +155,7 @@ def test_la_page_de_refus_de_l_arena_n_est_pas_un_defi():
 
 
 def test_un_pilote_sans_navigateur_peut_visiter(site, jeton):
-    """Le témoin classique (`playwright`) passe par le même chemin : aucun refus d'outil, l'Arena juge."""
+    """Le témoin classique (`playwright`) passe par le même chemin : aucun refus d'outil (sur un site sans défi)."""
 
     class Playwright(PiloteFactice):
         name = "playwright"
@@ -214,3 +214,22 @@ def test_start_session_relit_l_etat_avant_de_lancer_chrome(racine, monkeypatch):
             pilote.start_session()
     finally:
         pilote._identite.liberer()
+
+
+def test_un_pilote_javascript_sans_etat_de_page_est_arrete_a_la_porte_par_l_outil(site, jeton):
+    """Comportement réel du témoin classique (`playwright`) devant le défi de l'Arena, noté pour ne pas l'oublier : sans
+    `etat_page` le parcours ne peut pas relire la page, il ne laisse pas au défi le temps de se valider seul et arrête
+    la visite tout de suite sur `defi`. C'est l'outil qui arrête, pas l'empreinte : `refus_par_l_arena` du bilan de la
+    soirée dépend de ce que l'Arena a vu pendant ce premier chargement."""
+    from test_sentinelle import PAGE_ARENA
+
+    class Playwright(PiloteFactice):
+        name = "playwright"
+        runtime = "navigateur"
+        executes_javascript = True
+
+    pilote = Playwright(site)
+    pilote.reponses["annonces?sl="] = (403, PAGE_ARENA)
+    issue = visiter(pilote, jeton, pages=6)
+    assert issue.success is False and issue.details["arret"]["signe"] == "defi"
+    assert pilote.requetes_pages == 1 and issue.details["identite"] is None

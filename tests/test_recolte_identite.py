@@ -4,8 +4,7 @@ Pilote factice qui se comporte comme `DriverNoezia` en mode identité (il ouvre 
 identité bannie ou en alerte, état écrit par la sentinelle). Ce que ces tests prouvent : la même identité sert deux
 passes, une identité refusée donne le code 2 sans aucune requête, la sentinelle l'écrit `banni`, la reprise la
 retrouve. Ce qu'ils ne prouvent pas : que Chrome rende le même VISITEUR à l'Arena (cookie `sl_visiteur`) : cela
-demande un
-vrai Chrome sur le site du labo, voir `tests/test_moteur_navigateur.py` pour l'état de ce chantier.
+demande un vrai Chrome sur le site du labo, non essayé ici (non prouvé).
 """
 
 from __future__ import annotations

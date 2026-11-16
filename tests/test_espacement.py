@@ -7,6 +7,7 @@ aucune Arena) ; le passage est remplacé par une fonction qui note ce qu'il reç
 # ruff: noqa: E501  (requêtes SQL et configurations YAML en ligne)
 from __future__ import annotations
 
+import json
 import random
 import threading
 import time
@@ -489,3 +490,31 @@ def test_bannir_visiteur_connu_refuse_un_monde_ou_un_visiteur_inconnu(reglages):
     assert bannissements.bannir_visiteur_connu(cx, "m", "v1") is True
     assert bannissements.bannir_visiteur_connu(cx, "m", "v1") is False  # déjà banni
     assert bannissements.dernier_visiteur(cx, "m") == "v1" and bannissements.dernier_visiteur(cx, "autre") is None
+
+
+# ── Une identité refusée avant la visite est un résultat, pas une panne ───────────────────────
+
+
+def test_une_identite_refusee_est_un_resultat_du_passage_et_non_une_panne(tmp_path, reglages, monkeypatch):
+    from shadowlab.engines.noezia.identite import IdentiteRefusee
+
+    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="")
+    base = faux_pilote()
+
+    class IdentiteBannie(base):
+        def start_session(self):
+            raise IdentiteRefusee("identité 'x' bannie : elle ne sert plus jamais")
+
+    pilote = IdentiteBannie(reglages.hotes_autorises, {})
+    moteur = db.engine_id(cx, "noezia", "{}", "navigateur", {"label": "temoin-sentinelle"})
+    scenario = db.scenario_id(cx, "visite", "visite")
+    details = campaigns._passage(
+        cx, reglages, experience, experiment_id, pilote, moteur, SCENARIOS["visite"], scenario, 4, "endurance",
+        reglages.url_arena, random.Random(1), tmp_path / "artefacts", monde="m",
+    )  # fmt: skip
+    assert details["pages_faites"] == 0 and "bannie" in details["identite_refusee"]
+    run = cx.execute("SELECT status, success, issue FROM runs WHERE experiment_id = ?", (experiment_id,)).fetchone()
+    assert (run["status"], run["success"]) == ("echec", 0)  # pas `erreur` : ce n'est pas une panne du moteur
+    assert run["issue"] != "erreur_technique"
+    drapeaux = json.loads(cx.execute("SELECT drapeaux FROM runs").fetchone()[0])
+    assert "identite_refusee" in drapeaux["details_scenario"] and drapeaux["erreur_technique"] is False

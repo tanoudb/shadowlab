@@ -19,8 +19,8 @@
 #   uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml
 # Durée estimée : environ 10 à 15 minutes (le bras le plus long fait 6 visites : 5 écarts de 1 minute, plus 6 visites de
 # 20 à 30 s ; le sujet, 3 visites).
-# Bilan : uv run shadowlab soiree bilan <n° de la campagne>   (« visites réussies » du sujet : 3 sur 24 prévues n'est
-# pas le critère de la soirée ; l'essai se lit critère par critère, pas sur le verdict d'ensemble).
+# Bilan : uv run shadowlab soiree bilan <n° de la campagne>   (le sujet est jugé sur 3 visites prévues ici, pas 24 ;
+# le témoin négatif et la sentinelle sur 6).
 experiment:
   name: identite_soiree_essai
   description: >-
