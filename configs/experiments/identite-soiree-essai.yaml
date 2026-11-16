@@ -13,7 +13,7 @@
 #   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
 #        uv run shadowlab arena appliquer
 #   2. Vitrine d'au moins 3 annonces (500 par défaut).
-#   3. Pour recommencer l'essai : changer les suffixes `essai-…-1`. Rien d'autre sur le Mac pendant la campagne.
+#   3. Pour recommencer l'essai : changer les suffixes `essai-…-2`. Rien d'autre sur le Mac pendant la campagne.
 #
 # Commande (des fenêtres de Chrome s'ouvrent) :
 #   uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml
@@ -30,7 +30,7 @@ experiment:
     - name: noezia
       label: sujet
       visites: 3
-      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sujet-1}
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sujet-2}
     - name: noezia
       label: temoin-negatif
       visites: 6
@@ -39,7 +39,7 @@ experiment:
       label: temoin-sentinelle
       visites: 6
       bannir_avant_visite: 3
-      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sentinelle-1}
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sentinelle-2}
     - name: playwright
       label: temoin-classique
       visites: 3

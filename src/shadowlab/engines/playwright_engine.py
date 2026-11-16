@@ -146,6 +146,14 @@ class DriverPlaywright(Driver):
     def content(self) -> str:
         return self._reponse.text() if self._reponse is not None else ""
 
+    def etat_page(self) -> tuple[int | None, str, dict[str, str]]:
+        """(statut, adresse, en-têtes) de la dernière page du cadre principal, telle que le navigateur en est là
+        maintenant : la page peut avoir changé seule (un défi qui se valide) sans que rien ne soit redemandé.
+        Même contrat que `DriverNoezia.etat_page` ; ne lit que l'état déjà noté, aucune requête."""
+        reponse = self._reponse
+        entetes = {k.lower(): v for k, v in reponse.headers.items()} if reponse is not None else {}
+        return (reponse.status if reponse is not None else None), self._page.url, entetes
+
     def dom(self) -> str:
         return self._page.content()
 
