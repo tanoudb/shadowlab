@@ -90,7 +90,21 @@ def test_fichier_environnement_de_la_course():
     assert valeurs["SHADOWLAB_PORT_AVAL"] == "8761"
     assert valeurs["SHADOWLAB_ARENA_PROJET"] == "shadowlab-course-i9"
     assert "SHADOWLAB_SORTIES" in valeurs and "SHADOWLAB_IDENTITES" in valeurs
-    assert "SHADOWLAB_VITRINE_TAILLE" not in valeurs
+    assert valeurs["SHADOWLAB_VITRINE_TAILLE"] == "300"
+    assert "SHADOWLAB_PROFILS_EXTRA" not in valeurs  # la vraie course : profil endurance, porte de 24 h
+
+
+def test_fichier_environnement_de_la_repetition():
+    valeurs = {}
+    for ligne in (RACINE / "configs" / "courses" / "i9-repetition.env").read_text(encoding="utf-8").splitlines():
+        if ligne.strip() and not ligne.startswith("#"):
+            cle, _, valeur = ligne.partition("=")
+            valeurs[cle] = valeur
+    assert valeurs == {
+        "SHADOWLAB_PROFILS_EXTRA": "configs/arena/profils-endurance-court.yaml",
+        "SHADOWLAB_VITRINE_TAILLE": "30",
+    }
+    assert (RACINE / valeurs["SHADOWLAB_PROFILS_EXTRA"]).exists()
 
 
 def test_course_sh_syntaxe():

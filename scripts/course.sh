@@ -7,7 +7,7 @@
 #   scripts/course.sh demarrer <configuration>  lance la campagne dans la session tmux course-i9
 #   scripts/course.sh reprendre <n°>            reprend une campagne interrompue
 #   scripts/course.sh etat                      session, conteneurs, santé de la chaîne, journal
-#   scripts/course.sh bilan <n°>                bilan de la soirée
+#   scripts/course.sh bilan <n°>                bilan du § 6.3 (shadowlab course bilan)
 #   scripts/course.sh arreter                   arrêt d'urgence (crée <sorties>/ARRET)
 #   scripts/course.sh empreinte                 preuve d'isolation (à comparer avant/après avec diff)
 #
@@ -29,6 +29,17 @@ erreur() { echo "course.sh : $*" >&2; exit 1; }
 charger_env() {
   [ -f "$FICHIER_ENV" ] || erreur "fichier d'environnement absent : $FICHIER_ENV"
   VARIABLES=()
+  lire_env "$FICHIER_ENV"
+  # COURSE_ENV : un second fichier, lu après le premier (la dernière valeur gagne), pour la répétition seulement
+  # (configs/courses/i9-repetition.env). tmux ne transmet pas l'environnement du terminal : tout passe par ici.
+  if [ -n "${COURSE_ENV:-}" ]; then
+    case "$COURSE_ENV" in /*) ;; *) COURSE_ENV="$DEPOT/$COURSE_ENV" ;; esac
+    [ -f "$COURSE_ENV" ] || erreur "fichier d'environnement absent : $COURSE_ENV"
+    lire_env "$COURSE_ENV"
+  fi
+}
+
+lire_env() {
   local ligne cle valeur
   while IFS= read -r ligne || [ -n "$ligne" ]; do
     case "$ligne" in ''|'#'*) continue ;; esac
@@ -39,7 +50,7 @@ charger_env() {
         case "$valeur" in /*) ;; *) valeur="$COURSE/$valeur" ;; esac ;;
     esac
     VARIABLES+=("$cle=$valeur")
-  done < "$FICHIER_ENV"
+  done < "$1"
 }
 
 # Valeur d'une variable lue dans VARIABLES.
@@ -111,7 +122,7 @@ case "$commande" in
   bilan)
     [ $# -eq 1 ] || erreur "usage : bilan <n°>"
     exiger_course
-    dans_course uv run shadowlab soiree bilan "$1"
+    dans_course uv run shadowlab course bilan "$1"
     ;;
   arreter)
     exiger_course
