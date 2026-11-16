@@ -337,6 +337,16 @@ def test_les_visites_interrompues_sont_dites(base, reglages):
     assert course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]["visites_interrompues"] == 1
 
 
+def test_une_reprise_apres_l_echeance_ne_double_pas_les_visites_non_faites(base, reglages):
+    """`reprendre` après l'échéance réécrit une note `echeance` (mêmes répétitions restantes) : comptée une fois."""
+    cx, x = base
+    course_tenue(cx, x, reglages)
+    notes(reglages, x, [{**NOTES_OK[-1], "constatee": heure(7 * JOUR + 3600)}])
+    sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
+    assert sujet["visites_non_faites_echeance"] == 188
+    assert "188 non faite(s)" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
+
+
 def test_sous_commande_course_bilan(base, reglages, capsys):
     cx, x = base
     course_tenue(cx, x, reglages)
