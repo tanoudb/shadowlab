@@ -464,12 +464,20 @@ def test_un_pilote_sans_ces_fonctions_est_accepte(site):
 def _options_prises(monkeypatch, pilote_nom, scenario):
     prises = {}
 
-    def faux(d, base, jeton, rng, recette, moteur, *, options=None, duree_porte_s=None, noter=None):
+    def faux(
+        d, base, jeton, rng, recette, moteur, *, options=None, duree_porte_s=None, noter=None, dossier_durable=None
+    ):
         prises["options"] = options
         bilan = SimpleNamespace(
             statut="limitee",
             arret=None,
-            resume={"pages": {"faites": 1, "echecs": 0}, "lecture_humaine": {"relectures": 2}},
+            passe=1,
+            resume={
+                "pages": {"faites": 1, "echecs": 0},
+                "lecture_humaine": {"relectures": 2},
+                "lancement": {"pages": 1, "echecs": 0, "relectures": 2},  # ce que la visite a lu (I9)
+                "incrementale": {"active": False},
+            },
         )
         return bilan, None
 

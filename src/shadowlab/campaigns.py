@@ -20,6 +20,7 @@ import logging
 import multiprocessing
 import platform
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -82,6 +83,10 @@ class MoteurConfig(BaseModel):
     # Espacement propre à CE bras (I9) : il remplace celui de la campagne (ex. témoins à intervalle fixe pendant que le
     # sujet suit l'ordonnanceur).
     espacement: espacement_mod.Espacement | None = None
+    # Récolte qui dure (I9) : l'état du parcours du scénario `visite` vit dans un dossier durable propre au bras
+    # (`<sorties>/campagnes/<n°>/recolte/<libellé>-<protection>/`) ; chaque visite reprend là où la précédente s'est
+    # arrêtée, puis commence une passe incrémentale. Faux : chaque visite repart de zéro (la soirée).
+    recolte_incrementale: bool = False
 
     @property
     def nom_affiche(self) -> str:
@@ -189,6 +194,10 @@ class Experience(BaseModel):
                     f"espacement : `concurrency` doit couvrir tous les bras ({nb_unites}), sinon ils tourneraient "
                     f"l'un après l'autre (reçu {self.concurrency})"
                 )
+        if any(m.recolte_incrementale for m in self.engines) and self.scenarios != ["visite"]:
+            raise ValueError(
+                "recolte_incrementale : c'est le scénario `visite` qui récolte, `scenarios` doit être [visite]"
+            )
         for moteur in self.engines:
             if moteur.bannir_avant_visite is None:
                 continue
@@ -665,6 +674,21 @@ def _bannir_avant_visite(cx, monde: str, label: str, visite: int) -> bool:
     return True
 
 
+def _reglages_visite(
+    reglages: Reglages, experiment_id: int, moteur_cfg: MoteurConfig, protection: str
+) -> dict[str, Any]:
+    """Ce que le scénario `visite` reçoit de la campagne : la durée de la porte, tirée du profil (`duree_cookie_s`
+    d'un profil dont la porte est liée au visiteur, `defi_js.par_visiteur` ; sinon aucune règle de durée, la porte
+    revient à chaque session), et le dossier durable de la récolte du bras (`recolte_incrementale`)."""
+    profil = module_profils.charger().de(protection)
+    duree = profil.duree_cookie_s if profil is not None and profil.defi_js.par_visiteur else None
+    dossier = None
+    if moteur_cfg.recolte_incrementale:
+        nom = re.sub(r"[^a-z0-9_-]+", "-", f"{moteur_cfg.nom_affiche}-{protection}".lower()).strip("-")
+        dossier = dossier_campagne(reglages, experiment_id) / "recolte" / nom
+    return {"duree_porte_s": duree, "dossier_recolte": dossier}
+
+
 def _noteur(reglages: Reglages, experiment_id: int, label: str, protection: str) -> Callable[[dict[str, Any]], None]:
     """Écrit les notes de la cadence d'un bras. Le fichier existe dès le départ du bras (le bilan distingue « aucune
     visite manquée » de « aucune note lue »)."""
@@ -735,6 +759,7 @@ def executer_unite(
             engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
             journal.info("moteur %s (%s) %s", moteur_cfg.nom_affiche, protection, versions)
             label = moteur_cfg.nom_affiche
+            reglages_visite = _reglages_visite(reglages, experiment_id, moteur_cfg, protection)
             reglage_espacement = moteur_cfg.espacement or experience.espacement
             cadence = noter = None
             if reglage_espacement is not None:
@@ -773,9 +798,9 @@ def executer_unite(
                                 break
                             journal.warning("%s : visite non lancée, %s ; nouvel essai dans 5 min", label, panne)
                             cadence.manquer(creneau, "infrastructure", panne)
-                        scenario = avec_pages(creneau.pages or experience.pages_par_visite)
+                        scenario = avec_pages(creneau.pages or experience.pages_par_visite, **reglages_visite)
                     elif nom_scenario == "visite":
-                        scenario = avec_pages(experience.pages_par_visite)
+                        scenario = avec_pages(experience.pages_par_visite, **reglages_visite)
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
                     graine = f"{experience.seed}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
                     monde = visiteurs.nom_monde(
