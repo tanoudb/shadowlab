@@ -58,6 +58,14 @@ def site(reglages, monkeypatch):
         yield c
 
 
+@pytest.fixture(autouse=True)
+def lecture_instantanee(monkeypatch):
+    """La lecture humaine du scénario garde ses retours à la liste, mais n'attend rien (aucune durée : test rapide)."""
+    from shadowlab.engines.noezia.lecture import LectureHumaine
+
+    monkeypatch.setattr(scenarios, "LECTURE_HUMAINE_VISITE", LectureHumaine(duree_s=(0, 0, 0)))
+
+
 @pytest.fixture
 def jeton(reglages):
     return nouveau_passage(reglages, nouvelle_experience(reglages, "visite"), monde=MONDE)
@@ -79,21 +87,23 @@ def test_le_scenario_visite_est_declare_et_lit_15_pages_par_defaut():
     assert scenarios.PAGES_PAR_VISITE == 15
 
 
-def test_la_visite_lit_au_plus_n_pages_la_liste_puis_des_fiches(site, jeton):
+def test_la_visite_lit_au_plus_n_pages_la_liste_puis_des_fiches_avec_des_retours_a_la_liste(site, jeton):
     pilote = Chrome(site)
     issue = visiter(pilote, jeton, pages=6)
     assert issue.success is True, issue.details
-    lues = pilote.pages_lues()
-    assert [d.split("?")[0] for d in lues][0] == "/lab/vitrine/annonces"  # la liste d'abord
-    assert all("/lab/vitrine/annonces/AN-" in d for d in lues[1:])  # puis des fiches
-    assert len(lues) == 6 == issue.details["pages_faites"]
+    lues = [d.split("?")[0] for d in pilote.pages_lues()]
+    assert lues[0] == "/lab/vitrine/annonces"  # la liste d'abord
+    assert "/lab/vitrine/annonces/AN-" in lues[1] and lues[2] == "/lab/vitrine/annonces"  # retour après la 1re fiche
+    assert all(d == "/lab/vitrine/annonces" or "/lab/vitrine/annonces/AN-" in d for d in lues)
+    assert len(lues) == 6 == issue.details["pages_faites"] + issue.details["relectures"]  # budget, jamais en plus
     assert issue.details["statut"] == "limitee" and issue.details["pages_demandees"] == 6
 
 
 def test_la_visite_par_defaut_lit_15_pages(site, jeton):
     pilote = Chrome(site)
     issue = visiter(pilote, jeton)
-    assert issue.success is True and len(pilote.pages_lues()) == 15 == issue.details["pages_faites"]
+    assert issue.success is True and len(pilote.pages_lues()) == 15
+    assert issue.details["pages_faites"] + issue.details["relectures"] == 15 and issue.details["relectures"] >= 1
 
 
 def test_la_visite_note_le_visiteur_vu_par_l_arena_jamais_le_cookie_signe(site, jeton, reglages):
