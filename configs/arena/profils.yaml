@@ -11,6 +11,10 @@
 # turnstile    : Cloudflare Turnstile en mode test (test keys, ne prouve rien contre le vrai)
 # recaptcha    : Google reCAPTCHA v2 en mode test (test keys, ne prouve rien contre le vrai)
 # connexion    : niveau authentifié — login protégé par détection comportementale (comptes de test locaux)
+# bannissement : option (palier 2, I3), fausse par défaut et partout sauf dans `endurance`. Un visiteur détecté, ou qui
+#   dépasse `pages_par_heure` / `pages_par_jour` (toutes ses sessions ensemble), est banni dans son monde (403, même
+#   avec un nouveau jeton) ; l'empreinte E d'un détecté est bannie pour les seules sessions neuves du monde.
+# defi_js.par_visiteur : le cookie de réussite du défi est lié au visiteur et non au jeton (profil `endurance`)
 
 "01":
   nom: Baseline
@@ -175,7 +179,7 @@
   fingerprinting:
     actif: true
     bloquer: tout
-    detecteurs:
+    detecteurs: &detecteurs_06
       - regles-http
       - tls
       - botd
@@ -280,3 +284,28 @@
   turnstile: {actif: true}
   recaptcha: {actif: true}
   connexion: {actif: true, tentatives_max: 2}
+
+# Endurance (palier 2, I3) : le niveau 06 vu par un visiteur qui revient pendant des jours.
+# Repris du 06, à l'identique : limitation, WAF, preuve de travail (difficulté 18, liée au TLS), honeypots, login
+# anti-bot, seuil composite, et la liste des détecteurs (ancre `detecteurs_06`, donc correlation-session 2.1 par monde).
+# Changé : une seule porte d'entrée par visiteur, valable 24 h et posée avec une durée ; aucun CAPTCHA (le démo,
+# Turnstile et reCAPTCHA en clés de test sont éteints : le but est de ne pas déclencher un défi, pas de le résoudre) ;
+# bannissement par visiteur et par empreinte, compteurs de pages par visiteur. À mesurer dans un monde `campagne`.
+endurance:
+  nom: Endurance
+  description: "Niveau 06 pour un visiteur qui revient : une porte par visiteur (24 h), bannissement, aucun CAPTCHA"
+  limitation: {debit: 2, rafale: 4}
+  waf: {mode: blocage, paranoia: 3, seuil: 3}
+  defi_js: {actif: true, difficulte: 18, lier_tls: true, par_visiteur: true}
+  captcha: {actif: false}
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs: *detecteurs_06
+    seuil_composite: 0.5
+  honeypots: {actif: true}
+  turnstile: {actif: false}
+  recaptcha: {actif: false}
+  connexion: {actif: true, tentatives_max: 5}
+  duree_cookie_s: 86400
+  bannissement: {actif: true, pages_par_heure: 240, pages_par_jour: 2000}

@@ -224,6 +224,12 @@ MIGRATIONS: list[str] = [
     );
     ALTER TABLE runs ADD COLUMN monde_id INTEGER REFERENCES mondes(id)
     """,
+    # 11 — bannissement (palier 2, I3) : la table de la 10 est lue à chaque requête d'un profil qui l'active, par
+    # visiteur et par empreinte E, dans un monde. Deux index ; aucune colonne ne change.
+    """
+    CREATE INDEX bannissements_visiteur ON bannissements(monde_id, visiteur);
+    CREATE INDEX bannissements_empreinte ON bannissements(monde_id, empreinte)
+    """,
 ]
 
 

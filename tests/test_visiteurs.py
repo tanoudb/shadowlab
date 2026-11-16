@@ -63,7 +63,7 @@ def valeur_cookie(reponse) -> str | None:
 
 def test_migration_10_sur_base_neuve(tmp_path):
     cx = db.ouvrir(tmp_path / "neuve.sqlite3")
-    assert cx.execute("PRAGMA user_version").fetchone()[0] == 10
+    assert cx.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION  # 11 depuis I3
     tables = {r["name"] for r in cx.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"mondes", "visites", "bannissements"} <= tables
     assert cx.execute("SELECT COUNT(*) FROM bannissements").fetchone()[0] == 0
@@ -83,14 +83,14 @@ def test_migration_10_sur_base_au_schema_9(tmp_path):
     )
     cx.close()
     cx = db.ouvrir(chemin)
-    assert cx.execute("PRAGMA user_version").fetchone()[0] == 10
+    assert cx.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION  # 11 depuis I3
     assert cx.execute("SELECT name FROM experiments").fetchone()["name"] == "avant"
     tables = {r["name"] for r in cx.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"mondes", "visites", "bannissements"} <= tables
 
 
 def test_migration_9_inchangee():
-    assert len(db.MIGRATIONS) == 10
+    assert len(db.MIGRATIONS) >= 10  # 11 depuis I3 : la 10 et la 9 ne changent pas
     assert "orpheline_" in db.MIGRATIONS[8]  # la 9 reste celle de D-68
 
 

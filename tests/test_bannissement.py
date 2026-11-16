@@ -632,11 +632,11 @@ def test_le_cookie_de_porte_est_lie_au_visiteur(client, reglages, nouvelle_sessi
 
 
 def test_le_cookie_de_porte_est_pose_avec_une_duree_dans_endurance_seulement(client, reglages, nouvelle_session):
-    for profil, attendu in (("endurance", "max-age=86400"), ("06", None)):
+    for profil, attendu in (("endurance", "max-age=86400"), ("04", None)):
         nav = Navigateur(client, reglages, profil)
         jeton = nouvelle_session()
         assert nav.aller(jeton).status_code == 403
-        reponse = nav.resoudre_le_defi(jeton, difficulte=18)
+        reponse = nav.resoudre_le_defi(jeton, difficulte=18 if profil == "endurance" else 12)
         entetes = [e.lower() for e in reponse.headers.get_list("set-cookie") if e.startswith(gardien.COOKIE_DEFI)]
         assert len(entetes) == 1
         if attendu:
@@ -646,12 +646,12 @@ def test_le_cookie_de_porte_est_pose_avec_une_duree_dans_endurance_seulement(cli
 
 
 def test_aux_niveaux_existants_le_cookie_reste_lie_au_jeton(client, reglages, nouvelle_session, sans_suspicion):
-    nav = Navigateur(client, reglages, "06")
+    nav = Navigateur(client, reglages, "04")
     premiere = nouvelle_session()
     assert nav.aller(premiere).status_code == 403
-    assert nav.resoudre_le_defi(premiere, difficulte=18).status_code == 204
+    assert nav.resoudre_le_defi(premiere, difficulte=12).status_code == 204
     assert nav.aller(premiere).status_code == 200
-    seconde = nouvelle_session()  # même navigateur, autre jeton : le défi revient (comportement des niveaux 01 à 07)
+    seconde = nouvelle_session()  # même navigateur, autre jeton : le défi revient (comportement des niveaux 02 à 07)
     refus = nav.aller(seconde)
     assert refus.status_code == 403 and refus.json()["bloque_par"] == "defi-js"
 
@@ -662,7 +662,7 @@ def test_aux_niveaux_existants_le_cookie_reste_lie_au_jeton(client, reglages, no
 def test_sans_l_option_aucune_lecture_ni_ecriture_de_bannissement_ne_change_la_decision(
     client, reglages, cx, nouvelle_session, monkeypatch
 ):
-    nav = Navigateur(client, reglages, "06")
+    nav = Navigateur(client, reglages, "04")
     premiere = nouvelle_session()
     visiteur = nav.franchir_la_porte(premiere)
     empreinte = correlation.empreinte_e(_empreinte_js("m1"))
@@ -678,11 +678,15 @@ def test_sans_l_option_aucune_lecture_ni_ecriture_de_bannissement_ne_change_la_d
         "INSERT INTO bannissements (monde_id, visiteur, empreinte, motif, cree_le) VALUES (?, ?, ?, 'test', ?)",
         (visiteurs.identifiant_monde(cx, MONDE), visiteur, empreinte, db.maintenant()),
     )
-    _pages(cx, premiere, [datetime.now(UTC) - timedelta(minutes=1)] * 500)  # bien plus que 240 pages en une heure
-    assert nav.aller(premiere).status_code == 200
-    assert _envoyer_empreinte(nav, premiere, "m1").status_code == 204
-    assert nav.aller(premiere).status_code == 200
-    # Une détection au 06 arrête la session comme avant, et n'écrit aucun bannissement.
+    # Bien plus que 240 pages en une heure, sur une autre session du même visiteur (les détecteurs ne la voient pas).
+    _visite(cx, MONDE, visiteur, "e" * 32, datetime.now(UTC) - HEURE / 2, neuve=False)
+    _pages(cx, "e" * 32, [datetime.now(UTC) - timedelta(minutes=1)] * 500)
+    with monkeypatch.context() as sans_detecteurs:  # l'empreinte d'essai n'est pas celle d'un vrai navigateur
+        sans_detecteurs.setattr(gardien, "suspicion", lambda *a, **k: [])
+        assert nav.aller(premiere).status_code == 200
+        assert _envoyer_empreinte(nav, premiere, "m1").status_code == 204
+        assert nav.aller(premiere).status_code == 200
+    # Une détection au 04 arrête la session comme avant, et n'écrit aucun bannissement.
     db.enregistrer_decision(cx, premiere, "honeypot", "declenche", "/lab/piege", [])
     arret = nav.aller(premiere)
     assert arret.status_code == 403 and arret.json()["bloque_par"] == "fingerprinting"

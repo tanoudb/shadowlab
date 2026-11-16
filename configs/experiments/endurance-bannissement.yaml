@@ -1,0 +1,36 @@
+# Palier 2, I3 : le bannissement de l'Arena au profil `endurance`, trois passages par moteur dans un seul monde.
+#
+# Ce que la campagne doit montrer (plan 2.2) : `playwright` (le témoin, un navigateur sans les masquages de noezia) est
+# détecté à son 1er passage, donc banni (son visiteur et son empreinte E) ; au 2e et au 3e passage il est refusé par le
+# bannissement, dans le même monde. `noezia` en identité native, comme dans `correlation-06-mondes.yaml`, ne l'est pas.
+# On le lit dans la couche `bannissement` des décisions (`bloque`, motif `detecte:…` puis `empreinte_bannie`) et dans
+# la table `bannissements`.
+#
+# Réserves à garder : l'attendu du témoin suppose que son empreinte E diffère de celle de `noezia-natif` dans ce monde
+# (sinon `noezia` serait banni par la sienne : à lire dans `bannissements.empreinte` avant de conclure) ; `monde:
+# campagne` est un seul monde pour les six passages ; un seul Chrome sur macOS ; aucun humain en base.
+#
+#   1. uv run shadowlab arena appliquer            # SANS SHADOWLAB_PROFILS_EXTRA : le profil `endurance` est dans profils.yaml
+#   2. uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml
+#
+# 2 moteurs × 1 niveau × 1 scénario × 3 répétitions = 6 passages, un à la fois : quelques minutes (une fenêtre de
+# Chrome s'ouvre pour `noezia-natif`). Ne rien lancer d'autre pendant la campagne (durées et CPU mesurés).
+# Un passage de `playwright` ne s'arrête pas sur le premier refus : le scénario peut échouer ; c'est l'issue attendue.
+experiment:
+  name: endurance_bannissement
+  description: >-
+    Profil endurance, monde `campagne`, 3 passages par moteur : playwright (témoin) banni dès le 2e passage,
+    noezia en identité native (cookies jetés à chaque lancement, comme la campagne 119).
+  environment: local
+  engines:
+    - name: playwright
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["endurance"]
+  scenarios:
+    - static_html
+  repetitions: 3
+  seed: 20261116
+  monde: campagne
+  output: [json, html]

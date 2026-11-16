@@ -16,9 +16,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from .. import correlation, scoring
 from .. import database as db
-from ..arena import defis, profils
+from ..arena import bannissements, defis, profils, visiteurs
 from ..arena import secret as secrets_arena
-from ..detection import Detecteur, Observations, Signal, registre
+from ..detection import CHEMINS_TECHNIQUES, Detecteur, Observations, Signal, est_ressource_de_page, registre
 from . import pages
 
 COOKIE_DEFI = "sl_defi"
@@ -238,8 +238,94 @@ def honeypots_actifs(sceau: Sceau | None) -> bool:
     return bool(profil and profil.honeypots.actif)
 
 
+def portee_defi(profil: profils.Profil, jeton: str, monde: str, visiteur: str | None) -> tuple[str, str | None]:
+    """(usage, clé) du cookie de réussite du défi : le jeton de session, ou le visiteur du monde (`par_visiteur`).
+
+    Un cookie lié au visiteur ne vaut que pour lui, dans son monde ; sans visiteur connu (première requête d'un
+    navigateur neuf) il n'y a rien à lier : la clé est None, aucun cookie n'est valable et le défi est émis.
+    """
+    if profil.defi_js.par_visiteur:
+        return "defi-visiteur", f"{monde}:{visiteur}" if visiteur else None
+    return "defi", jeton
+
+
+def refus_banni(request: Request, cx: sqlite3.Connection, jeton: str, chemin: str, verdict: bannissements.Verdict):
+    """403 d'un visiteur banni, avec sa décision (`bannissement`, `bloque`) pour que le passage en garde la cause."""
+    db.enregistrer_decision(
+        cx,
+        jeton,
+        "bannissement",
+        "bloque",
+        chemin,
+        [{"detecteur": "bannissement", "motif": verdict.motif, "par": verdict.par}],
+    )
+    return _refus(request, pages.page_blocage(), "bannissement")
+
+
+def _est_une_page(chemin: str) -> bool:
+    """Une requête de page au sens de D-78 (pas une photo, une ressource ni un échange technique)."""
+    return not chemin.startswith(CHEMINS_TECHNIQUES) and not est_ressource_de_page(chemin)
+
+
+def bannir_si_arret(
+    cx: sqlite3.Connection,
+    surveillance: bannissements.Surveillance,
+    secret: bytes,
+    request: Request,
+    profil: profils.Profil,
+    jeton: str,
+    motifs: list[dict],
+) -> None:
+    """Le gardien arrête la session pour suspicion : si le profil bannit, son visiteur et son empreinte sont bannis."""
+    if profil.bannissement.actif and profil.fingerprinting.bloquer != "non":
+        detecteurs = [str(m.get("detecteur", "")) for m in motifs if m.get("detecteur")]
+        surveillance.bannir_detection(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton, detecteurs)
+
+
+def apres_empreinte(
+    cx: sqlite3.Connection,
+    surveillance: bannissements.Surveillance,
+    secret: bytes,
+    request: Request,
+    profil: profils.Profil,
+    jeton: str,
+    motifs: list[dict],
+    page: str,
+) -> None:
+    """À la réception d'une empreinte JS, pour un profil qui bannit.
+
+    - un automate révélé par l'empreinte est banni tout de suite (visiteur et E) : un scénario d'une seule page ne
+      redemande jamais de page, l'arrêt « à la page suivante » n'arriverait pas et le passage suivant n'aurait rien ;
+    - sinon, une session **neuve** dont E est déjà bannie dans le monde est refusée (décision `bannissement`) et son
+      visiteur banni à son tour. Un visiteur connu qui porte la même E n'est pas touché.
+    """
+    if not profil.bannissement.actif:
+        return
+    if motifs and profil.fingerprinting.bloquer != "non":
+        bannir_si_arret(cx, surveillance, secret, request, profil, jeton, motifs)
+        return
+    cookie = request.cookies.get(visiteurs.COOKIE)
+    verdict = surveillance.juger(cx, secret, cookie, jeton, page=False, seuils=profil.bannissement)
+    if verdict and verdict.par == "empreinte":
+        db.enregistrer_decision(
+            cx,
+            jeton,
+            "bannissement",
+            "bloque",
+            page,
+            [{"detecteur": "bannissement", "motif": verdict.motif, "par": "empreinte"}],
+        )
+        surveillance.bannir_visiteur(cx, secret, cookie, jeton, "empreinte_bannie")
+
+
 def controler(
-    request: Request, cx: sqlite3.Connection, secret: bytes, sceau: Sceau, jeton: str, chemin: str
+    request: Request,
+    cx: sqlite3.Connection,
+    secret: bytes,
+    sceau: Sceau,
+    jeton: str,
+    chemin: str,
+    surveillance: bannissements.Surveillance | None = None,
 ) -> Response | None:
     """Renvoie la réponse de la protection qui s'applique, ou None si la requête peut passer."""
     if not protegee(chemin, request.method):
@@ -247,8 +333,23 @@ def controler(
     profil = profils.charger().de(sceau.profil)
     if profil is None:
         return None
+    surveillance = surveillance or bannissements.Surveillance()
+    cookie_visiteur = request.cookies.get(visiteurs.COOKIE)
+    # Le bannissement se lit en tête, avant tout défi, et seulement si le profil l'active (niveaux 01 à 07 : jamais).
+    if profil.bannissement.actif:
+        verdict = surveillance.juger(
+            cx, secret, cookie_visiteur, jeton, page=_est_une_page(chemin), seuils=profil.bannissement
+        )
+        if verdict:
+            return refus_banni(request, cx, jeton, chemin, verdict)
     lie = empreinte_liee(sceau)
-    if profil.defi_js.actif and not defis.cookie_valide(secret, "defi", request.cookies.get(COOKIE_DEFI), jeton, lie):
+    usage_defi, cle_defi = "defi", jeton
+    if profil.defi_js.par_visiteur:
+        monde, visiteur = surveillance.visiteur_de(cx, secret, cookie_visiteur, jeton)
+        usage_defi, cle_defi = portee_defi(profil, jeton, monde, visiteur)
+    if profil.defi_js.actif and (
+        cle_defi is None or not defis.cookie_valide(secret, usage_defi, request.cookies.get(COOKIE_DEFI), cle_defi, lie)
+    ):
         defi = defis.creer_defi(secret, jeton, profil.defi_js.difficulte)
         motifs = [{"difficulte": profil.defi_js.difficulte}]
         db.enregistrer_decision(cx, jeton, "defi-js", "emis", chemin, motifs)
@@ -260,6 +361,9 @@ def controler(
                 db.enregistrer_decision(
                     cx, jeton, "fingerprinting", "bloque", chemin, [{"detecteur": "fingerprinting-differe"}]
                 )
+                bannir_si_arret(
+                    cx, surveillance, secret, request, profil, jeton, [{"detecteur": "fingerprinting-differe"}]
+                )
                 return _refus(request, pages.page_blocage(), "fingerprinting-differe")
             db.enregistrer_decision(
                 cx, jeton, "fingerprinting", "suspect", chemin, [{"detecteur": "fingerprinting-differe"}]
@@ -269,6 +373,7 @@ def controler(
                 db.enregistrer_decision(
                     cx, jeton, "fingerprinting", "bloque", chemin, [{"detecteur": "composite-differe"}]
                 )
+                bannir_si_arret(cx, surveillance, secret, request, profil, jeton, [{"detecteur": "composite-differe"}])
                 return _refus(request, pages.page_blocage(), "composite-differe")
             db.enregistrer_decision(
                 cx, jeton, "fingerprinting", "suspect", chemin, [{"detecteur": "composite-differe"}]
@@ -277,6 +382,7 @@ def controler(
         if motifs:
             if profil.fingerprinting.bloquer != "non":
                 db.enregistrer_decision(cx, jeton, "fingerprinting", "bloque", chemin, motifs)
+                bannir_si_arret(cx, surveillance, secret, request, profil, jeton, motifs)
                 return _refus(request, pages.page_blocage(), "fingerprinting")
             db.enregistrer_decision(cx, jeton, "fingerprinting", "suspect", chemin, motifs)
     if profil.turnstile.actif and not defis.cookie_valide(

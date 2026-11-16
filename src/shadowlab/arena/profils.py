@@ -36,6 +36,9 @@ class DefiJs(_Strict):
     actif: bool
     difficulte: int = Field(default=0, ge=0, le=22)
     lier_tls: bool = False
+    # Cookie de réussite lié au visiteur (`sl_visiteur`) et non au jeton de session : une seule porte par visiteur,
+    # posée avec une durée (`duree_cookie_s`) pour que le navigateur la garde d'une visite à l'autre (`endurance`).
+    par_visiteur: bool = False
 
 
 class Captcha(_Strict):
@@ -77,6 +80,19 @@ class Connexion(_Strict):
     tentatives_max: int = Field(default=5, ge=1, le=100)
 
 
+class Bannissement(_Strict):
+    """Option de profil (palier 2, I3) : un visiteur détecté, ou qui dépasse un débit de pages, est banni.
+
+    Fausse par défaut et partout sauf dans `endurance` : dans un monde partagé par une campagne, un seul passage détecté
+    ferait tomber tous les suivants, et les taux des niveaux 01 à 07 ne seraient plus comparables. Seuils de départ du
+    § 4.6 de la conception (`docs/recherche/identite-qui-dure-2026-11-12.md`), jamais tirés d'une mesure du moteur.
+    """
+
+    actif: bool = False
+    pages_par_heure: int = Field(default=240, ge=1)  # bannit au-delà, requête en cours comprise
+    pages_par_jour: int = Field(default=2000, ge=1)
+
+
 class Profil(_Strict):
     nom: str = ""
     description: str = ""
@@ -89,6 +105,7 @@ class Profil(_Strict):
     turnstile: Turnstile = Turnstile(actif=False)
     recaptcha: Recaptcha = Recaptcha(actif=False)
     connexion: Connexion = Connexion(actif=False)
+    bannissement: Bannissement = Bannissement()
     # Durée de vie des cookies de réussite `defi`, `captcha`, `turnstile` et `recaptcha` (pas `connexion`, 3 600 s).
     # Un profil « cookie court » sert à mesurer une récolte plus longue que le cookie
     # (configs/arena/profils-cookie-court.yaml).

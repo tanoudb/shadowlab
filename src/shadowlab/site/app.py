@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import correlation, passages
 from .. import database as db
-from ..arena import defis, visiteurs
+from ..arena import bannissements, defis, visiteurs
 from ..arena import secret as secrets_arena
 from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
@@ -92,6 +92,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
 
     app.state.base = base
     connus = visiteurs.Connus()  # sessions dont la visite est déjà écrite : pas de connexion à la base pour elles
+    surveillance = bannissements.Surveillance()  # fiches des sessions d'un profil qui bannit (profil `endurance` seul)
 
     @app.middleware("http")
     async def observer(request: Request, call_next):
@@ -121,7 +122,7 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         reponse: Response | None = None
         if sceau is not None and jeton:
             with base() as cx:
-                reponse = gardien.controler(request, cx, secret, sceau, jeton, chemin)
+                reponse = gardien.controler(request, cx, secret, sceau, jeton, chemin, surveillance)
         if reponse is None:
             reponse = await call_next(request)
         if chemin.startswith("/lab") or chemin.startswith("/manuel"):
@@ -537,6 +538,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                             db.enregistrer_decision(
                                 cx, jeton, "fingerprinting-differe", "detecte", page or "/lab/collecte", individuels
                             )
+                        gardien.apres_empreinte(
+                            cx, surveillance, secret, request, profil, jeton, motifs, page or "/lab/collecte"
+                        )
         return Response(status_code=204)
 
     @app.get("/lab/verdict", tags=["détection"])
@@ -570,7 +574,14 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         except (ValueError, KeyError, TypeError) as erreur:
             raise HTTPException(400, "message illisible") from erreur
         motif = defis.verifier_defi(secret, jeton, defi, nonce)
+        profil = charger_profils().de(sceau.profil)
+        cookie_visiteur = request.cookies.get(visiteurs.COOKIE)
         with base() as cx:
+            if profil and profil.bannissement.actif:  # un banni n'obtient pas le cookie de porte (valable 24 h)
+                verdict = surveillance.juger(cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement)
+                if verdict:
+                    gardien.refus_banni(request, cx, jeton, request.url.path, verdict)
+                    raise HTTPException(403, "banni")
             if motif:
                 db.enregistrer_decision(cx, jeton, "defi-js", "echec", request.url.path, [{"code": motif}])
                 raise HTTPException(403, motif)
@@ -583,14 +594,27 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                     request.url.path,
                     [{"code": "empreinte_suspecte"}],
                 )
+                if profil:  # le défi est refusé à une session déjà détectée : c'est un arrêt, comme un blocage
+                    gardien.bannir_si_arret(
+                        cx, surveillance, secret, request, profil, jeton, [{"detecteur": "empreinte_suspecte"}]
+                    )
                 raise HTTPException(403, "empreinte suspecte")
             duree = message.get("ms") if isinstance(message.get("ms"), int | float) else None
             db.enregistrer_decision(cx, jeton, "defi-js", "valide", request.url.path, [{"duree_ms": duree}])
         reponse = Response(status_code=204)
         lie = gardien.empreinte_liee(sceau)
+        usage, cle, duree = "defi", jeton, duree_cookie_de(sceau)
+        par_visiteur = bool(profil and profil.defi_js.par_visiteur)
+        if par_visiteur:  # profil `endurance` : porte liée au visiteur, gardée par le navigateur pendant `duree`
+            with base() as cx:
+                monde, visiteur = surveillance.visiteur_de(cx, secret, cookie_visiteur, jeton)
+            usage, cle = gardien.portee_defi(profil, jeton, monde, visiteur)
+            if cle is None:
+                raise HTTPException(400, "visiteur inconnu")
         reponse.set_cookie(
             gardien.COOKIE_DEFI,
-            defis.creer_cookie(secret, "defi", jeton, lie, duree_s=duree_cookie_de(sceau)),
+            defis.creer_cookie(secret, usage, cle, lie, duree_s=duree),
+            max_age=duree if par_visiteur else None,
             httponly=True,
             samesite="lax",
             path="/lab",
