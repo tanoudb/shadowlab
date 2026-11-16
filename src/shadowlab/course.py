@@ -184,7 +184,8 @@ def juger_sujet(
     criteres["porte_apres_sa_duree"] = vide or porte
     criteres["recolte_99"] = vide or juger_recolte(*recolte)
     manquees = compter_manquees(notes or [])
-    non_faites = sum(n.get("restantes") or 0 for n in notes or [] if n.get("genre") == "echeance")
+    # `reprendre` après l'échéance réécrit la même note (mêmes répétitions restantes) : la dernière fait foi
+    non_faites = next((n.get("restantes") or 0 for n in reversed(notes or []) if n.get("genre") == "echeance"), 0)
     if notes is None:
         criteres["visites_manquees_a_part"] = _critere(NON_MESURE, f"aucun relevé de la cadence ({FICHIER_CADENCE})")
     else:

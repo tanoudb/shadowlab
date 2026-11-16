@@ -9,9 +9,12 @@
 # Graine 20275777 : la 1re visite du sujet a 5 pages au plus, la 2e 40, tirées par l'ordonnanceur (aucun plafond ne les
 # impose). Vérifié par tests/test_course_configs.py, avec le vrai code de la campagne en temps simulé : en lisant toutes
 # les pages prévues, 12 visites avec des visites de 1 min plus 15 s par page (pages prévues 5, 40, 9, 18, 7, 12, 7, 22, 5,
-# 5, 9, 6 ; le plafond par heure réduit la 8e et la 9e), 11 avec 1 min 30 plus 20 s par page. En vrai, la 2e visite
-# reprend la passe à la 6e page et lit ce qu'il en reste (27 pages, plus les relectures, dans la limite de 40) ; les
-# suivantes sont des passes incrémentales courtes (la liste relue), donc les visites sont plus courtes et plus nombreuses.
+# 5, 9, 6 ; le plafond par heure réduit la 8e et la 9e), 11 avec 1 min 30 plus 20 s par page. Ce sont des budgets, pas
+# des pages lues : sur le site factice des tests (vitrine de 30 annonces, lecture instantanée, trois tirages), la 1re
+# visite lit 5 pages, la 2e reprend la passe et la finit en 33 à 36 pages (dont 5 à 8 relectures), jamais 40 ; chaque
+# visite suivante est une passe incrémentale de 3 pages (les 2 pages de liste, un retour). Les visites réelles sont donc
+# plus courtes et plus nombreuses que ces budgets. Une 1re visite de 40 aurait lu 38 à 40 pages, mais la passe n'aurait
+# plus été reprise d'une visite à l'autre : la reprise compte davantage pour la course.
 # Témoins réduits : espacement fixe de 1 min, 3 pages ; négatif et sentinelle 6 visites (bannie avant la 3e), classique 3.
 #
 # Ce que la répétition doit montrer avant les 7 jours (bilan : `uv run shadowlab course bilan <n°>`, code 0) :
