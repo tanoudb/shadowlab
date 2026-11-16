@@ -2602,10 +2602,14 @@ class DetecteurCorrelationSession:
     Seuils et poids sont ceux de D-48 (le composite ne bouge pas). Les comptes sont exacts : une ligne par visite,
     plus de borne à 10 jetons.
     V1.1 (12/11/2026) : un fait, un signal ; débit sur les 60 dernières minutes.
+    V2.1 (16/11/2026) : sans aucun signal, le détecteur répond « indéterminé » (`aucune_correlation`), plus « humain » :
+    une absence de corrélation entre sessions ne prouve rien sur l'humanité de la session. Sinon `meta-composite`
+    voyait une unanimité « humain » (`unanimite_humain`) et classait « automatisée » une session propre au bilan.
+    Avec un signal, rien ne change. Aucun effet sur la décision de l'Arena (poids 0, comme « humain » sans signal).
     """
 
     name = "correlation-session"
-    version = "2.0"
+    version = "2.1"
 
     SEUIL_SESSIONS = 5
     SEUIL_RAPIDE = 10
@@ -2635,6 +2639,10 @@ class DetecteurCorrelationSession:
                     f" (seuil {self.SEUIL_DEBIT})",
                     0.8,
                 )
+            )
+        if not signaux:
+            return _indetermine(
+                self.name, self.version, "aucune_correlation", "aucune corrélation relevée dans le monde"
             )
         return _verdict(self.name, self.version, signaux)
 

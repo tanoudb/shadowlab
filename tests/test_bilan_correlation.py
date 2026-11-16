@@ -155,7 +155,7 @@ def test_une_session_commencee_plus_tard_ne_compte_pas_contre_une_session_anteri
     run_id, jeton = _session(cx, "m", DEBUT)
     for n in range(6):
         _session(cx, "m", DEBUT + timedelta(minutes=1 + n))
-    assert _bilan(cx, run_id, jeton)["codes"] == []
+    assert _bilan(cx, run_id, jeton)["codes"] == ["aucune_correlation"]  # aucun signal relevé
 
 
 def test_un_autre_monde_ne_compte_pas():
@@ -163,4 +163,4 @@ def test_un_autre_monde_ne_compte_pas():
     for n in range(6):
         _session(cx, "autre", DEBUT - timedelta(minutes=10 - n))
     run_id, jeton = _session(cx, "m", DEBUT)
-    assert _bilan(cx, run_id, jeton)["codes"] == []
+    assert _bilan(cx, run_id, jeton)["codes"] == ["aucune_correlation"]  # aucun signal relevé
