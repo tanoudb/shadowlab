@@ -10,6 +10,8 @@ dit rien de la probabilité d'être repéré par un service externe, qui observe
 from __future__ import annotations
 
 import re
+import statistics
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from importlib.metadata import entry_points
@@ -19,6 +21,13 @@ SEUIL_AUTOMATISE = 1.0
 SEUIL_RYTHME_PAR_S = 4.0
 SEUIL_DUREE_PAGE_MS = 500
 PLAFOND_DELAIS_SOURIS = 50  # observateur.js ne garde que les 50 premiers délais de souris d'une page
+# `trajectoire_lineaire` juge la session : au moins 3 pages d'au moins 10 angles et 60 angles en tout (D-95)
+PAGES_MIN_TRAJECTOIRE = 3
+ANGLES_MIN_PAGE = 10
+ANGLES_MIN_SESSION = 60
+PART_PAS_FIXE = 0.9  # `deltas_uniformes` : part des deltas de même grandeur qui fait un pas fixe
+CADRE_MIN_PX = 40  # barre d'onglets et d'adresse : `outerHeight` - `innerHeight` d'un navigateur avec fenêtre
+IMAGE_MS = 1000 / 60  # `scroll` part une fois par image pendant un geste continu : 16,7 ms à 60 Hz
 
 CHEMINS_TECHNIQUES = ("/lab/collecte", "/lab/static", "/lab/verdict", "/lab/defi", "/lab/captcha")
 # Fichiers qu'une page charge d'elle-même (D-78) : un navigateur les réclame sans que la personne ou le robot ne
@@ -934,6 +943,12 @@ class DetecteurCoherenceProfonde:
         return _verdict(self.name, self.version, signaux)
 
 
+def _difference(a: Any, b: Any) -> float | None:
+    """a - b si les deux sont des nombres, sinon None."""
+    nombres = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (a, b))
+    return a - b if nombres else None
+
+
 def _plus_longue_pause(releve: dict[str, Any], delais: list[float]) -> float | None:
     """Plus grand délai entre deux mouvements de souris sur toute la page ; None si le relevé ne le dit pas.
 
@@ -957,10 +972,13 @@ class DetecteurEntropieInteraction:
     (faible écart-type) ou trop uniformément distribués.
     V1.1 (12/11/2026) : `pas_de_pause` juge la page entière (`delai_souris_max_ms`) ; la V1 ne lisait que les
     50 premiers délais, soit un seul geste continu d'environ 1,5 s (campagne 94).
+    V1.2 (16/11/2026, D-95) : `trajectoire_lineaire` juge la session entière, une fois, et non chaque page ; un humain
+    connu avait 5 pages sur 17 sous 0,08 rad (une page de 23 angles suffit à y descendre) avec une moyenne cumulée
+    jamais sous 0,095. Sans au moins 3 pages d'au moins 10 angles et 60 angles en tout, la règle ne conclut pas.
     """
 
     name = "entropie-interaction"
-    version = "1.1"
+    version = "1.2"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -971,12 +989,17 @@ class DetecteurEntropieInteraction:
             return _indetermine(self.name, self.version, "sans_releve", "aucun relevé")
 
         signaux: list[Signal] = []
+        angles_session: list[float] = []  # angles des pages qui en ont assez pour compter
+        pages_avec_angles = 0
         for r in releves:
+            angles = r.get("angles_segments") or []
+            if len(angles) >= ANGLES_MIN_PAGE:
+                angles_session += angles
+                pages_avec_angles += 1
+
             delais = r.get("delais_souris_ms") or []
             if len(delais) < 10:
                 continue
-
-            import statistics
 
             moyenne = statistics.mean(delais)
             ecart = statistics.stdev(delais) if len(delais) > 1 else 0
@@ -1005,23 +1028,9 @@ class DetecteurEntropieInteraction:
                     Signal("pas_de_pause", f"max délai souris = {plus_longue:.0f}ms (pas de pause humaine)", 0.5)
                 )
 
-            # Trajectoire trop linéaire : angles entre segments consécutifs
-            angles = r.get("angles_segments") or []
-            if len(angles) >= 10:
-                import statistics
-
-                angle_moyen = statistics.mean(angles)
-                # Un humain a des changements de direction fréquents (angle moyen > 0.15 rad)
-                # Un robot qui fait des lignes droites a un angle moyen très faible
-                if angle_moyen < 0.08:
-                    signaux.append(
-                        Signal(
-                            "trajectoire_lineaire",
-                            f"angle moyen entre segments = {angle_moyen:.3f} rad (< 0.08 = ligne droite)",
-                            0.6,
-                        )
-                    )
-                # Trop d'angles identiques → bruit synthétique régulier
+            # Trop d'angles identiques dans une page → bruit synthétique régulier
+            # (la linéarité de la trajectoire se juge sur la session, après la boucle)
+            if len(angles) >= ANGLES_MIN_PAGE:
                 angles_arr = [round(a, 2) for a in angles]
                 uniques_a = len(set(angles_arr))
                 ratio_a = uniques_a / len(angles_arr)
@@ -1037,8 +1046,6 @@ class DetecteurEntropieInteraction:
             # Rythme de frappe clavier : CV trop faible = timing synthétique
             touches = r.get("delais_clavier_ms") or []
             if len(touches) >= 8:
-                import statistics
-
                 m_t = statistics.mean(touches)
                 s_t = statistics.stdev(touches) if len(touches) > 1 else 0
                 if m_t > 0:
@@ -1053,6 +1060,24 @@ class DetecteurEntropieInteraction:
                             )
                         )
 
+        # Trajectoire trop linéaire : angle moyen entre segments consécutifs sur toute la session. Un humain change
+        # de direction (angle moyen > 0.15 rad) ; un robot qui trace des droites a un angle moyen très faible sur
+        # toutes ses pages. Une page isolée peut être droite chez un humain : sous le minimum de preuves, pas de
+        # conclusion. Au plus un signal.
+        if (
+            pages_avec_angles >= PAGES_MIN_TRAJECTOIRE
+            and len(angles_session) >= ANGLES_MIN_SESSION
+            and (angle_moyen := statistics.mean(angles_session)) < 0.08
+        ):
+            signaux.append(
+                Signal(
+                    "trajectoire_lineaire",
+                    f"angle moyen entre segments = {angle_moyen:.3f} rad sur {pages_avec_angles} pages "
+                    f"(< 0.08 = ligne droite)",
+                    0.6,
+                )
+            )
+
         return _verdict(self.name, self.version, signaux)
 
 
@@ -1062,10 +1087,14 @@ class DetecteurScroll:
     Un humain scrolle avec des deltas variables (trackpad : bell-curve ; molette : ticks discrets
     mais avec variation). Un robot utilise souvent des deltas identiques (ex: 120px à chaque tick)
     ou des intervalles trop réguliers.
+    V1.1 (16/11/2026, D-95) : `deltas_uniformes` vise un pas fixe (presque tous les deltas de même grandeur), et non
+    un petit nombre de valeurs : une molette lente ou un pavé tactile donne de petits entiers (7 valeurs sur 50
+    chez un humain connu). `scroll_timing_regulier` ne conclut plus sur des délais calés sur l'image : Chrome envoie
+    `scroll` une fois par image pendant un geste continu, et l'observateur ne garde que les 50 premiers délais.
     """
 
     name = "scroll"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1086,7 +1115,9 @@ class DetecteurScroll:
                 # Deltas tous identiques → robot avec pas fixe
                 uniques = len(set(round(d, 1) for d in deltas))
                 ratio = uniques / len(deltas)
-                if ratio < 0.15 and len(deltas) > 10:
+                # (V1.1) un pas fixe : une même grandeur (au signe près) pour presque tous les deltas
+                dominante = max(Counter(round(abs(d), 1) for d in deltas).values()) / len(deltas)
+                if ratio < 0.15 and len(deltas) > 10 and dominante >= PART_PAS_FIXE:
                     signaux.append(
                         Signal("deltas_uniformes", f"wheel deltas : {ratio:.0%} uniques ({uniques}/{len(deltas)})", 0.7)
                     )
@@ -1106,7 +1137,9 @@ class DetecteurScroll:
 
                 m_s = statistics.mean(delais)
                 s_s = statistics.stdev(delais) if len(delais) > 1 else 0
-                if m_s > 0:
+                # (V1.1) des délais d'une à deux images sont ceux d'un geste continu : pas de conclusion
+                cale_sur_l_image = statistics.median(delais) < 2 * IMAGE_MS
+                if m_s > 0 and not cale_sur_l_image:
                     cv_s = s_s / m_s
                     if cv_s < 0.1:
                         signaux.append(
@@ -1691,10 +1724,16 @@ class DetecteurStackTrace:
 
 
 class DetecteurPositionFenetre:
-    """Détecte les fenêtres headless (screenX/Y à 0, memory incohérente)."""
+    """Détecte les fenêtres headless (screenX/Y à 0, memory incohérente).
+
+    V1.1 (16/11/2026, D-95) : `screen_position_zero` ne vaut plus quand la fenêtre a un cadre de navigateur
+    (`outerHeight` d'au moins 40 px de plus que `innerHeight`) : une fenêtre agrandie sous Windows a (0, 0)
+    (Edge 157, humain connu) ; un navigateur sans tête n'a pas de cadre (`outer` = `inner`). Sans relevé de la
+    fenêtre, la règle vaut comme avant.
+    """
 
     name = "position-fenetre"
-    version = "1"
+    version = "1.1"
 
     def classer(self, obs: Observations) -> Classement:
         if not obs.attend_js:
@@ -1705,7 +1744,10 @@ class DetecteurPositionFenetre:
         pm = p.get("performance_memory") or {}
         signaux: list[Signal] = []
 
-        if pm.get("screenX") == 0 and pm.get("screenY") == 0:
+        fenetre = p.get("fenetre") or {}
+        hauteur_cadre = _difference(fenetre.get("outerHeight"), fenetre.get("innerHeight"))
+        a_un_cadre = hauteur_cadre is not None and hauteur_cadre >= CADRE_MIN_PX
+        if pm.get("screenX") == 0 and pm.get("screenY") == 0 and not a_un_cadre:
             signaux.append(
                 Signal(
                     "screen_position_zero",
