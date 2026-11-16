@@ -101,6 +101,13 @@ sur nos propres cibles (site vitrine factice, tor-i).
   Campagne 125 (contrôle) : mêmes taux que la 115. 2 015 tests verts. Reste I7 (puis I8 à I10), `test_duree_cookie`
   (intermittent), les quatre questions du palier 2, la base publique à migrer (migrations 10 et 11). Disque : 16 Gio libres
   (sous le seuil de 25 Go).
+- **16/11, palier 2 : I7** (D-93, fusions `b224227` et `91fa5f9`) : scénario `visite` (le 20ᵉ), champ `espacement` des
+  campagnes, un monde par bras, `shadowlab soiree bilan <n°>`, `recolte lancer --identite`. Corrigés : la sentinelle prenait le
+  refus de l'Arena pour un défi ; le moteur relit l'état de l'identité avant chaque Chrome ; le témoin `playwright` a `etat_page`.
+  Essai 126 : non tenu sur un critère (témoin classique, arrêté par l'outil). Essai 127 : tenu à tous les critères (3 visites).
+  2 097 tests verts. **Soirée lancée le 16/11, résultat à venir (campagne 128)** : `bilan 128` à lire à la fin (environ 5 h).
+  Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours, question 4), I10 (comptes, migration 12), `test_duree_cookie`
+  (intermittent), la base publique (migrations 10 et 11 au prochain redémarrage de l'application publique), le disque.
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native
