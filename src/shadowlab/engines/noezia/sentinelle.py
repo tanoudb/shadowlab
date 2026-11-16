@@ -1,7 +1,8 @@
 """Sentinelle : arrêt au premier signe d'alerte.
 
 Signes retenus (§ 5 du document de conception) :
-1. statut 401, 403, 407, 429 ou 503 ;
+1. statut 401, 403, 407, 429 ou 503 ; un 403 sur une ressource de la page (photo, appel de données) du même hôte
+   compte aussi (`examiner_ressources`) ;
 2. page de défi : `body[data-arena]` (Arena) ; en-tête `cf-mitigated: challenge`, formulaire de défi ou cadre de
    Cloudflare ; cadre reCAPTCHA, hCaptcha ou Turnstile (`detecter_defi`) ;
 3. adresse finale hors des hôtes de la recette, ou hors du motif `url` du type de page attendu ;
@@ -123,6 +124,14 @@ class Sentinelle:
             return Alerte(
                 "hors_motif", f"adresse finale {adresse_finale} hors du motif du type « {type_page} »", adresse, statut
             )
+        return None
+
+    def examiner_ressources(self, refus: Iterable[tuple[str, int]]) -> Alerte | None:
+        """Un 403 reçu pour une ressource de la page (photo, appel de données) du MÊME hôte que la recette est un refus,
+        comme celui de la page : les ressources d'un autre hôte (CDN, mesure) ne disent rien de ce site."""
+        for adresse, statut in refus:
+            if statut == 403 and (urlsplit(adresse).hostname or "").lower() in self._hotes:
+                return Alerte("statut", "statut 403 sur une ressource de la page", adresse, 403)
         return None
 
     def noter(self, type_page: str, decision: str, adresse: str = "") -> Alerte | None:

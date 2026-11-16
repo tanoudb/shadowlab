@@ -30,7 +30,7 @@ experiment:
     - name: noezia
       label: sujet
       visites: 3
-      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sujet-2}
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sujet-3}
     - name: noezia
       label: temoin-negatif
       visites: 6
@@ -39,7 +39,7 @@ experiment:
       label: temoin-sentinelle
       visites: 6
       bannir_avant_visite: 3
-      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sentinelle-2}
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-sentinelle-3}
     - name: playwright
       label: temoin-classique
       visites: 3

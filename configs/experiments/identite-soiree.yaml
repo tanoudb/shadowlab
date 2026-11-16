@@ -17,7 +17,7 @@
 #        uv run shadowlab arena appliquer          # le profil `endurance` est dans configs/arena/profils.yaml
 #   2. Vitrine d'au moins 15 annonces (500 par défaut ; `SHADOWLAB_VITRINE_TAILLE` pour la changer).
 #   3. Les noms d'identité ci-dessous sont à usage unique : l'identité de la sentinelle sera bannie, et une identité bannie
-#      ne sert plus jamais. Pour recommencer, changer les suffixes (`soiree-sujet-2`, `soiree-sentinelle-2`) ; ne jamais
+#      ne sert plus jamais. Pour recommencer, changer les suffixes (`soiree-sujet-4`, `soiree-sentinelle-4`) ; ne jamais
 #      recopier un dossier de `outputs/identites/` (deux identités avec le même cookie).
 #   4. Le Mac reste éveillé 5 heures (`caffeinate` ci-dessous), rien d'autre ne tourne dessus (CPU, durées).
 #
@@ -42,7 +42,7 @@ experiment:
   engines:
     - name: noezia
       label: sujet
-      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sujet-1}
+      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sujet-3}
     - name: noezia
       label: temoin-negatif
       options: {headless: false, channel: chrome, identite_native: true}
@@ -50,7 +50,7 @@ experiment:
       label: temoin-sentinelle
       visites: 6
       bannir_avant_visite: 3
-      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sentinelle-1}
+      options: {headless: false, channel: chrome, identite_native: true, identite: soiree-sentinelle-3}
     - name: playwright
       label: temoin-classique
       visites: 4

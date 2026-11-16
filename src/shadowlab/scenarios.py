@@ -15,6 +15,7 @@ from parsel import Selector
 
 from .config import RACINE
 from .engines.base import Driver, FonctionIndisponible, RefusProtection, ResultatNavigation
+from .engines.noezia.lecture import LectureHumaine
 from .engines.noezia.parcours import MoteurDriver, Options, Parcours, RefusParcours
 from .engines.noezia.recettes import PorteEntree, Recette, lire_texte
 from .notation import noter_recolte
@@ -36,6 +37,9 @@ PORTE_ECART_MIN_PASSAGE_S = 300
 # `endurance`, `duree_cookie_s`) ne redemande pas le défi à un visiteur connu : un défi revenu avant est une alerte.
 PAGES_PAR_VISITE = 15
 DUREE_PORTE_VISITE_S = 86400
+# Lecture humaine de la visite (`engines/noezia/lecture.py`) : durées de page dispersées, retours à la liste. Allumée
+# pour le moteur `noezia` seulement : le témoin classique (`playwright`) reste classique. Éteinte hors de `visite`.
+LECTURE_HUMAINE_VISITE = LectureHumaine()
 
 
 @dataclass
@@ -810,7 +814,14 @@ def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PA
     dans tous les cas, pour que le bilan de la soirée les lise dans la base.
     """
     nom_moteur = "navigateur" if d.runtime == "navigateur" else "http"
-    details: dict[str, Any] = {"moteur": nom_moteur, "recette": "vitrine", "pages_demandees": pages}
+    humain = d.name == "noezia"
+    details: dict[str, Any] = {
+        "moteur": nom_moteur,
+        "recette": "vitrine",
+        "pages_demandees": pages,
+        "lecture_humaine": humain,
+        "relectures": 0,
+    }
     succes = False
     try:
         bilan, _ = _lancer_parcours(
@@ -820,12 +831,13 @@ def visite(d: Driver, base: str, jeton: str, rng: random.Random, pages: int = PA
             rng,
             "vitrine",
             nom_moteur,
-            options=Options(pages_max=pages),
+            options=Options(pages_max=pages, lecture=LECTURE_HUMAINE_VISITE if humain else None),
             duree_porte_s=DUREE_PORTE_VISITE_S,
         )
         faites, echecs = bilan.resume["pages"]["faites"], bilan.resume["pages"]["echecs"]
         details.update(
             statut=bilan.statut, arret=bilan.arret, pages_faites=faites, pages_en_echec=echecs,
+            relectures=(bilan.resume.get("lecture_humaine") or {}).get("relectures", 0),
             **_repassages_de_la_porte(bilan),
         )  # fmt: skip
         if bilan.arret:
