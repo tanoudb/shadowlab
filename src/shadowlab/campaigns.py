@@ -755,7 +755,8 @@ def _identite_avant_creneau(
                 "restantes": restantes,
             }
         )
-        journal.info("%s : identité %s bannie, %d visite(s) non faite(s)", moteur_cfg.nom_affiche, nom, restantes)
+        # warning : une identité déjà bannie au lancement (suffixe réutilisé) ne laisse plus aucune ligne d'erreur
+        journal.warning("%s : identité %s bannie, %d visite(s) non faite(s)", moteur_cfg.nom_affiche, nom, restantes)
         return "bannie"
     fin = module_identite.fin_d_alerte(donnees, maintenant.astimezone())
     if fin is None or espacement_mod.au_cadran(fin, maintenant) <= maintenant:

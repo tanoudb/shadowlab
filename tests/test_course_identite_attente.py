@@ -223,6 +223,39 @@ def test_a_la_reprise_une_identite_bannie_n_ecrit_aucune_erreur(tmp_path, reglag
     assert notes and {(n["repetition"], n["restantes"]) for n in notes} == {(1, 3)}
 
 
+ECHEANCE_1H = "  espacement: {mode: ordonnanceur, jours: 0.0416667, reglages: {plage: [0, 24], ecart_min_min: 1, ecart_med_min: 2, ecart_max_min: 4}}\n  concurrency: 4\n"
+
+
+def test_une_alerte_qui_finit_apres_l_echeance_finit_le_bras_sans_attendre(tmp_path, reglages, monkeypatch):
+    """Répétition (échéance courte) : l'alerte de la 1re visite finit après l'échéance (départ + 1 h). Le bras est fini
+    tout de suite : une ligne `attente_alerte`, une ligne `echeance`, aucune heure d'attente, aucun passage de plus."""
+    experience, cx, x = preparer(tmp_path, reglages, monkeypatch, extra=ECHEANCE_1H, repetitions=5)
+    horloge = Horloge(T0)
+    passages = PassagesIdentite(horloge, "soiree-sujet", marquer={1: "alerte"})
+    monkeypatch.setattr(campaigns, "_passage", passages)
+    assert executer(reglages, x, rang_de(experience, "sujet"), horloge) == "termine"
+    assert len(passages.quand) == 1 and len(runs(cx, x)) == 1
+    assert horloge.pauses == []
+    assert len(notes_du_bras(reglages, x, "sujet", "attente_alerte")) == 1
+    [fin] = notes_du_bras(reglages, x, "sujet", "echeance")
+    assert fin["restantes"] == 4
+
+
+def test_a_la_reprise_une_alerte_qui_finit_apres_l_echeance_n_ouvre_pas_le_pilote(tmp_path, reglages, monkeypatch):
+    horloge = Horloge(T0)
+    experience, cx, x = preparer(
+        tmp_path, reglages, monkeypatch, extra=ECHEANCE_1H, repetitions=3, pilote=pilote_comme_noezia(horloge)
+    )
+    noter_identite("soiree-sujet", "alerte", T0)  # fin de l'attente à T0 + 60 min ; échéance à T0 + 59 min
+    passages = PassagesIdentite(horloge, "soiree-sujet")
+    monkeypatch.setattr(campaigns, "_passage", passages)
+    assert executer(reglages, x, rang_de(experience, "sujet"), horloge) == "termine"
+    assert passages.quand == [] and runs(cx, x) == [] and horloge.pauses == []
+    assert len(notes_du_bras(reglages, x, "sujet", "attente_alerte")) == 1
+    [fin] = notes_du_bras(reglages, x, "sujet", "echeance")
+    assert fin["restantes"] == 3
+
+
 def test_a_la_reprise_pendant_une_alerte_le_bras_attend_puis_visite(tmp_path, reglages, monkeypatch):
     horloge = Horloge(T0)
     experience, cx, x = preparer(tmp_path, reglages, monkeypatch, repetitions=2, pilote=pilote_comme_noezia(horloge))
