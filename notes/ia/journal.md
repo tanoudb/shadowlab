@@ -3623,3 +3623,8 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Soirée** : lancée le 16/11, résultat à venir (campagne 128, 24 visites espacées de 10 minutes) ; aucun résultat écrit.
 - **Fichiers** : `docs/DECISIONS.md` (D-93), `docs/PLAN.md` (§ 2, § 4, § 8), `AGENTS.md` (État, commandes, carte du code, 20 scénarios), `notes/ia/contexte.md`, ce journal. Aucun test lancé, `src/` et `tests/` intacts.
 - **Reste** : résultat de la soirée (`soiree bilan 128`) ; I8 (humains qui reviennent, attend Ethan) ; I9 (7 jours, question 4) ; I10 (comptes, migration 12) ; `test_duree_cookie` intermittent ; base publique aux schémas 10 et 11 au prochain redémarrage de l'application publique ; disque.
+
+## 2026-11-16 (08h25) — Claude (Fable 5.2, coordination) — Vidéo d'appel à participer pour le site public
+- **Fait** : vidéo verticale de 20 s (1080 × 1920, 30 images/s, sans son), en français et en anglais, composée par un sous-agent Sonnet (HyperFrames 0.9.12 déjà en cache, rien d'installé) et rendue à 8 h 21, après la fin de la campagne en cours. Contrôlée sur 9 images : textes lisibles, barre de « Jamais ce que vous tapez » et « 2 minutes » corrects, aucun nom de projet. Envoyée à Ethan.
+- **Fichiers** : `outputs/video-tiktok/` (hors git) : `humain-ou-robot-fr.mp4`, `human-or-bot-en.mp4`, `render.sh [adresse]` pour refaire le rendu avec une adresse affichée, `film/variables-fr.json` et `-en.json` pour les textes.
+- **Reste** : la vidéo finit par « Lien en bio » sans adresse (celle du tunnel rapide est trop longue à taper) ; un nom de domaine court reste à décider par Ethan ; non regardée en entier en mouvement, ni essayée dans TikTok.
