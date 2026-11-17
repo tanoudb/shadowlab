@@ -198,6 +198,10 @@ recommander des optimisations.
   émulé), 6 campagnes de la base du dossier `fumee-linux`, conservée dans le dossier principal sous `outputs/fumee-linux-2026-11-17.sqlite3` (campagnes 1 à 6, 540 passages, 0 panne ; numérotation à part de `outputs/shadowlab.sqlite3`). Le réglage par défaut sans écran refait la campagne 97 du poste ; en natif, Chrome 157 (amd64) 87 sur 90, Chromium (arm64) 89 sur 90, contre 15 sur 15 par niveau à
   la 132 du poste. Incohérences, de la plus grave : WebGL absent avec interface (D-50 suppose un repli SwiftShader qui n'a lieu que sans interface), `devices_vide` (15 sur 15 en natif), `voices_vide` (Chromium), `duree_pages_reguliere`.
   Pas de Chrome pour Linux arm64. Non vérifié : vrai serveur x86_64, architecture arm64 réelle, niveau 07. Coût disque : 13 Go (images 3,5 et 4,6 Go, cache 8,2 Go), à prévoir.
+- **Proxy par identité, étape 3.2** (17/11, D-99, `docs/recherche/proxy-par-identite-2026-11-17.md`) : une identité déclare son proxy HTTP ou SOCKS5 dans `outputs/identites/<nom>/proxy.json` (0600, jamais par option de campagne : voir D-99) ; le moteur
+  lance un relais local (`engines/noezia/proxy_identite.py`) qui tient les identifiants et fait office de verrou réseau de l'identité (périmètre jugé par nom, aucun repli direct). Avec un vrai Chrome 156 : deux identités, deux sorties, aucune connexion directe,
+  mauvais mot de passe refusé, WebRTC fermé (`--webrtc-ip-handling-policy=disable_non_proxied_udp`). `identite.declarer_proxy(nom, serveur, utilisateur, mot_de_passe)` crée le fichier. Fuites connues : DNS local du mode strict, relais sans authentification,
+  identifiants en clair jusqu'au proxy. Aucun vrai proxy essayé ; l'effet de l'argument WebRTC sur les détecteurs n'est pas mesuré.
 - **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
@@ -316,6 +320,7 @@ uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés p
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
 uv run pytest -m "not integration"                         # < 3 s, sans navigateur
+uv run pytest tests/test_proxy_identite_chrome.py -q                  # proxy par identité avec un vrai Chrome (24 s, ouvre des fenêtres) ; les 125 tests rapides : tests/test_proxy_identite.py
 uv run ruff check src tests && uv run ruff format --check src tests
 npm --prefix frontend test                                 # tests front (vitest)
 npm --prefix frontend run dev                              # dev UI : http://localhost:5173/labo (proxy /api → 8770)
@@ -331,7 +336,7 @@ src/shadowlab/
 ├── engines/         # Moteurs (base.Driver, intégrés, pont pour isolés)
 │   ├── isoles/      # Moteurs en environnement isolé (camoufox, seleniumbase, uc, crawlee, zendriver)
 │   └── noezia/      # Le moteur étudié : moteur, profils, furtivité, comportement, défis, récolte ; récolte générale :
-│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88) ;
+│                    #   recettes, parcours, etat, robots, rythme, sentinelle, navigateur, export ; identite.py = identité persistante (D-88) ; proxy_identite.py = proxy d'une identité et relais local (D-99) ;
 │                    #   visites.py = ordonnanceur des visites (D-90) ; sentinelle.py = aussi la sentinelle d'identité (D-91) ;
 │                    #   lecture.py = lecture humaine d'une visite : durées de page log-normales tirées par blocs de trois, retours à la liste (D-94)
 ├── site/            # Site de test FastAPI (app, pages, vitrine, rallye, gardien, static/)
