@@ -154,7 +154,7 @@ ne compare ces valeurs. Données : `fumee-linux-2026-11-17-donnees/comparaisons/
 
 « Grave » veut dire : ce qu'une vraie protection verrait, et ce qui a déjà coûté un passage. Preuve : numéro de campagne de la base `fumee-linux`.
 
-1. **WebGL absent dans tout navigateur avec interface** (campagnes 2, 3, 5, 6 : `webgl.disponible` faux sur 90 empreintes sur 90 dans chacune ;
+1. **WebGL absent dans tout navigateur avec interface** (*mise à jour du 17/11 soir : `--enable-unsafe-swiftshader` essayé depuis, mesures et choix dans `docs/recherche/webgl-linux-sans-gpu-2026-11-17.md`, D-102*) (campagnes 2, 3, 5, 6 : `webgl.disponible` faux sur 90 empreintes sur 90 dans chacune ;
    sonde : `getContext('webgl')` et `'webgl2'` rendent `null`, WebGPU sans adaptateur, Chrome 157 comme Chromium 156). Sans interface (headless shell, campagnes
    1 et 4) WebGL existe, avec SwiftShader (sonde : « ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)…) », 35 extensions, texture max 8192,
    SUBPIXEL_BITS 4), et c'est ce que D-50 masque (90 empreintes sur 90 des campagnes 1 et 4 annoncent la carte d'un profil — Mesa AMD ou Intel, ANGLE NVIDIA — aucune ne montre SwiftShader). **D-50 suppose un repli sur SwiftShader qui n'a pas lieu
