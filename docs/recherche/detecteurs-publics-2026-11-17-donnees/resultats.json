@@ -1,0 +1,359 @@
+[
+ {
+  "moteur": "noezia-natif",
+  "page": "creepjs",
+  "adresse": "https://abrahamjuliot.github.io/creepjs/",
+  "debut": "2026-11-17T20:24:06.060940+00:00",
+  "statut": 200,
+  "adresse_finale": "https://abrahamjuliot.github.io/creepjs/",
+  "duree_ms": 2720,
+  "fin": "2026-11-17T20:24:39.658142+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": "chrome",
+   "identite_native": true,
+   "headless": false,
+   "locale": null,
+   "viewport": null,
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": false,
+   "furtivite_webgl": false,
+   "furtivite_audio": false,
+   "furtivite_navigateur": false,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.80"
+  },
+  "texte_octets": 191215,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-natif/creepjs.png"
+ },
+ {
+  "moteur": "noezia-natif",
+  "page": "rebrowser",
+  "adresse": "https://bot-detector.rebrowser.net/",
+  "debut": "2026-11-17T20:24:47.667888+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot-detector.rebrowser.net/",
+  "duree_ms": 1468,
+  "fin": "2026-11-17T20:25:05.982490+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": "chrome",
+   "identite_native": true,
+   "headless": false,
+   "locale": null,
+   "viewport": null,
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": false,
+   "furtivite_webgl": false,
+   "furtivite_audio": false,
+   "furtivite_navigateur": false,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.80"
+  },
+  "texte_octets": 7276,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-natif/rebrowser.png"
+ },
+ {
+  "moteur": "noezia-natif",
+  "page": "sannysoft",
+  "adresse": "https://bot.sannysoft.com/",
+  "debut": "2026-11-17T20:25:13.984768+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot.sannysoft.com/",
+  "duree_ms": 5005,
+  "fin": "2026-11-17T20:25:33.052562+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": "chrome",
+   "identite_native": true,
+   "headless": false,
+   "locale": null,
+   "viewport": null,
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": false,
+   "furtivite_webgl": false,
+   "furtivite_audio": false,
+   "furtivite_navigateur": false,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.80"
+  },
+  "texte_octets": 34491,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-natif/sannysoft.png"
+ },
+ {
+  "moteur": "noezia-reecrit",
+  "page": "creepjs",
+  "adresse": "https://abrahamjuliot.github.io/creepjs/",
+  "debut": "2026-11-17T20:25:41.931931+00:00",
+  "statut": 200,
+  "adresse_finale": "https://abrahamjuliot.github.io/creepjs/",
+  "duree_ms": 283,
+  "fin": "2026-11-17T20:26:12.782277+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": null,
+   "identite_native": false,
+   "headless": false,
+   "locale": "fr-FR",
+   "viewport": "1920x1080",
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": true,
+   "furtivite_webgl": true,
+   "furtivite_audio": true,
+   "furtivite_navigateur": true,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false,
+   "profil": "profil-9bb5f130",
+   "profil_os": "macos",
+   "profil_gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+   "profil_digest": "788ef5dab11cad72"
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4",
+   "profil": "profil-9bb5f130"
+  },
+  "texte_octets": 196223,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-reecrit/creepjs.png"
+ },
+ {
+  "moteur": "noezia-reecrit",
+  "page": "rebrowser",
+  "adresse": "https://bot-detector.rebrowser.net/",
+  "debut": "2026-11-17T20:26:20.793482+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot-detector.rebrowser.net/",
+  "duree_ms": 451,
+  "fin": "2026-11-17T20:26:38.113142+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": null,
+   "identite_native": false,
+   "headless": false,
+   "locale": "fr-FR",
+   "viewport": "1920x1080",
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": true,
+   "furtivite_webgl": true,
+   "furtivite_audio": true,
+   "furtivite_navigateur": true,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false,
+   "profil": "profil-9bb5f130",
+   "profil_os": "macos",
+   "profil_gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+   "profil_digest": "788ef5dab11cad72"
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4",
+   "profil": "profil-9bb5f130"
+  },
+  "texte_octets": 8438,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-reecrit/rebrowser.png"
+ },
+ {
+  "moteur": "noezia-reecrit",
+  "page": "sannysoft",
+  "adresse": "https://bot.sannysoft.com/",
+  "debut": "2026-11-17T20:26:46.123448+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot.sannysoft.com/",
+  "duree_ms": 2313,
+  "fin": "2026-11-17T20:27:02.834973+00:00",
+  "configuration": {
+   "browser": "chromium-patchright",
+   "channel": null,
+   "identite_native": false,
+   "headless": false,
+   "locale": "fr-FR",
+   "viewport": "1920x1080",
+   "simuler_souris": true,
+   "simuler_frappe": true,
+   "simuler_defilement": true,
+   "furtivite_canvas": true,
+   "furtivite_webgl": true,
+   "furtivite_audio": true,
+   "furtivite_navigateur": true,
+   "eviter_pieges": true,
+   "interaction_post_page": true,
+   "bloquer_ressources": false,
+   "verifier_tls": false,
+   "profil": "profil-9bb5f130",
+   "profil_os": "macos",
+   "profil_gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+   "profil_digest": "788ef5dab11cad72"
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4",
+   "profil": "profil-9bb5f130"
+  },
+  "texte_octets": 33279,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/noezia-reecrit/sannysoft.png"
+ },
+ {
+  "moteur": "patchright",
+  "page": "creepjs",
+  "adresse": "https://abrahamjuliot.github.io/creepjs/",
+  "debut": "2026-11-17T20:27:11.198414+00:00",
+  "statut": 200,
+  "adresse_finale": "https://abrahamjuliot.github.io/creepjs/",
+  "duree_ms": 560,
+  "fin": "2026-11-17T20:27:37.396506+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 183118,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/patchright/creepjs.png"
+ },
+ {
+  "moteur": "patchright",
+  "page": "rebrowser",
+  "adresse": "https://bot-detector.rebrowser.net/",
+  "debut": "2026-11-17T20:27:45.403920+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot-detector.rebrowser.net/",
+  "duree_ms": 633,
+  "fin": "2026-11-17T20:27:56.275215+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 7511,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/patchright/rebrowser.png"
+ },
+ {
+  "moteur": "patchright",
+  "page": "sannysoft",
+  "adresse": "https://bot.sannysoft.com/",
+  "debut": "2026-11-17T20:28:04.285321+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot.sannysoft.com/",
+  "duree_ms": 1463,
+  "fin": "2026-11-17T20:28:12.060637+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "patchright": "1.64.4",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 31961,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/patchright/sannysoft.png"
+ },
+ {
+  "moteur": "playwright",
+  "page": "creepjs",
+  "adresse": "https://abrahamjuliot.github.io/creepjs/",
+  "debut": "2026-11-17T20:28:20.426711+00:00",
+  "statut": 200,
+  "adresse_finale": "https://abrahamjuliot.github.io/creepjs/",
+  "duree_ms": 610,
+  "fin": "2026-11-17T20:28:46.596844+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "playwright": "1.64.1",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 183116,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/playwright/creepjs.png"
+ },
+ {
+  "moteur": "playwright",
+  "page": "rebrowser",
+  "adresse": "https://bot-detector.rebrowser.net/",
+  "debut": "2026-11-17T20:28:54.606948+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot-detector.rebrowser.net/",
+  "duree_ms": 342,
+  "fin": "2026-11-17T20:29:05.226045+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "playwright": "1.64.1",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 8213,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/playwright/rebrowser.png"
+ },
+ {
+  "moteur": "playwright",
+  "page": "sannysoft",
+  "adresse": "https://bot.sannysoft.com/",
+  "debut": "2026-11-17T20:29:13.236127+00:00",
+  "statut": 200,
+  "adresse_finale": "https://bot.sannysoft.com/",
+  "duree_ms": 1337,
+  "fin": "2026-11-17T20:29:20.841704+00:00",
+  "configuration": {
+   "browser": "chromium",
+   "headless": true,
+   "trace": false,
+   "tls_non_verifie": true
+  },
+  "versions": {
+   "playwright": "1.64.1",
+   "chromium": "156.0.8078.4"
+  },
+  "texte_octets": 31960,
+  "capture": "outputs/detecteurs-publics/2026-11-17-complet/playwright/sannysoft.png"
+ }
+]

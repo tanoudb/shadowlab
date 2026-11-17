@@ -1,0 +1,264 @@
+
+        🕵️ rebrowser-bot-detector 
+        Modern tests to detect automated browser behavior. See github repo for more details. How to properly run the tests?
+        
+            These tests are designed for Chromium based browsers only.
+            To properly trigger all the tests you need to add the code below to your automation script and open this page again.
+                            /* puppeteer & playwright */
+                // dummyFn - must be called in the main context
+                await page.evaluate(() => window.dummyFn())
+                
+                // exposeFunctionLeak
+                await page.exposeFunction('exposedFn', () => { console.log('exposedFn call') })
+                
+                // documentInterception - add any init script before opening the page
+                await page.evaluateOnNewDocument(() => {}) /* puppeteer */
+                await page.addInitScript(() => {}) /* playwright */
+                
+                // sourceUrlLeak
+                await page.evaluate(() => document.getElementById('detections-json'))
+                
+                // mainWorldExecution - must be called in an isolated context
+                /* puppeteer */
+                await page.mainFrame().isolatedRealm().evaluate(() => document.getElementsByClassName('div'))
+                
+                /* 
+                playwright - there is no way to explicitly evaluate script in an isolated context
+                follow rebrowser-patches on github for the fix
+                */
+                await page.evaluate(() => document.getElementsByClassName('div'))
+            
+        
+        
+        
+            
+                
+                    Test name
+                    Time since load
+                    Notes
+                
+            
+            ⚪️ dummyFn0.1 ms
+        Call window.dummyFn() to test if you can access main world objects.
+        
+      ⚪️ sourceUrlLeak0.4 ms
+        Call document.getElementById('detections-json') to test sourceUrl leak.
+        
+      ⚪️ mainWorldExecution0.7 ms
+        Call document.getElementsByClassName('div') to trigger this test. If you did and the test wasn't triggered, then you're running it in an isolated world, which is safe and not detectable.
+        
+      🟢 runtimeEnableLeak0.9 ms
+        No leak detected.
+        
+      ⚪️ exposeFunctionLeak1.1 ms
+        No window.exposedFn. Use page.exposeFunction to trigger this test.
+        
+      🔴 navigatorWebdriver1.2 ms
+        This property shouldn't be undefined. You might have it deleted manually.
+        
+          typeof navigator.webdriver = undefined
+        
+      🟢 viewport4.6 ms
+        Viewport is different from default values used in automation libraries.
+        
+          {
+  "width": 1728,
+  "height": 1080
+}
+        
+      🟢 pwInitScripts5 ms
+        No window.__pwInitScripts detected.
+        
+      🔴 platformMismatch5.6 ms
+        🔴 User agent says Chrome 130, but navigator.userAgentData says Chromium 156.
+        
+          {
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.116 Safari/537.36",
+  "navigator.platform": "MacIntel",
+  "userAgentData.platform": "macOS",
+  "userAgentData.brands": [
+    {
+      "brand": "Not:A-Brand",
+      "version": "8"
+    },
+    {
+      "brand": "Chromium",
+      "version": "156"
+    }
+  ],
+  "activeTextLight": "rgb(255, 0, 0)"
+}
+        
+      🟢 mobileEmulation7.2 ms
+        Desktop user agent, no mobile emulation detected.
+        
+      🟢 documentInterception7.5 ms
+        The page was loaded over the network as usual.
+        
+          {
+  "nextHopProtocol": "h3",
+  "transferSize": 1540,
+  "deliveryType": "",
+  "workerStart": 0
+}
+        
+      🟢 popupBlocking8.7 ms
+        Popups without a click are blocked, as in a normal browser.
+        
+      🟢 ipcFloodingProtection16.8 ms
+        History updates are rate-limited, as in a normal browser.
+        
+          {
+  "applied": 200
+}
+        
+      🟢 cdpBindingGlobals18 ms
+        No unnamed native functions on window.
+        
+      🟢 headless32.7 ms
+        No signs of headless Chrome.
+        
+          {
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.116 Safari/537.36",
+  "brands": [
+    "Not:A-Brand",
+    "Chromium"
+  ],
+  "windowChrome": "object",
+  "notificationPermission": "default",
+  "notificationsQueryState": "prompt",
+  "anyPointer": [
+    "fine"
+  ],
+  "screen": "1728x1117",
+  "plugins": 4,
+  "pdfViewerEnabled": true,
+  "webglRenderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+}
+        
+      🔴 nativeTampering38.9 ms
+        🟡 Native functions were replaced or wrapped in a Proxy: Navigator.platform, Navigator.languages, Navigator.plugins, Navigator.hardwareConcurrency, Navigator.deviceMemory, Navigator.vendor, Screen.width, Screen.height, WebGLRenderingContext.getParameter, WebGL2RenderingContext.getParameter, HTMLCanvasElement.toDataURL. Stealth plugins and fingerprint-spoofing extensions do this, and anti-bot scripts look for it.🔴 A srcdoc iframe returned the parent window from contentWindow. That's the iframe.contentWindow evasion of puppeteer-extra-plugin-stealth.
+        
+          {
+  "tampered": {
+    "Navigator.platform": [
+      "has own prototype"
+    ],
+    "Navigator.languages": [
+      "has own prototype"
+    ],
+    "Navigator.plugins": [
+      "has own prototype"
+    ],
+    "Navigator.hardwareConcurrency": [
+      "has own prototype"
+    ],
+    "Navigator.deviceMemory": [
+      "has own prototype"
+    ],
+    "Navigator.vendor": [
+      "has own prototype"
+    ],
+    "Screen.width": [
+      "has own prototype"
+    ],
+    "Screen.height": [
+      "has own prototype"
+    ],
+    "WebGLRenderingContext.getParameter": [
+      "has own prototype"
+    ],
+    "WebGL2RenderingContext.getParameter": [
+      "has own prototype"
+    ],
+    "HTMLCanvasElement.toDataURL": [
+      "has own prototype"
+    ]
+  },
+  "automationFrames": {},
+  "iframeSharesRealm": true
+}
+        
+      🔴 useragent49.5 ms
+        
+    Google Chrome is not presented in navigator.userAgentData. You might be using Google Chrome for Testing which is a red flag.
+    Try to specify executablePath and use Google Chrome (stable channel).
+    
+        
+          {
+  "useragentVersionItems": [
+    {
+      "brand": "Chromium",
+      "version": "156.0.8078.4"
+    }
+  ]
+}
+        
+      🟢 bypassCsp55 ms
+        Content Security Policy (CSP) is enabled, it's expected behavior.
+        
+      🟡 workerConsistency57 ms
+        🟡 languages in a Web Worker differs from the page. Stealth plugins and some CDP overrides (e.g. Playwright locale) cause this, but so can a privacy extension.
+        
+          {
+  "main": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.116 Safari/537.36",
+    "platform": "MacIntel",
+    "languages": [
+      "de-DE",
+      "de"
+    ],
+    "hardwareConcurrency": 18,
+    "brands": [
+      {
+        "brand": "Not:A-Brand",
+        "version": "8"
+      },
+      {
+        "brand": "Chromium",
+        "version": "156"
+      }
+    ]
+  },
+  "worker": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.116 Safari/537.36",
+    "platform": "MacIntel",
+    "languages": [
+      "fr-FR",
+      "fr",
+      "en-US",
+      "en"
+    ],
+    "hardwareConcurrency": 18,
+    "brands": [
+      {
+        "brand": "Not:A-Brand",
+        "version": "8"
+      },
+      {
+        "brand": "Chromium",
+        "version": "156"
+      }
+    ]
+  }
+}
+        
+      🔴 storagePartitioning958.8 ms
+        
+        An iframe from this site, nested in a frame from another site, can read this page's localStorage: third-party storage partitioning is turned off. Playwright turns it off by default (--disable-features=...ThirdPartyStoragePartitioning...), and so do tools built on it, including Patchright.
+        Use rebrowser-patches to fix it.
+      
+        
+          {
+  "otherOrigin": "https://rebrowser-bot-detector.pages.dev"
+}
+        
+      
+        
+        
+        JSON
+        
+    
+        Sponsored by rebrowser.net — the ultimate stealth browser and scraping solution fueled by AI.
+    
+
