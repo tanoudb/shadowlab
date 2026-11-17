@@ -22,7 +22,7 @@ tout le trafic de Chrome pour cette identité passe par lui, ressources de page 
    connexion vers le proxy de l'identité (HTTP `CONNECT` avec `Proxy-Authorization: Basic`, ou SOCKS5 avec mot de passe, nom de domaine transmis tel quel) et recopie les octets.
 3. **Le relais est le verrou réseau de cette identité.** En mode strict, le verrou actuel (mandataire bloquant `127.0.0.1:9` + liste directe, D-07) envoie les hôtes autorisés
    *en direct* : incompatible avec un proxy d'identité. Avec un proxy d'identité, Chrome n'a **aucun chemin direct** : tout passe par le relais, qui refuse tout hôte hors
-   périmètre (`perimetre.est_autorisee` sur `https://hote:port/`, hôtes des défis compris) avant de contacter le proxy. Le contrôle de périmètre est donc le même et plus strict
+   périmètre (hôtes des défis compris) avant de contacter le proxy. **Le contrôle du relais se fait par nom, sans résolution locale** : l'hôte demandé doit être dans la liste (mêmes règles de comparaison que `perimetre.verifier_url`, `*` compris, mais sans son `getaddrinfo`). Pourquoi : cette résolution protège contre un nom qui mènerait à NOTRE réseau privé ; le relais ne joint jamais rien en direct (le proxy résout et sort), donc elle ne protège de rien ici, elle fuirait le nom hors proxy et refuserait à tort un nom que seul le proxy connaît. Le contrôle de périmètre est donc le même et plus strict
    (rien n'est joint en direct) ; il ne dépend plus de la liste `bypass` de Chrome. En mode illimité (`*`, défaut de la phase interne, D-30) le relais laisse tout passer
    (http et https seulement), mais tout passe encore par le proxy. Le filtre `route` de Playwright (`_filtrer`) reste inchangé.
 4. **Sans proxy déclaré : aucun changement** (ni relais, ni argument de lancement). `SHADOWLAB_PROXY` (proxy unique du processus, mode illimité, sans identité) reste tel quel ;
@@ -60,7 +60,7 @@ Le relais (client = Chrome) :
   échec ou refus du proxy (407, 403, mauvais mot de passe SOCKS5, connexion impossible) : `502` (jamais `407` à Chrome, qui afficherait une demande d'identifiants) ; **jamais de repli sur une connexion directe**.
 - Requête `http://hote[:port]/chemin` (forme absolue) : même décision ; proxy HTTP : la requête part telle quelle avec `Proxy-Authorization` et `Connection: close` ; proxy SOCKS5 : connexion au
   nom d'hôte par SOCKS5, requête réécrite en forme d'origine avec `Connection: close`. Une connexion du client porte une seule requête.
-- Aucun nom n'est résolu localement par le relais (le nom part au proxy). Les identifiants ne sont jamais écrits dans un message d'erreur ni dans `demandes`.
+- Aucun nom n'est résolu localement par le relais (le nom part au proxy), y compris pour juger du périmètre (§ 2.3). **Reste hors du relais** : en mode strict, `Driver.verifier()` et le filtre `route` (`_filtrer`) appellent encore `perimetre.verifier_url`, donc résolvent localement le nom des hôtes de la liste ; fuite DNS du mode strict, à lister (§ 6), pas à corriger ici. Les identifiants ne sont jamais écrits dans un message d'erreur ni dans `demandes`.
 
 ## 4. Tests (écrits avant le code, vus en échec)
 
