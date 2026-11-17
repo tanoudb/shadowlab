@@ -41,6 +41,10 @@ RETARD_ANORMAL_MIN = 30.0
 # Une visite lit au plus 40 pages et celles de la soirée 131 duraient 122 s en moyenne : un passage `en_cours` depuis
 # plus d'une heure n'est plus une visite longue, c'est un blocage (navigateur ou défi figé).
 BLOCAGE_MIN = 60.0
+# Un créneau manqué est un accident (Mac en veille, panne brève) ; le suivant manqué aussi, sans aucune visite faite
+# entre les deux, ce n'est plus un accident : une panne prolongée (OrbStack tombé la nuit, site injoignable) ou un
+# processus qui rate ses créneaux, et la course se perd. Un créneau réessayé après une panne compte pour un seul.
+MANQUEES_DE_SUITE_MAX = 2
 
 EN_COURS, ARRETEE, FINIE = "en cours", "arrêtée", "finie"
 CODE_OK, CODE_ARRETEE, CODE_ANOMALIE, CODE_INTROUVABLE = 0, 1, 2, 3
@@ -110,6 +114,19 @@ def _prochaine(notes: list[dict[str, Any]], passages: list[sqlite3.Row]) -> date
     return prevue
 
 
+def _manquees_de_suite(notes: list[dict[str, Any]], finis: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    """Les créneaux manqués depuis la dernière visite faite du bras (un créneau réessayé compte une fois, avec la note
+    de son premier essai), dans l'ordre."""
+    fin = max((d for p in finis if (d := _instant(p["completed_at"] or p["started_at"])) is not None), default=None)
+    creneaux: dict[str, dict[str, Any]] = {}
+    for n in notes:
+        constatee = _instant(n.get("constatee"))
+        if n.get("genre") != "manquee" or (fin is not None and constatee is not None and constatee <= fin):
+            continue
+        creneaux.setdefault(str(n.get("creneau") or n.get("prevue")), n)
+    return list(creneaux.values())
+
+
 def _bras(
     moteur: campaigns.MoteurConfig, protection: str, experience: campaigns.Experience, passages: list[sqlite3.Row],
     notes: list[dict[str, Any]], maintenant: datetime,
@@ -118,6 +135,8 @@ def _bras(
     finis = [p for p in passages if p["status"] in ("reussi", "echec", "erreur")]
     ouverts = [d for p in passages if p["status"] == "en_cours" and (d := _instant(p["started_at"])) is not None]
     prevues = experience.visites_de(moteur)
+    de_suite = _manquees_de_suite(notes, finis)
+    premiere = _instant(de_suite[0].get("prevue")) if de_suite else None
     identite = _identite(moteur.options, maintenant)
     echeance = next((n for n in reversed(notes) if n.get("genre") == "echeance"), None)
     if any(n.get("genre") == "bannie" for n in notes) or (identite and identite["etat"] == "banni"):
@@ -140,6 +159,13 @@ def _bras(
         "faites": len(finis),
         "reussies": sum(1 for p in finis if p["status"] == "reussi" and p["success"]),
         "manquees": course.compter_manquees(notes)["nombre"],
+        "manquees_de_suite": len(de_suite),
+        "premiere_manquee": {
+            "prevue": premiere.astimezone(maintenant.tzinfo).isoformat(timespec="seconds"),
+            "motif": de_suite[0].get("motif"),
+        }
+        if premiere
+        else None,
         "en_cours": {
             "depuis": min(ouverts).astimezone(maintenant.tzinfo).isoformat(timespec="seconds"),
             "minutes": _minutes(maintenant, min(ouverts)),
@@ -232,6 +258,12 @@ def etat(
                 raisons.append(
                     f"retard anormal : {b['label']} devait commencer à {_heure(b['prochaine'])}, "
                     f"{b['retard_min']:g} min de retard"
+                )
+            if b["manquees_de_suite"] >= MANQUEES_DE_SUITE_MAX and b["premiere_manquee"]:
+                premiere = b["premiere_manquee"]
+                raisons.append(
+                    f"visites manquées de suite : {b['label']}, {b['manquees_de_suite']} créneaux sans visite faite, "
+                    f"la première prévue à {_heure(premiere['prevue'])} (motif {premiere['motif']})"
                 )
             if b["en_cours"] is not None and b["en_cours"]["minutes"] > BLOCAGE_MIN:
                 raisons.append(f"blocage : {b['label']} a un passage en_cours depuis {b['en_cours']['minutes']:g} min")

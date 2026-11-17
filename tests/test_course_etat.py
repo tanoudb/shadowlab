@@ -269,6 +269,47 @@ def test_un_bras_fini_n_a_pas_de_prochaine_visite_ni_de_retard(base, reglages):
     assert classique["etat"] == "complet" and classique["prochaine"] is None and rapport["code"] == 0
 
 
+def manquee(reglages, x, creneau_il_y_a, motif="infrastructure", essais=1):
+    """Un créneau manqué du sujet (créneau prévu il y a `creneau_il_y_a` minutes), noté `essais` fois."""
+    for essai in range(1, essais + 1):
+        note(
+            reglages, x, genre="manquee", motif=motif, prevue=depuis(creneau_il_y_a), creneau=depuis(creneau_il_y_a),
+            constatee=depuis(creneau_il_y_a - 5 * essai), essai=essai,
+        )  # fmt: skip
+
+
+def test_deux_visites_manquees_de_suite_code_2_avec_motif_et_heure_de_la_premiere(base, reglages):
+    cx, x = base
+    fait(cx, x, "sujet", 1, 400)
+    manquee(reglages, x, 200, "infrastructure", essais=3)  # trois essais d'un même créneau : un seul créneau manqué
+    manquee(reglages, x, 100, "retard")
+    prevue(reglages, x, dans_min=20, ecrite_il_y_a=5)
+    rapport = etat(cx, x, reglages)
+    assert rapport["code"] == 2 and bras(rapport)["manquees_de_suite"] == 2
+    message = " ".join(rapport["raisons"])
+    assert "manquées de suite" in message and "infrastructure" in message and "07:10" in message  # 10 h 30 - 200 min
+
+
+def test_une_seule_visite_manquee_code_0(base, reglages):
+    cx, x = base
+    fait(cx, x, "sujet", 1, 400)
+    manquee(reglages, x, 100, essais=4)  # une panne longue sur un seul créneau reste un seul créneau manqué
+    prevue(reglages, x, dans_min=20, ecrite_il_y_a=5)
+    rapport = etat(cx, x, reglages)
+    assert rapport["code"] == 0 and bras(rapport)["manquees_de_suite"] == 1
+
+
+def test_manquee_visite_faite_manquee_code_0(base, reglages):
+    cx, x = base
+    fait(cx, x, "sujet", 1, 500)
+    manquee(reglages, x, 300)
+    fait(cx, x, "sujet", 2, 200)  # une visite faite entre les deux : la série repart de zéro
+    manquee(reglages, x, 100, "retard")
+    prevue(reglages, x, dans_min=20, ecrite_il_y_a=5)
+    rapport = etat(cx, x, reglages)
+    assert rapport["code"] == 0 and bras(rapport)["manquees_de_suite"] == 1
+
+
 def test_visites_manquees_comptees_par_bras(base, reglages):
     cx, x = base
     note(
