@@ -11,6 +11,7 @@
 #   scripts/fumee-linux.sh pile                                          génère les configurations, lance la pile
 #   scripts/fumee-linux.sh lancer <arm64|amd64> <ecran|sans-ecran> <campagne.yaml>   un conteneur, en arrière-plan
 #   scripts/fumee-linux.sh suivre <arm64|amd64> <ecran|sans-ecran>       journal du conteneur
+#   scripts/fumee-linux.sh sonde <arm64|amd64> <ecran|sans-ecran> <chrome|chromium>   ce que le navigateur réel montre
 #   scripts/fumee-linux.sh sauvegarder                                   copie la base vers outputs/shadowlab.sqlite3
 #   scripts/fumee-linux.sh arreter                                       arrête la pile (jamais Docker ni OrbStack)
 #   scripts/fumee-linux.sh retirer <arm64|amd64>                         supprime l'image et les conteneurs de cette archi
@@ -102,9 +103,24 @@ case "$commande" in
     ;;
   sauvegarder)
     mkdir -p "$DEPOT/outputs"
-    docker run --rm --platform linux/arm64 -v "$VOLUME:/data:ro" -v "$DEPOT/outputs:/sortie" shadowlab-linux:arm64 \
-      python -c "import sqlite3; s = sqlite3.connect('file:/data/shadowlab.sqlite3?mode=ro', uri=True); d = sqlite3.connect('/sortie/shadowlab.sqlite3'); s.backup(d); print('copie faite')"
+    arch="${FUMEE_ARCH_GENERATION:-arm64}"  # l'entrée normale exige les ports : on la remplace pour une simple copie
+    docker run --rm --platform "linux/$arch" --entrypoint python -v "$VOLUME:/data" -v "$DEPOT/outputs:/sortie" \
+      "shadowlab-linux:$arch" \
+      -c "import sqlite3; s = sqlite3.connect('file:/data/shadowlab.sqlite3?mode=ro', uri=True); d = sqlite3.connect('/sortie/shadowlab.sqlite3'); s.backup(d); print('copie faite')"
     ls -la "$DEPOT/outputs/shadowlab.sqlite3"
+    ;;
+  sonde)
+    # Ce que le navigateur réel montre à une page (sans le moteur) : JSON dans outputs/fumee-linux/sondes/.
+    [ $# -eq 3 ] || erreur "usage : sonde <arm64|amd64> <ecran|sans-ecran> <chrome|chromium>"
+    arch_valide "$1"; ecran_valide "$2"; exiger_disque
+    case "$3" in chrome|chromium) ;; *) erreur "navigateur : chrome ou chromium" ;; esac
+    ecran=0; sans=(--sans-interface); [ "$2" = "ecran" ] && { ecran=1; sans=(); }
+    mkdir -p "$SORTIES/sondes"
+    # shellcheck disable=SC2046
+    docker run --rm --platform "linux/$1" --add-host host.docker.internal:host-gateway --shm-size 1g \
+      $(env_conteneur) -e "FUMEE_ECRAN=$ecran" -v "$SORTIES:/srv/outputs" \
+      -v "$DEPOT/scripts/fumee-linux-sonde.py:/sonde.py:ro" "shadowlab-linux:$1" \
+      python /sonde.py --canal "$3" ${sans[@]+"${sans[@]}"} --sortie "/srv/outputs/sondes/$1-$2-$3.json"
     ;;
   arreter)
     SHADOWLAB_ARENA_DIR="$SORTIES/arena" SHADOWLAB_PORT_AVAL="$PORT_AVAL" SHADOWLAB_PORT="$PORT_SITE" \
