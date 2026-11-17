@@ -318,6 +318,7 @@ uv run shadowlab soiree bilan <n°> [--json]                # verdict par critè
 uv run shadowlab recolte lancer <recette> --moteur navigateur --identite <nom>  # même profil Chrome, donc même visiteur, d'une passe à l'autre (lu par `lancer` seulement)
 uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés par niveau (sessions de /manuel, ou du site public avec --base)
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
+uv run python scripts/detecteurs-publics.py                # nos moteurs devant Sannysoft, CreepJS et rebrowser-bot-detector (une visite chacun ; docs/recherche/detecteurs-publics-2026-11-17.md)
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
 uv run pytest -m "not integration"                         # < 3 s, sans navigateur
 uv run pytest tests/test_proxy_identite_chrome.py -q                  # proxy par identité avec un vrai Chrome (23 tests, 31 s, ouvre des fenêtres) ; les 218 tests rapides : tests/test_proxy_identite.py

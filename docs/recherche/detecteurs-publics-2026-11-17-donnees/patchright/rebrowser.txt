@@ -1,0 +1,233 @@
+
+        🕵️ rebrowser-bot-detector 
+        Modern tests to detect automated browser behavior. See github repo for more details. How to properly run the tests?
+        
+            These tests are designed for Chromium based browsers only.
+            To properly trigger all the tests you need to add the code below to your automation script and open this page again.
+                            /* puppeteer & playwright */
+                // dummyFn - must be called in the main context
+                await page.evaluate(() => window.dummyFn())
+                
+                // exposeFunctionLeak
+                await page.exposeFunction('exposedFn', () => { console.log('exposedFn call') })
+                
+                // documentInterception - add any init script before opening the page
+                await page.evaluateOnNewDocument(() => {}) /* puppeteer */
+                await page.addInitScript(() => {}) /* playwright */
+                
+                // sourceUrlLeak
+                await page.evaluate(() => document.getElementById('detections-json'))
+                
+                // mainWorldExecution - must be called in an isolated context
+                /* puppeteer */
+                await page.mainFrame().isolatedRealm().evaluate(() => document.getElementsByClassName('div'))
+                
+                /* 
+                playwright - there is no way to explicitly evaluate script in an isolated context
+                follow rebrowser-patches on github for the fix
+                */
+                await page.evaluate(() => document.getElementsByClassName('div'))
+            
+        
+        
+        
+            
+                
+                    Test name
+                    Time since load
+                    Notes
+                
+            
+            ⚪️ dummyFn0.1 ms
+        Call window.dummyFn() to test if you can access main world objects.
+        
+      ⚪️ sourceUrlLeak0.6 ms
+        Call document.getElementById('detections-json') to test sourceUrl leak.
+        
+      ⚪️ mainWorldExecution0.7 ms
+        Call document.getElementsByClassName('div') to trigger this test. If you did and the test wasn't triggered, then you're running it in an isolated world, which is safe and not detectable.
+        
+      🟢 runtimeEnableLeak0.8 ms
+        No leak detected.
+        
+      ⚪️ exposeFunctionLeak1.2 ms
+        No window.exposedFn. Use page.exposeFunction to trigger this test.
+        
+      🟢 navigatorWebdriver1.3 ms
+        No webdriver presented.
+        
+      🟡 viewport5 ms
+        Viewport has default Playwright values. Use viewport: null in options.
+        
+          {
+  "width": 1280,
+  "height": 720
+}
+        
+      🟢 pwInitScripts5.4 ms
+        No window.__pwInitScripts detected.
+        
+      🟢 platformMismatch6.3 ms
+        User agent, navigator.platform and client hints agree.
+        
+          {
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+  "navigator.platform": "MacIntel",
+  "userAgentData.platform": "macOS",
+  "userAgentData.brands": [
+    {
+      "brand": "Not:A-Brand",
+      "version": "8"
+    },
+    {
+      "brand": "Chromium",
+      "version": "156"
+    },
+    {
+      "brand": "HeadlessChrome",
+      "version": "156"
+    }
+  ],
+  "activeTextLight": "rgb(255, 0, 0)"
+}
+        
+      🟢 mobileEmulation8.4 ms
+        Desktop user agent, no mobile emulation detected.
+        
+      🟢 documentInterception8.9 ms
+        The page was loaded over the network as usual.
+        
+          {
+  "nextHopProtocol": "h2",
+  "transferSize": 1540,
+  "deliveryType": "",
+  "workerStart": 0
+}
+        
+      🟡 popupBlocking16.4 ms
+        
+        A page script opened a popup without a click. Either popups are allowed for this site in the browser settings, or Chrome runs with --disable-popup-blocking (a Puppeteer and Playwright default).
+        Use rebrowser-patches to fix it.
+      
+        
+      🟢 ipcFloodingProtection20.5 ms
+        History updates are rate-limited, as in a normal browser.
+        
+          {
+  "applied": 200
+}
+        
+      🟢 cdpBindingGlobals21.8 ms
+        No unnamed native functions on window.
+        
+      🔴 useragent34.5 ms
+        
+    Google Chrome is not presented in navigator.userAgentData. You might be using Google Chrome for Testing which is a red flag.
+    Try to specify executablePath and use Google Chrome (stable channel).
+    
+        
+          {
+  "useragentVersionItems": [
+    {
+      "brand": "Chromium",
+      "version": "156.0.8078.4"
+    }
+  ]
+}
+        
+      🔴 headless37.5 ms
+        🔴 HeadlessChrome is in the user agent or navigator.userAgentData.brands.🔴 window.chrome is missing. Desktop Chrome always has it; chrome-headless-shell (Playwright's default headless mode, Puppeteer headless: 'shell') doesn't.🔴 Notification.permission is denied while navigator.permissions.query() says prompt. Only chrome-headless-shell answers like that.🟡 WebGL is rendered by SwiftShader (software). Current Chrome only does that in headless mode or with --enable-unsafe-swiftshader, which Playwright adds.
+        
+          {
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+  "brands": [
+    "Not:A-Brand",
+    "Chromium",
+    "HeadlessChrome"
+  ],
+  "windowChrome": "undefined",
+  "notificationPermission": "denied",
+  "notificationsQueryState": "prompt",
+  "anyPointer": [
+    "fine"
+  ],
+  "screen": "1280x720",
+  "plugins": 0,
+  "pdfViewerEnabled": false,
+  "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)"
+}
+        
+      🟢 workerConsistency42 ms
+        navigator in a Web Worker matches the page.
+        
+          {
+  "main": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+    "platform": "MacIntel",
+    "languages": [
+      "en-US"
+    ],
+    "hardwareConcurrency": 18,
+    "brands": [
+      {
+        "brand": "Not:A-Brand",
+        "version": "8"
+      },
+      {
+        "brand": "Chromium",
+        "version": "156"
+      },
+      {
+        "brand": "HeadlessChrome",
+        "version": "156"
+      }
+    ]
+  },
+  "worker": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+    "platform": "MacIntel",
+    "languages": [
+      "en-US"
+    ],
+    "hardwareConcurrency": 18,
+    "brands": [
+      {
+        "brand": "Not:A-Brand",
+        "version": "8"
+      },
+      {
+        "brand": "Chromium",
+        "version": "156"
+      },
+      {
+        "brand": "HeadlessChrome",
+        "version": "156"
+      }
+    ]
+  }
+}
+        
+      🟢 nativeTampering48.1 ms
+        Native functions look untouched.
+        
+          {
+  "tampered": {},
+  "automationFrames": {},
+  "iframeSharesRealm": false
+}
+        
+      🟢 bypassCsp52.7 ms
+        Content Security Policy (CSP) is enabled, it's expected behavior.
+        
+      ⚪️ storagePartitioning10023 ms
+        No answer from the test frames within 10 seconds.
+        
+      
+        
+        
+        JSON
+        
+    
+        Sponsored by rebrowser.net — the ultimate stealth browser and scraping solution fueled by AI.
+    
+
