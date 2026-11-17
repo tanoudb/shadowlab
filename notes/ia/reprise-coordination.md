@@ -50,6 +50,9 @@ Sous-agents et sessions : Sonnet par défaut, Opus pour une conception difficile
 Le 17/11 le disque est tombé deux fois sous 15 Gio libres : un autre projet du poste écrit beaucoup par moments, et les
 constructions Docker de l'essai Linux ont pris 13 Go. Seuil d'arrêt des sessions : 20 Gio libres. Ethan fait la place
 lui-même hors de ce projet ; ne rien supprimer hors du projet sans qu'il le dise.
+Le modèle FLUX.2 (environ 22 Gio dans `~/.cache/huggingface`) **reste en place** : Ethan, le 17/11, « non le supprime pas
+je m'en sert ». Ne plus proposer de le supprimer. Le 17/11 vers 17 h : 23 Gio libres ; la suite Linux demande environ
+33 Gio libres (13 Go au pic, sans passer sous 20), donc elle attend qu'Ethan libère une dizaine de Gio ailleurs.
 
 ## En attente d'Ethan
 - Quand et où il poste le lien du site ; un essai du partage sur son téléphone (Safari et iPhone jamais essayés).
