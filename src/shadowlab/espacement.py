@@ -249,6 +249,7 @@ class Cadence:
             creneau = self._prochain()
             if self._echeance is not None and creneau.debut >= self._echeance:
                 return Creneau(creneau.debut, echeance=True)
+            self._annoncer(creneau)
             while (reste := (creneau.debut - self._horloge()).total_seconds()) > 0:
                 if interrompre():
                     return None
@@ -259,6 +260,12 @@ class Cadence:
             if not self._ordonnancer or not self._manque(creneau, maintenant):
                 return creneau
             self._ajouter_note(creneau, maintenant, "retard", "")
+
+    def _annoncer(self, creneau: Creneau) -> None:
+        """Note durable de la prochaine visite (genre `prevue` : heure prévue, heure d'écriture), écrite quand le
+        créneau est choisi, AVANT l'attente : `shadowlab course etat` y lit l'heure prévue et le retard. Ni la
+        cadence, ni la reprise, ni le bilan ne la comptent : ce n'est ni une visite, ni une visite manquée."""
+        self._noter({"genre": "prevue", "prevue": _ecrire(creneau.debut), "ecrite": _ecrire(self._horloge())})
 
     def _manque(self, creneau: Creneau, maintenant: datetime) -> bool:
         assert self._reglages is not None
