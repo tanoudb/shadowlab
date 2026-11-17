@@ -25,7 +25,7 @@ from .textes import ERREURS, LANGUES, RELEVES_TRACE, RESUME_RELEVE, T
 from .trace import BALISE as BALISE_RELEVE
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-17.1"
+VERSION_INFORMATION = "2026-11-17.2"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -617,7 +617,7 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
 <ol>
 <li>{_t(langue, "deroulement_1")}</li>
 <li>{_t(langue, "deroulement_2", social=social)}</li>
-<li>{_t(langue, "deroulement_3", duree=duree)}</li>
+<li>{_t(langue, "deroulement_3", duree=duree, min=PAGES_MIN)}</li>
 </ol>
 <p>{_t(langue, "deroulement_ma_session")}</p>
 <p>{_t(langue, "deroulement_sans_participer" if v else "deroulement_sans_participer_un")}</p>
@@ -838,6 +838,7 @@ def encore_un_peu(csrf: str, langue: str, pages: int, *, vitrine: bool = False) 
     corps = f"""<article class="message">
 <h1>{_t(langue, "encore_h1")}</h1>
 <p class="chapeau">{_t(langue, "encore_texte", min=PAGES_MIN, pages=pages)}</p>
+<p>{_t(langue, "encore_ouverte")}</p>
 <div class="actions">
 <a class="bouton-principal" href="{SOCIAL}">{_t(langue, "encore_continuer")}</a>
 <form class="en-ligne" method="post" action="/session/terminer">

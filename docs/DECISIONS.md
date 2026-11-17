@@ -1330,7 +1330,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   **Seuil : 4 pages avec empreinte.** Plusieurs règles ne jugent qu'à partir de 3 ou 4 pages (trajectoire de la souris,
   régularité des durées, navigation linéaire) ; en dessous, « Humain » voudrait seulement dire « pas encore jugé ». Sous
   le seuil, « Terminer » ne clôt pas la session : la page « Encore un peu » propose de continuer, ou de terminer quand
-  même, sans verdict. **Notice.** Version `2026-11-17.1` : nouvelle section « Votre résultat », « plus tard et hors ligne »
+  même, sans verdict. **Notice.** Version `2026-11-17.1`, puis `2026-11-17.2` (elle annonce aussi la page « Encore un peu », qui dit que la
+  session reste ouverte) : nouvelle section « Votre résultat », « plus tard et hors ligne »
   devient « plus tard ». Une session acceptée sous une notice plus ancienne n'a pas de résultat (elle n'avait pas été
   annoncée). **Partage.** Le bouton (`partage.js`, fichier statique en liste fermée) ouvre le partage du téléphone, sinon
   copie la phrase du score et l'adresse nue du site (`location.origin` + « / ») : rien de la session. Le bouton de fin

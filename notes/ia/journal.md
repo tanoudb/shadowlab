@@ -3688,11 +3688,13 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   robot de 02 à 07 (famille « navigateur incohérent »).
 - **Vérifié** : tests du site public, du calcul et du rejeu verts (712), tests rapides 2 335 verts (2 sautés, 49 avec navigateur non lancés), lint propre ;
   captures `outputs/resultat-public/` (téléphone 390 px et ordinateur, FR et EN : humain partout = résultat injecté,
-  arrêté = calcul réel, trop courte et « Encore un peu » ; bandeau du réseau social à 360 px).
+  arrêté = calcul réel, mixte 05 à 07 = résultat injecté, aussi en mode sombre, trop courte et « Encore un peu » ;
+  bandeau du réseau social à 360 px) ; bouton de partage cliqué dans Chromium (copie exacte sans jeton, partage natif
+  simulé : réussite sans copie, échec avec repli sur la copie). « Encore un peu » dit que la session reste ouverte, et la
+  notice (`2026-11-17.2`) annonce cette étape.
 - **Relecture indépendante** : aucun défaut bloquant ; corrigés : lectures SQLite de « Ma session » et « Terminer » hors de
   la boucle d'événements, échec gardé 2 min au lieu de 15, seuil de la notice lié à `PAGES_MIN`.
-- **Non vérifié** : Safari, iPhone, Firefox ; le partage natif et la copie dans un vrai navigateur (`partage.js` jamais
-  exécuté) ; le site en ligne (rien n'y est déployé) ; la suite avec navigateurs (course de 7 jours en cours).
+- **Non vérifié** : Safari, iPhone, Firefox ; le partage natif d'un vrai téléphone ; le site en ligne (rien n'y est déployé) ; la suite avec navigateurs (course de 7 jours en cours).
 - **Reste, à la charge d'Ethan ou de la coordination** : fusionner la branche (conflit attendu en ajout dans
   `docs/DECISIONS.md`, D-96 étant sur `niveau-authentifie-perimetre` : garder les deux) ; relancer l'application en ligne
   pour servir la nouvelle version ; un nom d'hôte stable pour que les liens partagés durent.

@@ -712,7 +712,7 @@ partager son score. Décidé par Ethan le 17/11 (« oui bonne idee ») ; choix e
 **Parcours.**
 - « Terminer et voir mon résultat » (bandeau des deux sites, « Ma session ») : avec au moins 4 pages vues (`PAGES_MIN`,
   lignes `observations_js` de sorte `empreinte`), la session est close et la page de fin montre le résultat. En dessous,
-  la session reste ouverte : page « Encore un peu », avec « Continuer la visite » et « Terminer quand même » (`force=1`,
+  la session reste ouverte (la page le dit) : « Encore un peu », avec « Continuer la visite » et « Terminer quand même » (`force=1`,
   session close sans verdict). Une session n'est donc comptée « terminée » qu'à ce moment-là.
 - « Ma session » montre le résultat d'une session que la base dit terminée (ou arrivée au bout de sa durée), jamais
   pendant la session, même sans le cookie `slp-session`.
@@ -758,7 +758,11 @@ par l'entrée standard). `partage.js` est aussi couvert par `tests/test_public_s
 
 **Captures** (17/11, instance d'essai sur le port 8795, base d'essai) : `outputs/resultat-public/`. « Humain partout » :
 résultat injecté (aucun robot de nos essais ne passe partout). « Arrêté » : calcul réel, Chromium sans tête et sans geste
-humain, pris pour un robot de 02 à 07. « Trop courte » : une page, « Encore un peu », puis « Terminer quand même ».
+humain, pris pour un robot de 02 à 07. « Mixte » : résultat injecté, arrêté de 05 à 07 avec deux familles (le cas qu'un
+humain a le plus de chances de voir), en clair et en sombre. « Trop courte » : une page, « Encore un peu », puis
+« Terminer quand même ». Bandeau du réseau social à 360 px. Bouton de partage cliqué dans un vrai Chromium : la copie
+donne la phrase, une espace et l'adresse nue, sans jeton, et affiche « Copié » ; un partage natif simulé réussi ne
+copie rien ; un échec simulé retombe sur la copie.
 
 ## Message à envoyer avec le lien
 

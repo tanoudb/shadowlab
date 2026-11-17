@@ -96,7 +96,7 @@ recommander des optimisations.
   le verdict de nos détecteurs aux niveaux 01 à 07, avec les raisons en six familles de mots simples, et un bouton de
   partage (adresse nue du site). Calcul par `rejeu._rejouer_session` dans un sous-processus du labo
   (`python -m shadowlab.resultat_public`), rien d'écrit en base, aucun résultat pendant la session, 4 pages au moins
-  (sinon « Encore un peu »), notice `2026-11-17.1` ; détail dans `docs/site-public.md`, « Résultat de fin de session ». Avant une annonce publique, à la charge
+  (sinon « Encore un peu »), notice `2026-11-17.2` ; détail dans `docs/site-public.md`, « Résultat de fin de session ». Avant une annonce publique, à la charge
   d'Ethan : un nom d'hôte stable (tunnel nommé sur un domaine, pas le tunnel rapide), une règle de limitation de
   débit chez Cloudflare, le plafond de sessions réglé ; liste dans `docs/site-public.md` (« Avant d'annoncer le
   site publiquement »). Non essayé : Safari, iPhone, Firefox. Vrai tunnel

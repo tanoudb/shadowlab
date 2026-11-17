@@ -310,6 +310,11 @@ def test_trop_peu_de_pages_terminer_ne_clot_pas(reglages_publics, langue):
             assert "Just a little more" in texte
             assert "you need to view at least 4 pages" in texte and "You have viewed 2." in texte
             assert "Encore un peu" not in texte and "Continuer la visite" not in texte
+        ouverte = {
+            "fr": "Votre session reste ouverte : la suite de votre visite est enregistrée comme avant.",
+            "en": "Your session stays open: the rest of your visit is recorded as before.",
+        }[langue]
+        assert ouverte in texte
         assert TETE_PASSE[langue] not in texte and not sel.css("button[data-partage]")
         assert "partage.js" not in r.text
         # « Terminer quand même » : la session est close, sans calcul.
@@ -709,7 +714,7 @@ def test_csp_inchangee_sur_chaque_page_de_resultat(reglages_publics, monkeypatch
 
 
 def test_version_de_la_notice():
-    assert VERSION_INFORMATION == "2026-11-17.1"
+    assert VERSION_INFORMATION == "2026-11-17.2"
     assert R().annonce_resultat(VERSION_INFORMATION) is True
 
 
@@ -726,6 +731,11 @@ def test_notice_annonce_le_resultat(reglages_publics, langue):
         pourquoi = textes.T[langue]["pourquoi"].lower()
         assert "hors ligne" not in pourquoi and "offline" not in pourquoi
         label = {"fr": "Terminer et voir mon résultat", "en": "End and see my result"}[langue]
+        etape = {
+            "fr": "Avec moins de 4 pages vues, le site vous propose de continuer la visite, ou de terminer sans résultat.",
+            "en": "With fewer than 4 pages viewed, the site offers to let you keep browsing, or to end without a result.",
+        }[langue]
+        assert etape in texte_de(html)
         assert label in textes.T[langue]["deroulement_3"]
         assert label in texte_de(html)
 
