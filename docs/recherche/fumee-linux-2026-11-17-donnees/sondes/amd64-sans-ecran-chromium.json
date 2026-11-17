@@ -1,0 +1,146 @@
+{
+ "hote": {
+  "machine": "x86_64",
+  "systeme": "Linux",
+  "version_python": "3.12.15"
+ },
+ "reglage": {
+  "canal": "chromium",
+  "sans_interface": true
+ },
+ "version_navigateur": "156.0.8078.4",
+ "sonde": {
+  "navigateur": {
+   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+   "platform": "Linux x86_64",
+   "vendor": "Google Inc.",
+   "hardwareConcurrency": 18,
+   "deviceMemory": 16,
+   "languages": [
+    "en-US"
+   ],
+   "webdriver": false,
+   "plugins": 0,
+   "pdfViewerEnabled": false,
+   "maxTouchPoints": 0
+  },
+  "userAgentData": {
+   "brands": [
+    {
+     "brand": "Not:A-Brand",
+     "version": "8"
+    },
+    {
+     "brand": "Chromium",
+     "version": "156"
+    },
+    {
+     "brand": "HeadlessChrome",
+     "version": "156"
+    }
+   ],
+   "mobile": false,
+   "platform": "Linux",
+   "haute_entropie": {
+    "architecture": "x86",
+    "bitness": "64",
+    "brands": [
+     {
+      "brand": "Not:A-Brand",
+      "version": "8"
+     },
+     {
+      "brand": "Chromium",
+      "version": "156"
+     },
+     {
+      "brand": "HeadlessChrome",
+      "version": "156"
+     }
+    ],
+    "fullVersionList": [
+     {
+      "brand": "Not:A-Brand",
+      "version": "8.0.0.0"
+     },
+     {
+      "brand": "Chromium",
+      "version": "156.0.8078.4"
+     },
+     {
+      "brand": "HeadlessChrome",
+      "version": "156.0.8078.4"
+     }
+    ],
+    "mobile": false,
+    "model": "",
+    "platform": "Linux",
+    "platformVersion": "",
+    "uaFullVersion": "156.0.8078.4",
+    "wow64": false
+   }
+  },
+  "ecran": {
+   "width": 800,
+   "height": 600,
+   "availWidth": 800,
+   "availHeight": 600,
+   "colorDepth": 24,
+   "devicePixelRatio": 1
+  },
+  "fenetre": {
+   "innerWidth": 800,
+   "innerHeight": 600,
+   "outerWidth": 800,
+   "outerHeight": 600,
+   "screenX": 0,
+   "screenY": 0
+  },
+  "intl": {
+   "fuseau": "UTC",
+   "langue": "en-US",
+   "decalage": 0
+  },
+  "webgl": {
+   "webgl": {
+    "vendor": "Google Inc. (Google)",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "extensions": 35,
+    "maxTexture": 8192,
+    "subpixelBits": 4
+   },
+   "webgl2": {
+    "vendor": "Google Inc. (Google)",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "extensions": 29,
+    "maxTexture": 8192,
+    "subpixelBits": 4
+   }
+  },
+  "webgpu": {
+   "present": true,
+   "adaptateur": null
+  },
+  "voix": {
+   "n": 0,
+   "attente_ms": 5
+  },
+  "peripheriques": [],
+  "polices": [],
+  "codecs": {
+   "h264": "probably",
+   "aac": "probably",
+   "vp9": "probably",
+   "mp3": "probably"
+  },
+  "connexion": {
+   "rtt": 0,
+   "downlink": 9,
+   "type": "4g"
+  },
+  "audio": {
+   "offline": true,
+   "echantillonnage": 44100
+  }
+ }
+}

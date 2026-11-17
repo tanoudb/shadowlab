@@ -29,8 +29,8 @@ Cette étape ne corrige pas le moteur : elle liste. Aucun fichier du moteur ni d
    fenêtre de 945 px sans gestionnaire de fenêtres. Ces écarts viennent de l'image autant que de Linux.
 9. L'essai a **coûté 13 Go de disque** (8,2 Go de cache de construction + 4,6 Go d'image amd64, après effacement de l'image arm64), pas
    les 2 Go annoncés. Tout est rendu : images et cache sont revenus à leur niveau d'avant.
-10. Une machine Linux d'OrbStack peut tenir lieu de serveur pour la 3.3 avec des limites (§ 8), mais je ne l'ai pas créée : le disque
-    était sous le seuil.
+10. Une machine Linux d'OrbStack pourrait tenir lieu de serveur pour la 3.3, avec des limites (§ 8). **Non faite** : la consigne est arrivée pendant que le disque était sous le seuil,
+    puis la coordination a interdit toute nouvelle construction ; je ne l'ai pas reprise ensuite (disque à 23 Gio en fin d'essai). À décider : la faire maintenant, ou non.
 
 ## 2. Ce qui a été monté, et pourquoi
 
@@ -138,6 +138,14 @@ alors que la version est la même, 2.1 — la règle est écartée au profil `06
 **Pas de référence du poste** pour ce réglage (aucune campagne du poste avec `headless: false` et profil réécrit) : 15 sur 15 aux six niveaux, rien de plus à
 affirmer. Pas de campagne du poste lancée pour l'occasion : elle aurait ouvert des fenêtres de Chrome sur l'écran d'Ethan pendant 30 minutes.
 
+### 5.4 arm64 contre amd64, même Chromium (campagnes 2 et 5, niveau 04)
+
+Les dix constantes mathématiques (`math_constants.*`) et les codecs sont **identiques** entre arm64 et amd64 (V8 les calcule lui-même) : ils ne distinguent pas l'architecture. L'**AudioContext**, lui, la
+distingue : somme 124,043475 sur arm64, 124,043476 sur amd64 sous Rosetta, hachages différents. En identité native (sans bruit du moteur), la valeur est (124,043475 ; hachage 2136325374) sur les quatre séries arm64 — Chrome du Mac
+(campagnes 132, 100 et 97 du poste) et Chromium arm64 du conteneur (campagne 3) — et (124,043476 ; 538831359) pour le Chrome 157 amd64 de la campagne 6. L'écart suit donc l'architecture, **mêlée à la version**
+(Chromium 156 contre Chrome 157) : les deux ne sont pas séparées ici. En identité réécrite, le bruit audio du moteur change le dernier chiffre d'un profil à l'autre (campagnes 1, 2, 4, 5) et masque cet écart. Aucun détecteur de l'Arena
+ne compare ces valeurs. Données : `fumee-linux-2026-11-17-donnees/comparaisons/cmp-2-vs-5-arm64-amd64.md`.
+
 ## 6. Les incohérences, de la plus grave à la moins grave
 
 « Grave » veut dire : ce qu'une vraie protection verrait, et ce qui a déjà coûté un passage. Preuve : numéro de campagne de la base `fumee-linux`.
@@ -147,15 +155,14 @@ affirmer. Pas de campagne du poste lancée pour l'occasion : elle aurait ouvert 
    1 et 4) WebGL existe, avec SwiftShader (sonde : « ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)…) », 35 extensions, texture max 8192,
    SUBPIXEL_BITS 4), et c'est ce que D-50 masque (90 empreintes sur 90 des campagnes 1 et 4 annoncent la carte d'un profil — Mesa AMD ou Intel, ANGLE NVIDIA — aucune ne montre SwiftShader). **D-50 suppose un repli sur SwiftShader qui n'a pas lieu
    avec une interface** : un profil qui annonce une carte NVIDIA, AMD ou Intel (D-51) sans WebGL est contradictoire. Aucun détecteur de l'Arena ne le relève
-   (aucun blocage ne s'y rattache). Un navigateur de bureau sans WebGL est une rareté.
+   (aucun blocage ne s'y rattache). Un navigateur de bureau sans WebGL est une rareté. Constat mesuré avec les drapeaux par défaut du moteur et de Patchright ; le drapeau `--enable-unsafe-swiftshader` n'a **pas été essayé**.
 2. **`devices_vide` : aucun périphérique audio ou vidéo** (identité native, campagnes 3 et 6 : 15/15 à chaque niveau, 0 au poste, même version 1.1).
    C'est ce signal qui a fait basculer **trois blocages sur quatre** (§ 4) : à lui seul il ne bloque pas, mais il laisse moins de marge au composite.
    Le profil réécrit l'invente (`audioinput`, `audiooutput`, `videoinput`) : il ne se déclenche pas en identité réécrite.
 3. **`voices_vide` : aucune voix de synthèse avec le Chromium de Patchright** (campagne 3 : 0 voix, 15/15 à chaque niveau ; sonde Chromium : 0 voix) alors
    que **Chrome 157 en a 19** (campagne 6, sonde). La différence vient du navigateur, pas de Linux. Il faut un vrai Chrome pour avoir des voix.
 4. **Durées de page trop régulières dans `pagination`** (`duree_pages_reguliere`, CV de 0,08 à 0,18 pour un seuil de 0,2) : 5 passages touchés dont 4 bloqués
-   (campagnes 3 et 6), jamais vu à la campagne 132 du poste. Durée moyenne de pagination au niveau 06 : 35,1 s sous Linux (campagne 6), 48,0 s au poste
-   (campagne 132). **Cause non établie** : ce n'est pas l'émulation (le signal apparaît aussi en arm64 natif, campagne 3) ; à chercher dans l'interaction
+   (campagnes 3 et 6), jamais vu à la campagne 132 du poste. Sur les passages réussis, la durée de `pagination` est la même qu'au poste aux niveaux 04 et 05 (30,8 s contre 31,6 s ; 44,3 s contre 44,4 s) : le rythme moyen n'explique donc rien. **Cause non établie** : ce n'est pas l'émulation (le signal apparaît aussi en arm64 natif, campagne 3) ; à chercher dans l'interaction
    (fenêtre sans gestionnaire de fenêtres, écran virtuel) ou dans les durées de chargement.
 5. **Fuseau UTC et langue en-US en identité native** (campagnes 3 et 6 ; sonde) contre Europe/Paris et fr-FR au poste. Écart de l'image (`TZ` et `LANG` non
    réglés), pas de Linux. Les profils réécrits imposent leur fuseau et leur langue (campagne 2 : `America/Chicago` avec `fr-FR`, une paire contradictoire
@@ -165,8 +172,8 @@ affirmer. Pas de campagne du poste lancée pour l'occasion : elle aurait ouvert 
 7. **Écran et fenêtre** : Xvfb 1920×1080 avec, sans gestionnaire de fenêtres, une fenêtre de 945 px de large à `screenX = screenY = 10`, largeur extérieure
    égale à la largeur intérieure (campagne 6 ; sonde). Pas de blocage constaté. (L'écran de 800×600 sans interface est le même au poste : pas imputable à Linux.)
 8. **Architecture annoncée contre architecture réelle.** Les profils Linux du moteur ne déclarent que `x86_64` (`profils/generateur.py`), et l'en-tête
-   `sec-ch-ua-arch` est forcé à `"x86"` pour tout profil non macOS (`moteur.py`). Sur un conteneur **arm64**, la réalité est `aarch64`. **Non observé** : l'image
-   arm64 a été effacée avant la sonde (disque). À savoir : Chrome réduit son User-Agent, donc le User-Agent et `navigator.platform` d'un Chromium arm64 natif disent
+   `sec-ch-ua-arch` est forcé à `"x86"` pour tout profil non macOS (`moteur.py`). Sur un conteneur **arm64**, la réalité est `aarch64`. **La sonde n'a pas pu lire l'architecture sur arm64** : l'image
+   arm64 a été effacée avant la sonde (disque). **Observé indirectement** : l'AudioContext donne une valeur différente sur arm64 et sur amd64 (§ 5.4), donc la machine arm64 se lit dans un calcul que le profil réécrit ne masque pas (il ne fait que le bruiter). À savoir : Chrome réduit son User-Agent, donc le User-Agent et `navigator.platform` d'un Chromium arm64 natif disent
    déjà « Linux x86_64 » (campagne 3) ; seul `userAgentData.getHighEntropyValues().architecture` donnerait « arm », et l'Arena ne le collecte pas. Sous
    Rosetta (amd64), la page voit `x86` (sonde) : pas d'écart. Sur un vrai serveur x86_64, ce point disparaît.
 9. **Ressources déclarées** : `hardwareConcurrency` = 18 (les cœurs de la machine virtuelle) alors que le conteneur est limité à 6 processeurs ; `deviceMemory`
@@ -180,7 +187,7 @@ affirmer. Pas de campagne du poste lancée pour l'occasion : elle aurait ouvert 
 
 `scripts/fumee-linux-sonde.py` lance Chrome ou Chromium tel quel devant une page `http://localhost` et note ce qu'une page peut lire. JSON dans
 `outputs/fumee-linux/sondes/` (non versionné) : `amd64-ecran-chrome`, `amd64-sans-ecran-chrome`, `amd64-ecran-chromium`, `amd64-sans-ecran-chromium`,
-`poste-ecran-chrome`, `poste-sans-ecran-chrome` (Chrome 156.0.8078.80 du poste). Lancées le 17/11 entre les campagnes. **Aucune sonde arm64** (image effacée).
+`poste-ecran-chrome`, `poste-sans-ecran-chrome` (Chrome 156.0.8078.80 du poste), **versionnés** avec les comparaisons dans `fumee-linux-2026-11-17-donnees/` (sondes/, comparaisons/). Lancées le 17/11 entre les campagnes. **Aucune sonde arm64** (image effacée).
 
 | | poste (Chrome 156, arm64) | amd64 Chrome 157 avec écran | amd64 Chromium 156 avec écran | amd64 Chrome 157 sans écran |
 |---|---|---|---|---|
@@ -193,8 +200,7 @@ affirmer. Pas de campagne du poste lancée pour l'occasion : elle aurait ouvert 
 | `userAgentData.architecture` | arm | x86 | x86 | x86 |
 | User-Agent | … Chrome/156 | … Chrome/157 | … Chrome/156 | **HeadlessChrome/157** |
 
-Limite de la sonde : la mesure des polices du script est fausse (liste vide partout, poste compris) ; les polices viennent de l'empreinte du moteur (`font_fingerprint`),
-pas de la sonde.
+Les six JSON contiennent un champ `polices` vide partout (poste compris) : la mesure était fausse, elle est retirée du script ; les polices viennent de l'empreinte du moteur (`font_fingerprint`).
 
 ## 8. Ce qu'OrbStack permet sur ce poste (lu avec `orbctl`, rien créé)
 
@@ -202,7 +208,7 @@ pas de la sonde.
 - `orbctl create` : architectures **arm64 et amd64** ; Ubuntu 22.04, 24.04, 25.10, 26.04, Debian 11 à 14, Fedora, Alma, Rocky, etc. ; limites par machine
   (`--cpus`, `--memory`, `--disk`), machine isolée (`--isolated`), cloud-init (`--user-data`).
 - Vérifié : un **conteneur** amd64 démarre et le moteur y tourne (campagnes 4 à 6) ; Chrome 157 s'y installe.
-- **Non vérifié** (disque sous le seuil quand la consigne est arrivée, puis plus d'image à bâtir) : Chrome dans une machine amd64 (probable : même Rosetta), Docker dans une
+- **Non fait** (consigne arrivée disque sous le seuil, puis interdiction de construire, puis non reprise) : Chrome dans une machine amd64 (probable : même Rosetta), Docker dans une
   machine, et tout ce qui suit.
 - **Pour la 3.3** : une machine amd64 aurait l'avantage d'être « un serveur » (systemd, apt, Docker dans la machine) et ferait disparaître mes deux relais : l'Arena et le moteur seraient
   dans la même machine, comme sur le vrai serveur. Limites probables : même noyau et même émulation que les conteneurs (donc les mêmes résultats que ci-dessus : WebGL absent, périphériques vides,
@@ -220,20 +226,21 @@ Estimé : 2 Gio au pic. **Mesuré : environ 13 Go**, et le disque du poste étai
 | base et sorties de l'essai | 50 Mo (SQLite) + rapports |
 
 Rendu en fin d'essai : image amd64 effacée, pile arrêtée, 29 enregistrements de cache effacés un par un par leur identifiant (ceux d'avant n'ont pas été touchés) ; images
-28,81 Go et cache 2,63 Go, soit le niveau d'avant. Le volume Docker `fumee-linux-data` (la base vivante, 50 Mo) est gardé. **Un constat** : OrbStack ne rend pas tout de suite au Mac l'espace que Docker libère dans sa
-machine (la mesure `df` a peu bougé juste après l'effacement). Pendant l'essai le disque libre est passé de 22 à 14 Gio ; une partie venait d'autres projets du poste.
+28,81 Go et cache 2,63 Go, soit le niveau d'avant. Le volume Docker `fumee-linux-data` (la base vivante, 50 Mo) est gardé. **Un constat** : la mesure `df` a peu bougé juste après l'effacement du cache (19 Gio avant et après) ; cause non établie (OrbStack qui rend l'espace avec retard, ou d'autres projets qui écrivaient au même moment). Pendant l'essai le disque libre est passé de 22 à 14 Gio ; une partie venait d'autres projets du poste.
 
 ## 10. Composition de l'image : ce qui est de Linux, ce qui est de l'image
 
 Image volontairement ordinaire (un serveur sans réglage) : Ubuntu 24.04, aucun GPU, aucun gestionnaire de fenêtres, polices de `patchright install-deps`
 (`fonts-liberation`, `fonts-freefont-ttf`, `fonts-noto-color-emoji`, `fonts-ipafont-*`, `fonts-wqy-zenhei`, `fonts-tlwg-loma`, `fonts-unifont`, `xfonts-*`), fuseau UTC, langue `C.UTF-8`, Xvfb
 1920×1080×24 seulement pour les passages « avec écran ». **Ce qui vient de l'image** (réglable) : fuseau, langue, polices, taille d'écran, fenêtre sans gestionnaire,
-absence de périphériques simulés. **Ce qui vient de Linux sans GPU** (pas réglable sans carte) : pas de WebGL avec interface, SwiftShader sans interface.
+absence de périphériques simulés. **Ce qui vient de Linux sans GPU** : pas de WebGL avec interface (drapeaux par défaut), SwiftShader sans interface. **Non essayé** : `--enable-unsafe-swiftshader`, que la note `chrome-interface-serveur-linux-2026-11-12.md` donne à mesurer ; on ne sait donc pas si ce drapeau rendrait WebGL avec interface.
 
 ## 11. Non vérifié
 
 - Aucun vrai serveur Linux x86_64 : tout est un conteneur sur Mac (arm64 natif, ou amd64 sous Rosetta). Les durées, le processeur et le comportement de la mémoire ne valent pas pour un serveur.
-- L'architecture réelle `aarch64` face à l'annonce `x86_64` : non observée (image arm64 effacée avant la sonde).
+- L'architecture réelle `aarch64` face à l'annonce `x86_64` : lue seulement indirectement (AudioContext, § 5.4), jamais directement (image arm64 effacée avant la sonde).
+- `--enable-unsafe-swiftshader` : non essayé (WebGL avec interface sans GPU reste inexpliqué).
+- La base de l'essai : la copie `outputs/shadowlab.sqlite3` du dossier `fumee-linux` et le volume Docker `fumee-linux-data` ; une copie est aussi dans le dossier de notes partagé des sessions.
 - Aucune référence du poste pour l'identité réécrite avec écran (campagnes 2 et 5) ni pour l'identité native avec Chromium (campagne 3, comparée à un Chrome 156).
 - Chrome 157 (Linux) contre Chrome 156 (poste) : la différence de version est mêlée aux écarts.
 - Niveau 07 non mesuré ; 15 passages par niveau (pas 30), un seul passage par cellule, un seul poste ; CAPTCHA en clés de test aux niveaux 05 et 06.

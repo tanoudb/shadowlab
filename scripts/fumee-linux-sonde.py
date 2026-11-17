@@ -3,7 +3,7 @@
 
 Lance le navigateur avec Patchright, tel quel (aucune réécriture, aucun script d'empreinte), devant une page locale
 (`http://localhost`, contexte sécurisé) et écrit un JSON de propriétés brutes : architecture réelle, carte
-graphique (WebGL, WebGPU), écran, fenêtre, voix, périphériques, polices, fuseau, codecs.
+graphique (WebGL, WebGPU), écran, fenêtre, voix, périphériques, fuseau, codecs (les polices ne sont pas sondées : voir `font_fingerprint` des campagnes).
 
 Sert à lister les écarts qu'aucun détecteur de l'Arena ne relève : on les compare à ce que le moteur annonce
 (`engines/noezia/profils`) et à la même sonde lancée sur le poste. Aucune requête hors de `localhost`.
@@ -22,35 +22,8 @@ from pathlib import Path
 
 PAGE = b"<!doctype html><meta charset=utf-8><title>sonde</title><body>sonde</body>"
 
-POLICES = [
-    "Arial",
-    "Helvetica",
-    "Times New Roman",
-    "Courier New",
-    "Georgia",
-    "Verdana",
-    "Trebuchet MS",
-    "Impact",
-    "Comic Sans MS",
-    "Tahoma",
-    "Segoe UI",
-    "Calibri",
-    "Cambria",
-    "Consolas",
-    "Menlo",
-    "SF Pro",
-    "Helvetica Neue",
-    "Ubuntu",
-    "DejaVu Sans",
-    "Liberation Sans",
-    "Liberation Mono",
-    "Noto Sans",
-    "Noto Color Emoji",
-    "Apple Color Emoji",
-]
-
 SCRIPT = """
-async (polices) => {
+async () => {
   const r = {};
   r.navigateur = {
     userAgent: navigator.userAgent, platform: navigator.platform, vendor: navigator.vendor,
@@ -91,9 +64,6 @@ async (polices) => {
     speechSynthesis.onvoiceschanged = fin; setTimeout(fin, 1500);
   });
   try { const d = await navigator.mediaDevices.enumerateDevices(); r.peripheriques = d.map(x => x.kind); } catch (e) { r.peripheriques = String(e); }
-  const base = ['monospace', 'sans-serif', 'serif']; const cv = document.createElement('canvas').getContext('2d');
-  const mesure = (police, b) => { cv.font = `72px '${police}', ${b}`; return cv.measureText('mmmmmmmmmmlli').width; };
-  r.polices = polices.filter(p => base.some(b => (cv.font = `72px ${b}`, mesure(p, b) !== cv.measureText('mmmmmmmmmmlli').width)));
   const v = document.createElement('video');
   r.codecs = {h264: v.canPlayType('video/mp4; codecs="avc1.42E01E"'), aac: v.canPlayType('audio/mp4; codecs="mp4a.40.2"'),
               vp9: v.canPlayType('video/webm; codecs="vp9"'), mp3: v.canPlayType('audio/mpeg')};
@@ -146,7 +116,7 @@ def main() -> int:
             resultat["version_navigateur"] = nav.version
             page = nav.new_context(no_viewport=True).new_page()
             page.goto(url)
-            resultat["sonde"] = page.evaluate(SCRIPT, POLICES)
+            resultat["sonde"] = page.evaluate(SCRIPT)
             nav.close()
     except Exception as erreur:  # un navigateur qui ne démarre pas est un résultat
         resultat["erreur"] = f"{type(erreur).__name__}: {str(erreur)[:600]}"
