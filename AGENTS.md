@@ -199,7 +199,7 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
-- **Course de 7 jours (I9)** (D-96) : **EN COURS depuis le 17/11 à 11 h 21 min 14 s** (campagne 1 de la base de la course, échéance le
+- **Course de 7 jours (I9)** (D-96) : **NON TENUE (constat du 18/11 à 0 h 31)** : le sujet est banni à sa 6ᵉ visite, le 17/11 à 21 h 43, 10 h 22 après le départ (`composite` 0,6 pour un seuil de 0,5 : `pas_de_scroll` et `navigation_lineaire`, deux pages défilables quittées en 4 s sans défilement), puis la visite reste bloquée sans fin (identité encore notée `ok`) ; 5 visites réussies avant, 67 annonces sur 300, les trois témoins tenus. Deux défauts du moteur, correction en cours ; le processus de la course est encore en place, son arrêt attend Ethan ; ce qui suit décrit le lancement. Lancée le 17/11 à 11 h 21 min 14 s (campagne 1 de la base de la course, échéance le
   24/11 vers 11 h 21 ; étiquette `course-i9` = `d5983d7`, poussée ; premières visites des quatre bras faites, porte du sujet de 86 400 s). Trois répétitions : 16/11 (17 h 11) et 16/11 (19 h 23) non tenues,
   causes corrigées ; 17/11 (9 h 15 à 10 h 41) tenue à tous les critères (30 visites sur 30, témoins tenus). Essai ciblé de la porte
   (17/11, porte de 150 s) : défi sur une photo revu dans un vrai Chrome, sans alerte, 3 visites sur 3. Ethan a dit « Oui » à la question 4 ; I9 part avant I8. Copie figée du code `.courses/i9/` (ports
@@ -219,7 +219,7 @@ recommander des optimisations.
   lance un relais local (`engines/noezia/proxy_identite.py`) qui tient les identifiants et fait office de verrou réseau de l'identité (périmètre jugé par nom, aucun repli direct). Avec un vrai Chrome 156 : deux identités, deux sorties, aucune connexion directe,
   mauvais mot de passe refusé, WebRTC fermé (`--webrtc-ip-handling-policy=disable_non_proxied_udp`). `identite.declarer_proxy(nom, serveur, utilisateur, mot_de_passe)` crée le fichier. Fuites connues : DNS local du mode strict, relais sans authentification,
   identifiants en clair jusqu'au proxy. Aucun vrai proxy essayé ; l'effet de l'argument WebRTC sur les détecteurs n'est pas mesuré.
-- **2 762 tests verts** (`uv run pytest`, 17/11, sur `06319e3`, 12 min 31 s, pendant la course I9) ; lint propre ; 11 tests de l'interface (vitest). Branche
+- **2 787 tests verts** (`uv run pytest`, 18/11, sur `b13a9d1`, 10 min 47 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au

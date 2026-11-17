@@ -1400,6 +1400,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   pas un défi reconnu (page du WAF ou de Nginx, motif inconnu, corps illisible) vaut toujours `banni`, sans retour ; une mise à
   jour de Chrome pendant la semaine.
   Décidé par : coordination, sur le « Oui » d'Ethan.
+  **Résultat (constat du 18/11 à 0 h 31) : course NON TENUE.** Le sujet est banni à sa 6ᵉ visite (17/11, 21 h 43, passage 19 de la base de la course) : `composite` 0,6 (seuil 0,5), signaux `pas_de_scroll` et `navigation_lineaire`, après une fiche et la liste quittées en 4,4 s et 3,4 s sans défilement ; même fenêtre qu'à la visite 5. Puis la visite ne se termine pas (plus de 3 heures `en_cours`, identité encore notée `ok`). Avant : 5 visites réussies, 1 visiteur, 1 empreinte E, 67 annonces sur 300 ; les trois témoins tiennent tous leurs critères. Deux défauts du moteur (rythme de lecture, visite sans fin), à corriger tests d'abord avant toute nouvelle course ; l'Arena ne change pas.
 
 - **D-97 — 17/11/2026 — Site public : le visiteur voit son résultat à la fin de la session, niveau par niveau, et peut le partager.**
   **Ce qu'a dit Ethan.** Le 17/11, à la proposition de montrer au visiteur, à la fin, si nos détecteurs l'ont pris pour un
