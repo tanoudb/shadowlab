@@ -72,3 +72,9 @@ que l'argument WebRTC des identités à proxy ferme (étape 3.2). Les chiffres s
 - **Pas de mesure d'adresse ni de comportement** : une protection du commerce regarde l'IP, la durée et le comportement ; ces pages non. Elles bornent le bas du niveau, elles ne prouvent rien du haut.
 - **Une visite par cas** : les chiffres de CreepJS peuvent bouger d'une visite à l'autre ; non répété. Le script a eu un défaut de comptabilité (chemin relatif) : les fichiers de capture et de texte étaient bons, les métadonnées de `resultats.json` ont été réparées à la main (aucune valeur mesurée touchée) et le script corrigé.
 - **Hors périmètre de cet essai** : BrowserScan, Linux (tout est sur macOS), un humain de référence.
+
+## Mise à jour du 17/11 : `storagePartitioning` corrigé en identité native (D-101)
+
+Cause : l'argument par défaut `--disable-features=…` de Playwright et de Patchright liste `ThirdPartyStoragePartitioning`. Correctif : en identité native seulement, le moteur repasse `--disable-features=` avec la liste de Playwright moins cette fonction (un second `--disable-features` remplace le premier ; un `--enable-features` n'y change rien).
+Contrôle avec un vrai Chrome sur deux sites locaux (`tests/test_stockage_tiers_partitionne.py`) : avant `lu=valeur-premiere-partie`, après `lu=null`. **Une seule visite de contrôle** de la page rebrowser (`outputs/detecteurs-publics/2026-11-17-controle-storage/`) : `storagePartitioning` vert, 16 tests verts, 4 non déclenchés, aucun rouge ni jaune.
+Le même défaut existe dans l'identité réécrite et chez les témoins (réglage par défaut de Patchright) ; non changé. Effet sur l'Arena non mesuré : campagne de contrôle à lancer depuis le dossier principal.
