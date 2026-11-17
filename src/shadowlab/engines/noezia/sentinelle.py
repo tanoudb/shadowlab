@@ -2,7 +2,8 @@
 
 Signes retenus (§ 5 du document de conception) :
 1. statut 401, 403, 407, 429 ou 503 ; un 403 sur une ressource de la page (photo, appel de données) du même hôte
-   compte aussi (`examiner_ressources`) ;
+   compte aussi (`examiner_ressources`), sauf si son corps est un défi (`detecter_defi_ressource`) : c'est alors le
+   signe 2 ;
 2. page de défi : `body[data-arena]` (Arena) ; en-tête `cf-mitigated: challenge`, formulaire de défi ou cadre de
    Cloudflare ; cadre reCAPTCHA, hCaptcha ou Turnstile (`detecter_defi`) ;
 3. adresse finale hors des hôtes de la recette, ou hors du motif `url` du type de page attendu ;
@@ -19,10 +20,12 @@ sans aucun nouvel essai (réessayer aggrave).
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 STATUTS_ALERTE = frozenset({401, 403, 407, 429, 503})
@@ -74,12 +77,45 @@ def detecter_defi(html: str, entetes: Mapping[str, str] | None = None) -> str | 
     return None
 
 
+# Le motif JSON que l'Arena rend à une ressource (photo, appel de données : `Accept` sans `text/html`) à la place de la
+# page qu'elle sert à une navigation (`gardien._refus`). Seuls ceux d'une page de défi sont des défis ; les autres
+# (`bannissement`, `fingerprinting`, `composite-differe`…) accompagnent la page de refus : un refus franc.
+_MOTIFS_DEFI_ARENA = {"defi-js": "arena", "turnstile": "turnstile", "recaptcha": "recaptcha", "captcha": "captcha"}
+
+
+def detecter_defi_ressource(corps: str, entetes: Mapping[str, str] | None = None) -> str | None:
+    """Nature du défi servi à la place d'une ressource de la page (photo, appel de données), ou None (refus franc).
+
+    Une page de défi (`detecter_defi`), ou le motif JSON d'un défi de l'Arena : `defi-js` (la porte d'entrée) donne
+    `arena` ; `turnstile`, `recaptcha`, `captcha` donnent leur nom. Tout autre corps (motif de refus, motif inconnu,
+    texte quelconque) : None. Ne fait que reconnaître."""
+    defi = detecter_defi(corps, entetes)
+    if defi is not None:
+        return defi
+    try:
+        donnees = json.loads(corps)
+    except ValueError:
+        return None
+    motif = donnees.get("bloque_par") if isinstance(donnees, dict) else None
+    return _MOTIFS_DEFI_ARENA.get(motif) if isinstance(motif, str) else None
+
+
+class RefusRessource(NamedTuple):
+    """Un 403 reçu pour une ressource de la page (`refus_ressources` du moteur) ; `defi` : la nature du défi servi à sa
+    place (`detecter_defi_ressource`), None pour un refus franc ou un corps illisible."""
+
+    adresse: str
+    statut: int
+    defi: str | None = None
+
+
 @dataclass(frozen=True)
 class Alerte:
     signe: str  # statut | defi | hors_site | hors_motif | page_non_conforme | echecs | porte_revenue
     detail: str
     adresse: str
     statut: int | None = None
+    defi: str | None = None  # alerte `defi` d'une ressource (`examiner_ressources`) : la nature du défi
 
     def message(self) -> str:
         return f"signe d'alerte ({self.detail}) sur {self.adresse}"
@@ -126,13 +162,30 @@ class Sentinelle:
             )
         return None
 
-    def examiner_ressources(self, refus: Iterable[tuple[str, int]]) -> Alerte | None:
+    def examiner_ressources(self, refus: Iterable[tuple]) -> Alerte | None:
         """Un 403 reçu pour une ressource de la page (photo, appel de données) du MÊME hôte que la recette est un refus,
-        comme celui de la page : les ressources d'un autre hôte (CDN, mesure) ne disent rien de ce site."""
-        for adresse, statut in refus:
-            if statut == 403 and (urlsplit(adresse).hostname or "").lower() in self._hotes:
-                return Alerte("statut", "statut 403 sur une ressource de la page", adresse, 403)
-        return None
+        comme celui de la page : les ressources d'un autre hôte (CDN, mesure) ne disent rien de ce site.
+
+        `refus` : des `RefusRessource` (adresse, statut, nature du défi), ou des couples (adresse, statut) d'un pilote
+        qui ne lit pas le corps. Un 403 dont le corps est un défi (`detecter_defi_ressource`, lu par le moteur) n'est
+        pas un refus franc : alerte `defi` (jamais un bannissement, `verdict_identite`), comme le même défi servi à la
+        place d'une page ; le parcours l'excuse quand c'est le défi de sa porte d'entrée et qu'elle peut être repassée.
+        Du plus grave au moins grave : un refus franc, puis un défi d'une autre nature, puis le défi de la porte de
+        l'Arena (`arena`)."""
+        retenu: tuple[int, RefusRessource] | None = None
+        for brut in refus:
+            r = RefusRessource(*brut)
+            if r.statut != 403 or (urlsplit(r.adresse).hostname or "").lower() not in self._hotes:
+                continue
+            gravite = 0 if r.defi is None else 1 if r.defi != "arena" else 2
+            if retenu is None or gravite < retenu[0]:
+                retenu = (gravite, r)
+        if retenu is None:
+            return None
+        r = retenu[1]
+        if r.defi is None:
+            return Alerte("statut", "statut 403 sur une ressource de la page", r.adresse, 403)
+        return Alerte("defi", f"page de défi ({r.defi}) sur une ressource de la page", r.adresse, 403, r.defi)
 
     def noter(self, type_page: str, decision: str, adresse: str = "") -> Alerte | None:
         """Signes 4 et 5, une fois la page lue. `decision` : ok, introuvable, anormale ou echec."""
