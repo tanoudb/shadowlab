@@ -3752,3 +3752,10 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Reste, à la charge d'Ethan ou de la coordination** : fusionner la branche (conflit attendu en ajout dans
   `docs/DECISIONS.md`, D-96 étant sur `niveau-authentifie-perimetre` : garder les deux) ; relancer l'application en ligne
   pour servir la nouvelle version ; un nom d'hôte stable pour que les liens partagés durent.
+
+## 2026-11-17 (11h59) — Claude (Fable 5.2, coordination) — Résultat à partager fusionné et mis en ligne ; disque
+- Fusion `c4f5de8` de `claude/resultat-public-a943e4` (D-97), à la demande d'Ethan (« Oui, mets en ligne ») ; conflits de `docs/DECISIONS.md` et du journal résolus en gardant les deux côtés ; 2 420 tests rapides verts, lint propre ; poussé.
+- Application publique relancée dans `site-public-app` avec la même commande, adresse inchangée : `/fr` et `/en` en 200, `/labo` et `/api/docs` en 404.
+- Session d'essai par l'adresse publique, depuis le navigateur intégré de l'application Claude : après 6 pages quittées en moins d'une seconde, page « Encore un peu » (1 page comptée) ; après 4 pages lues environ 9 s chacune, résultat « Pris pour un robot à 5 niveaux sur 6 » (01 et 02 humain, 03 à 07 robot ; raison affichée : traces d'un outil d'automatisation). Session supprimée ensuite ; la fréquentation du jour compte cette visite.
+- Non essayé : Safari, iPhone, Firefox, partage depuis un vrai téléphone. Les liens partagés meurent avec l'adresse du tunnel.
+- Disque : tombé de 30 à 13 Gio libres dans la matinée, à cause d'autres dossiers du poste ; un modèle local de 21 Go supprimé à la demande d'Ethan ; 30 Gio libres au départ de la course I9. À regarder à chaque contrôle de la course (`df -h /`).
