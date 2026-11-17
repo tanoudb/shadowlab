@@ -194,12 +194,17 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
-- **Course de 7 jours (I9)** (D-96, 16/11) : préparée, non lancée. Trois répétitions : 16/11 (17 h 11) et 16/11 (19 h 23) non tenues,
+- **Course de 7 jours (I9)** (D-96) : **EN COURS depuis le 17/11 à 11 h 21 min 14 s** (campagne 1 de la base de la course, échéance le
+  24/11 vers 11 h 21 ; étiquette `course-i9` = `d5983d7`, poussée ; premières visites des quatre bras faites, porte du sujet de 86 400 s). Trois répétitions : 16/11 (17 h 11) et 16/11 (19 h 23) non tenues,
   causes corrigées ; 17/11 (9 h 15 à 10 h 41) tenue à tous les critères (30 visites sur 30, témoins tenus). Essai ciblé de la porte
   (17/11, porte de 150 s) : défi sur une photo revu dans un vrai Chrome, sans alerte, 3 visites sur 3. Ethan a dit « Oui » à la question 4 ; I9 part avant I8. Copie figée du code `.courses/i9/` (ports
   8760, 8753 et 8761, projet Docker `shadowlab-course-i9`, base et identités à part), session tmux `course-i9`. Non vérifié : les
-  nuits, la vraie porte de 24 h, une vraie veille du Mac, le plafond de 200 pages par jour, un profil Chrome sur 7 jours. Lancée seulement quand la coordination le dit.
-- **2 345 tests verts** (`uv run pytest`, 17/11, sur `fa88df6`, 9 min 11 s, pendant la répétition 3 ; depuis, 6 tests de configuration pour l'essai ciblé, verts) ; lint propre ; 11 tests de l'interface (vitest). Branche
+  nuits, la vraie porte de 24 h, une vraie veille du Mac, le plafond de 200 pages par jour, un profil Chrome sur 7 jours.
+  **Contrôle quotidien** (dossier principal) : `scripts/course.sh etat; echo $?`, sans tube (0 normal ; 1 arrêtée, alors
+  `scripts/course.sh reprendre 1` ; 2 retard ou blocage, lire le journal ; 3 introuvable) ; lire aussi la ligne de l'identité du sujet (le
+  code 0 ne veut pas dire « critères tenus ») et `df -h /` (jamais sous 20 Gio). Ne jamais changer de commit dans `.courses/i9`.
+  **À l'échéance** : `scripts/course.sh bilan 1` (0 = tenu). Règles, chiffres des répétitions et limites : D-96.
+- **2 351 tests verts** (`uv run pytest`, 17/11, sur `2fe3537`, 9 min 35 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au

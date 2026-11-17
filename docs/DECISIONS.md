@@ -1384,6 +1384,14 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   && uv sync)` ; (4) `scripts/course.sh demarrer configs/experiments/identite-7-jours.yaml`, sans `COURSE_ENV` ; (5) ensuite
   `scripts/course.sh etat | reprendre <n°> | bilan <n°>`. Étiquette `course-i9` sur le commit qui porte cette version de D-96 ; depuis `da41a39`, il n'ajoute que des documents. Pendant la course, ne jamais changer de commit dans `.courses/i9` : un outil plus récent, en lecture seule, se lance depuis le dossier principal. **Code répété et code étiqueté** : la répétition 3 a tourné sur `a3d56e4`. Entre `a3d56e4` et `da41a39`, le code n'a changé que dans `src/shadowlab/course.py`, le calcul du bilan (`fa88df6`) ; le reste, ce sont des tests et trois fichiers de configuration de l'essai (`configs/arena/profils-endurance-essai-porte.yaml`, `configs/courses/i9-essai-porte.env`, `configs/experiments/essai-porte-en-visite.yaml`), qu'aucune lecture de la vraie course ne charge. Lancée
   seulement quand la coordination le dit.
+  **Lancée** le 17/11 à 11 h 21 min 14 s, départ accordé par la coordination : campagne 1 de la base de la course, graine 20261117,
+  échéance le 24/11 vers 11 h 21 (`course etat`). Étiquette `course-i9` posée sur `d5983d7` et poussée. Avant le départ : les deux
+  conteneurs de l'essai (porte de 150 s) retirés, puis recréés neufs à 11 h 21 min 13 s ; configuration générée sans autre profil
+  qu'`endurance` ; un dossier de sorties vide créé à 11 h 19 par une commande de contrôle, retiré. Premières visites (11 h 21 à
+  11 h 23) : sujet réussi (9 pages, identité `ok`, visiteur `0405c585`), témoin sentinelle réussi (11 pages), témoin négatif réussi
+  (12 pages), témoin classique arrêté (0 page, comme voulu). Porte du sujet : défi émis à 11 h 21 min 25,6 s, validé à 11 h 21 min
+  27,2 s ; cookie `sl_defi` de 86 400 s dans son Chrome (jusqu'au 18/11, 11 h 21 min 27 s) ; `duree_porte_s` = 86 400 au passage.
+  `scripts/course.sh etat`, lu sans tube : code 0, prochaine visite du sujet à 12 h 58.
   **Non vérifié** : les nuits et le passage d'une journée à l'autre ; la vraie porte de 24 h ; une vraie mise en veille du Mac ; le
   plafond de 200 pages par jour ; un profil Chrome qui tient 7 jours ; `course etat` : une seule visite prévue manquée la nuit
   donne encore 0, et un blocage hors attente et hors visite ne se voit qu'à « dernière activité » ; le code 0 ne veut pas dire
