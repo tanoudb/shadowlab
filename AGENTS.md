@@ -209,6 +209,10 @@ recommander des optimisations.
   `scripts/course.sh reprendre 1` ; 2 retard ou blocage, lire le journal ; 3 introuvable) ; lire aussi la ligne de l'identité du sujet (le
   code 0 ne veut pas dire « critères tenus ») et `df -h /` (jamais sous 20 Gio). Ne jamais changer de commit dans `.courses/i9`.
   **À l'échéance** : `scripts/course.sh bilan 1` (0 = tenu). Règles, chiffres des répétitions et limites : D-96.
+- **Essai de fumée Linux, étape 3.1** (17/11, D-98, `docs/recherche/fumee-linux-2026-11-17.md`) : le moteur `noezia` tourne sous Linux sans carte graphique (conteneur Ubuntu 24.04 sur OrbStack, arm64 natif et amd64
+  émulé), 6 campagnes de la base du dossier `fumee-linux`, conservée dans le dossier principal sous `outputs/fumee-linux-2026-11-17.sqlite3` (campagnes 1 à 6, 540 passages, 0 panne ; numérotation à part de `outputs/shadowlab.sqlite3`). Le réglage par défaut sans écran refait la campagne 97 du poste ; en natif, Chrome 157 (amd64) 87 sur 90, Chromium (arm64) 89 sur 90, contre 15 sur 15 par niveau à
+  la 132 du poste. Incohérences, de la plus grave : WebGL absent avec interface (D-50 suppose un repli SwiftShader qui n'a lieu que sans interface), `devices_vide` (15 sur 15 en natif), `voices_vide` (Chromium), `duree_pages_reguliere`.
+  Pas de Chrome pour Linux arm64. Non vérifié : vrai serveur x86_64, architecture arm64 réelle, niveau 07. Coût disque : 13 Go (images 3,5 et 4,6 Go, cache 8,2 Go), à prévoir.
 - **2 351 tests verts** (`uv run pytest`, 17/11, sur `2fe3537`, 9 min 35 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
@@ -320,6 +324,10 @@ scripts/course.sh bilan <n°>                               # bilan du § 6.3 (0
 scripts/course.sh arreter                                  # arrêt d'urgence de la course (crée `ARRET` dans ses sorties)
 scripts/course.sh empreinte                                # preuve d'isolation : conteneurs et fichiers générés de la course, à comparer avant/après
 COURSE_ENV=configs/courses/i9-repetition.env scripts/course.sh demarrer configs/experiments/identite-7-jours-repetition.yaml  # la répétition (environ 1 h 30)
+scripts/fumee-linux.sh disque                                # étape 3.1 : espace libre avant de construire (prévoir 13 Go ; arrêt sous 20 Gio)
+scripts/fumee-linux.sh construire arm64 | amd64                 # image Linux sans GPU (une à la fois) ; pile : `pile` ; passage : `lancer <arch> <ecran|sans-ecran> configs/experiments/fumee-linux-<mode>.yaml`
+scripts/fumee-linux.sh sauvegarder | sonde <arch> <mode> <chrome|chromium> | arreter | retirer <arch>   # copie la base du volume, sonde le navigateur réel, rend la place (voir docs/recherche/fumee-linux-2026-11-17.md § 12)
+python3 scripts/fumee-linux-comparer.py --linux <base> --linux-campagne <n°> --poste <base du poste> --poste-campagne 132 --protections 04 05 06scorr   # signaux Linux contre poste (version des détecteurs signalée)
 uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
 uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
 uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml  # I7 : 4 bras, 3 visites (environ 15 min) ; renommer les identités (`-2`, `-3`…) avant de relancer, une identité bannie ne sert plus

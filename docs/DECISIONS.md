@@ -1438,3 +1438,10 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   **Relecture indépendante** (un agent qui n'a rien écrit) : aucun défaut bloquant. Corrigé : les lectures de la base de
   « Ma session » et de « Terminer » passent par le pool de fils (elles bloquaient la boucle) ; un échec n'est plus gardé
   15 minutes mais 2 ; le seuil de la notice suit `PAGES_MIN`.
+
+- **D-98 — 17/11/2026 — Étape 3.1, essai de fumée Linux : montage et règle « on liste, on ne corrige pas ».** L'Arena d'un essai Linux se monte ainsi : le site, le frontal TLS,
+  la campagne, la base et le moteur dans le conteneur Linux ; seule la pile Nginx + Coraza reste sur OrbStack, sous un projet Docker et des ports à part (`fumee-linux`, 8744 à 8746), reliée par deux relais `socat`
+  (le code de l'Arena vise des adresses en dur, il ne change pas). Pourquoi : la campagne crée le moteur dans son processus, donc elle doit tourner sous Linux ; la base SQLite est en mode WAL et ne se partage pas ;
+  c'est la disposition de l'étape 3.3. Le périmètre reste en mode strict (`localhost,127.0.0.1`). Niveau 06 sans corrélation, comme les campagnes 115 et 132. L'étape ne corrige rien : elle liste (aucun fichier du moteur
+  ni de l'Arena modifié). Résultats et incohérences : `docs/recherche/fumee-linux-2026-11-17.md`. Le numéro D-98 est le premier libre au 17/11 sur toutes les branches (D-97 pris par la branche du site public) ; la coordination
+  le renumérote à la fusion si une autre branche l'a pris. Décidé par : la session qui a fait l'étape 3.1, montage approuvé par la session de coordination (17/11) ; Ethan avait demandé de continuer le moteur « en attendant » la course.

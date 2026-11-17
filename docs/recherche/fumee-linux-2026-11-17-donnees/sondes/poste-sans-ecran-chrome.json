@@ -1,0 +1,156 @@
+{
+ "hote": {
+  "machine": "arm64",
+  "systeme": "Darwin",
+  "version_python": "3.12.15"
+ },
+ "reglage": {
+  "canal": "chrome",
+  "sans_interface": true
+ },
+ "version_navigateur": "156.0.8078.80",
+ "sonde": {
+  "navigateur": {
+   "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+   "platform": "MacIntel",
+   "vendor": "Google Inc.",
+   "hardwareConcurrency": 18,
+   "deviceMemory": 32,
+   "languages": [
+    "fr-FR",
+    "fr",
+    "en-US",
+    "en"
+   ],
+   "webdriver": false,
+   "plugins": 5,
+   "pdfViewerEnabled": true,
+   "maxTouchPoints": 0
+  },
+  "userAgentData": {
+   "brands": [
+    {
+     "brand": "Not:A-Brand",
+     "version": "8"
+    },
+    {
+     "brand": "Chromium",
+     "version": "156"
+    },
+    {
+     "brand": "Google Chrome",
+     "version": "156"
+    }
+   ],
+   "mobile": false,
+   "platform": "macOS",
+   "haute_entropie": {
+    "architecture": "arm",
+    "bitness": "64",
+    "brands": [
+     {
+      "brand": "Not:A-Brand",
+      "version": "8"
+     },
+     {
+      "brand": "Chromium",
+      "version": "156"
+     },
+     {
+      "brand": "Google Chrome",
+      "version": "156"
+     }
+    ],
+    "fullVersionList": [
+     {
+      "brand": "Not:A-Brand",
+      "version": "8.0.0.0"
+     },
+     {
+      "brand": "Chromium",
+      "version": "156.0.8078.80"
+     },
+     {
+      "brand": "Google Chrome",
+      "version": "156.0.8078.80"
+     }
+    ],
+    "mobile": false,
+    "model": "",
+    "platform": "macOS",
+    "platformVersion": "27.0.0",
+    "uaFullVersion": "156.0.8078.80",
+    "wow64": false
+   }
+  },
+  "ecran": {
+   "width": 800,
+   "height": 600,
+   "availWidth": 800,
+   "availHeight": 600,
+   "colorDepth": 24,
+   "devicePixelRatio": 1
+  },
+  "fenetre": {
+   "innerWidth": 756,
+   "innerHeight": 469,
+   "outerWidth": 756,
+   "outerHeight": 556,
+   "screenX": 22,
+   "screenY": 22
+  },
+  "intl": {
+   "fuseau": "Europe/Paris",
+   "langue": "fr",
+   "decalage": -60
+  },
+  "webgl": {
+   "webgl": {
+    "vendor": "Google Inc. (Apple)",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+    "extensions": 39,
+    "maxTexture": 16384,
+    "subpixelBits": 4
+   },
+   "webgl2": {
+    "vendor": "Google Inc. (Apple)",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+    "extensions": 36,
+    "maxTexture": 16384,
+    "subpixelBits": 4
+   }
+  },
+  "webgpu": {
+   "present": true,
+   "adaptateur": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "description": ""
+   }
+  },
+  "voix": {
+   "n": 19,
+   "attente_ms": 0
+  },
+  "peripheriques": [
+   "audioinput",
+   "audiooutput"
+  ],
+  "polices": [],
+  "codecs": {
+   "h264": "probably",
+   "aac": "probably",
+   "vp9": "probably",
+   "mp3": "probably"
+  },
+  "connexion": {
+   "rtt": 100,
+   "downlink": 1.7,
+   "type": "4g"
+  },
+  "audio": {
+   "offline": true,
+   "echantillonnage": 48000
+  }
+ }
+}

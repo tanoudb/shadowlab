@@ -1,0 +1,24 @@
+# Étape 3.1 du plan (essai de fumée Linux) : noezia en identité native, vrai Google Chrome avec interface sur Xvfb (amd64 seulement : pas de Chrome pour Linux arm64).
+# Conteneur Linux sans carte graphique (docker/linux, scripts/fumee-linux.sh). Mêmes cellules que la campagne 132 du
+# poste (`controle-vrai-chrome.yaml`) : 3 scénarios × 5 répétitions = 15 passages par niveau, un à la fois ;
+# les niveaux 01 à 03 s'y ajoutent. Niveau 06 sans corrélation (profil `06scorr`), comme les campagnes 115 et 132 :
+# `SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml`, passé à la pile ET au conteneur.
+# 6 niveaux × 3 scénarios × 5 répétitions = 90 passages. Ce fichier ne mesure pas un humain : c'est un essai de
+# démarrage, il liste des incohérences et ne vaut pas validation (aucune mesure sur un vrai serveur, un seul poste).
+experiment:
+  name: fumee_linux_natif
+  description: >-
+    Essai de fumée Linux (étape 3.1) : noezia en identité native, vrai Google Chrome avec interface sur Xvfb (amd64 seulement : pas de Chrome pour Linux arm64).
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["01", "02", "03", "04", "05", "06scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 5
+  seed: 20261117
+  output: [json, html]
