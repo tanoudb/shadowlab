@@ -217,7 +217,7 @@ recommander des optimisations.
   lance un relais local (`engines/noezia/proxy_identite.py`) qui tient les identifiants et fait office de verrou réseau de l'identité (périmètre jugé par nom, aucun repli direct). Avec un vrai Chrome 156 : deux identités, deux sorties, aucune connexion directe,
   mauvais mot de passe refusé, WebRTC fermé (`--webrtc-ip-handling-policy=disable_non_proxied_udp`). `identite.declarer_proxy(nom, serveur, utilisateur, mot_de_passe)` crée le fichier. Fuites connues : DNS local du mode strict, relais sans authentification,
   identifiants en clair jusqu'au proxy. Aucun vrai proxy essayé ; l'effet de l'argument WebRTC sur les détecteurs n'est pas mesuré.
-- **2 351 tests verts** (`uv run pytest`, 17/11, sur `2fe3537`, 9 min 35 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
+- **2 698 tests verts** (`uv run pytest`, 17/11, sur `46b3c26`, 10 min 22 s, pendant la course I9) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au

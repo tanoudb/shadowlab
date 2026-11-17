@@ -3787,3 +3787,23 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fait** : `docs/recherche/anti-bot-essais-pour-3-4-2026-11-17.md`. Cloudflare (gratuit : Bot Fight Mode, non réglable ; Pro et plus : Super Bot Fight Mode, réglable ; Bot Management : Enterprise, devis) : documentation officielle lue. AWS WAF Bot Control : libre-service à l'usage (prix lus via un moteur de recherche). DataDome, HUMAN, Kasada, Akamai, Imperva : pas de libre-service trouvé, sources de seconde main contradictoires, page de prix de DataDome en 403.
 - **Recommandation** : 3.4 avec Cloudflare d'abord (gratuit, puis Pro si le témoin `playwright` n'est pas arrêté), AWS WAF Bot Control ensuite, DataDome seulement avec un essai écrit. Comptes, paiement et domaine : à Ethan.
 - **Reste** : aucun prix confirmé ; règles personnalisées du plan gratuit de Cloudflare non vérifiées ; rien acheté ni créé.
+
+## 2026-11-17 (soir) — Claude (Fable 5.2, coordination) — Étape 3.2 contrôlée et fusionnée ; où est la place du disque
+
+- **Fusion** : branche `claude/fumee-linux-43d3e8` jusqu'à `460aaa1` dans `niveau-authentifie-perimetre` (commit `46b3c26`). Un seul
+  conflit, `AGENTS.md` : l'entrée « Proxy par identité » est gardée, le compte de tests de la branche de travail aussi.
+- **Contrôle** : au commit des tests seuls (`ee72107`), aucun module `proxy_identite.py` n'existe, donc les tests ne pouvaient pas
+  passer ; relecture indépendante du code (sous-agent Sonnet, lecture seule) : aucun défaut bloquant, aucune fuite d'identifiants
+  (`configuration()` ne rend que le masque, `proxy.json` en 0600 sous `outputs/`, rien sur la ligne de commande de Chrome). Suite
+  complète sur `46b3c26` : 2 698 tests verts en 10 min 22 s, lint propre. La course I9 tournait pendant la suite.
+- **Trois durcissements confiés à la session `fumee-linux`** (tests d'abord) : `configuration()` lève `ProxyInvalide` si `proxy.json`
+  a de mauvais droits alors que le relais ne tourne pas ; `declarer_proxy` ouvre son fichier temporaire sans `O_NOFOLLOW` ni
+  `O_EXCL` ; l'en-tête `Host` du client est transmis tel quel. Limites connues laissées (D-99) : relais sans authentification,
+  pas de contrôle de réseau privé côté relais, fils non bornés. Non vérifié : aucun vrai proxy, DNS et QUIC non observés.
+- **Disque** (Ethan : « faut aller chercher ailleurs comment faire de la place ») : 28 Gio libres sur 460. Relevé en lecture seule,
+  rien supprimé. Notre projet pèse 6,9 Go. Le dossier temporaire du système affiche 115 Go : 81 copies de Chrome
+  (`code_sign_clone`) laissées par nos tests et nos campagnes, toutes de la version installée (156.0.8078.80), donc des clones
+  APFS qui ne prennent presque pas de vraie place (la somme des `du` dépasse la taille du disque). Proposé à Ethan : 8,9 Go
+  inutilisés dans Docker (image `strix-sandbox`, cache de construction, images de base) ; il décide. FLUX.2 reste en place.
+- **Course I9** : jour 1, sujet 5 visites sur 5, identité `ok`, témoins finis comme prévu, `course.sh etat` rend 0.
+- **Reste** : pousser ; fusionner les trois durcissements quand la session les rend ; corrections Linux dès 33 Gio libres.
