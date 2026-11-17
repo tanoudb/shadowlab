@@ -178,3 +178,30 @@ def test_identite_reecrite_garde_son_reglage_par_defaut(sites):
         assert _lu_par_l_iframe(pilote, sites.port) == f"lu={VALEUR}"
     finally:
         pilote.close()
+
+
+def test_la_liste_copiee_est_celle_de_patchright_moins_le_partitionnement():
+    """Le correctif repasse `--disable-features=…` (le dernier gagne) : il copie la liste de Playwright, moins
+    `ThirdPartyStoragePartitioning`. Une mise à jour de Patchright qui change cette liste (par exemple un nouveau
+    contournement d'un défaut de Chromium) doit échouer ICI, pas se perdre en silence : mettre alors la liste à jour."""
+    import re
+
+    import patchright
+
+    from shadowlab.engines.noezia.moteur import (
+        ARGUMENT_STOCKAGE_TIERS_PARTITIONNE,
+        FONCTIONS_COUPEES_SANS_PARTITIONNEMENT,
+    )
+
+    pilote = Path(patchright.__file__).parent / "driver" / "package" / "lib" / "coreBundle.js"
+    bloc = re.search(r"disabledFeatures = \[(.*?)\]\.filter\(", pilote.read_text(encoding="utf-8"), re.S)
+    assert bloc is not None, "la liste des fonctions coupées n'est plus où on la cherche : relire coreBundle.js"
+    noms = re.findall(r'^\s*"([A-Za-z0-9]+)",?\s*$', bloc.group(1), re.M)
+    # Patchright retire `MediaRouter` de la liste (`.filter(... !== "MediaRouter")`) ; le correctif retire
+    # le partitionnement.
+    attendu = [nom for nom in noms if nom not in ("MediaRouter", "ThirdPartyStoragePartitioning")]
+    assert "ThirdPartyStoragePartitioning" in noms, (
+        "Patchright ne coupe plus le partitionnement : le correctif est inutile"
+    )
+    assert list(FONCTIONS_COUPEES_SANS_PARTITIONNEMENT) == attendu
+    assert ARGUMENT_STOCKAGE_TIERS_PARTITIONNE == "--disable-features=" + ",".join(attendu)
