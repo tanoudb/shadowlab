@@ -20,6 +20,7 @@ import time
 
 import pytest
 from outils_proxy import (
+    AmontEnregistreur,
     AmontMuet,
     CibleDeTest,
     Echantillonneur,
@@ -353,6 +354,21 @@ def test_amont_muet_accepte_et_ne_dit_rien():
             sock.recv(10)
         sock.close()
         assert muet.adresse == f"http://127.0.0.1:{muet.port}"
+
+
+def test_amont_enregistreur_note_ce_qu_il_recoit_et_ne_repond_jamais():
+    with AmontEnregistreur() as enregistreur:
+        assert enregistreur.octets_recus == b"" and enregistreur.adresse == f"http://127.0.0.1:{enregistreur.port}"
+        sock = ouvrir_connexion(enregistreur.port, delai_s=0.5)
+        sock.sendall(b"GET http://x/ HTTP/1.1\r\n")
+        sock.sendall(b"Host: x\r\n\r\n")
+        assert attendre(lambda: enregistreur.octets_recus == b"GET http://x/ HTTP/1.1\r\nHost: x\r\n\r\n")
+        with pytest.raises(TimeoutError):  # comme `AmontMuet` : aucune réponse
+            sock.recv(10)
+        sock.close()
+        with ouvrir_connexion(enregistreur.port) as autre:  # plusieurs connexions : tout s'ajoute
+            autre.sendall(b"deuxieme")
+            assert attendre(lambda: enregistreur.octets_recus.endswith(b"deuxieme"))
 
 
 def test_ecrire_proxy_dossier_0700_fichier_0600_contenu_relu(tmp_path):

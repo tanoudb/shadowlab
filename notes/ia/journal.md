@@ -3807,3 +3807,11 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   inutilisés dans Docker (image `strix-sandbox`, cache de construction, images de base) ; il décide. FLUX.2 reste en place.
 - **Course I9** : jour 1, sujet 5 visites sur 5, identité `ok`, témoins finis comme prévu, `course.sh etat` rend 0.
 - **Reste** : pousser ; fusionner les trois durcissements quand la session les rend ; corrections Linux dès 33 Gio libres.
+
+## 2026-11-17 — Claude (Sonnet 5.5, session `fumee-linux`, sous-agent Sonnet) — Proxy par identité : trois durcissements après relecture indépendante
+- **Demande de la coordination** (étape 3.2 fusionnée en `46b3c26`) : trois défauts mineurs, tests d'abord vus en échec.
+- **Fait** : (1) `configuration()` ne lève plus (`identite_proxy: "invalide"` pour un `proxy.json` inutilisable, dossier ou lien compris, sans rien citer du fichier) ; `open()` refuse toujours (17 tests rouges avant) ; (2) `declarer_proxy` ne suit aucun lien (suppression du `proxy.tmp` puis `O_EXCL | O_NOFOLLOW` ; 4 tests rouges sur 7 avant) ;
+  (3) le relais réécrit `Host` sur la cible jugée, choix RFC 7230 § 5.4 plutôt qu'un refus en 400 (29 tests rouges sur 31 avant). `Host` est reconstruit : hôte en minuscules, `:80` omis, IPv6 entre crochets.
+- **Vérifié** : 218 tests rapides + 41 d'aides + 23 avec un vrai Chrome 156 (282 en tout) ; les 3 tests d'identité d'avant ; suite rapide 2 549 réussis, 2 sautés ; suite complète non lancée ; lint propre.
+- **Fichiers** : `moteur.py`, `identite.py`, `proxy_identite.py` ; `tests/test_proxy_identite.py`, `outils_proxy.py`, `test_outils_proxy.py` ; D-99 complétée d'une phrase, `docs/recherche/proxy-par-identite-2026-11-17.md`, `AGENTS.md`, `docs/PLAN.md` (comptes).
+- **Reste** : `lire_proxy` laisse passer une `IsADirectoryError` (et non une `ProxyInvalide`) pour un `proxy.json` qui est un dossier : `open()` refuse bien, `configuration()` donne `invalide`, mais le § 7 de la conception dit « refuse tout fichier non ordinaire » ; correctif possible : envelopper `fdopen`, `fstat` et la lecture dans un `except OSError`. Limites connues inchangées : relais sans authentification, pas de contrôle de réseau privé côté relais, fils non bornés.

@@ -235,7 +235,9 @@ def ouvrir(nom: str, *, horloge: Callable[[], datetime] | None = None, maintenan
 
 def declarer_proxy(nom: str, serveur: str, utilisateur: str | None = None, mot_de_passe: str | None = None) -> Path:
     """Écrit le proxy de l'identité (`proxy.json`, droits 0600, dossier 0700) ; rien n'est écrit s'il est invalide. Le
-    fichier est remplacé d'un coup : un ancien fichier plus ouvert ne laisse pas ses droits au nouveau."""
+    fichier est remplacé d'un coup : un ancien fichier plus ouvert ne laisse pas ses droits au nouveau. Un lien
+    symbolique n'est jamais suivi : un `proxy.tmp` déjà là (reste d'un plantage, ou lien posé dans le dossier) est
+    retiré avant l'écriture, et `proxy.json`, même si c'était un lien, est remplacé par un fichier ordinaire."""
     verifier_nom(nom)
     analyser(serveur, utilisateur, mot_de_passe)
     dossier = racine_identites() / nom
@@ -244,9 +246,15 @@ def declarer_proxy(nom: str, serveur: str, utilisateur: str | None = None, mot_d
     champs = {"serveur": serveur, "utilisateur": utilisateur, "mot_de_passe": mot_de_passe}
     fichier = dossier / FICHIER_PROXY
     temporaire = fichier.with_suffix(".tmp")
-    descripteur = os.open(temporaire, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.unlink(temporaire)  # retire un lien lui-même, jamais sa cible
+    except FileNotFoundError:
+        pass
+    # Création exclusive et sans suivre de lien : un `proxy.tmp` réapparu depuis (course) fait échouer, jamais écrire
+    # ailleurs.
+    descripteur = os.open(temporaire, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descripteur, "w", encoding="utf-8") as f:
-        os.fchmod(f.fileno(), 0o600)  # avant d'écrire : ni l'umask ni un `.tmp` laissé plus ouvert ne comptent
+        os.fchmod(f.fileno(), 0o600)  # avant d'écrire : l'umask ne compte pas
         json.dump({cle: valeur for cle, valeur in champs.items() if valeur is not None}, f)
     os.replace(temporaire, fichier)
     return fichier
