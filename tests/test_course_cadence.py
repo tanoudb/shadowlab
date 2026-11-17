@@ -32,6 +32,15 @@ def iso(t: datetime) -> str:
     return t.astimezone().isoformat(timespec="milliseconds")
 
 
+class Notes(list):
+    """Les notes durables écrites par la cadence, sans la note `prevue` (heure de la prochaine visite : un relevé, pas un
+    état ; elle est testée dans `test_course_etat.py`)."""
+
+    def append(self, ligne):
+        if ligne.get("genre") != "prevue":
+            super().append(ligne)
+
+
 def cadence(horloge, *, faites=(), notes=(), depart=None, noter=None, graine=7, **champs):
     reglage = espacement.Espacement(mode="ordonnanceur", **champs)
     return espacement.Cadence(
@@ -113,7 +122,7 @@ class MacQuiDort(Horloge):
 
 def test_un_creneau_pris_trop_tard_est_manque_note_puis_replanifie_depuis_maintenant():
     horloge = MacQuiDort(T0, duree_s=4 * 3600)
-    notes = []
+    notes = Notes()
     faites = [(T0 - timedelta(minutes=12), T0 - timedelta(minutes=10), 15)]
     c = cadence(horloge, faites=faites, noter=notes.append)
     prevu = c._prochain().debut
@@ -130,7 +139,7 @@ def test_un_creneau_pris_trop_tard_est_manque_note_puis_replanifie_depuis_mainte
 
 def test_un_retard_sous_le_seuil_n_est_pas_une_visite_manquee():
     horloge = MacQuiDort(T0, duree_s=5 * 60)  # 5 minutes de veille juste avant l'heure : sous les 10 minutes
-    notes = []
+    notes = Notes()
     faites = [(T0 - timedelta(minutes=12), T0 - timedelta(minutes=10), 15)]
     c = cadence(horloge, faites=faites, noter=notes.append)
     prevu = c._prochain().debut
@@ -144,7 +153,7 @@ def test_un_creneau_qui_tomberait_hors_de_la_plage_n_est_jamais_joue():
     au-delà de la dernière heure de début (23 h moins 30 min) : manquée, et la suivante est demain matin."""
     soir = datetime(2026, 11, 17, 21, 0)
     horloge = MacQuiDort(soir, duree_s=2 * 3600)  # créneau vers 21 h 45, réveil vers 23 h 45
-    notes = []
+    notes = Notes()
     faites = [(soir - timedelta(minutes=2), soir, 15)]
     c = cadence(horloge, faites=faites, noter=notes.append, retard_max_min=600, reglages=ECART_COURT)
     creneau = c.attendre()
@@ -156,7 +165,7 @@ def test_une_reprise_tardive_retrouve_le_creneau_et_le_compte_manque():
     """Processus arrêté puis relancé une heure après l'heure prévue : le créneau recalculé est en retard, il est noté."""
     faites = [(T0 - timedelta(minutes=12), T0 - timedelta(minutes=10), 15)]
     prevu = cadence(Horloge(T0), faites=faites)._prochain().debut
-    notes = []
+    notes = Notes()
     relance = Horloge(prevu + timedelta(hours=1))
     c = cadence(relance, faites=faites, noter=notes.append)
     creneau = c.attendre()
@@ -168,7 +177,7 @@ def test_une_reprise_tardive_retrouve_le_creneau_et_le_compte_manque():
 def test_la_premiere_visite_se_planifie_depuis_le_depart_durable_de_la_course():
     """Sans visite faite, la référence est le départ de la course (création de l'expérience) : une relance tardive
     avant toute visite est aussi une visite manquée."""
-    notes = []
+    notes = Notes()
     depart = T0 - timedelta(hours=2)
     c = cadence(Horloge(T0), depart=depart, noter=notes.append)
     creneau = c.attendre()
@@ -187,7 +196,7 @@ def test_les_notes_relues_font_partie_de_l_etat():
         "prevue": iso(T0 - timedelta(hours=1)),
         "constatee": iso(T0 - timedelta(minutes=2)),
     }
-    notes = []
+    notes = Notes()
     c = cadence(Horloge(T0), faites=faites, notes=[deja], noter=notes.append)
     creneau = c.attendre()
     assert notes == [] and creneau.debut <= T0
@@ -198,7 +207,7 @@ def test_les_notes_relues_font_partie_de_l_etat():
 
 def test_une_panne_n_est_pas_jouee_on_reessaie_5_minutes_apres_et_une_seule_visite_manquee_est_comptee():
     horloge = Horloge(T0)
-    notes = []
+    notes = Notes()
     faites = [(T0 - timedelta(minutes=12), T0 - timedelta(minutes=10), 15)]
     c = cadence(horloge, faites=faites, noter=notes.append)
     premier = c.attendre()
@@ -241,7 +250,7 @@ def test_un_reveil_apres_l_echeance_n_est_ni_une_visite_ni_une_visite_manquee():
     depart = T0 - timedelta(hours=6)
     faites = [(T0 - timedelta(minutes=12), T0 - timedelta(minutes=10), 15)]
     horloge = MacQuiDort(T0, duree_s=6 * 3600)
-    notes = []
+    notes = Notes()
     c = cadence(
         horloge, faites=faites, depart=depart, jours=8 / 24, noter=notes.append, reglages=ECART_COURT
     )  # échéance T0 + 2 h

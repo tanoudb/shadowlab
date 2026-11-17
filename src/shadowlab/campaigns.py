@@ -454,7 +454,8 @@ def ecrire_note(reglages: Reglages, experiment_id: int, ligne: dict[str, Any]) -
     créneau, essai), `interrompue` (visite coupée en plein milieu par un arrêt brutal : début, dernière requête vue par
     l'Arena, pages), `echeance` (la course est finie pour le bras : répétitions restantes, non faites),
     `attente_alerte` (identité du bras en alerte : heure prévue, fin de l'attente, `alerte_le` ; aucune visite avant),
-    `bannie` (identité du bras bannie : plus aucune visite, répétitions restantes, non faites)."""
+    `bannie` (identité du bras bannie : plus aucune visite, répétitions restantes, non faites), `prevue` (prochaine
+    visite choisie par la cadence : heure prévue, heure d'écriture ; un relevé pour `course etat`, jamais un état)."""
     fichier = dossier_campagne(reglages, experiment_id) / FICHIER_CADENCE
     fichier.parent.mkdir(parents=True, exist_ok=True)
     with fichier.open("a", encoding="utf-8") as flux:
