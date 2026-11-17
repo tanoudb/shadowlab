@@ -43,6 +43,7 @@ from .defis import turnstile as defi_turnstile
 from .furtivite.patches import injecter as injecter_furtivite
 from .profils.generateur import ProfilNavigateur, generer_profil
 from .profils.stockage import charger_ou_creer
+from .proxy_identite import RelaisProxy
 from .sentinelle import RefusRessource, detecter_defi_ressource
 
 log = logging.getLogger(__name__)
@@ -62,6 +63,14 @@ HOTES_CHALLENGES = (
     "www.gstatic.com",
     "www.recaptcha.net",
 )
+
+# Lancement d'une identité qui a un proxy : l'UDP de WebRTC ignore le proxy et montrerait l'adresse de la machine ;
+# cette politique ne laisse sortir que ce qui passe par le proxy. Seul réglage ajouté (l'identité reste native).
+# Mesuré sur Chrome 156 (macOS) avec un STUN local : sans cet argument 4 paquets UDP sortent, avec lui 0. Le nom
+# `--force-webrtc-ip-handling-policy`, souvent cité, n'a aucun effet sur ce Chrome (4 paquets). Le test WebRTC de
+# `test_proxy_identite_chrome.py` garde l'effet : un Chrome qui changerait encore de nom l'échouerait.
+ARGUMENT_WEBRTC_PROXY = "--webrtc-ip-handling-policy=disable_non_proxied_udp"
+ARGUMENTS_PROXY_IDENTITE = (ARGUMENT_WEBRTC_PROXY,)  # tous les arguments de lancement imposés par un proxy d'identité
 
 
 class DriverNoezia(Driver):
@@ -107,6 +116,8 @@ class DriverNoezia(Driver):
         if self._nom_identite is not None:
             self._nb_essais = 1  # une identité qui revient ne réessaie jamais : un 429 n'est pas relancé
         self._identite: identite.Identite | None = None
+        # Relais local vers le proxy de l'identité (None sans proxy déclaré) : voir `proxy_identite.py`.
+        self._relais: RelaisProxy | None = None
         self._version_chrome: str | None = None
         self._pages_visite = 0
         # Hôtes que le cadre principal a le droit de demander (récolte : `hotes` de la recette).
@@ -191,6 +202,12 @@ class DriverNoezia(Driver):
         if self._nom_identite is not None:
             conf["identite"] = self._nom_identite
             conf["identite_age_jours"] = identite.age_jours(self._nom_identite)
+            # Le proxy réellement utilisé si le relais tourne (le fichier a pu changer depuis), sinon celui déclaré.
+            proxy = self._relais.amont if self._relais is not None else identite.lire_proxy(self._nom_identite)
+            if proxy is not None:
+                conf["identite_proxy"] = proxy.masque()  # le masque seul : jamais d'identifiant dans les résultats
+                # Réglage imposé par le proxy : déclaré et enregistré avec les résultats.
+                conf["identite_proxy_arguments"] = list(ARGUMENTS_PROXY_IDENTITE)
         if self._profil:
             conf["profil"] = self._profil.nom
             conf["profil_os"] = self._profil.os
@@ -224,9 +241,18 @@ class DriverNoezia(Driver):
         self._avertir_identite_native_sans_interface()
 
         if self._nom_identite is not None:
+            # Le proxy se lit avant de prendre le verrou : un fichier refusé ne laisse pas l'identité prise.
+            proxy = identite.lire_proxy(self._nom_identite)
             # Refus avant tout lancement : identité bannie ou déjà prise. Chrome démarre à start_session().
             self._identite = identite.ouvrir(self._nom_identite)
-            self._pw = sync_playwright().start()
+            try:
+                if proxy is not None:
+                    self._relais = RelaisProxy(proxy, self.hotes_autorises, HOTES_CHALLENGES)
+                    self._relais.demarrer()
+                self._pw = sync_playwright().start()
+            except BaseException:
+                self.close()  # une campagne n'appelle pas `close()` si `open()` échoue : ni verrou ni relais ne restent
+                raise
             self._profil = None
             return
 
@@ -291,6 +317,9 @@ class DriverNoezia(Driver):
         )
 
     def close(self) -> None:
+        if self._relais is not None:  # d'abord : si la suite lève, aucun relais ne survit au pilote
+            self._relais.arreter()
+            self._relais = None
         if self._navigateur is not None:
             self._navigateur.close()
             self._navigateur = None
@@ -308,15 +337,21 @@ class DriverNoezia(Driver):
         return self._identite
 
     def _lancer_identite(self):
-        """Chrome sur le dossier de profil de l'identité, avec le verrou réseau du périmètre (après les options)."""
-        verrou = self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)
+        """Chrome sur le dossier de profil de l'identité, avec le verrou réseau du périmètre (après les options).
+
+        Avec un proxy d'identité, Chrome n'a pour proxy que le relais, sans bypass : Playwright y ajoute `<-loopback>`,
+        le local passe donc aussi par le relais, qui est le verrou. Jamais `SHADOWLAB_PROXY` ni un accès direct."""
+        if self._relais is not None:
+            reseau = {"proxy": {"server": self._relais.adresse}, "args": list(ARGUMENTS_PROXY_IDENTITE)}
+        else:
+            reseau = {"proxy": self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)}
         contexte = self._pw.chromium.launch_persistent_context(
             user_data_dir=str(self._identite.dossier_profil),
             channel=self._config.channel,
             headless=False,
-            proxy=verrou,
             no_viewport=True,
             ignore_https_errors=not self._verifier_tls,
+            **reseau,
         )
         self._version_chrome = contexte.browser.version if contexte.browser else None
         self._pages_visite = 0

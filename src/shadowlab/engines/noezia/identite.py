@@ -7,6 +7,8 @@ Disposition (I4, `docs/recherche/identite-qui-dure-2026-11-12.md` § 5.2) :
                    chrome/         dossier de profil de Chrome (cookies, stockage, cache)
                    visites.jsonl   une ligne par visite
                    verrou          un seul processus à la fois sur une identité
+                   proxy.json      facultatif : le proxy de l'identité, avec ses identifiants (0600, jamais lisible par
+                                   un autre ; `docs/recherche/proxy-par-identite-2026-11-17.md`)
 
 La racine est `outputs/identites` (ignoré par git), ou `SHADOWLAB_IDENTITES` (tests). Ce n'est jamais une
 option de campagne : une option ne doit pas pouvoir pointer vers le profil d'une personne.
@@ -21,17 +23,20 @@ import fcntl
 import json
 import os
 import re
+import stat
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from ...config import RACINE
+from .proxy_identite import ProxyIdentite, ProxyInvalide, analyser
 
 NOM_VALIDE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 ETATS = ("ok", "alerte", "banni")
 VERDICTS = ("alerte", "banni")
 ATTENTE_ALERTE_S = 3600  # une identité en alerte ne sert pas avant 1 h (comme `parcours.ATTENTE_APRES_ALERTE_S`)
+FICHIER_PROXY = "proxy.json"
 
 
 class IdentiteRefusee(RuntimeError):
@@ -226,3 +231,52 @@ def ouvrir(nom: str, *, horloge: Callable[[], datetime] | None = None, maintenan
         verrou.close()
         raise
     return Identite(nom, dossier, verrou, horloge)
+
+
+def declarer_proxy(nom: str, serveur: str, utilisateur: str | None = None, mot_de_passe: str | None = None) -> Path:
+    """Écrit le proxy de l'identité (`proxy.json`, droits 0600, dossier 0700) ; rien n'est écrit s'il est invalide. Le
+    fichier est remplacé d'un coup : un ancien fichier plus ouvert ne laisse pas ses droits au nouveau."""
+    verifier_nom(nom)
+    analyser(serveur, utilisateur, mot_de_passe)
+    dossier = racine_identites() / nom
+    dossier.mkdir(parents=True, exist_ok=True, mode=0o700)
+    dossier.chmod(0o700)
+    champs = {"serveur": serveur, "utilisateur": utilisateur, "mot_de_passe": mot_de_passe}
+    fichier = dossier / FICHIER_PROXY
+    temporaire = fichier.with_suffix(".tmp")
+    descripteur = os.open(temporaire, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descripteur, "w", encoding="utf-8") as f:
+        os.fchmod(f.fileno(), 0o600)  # avant d'écrire : ni l'umask ni un `.tmp` laissé plus ouvert ne comptent
+        json.dump({cle: valeur for cle, valeur in champs.items() if valeur is not None}, f)
+    os.replace(temporaire, fichier)
+    return fichier
+
+
+def lire_proxy(nom: str) -> ProxyIdentite | None:
+    """Le proxy déclaré de l'identité, ou None sans fichier (rien n'est créé). Lève `ProxyInvalide` si le fichier est
+    lisible par le groupe ou les autres, d'un autre propriétaire, ou invalide : un proxy déclaré mais inutilisable ne
+    doit jamais devenir un accès direct. Aucun message ne cite le contenu du fichier."""
+    chemin = racine_identites() / verifier_nom(nom) / FICHIER_PROXY
+    try:
+        # Un seul descripteur pour contrôler les droits et lire (rien ne change entre les deux), sans lien symbolique.
+        descripteur = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise ProxyInvalide(f"proxy de l'identité {nom!r} : fichier illisible (lien symbolique ?)") from None
+    with os.fdopen(descripteur, encoding="utf-8") as f:
+        info = os.fstat(f.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            raise ProxyInvalide(f"proxy de l'identité {nom!r} : fichier ordinaire de l'utilisateur attendu")
+        if info.st_mode & 0o077:
+            raise ProxyInvalide(f"proxy de l'identité {nom!r} : droits trop larges (0600 attendu)")
+        try:
+            donnees = json.load(f)
+        except ValueError:
+            raise ProxyInvalide(f"proxy de l'identité {nom!r} : JSON invalide") from None
+    if not isinstance(donnees, dict):
+        raise ProxyInvalide(f"proxy de l'identité {nom!r} : un objet JSON est attendu")
+    try:
+        return analyser(donnees.get("serveur"), donnees.get("utilisateur"), donnees.get("mot_de_passe"))
+    except ProxyInvalide as erreur:
+        raise ProxyInvalide(f"proxy de l'identité {nom!r} : {erreur}") from None
