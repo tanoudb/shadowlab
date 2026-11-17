@@ -1337,15 +1337,54 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `<sorties>/campagnes/<n°>/cadence.jsonl`. (4) La cadence reprend les visites faites (base, plus les visites coupées
   notées `interrompue`) par `Ordonnanceur.rejouer`, sans modifier l'ordonnanceur. (5) Échéance `jours: 7`, comptée de la
   création de l'expérience. (6) La porte n'est jugée trop tôt que sous la durée du profil moins 60 s
-  (`TOLERANCE_PORTE_S`). (7) Récolte incrémentale portée par le scénario `visite`, avec un dossier durable par bras
+  (`TOLERANCE_PORTE_S`). L'âge de la porte au retour se compte depuis sa dernière validation (`defi-js` / `valide`) jusqu'à la
+  première émission du retour : une photo puis la page suivante ne font qu'un seul retour (`fa88df6`). (7) Récolte incrémentale portée par le scénario `visite`, avec un dossier durable par bras
   (`campagnes/<n°>/recolte/<libellé>-<protection>/`), pas par `recolte lancer`, qui vise le site sans jeton, donc sans
   profil de l'Arena. (8) Vitrine de 300 annonces. (9) Témoins négatif, de sentinelle et classique à 10 min d'intervalle le
   premier jour. (10) Bilan : `shadowlab course bilan <n°>` (`scripts/course.sh bilan <n°>`), un verdict par critère du
-  § 6.3.
+  § 6.3. (11) Contrôle : `shadowlab course etat [<n°>] [--session vivante|absente] [--json]`, appelé par `scripts/course.sh etat [<n°>]`
+  (`d2932bc`). Il montre : en cours, arrêtée ou finie ; le jour et l'échéance ; la dernière activité ; par bras, les visites, les
+  manquées, la prochaine visite et le retard, l'identité. Codes de sortie : 0 en cours ou finie ; 1 arrêtée ; 2 retard de plus de
+  30 min, ou visite en cours depuis plus de 60 min, ou 2 visites prévues manquées de suite ; 3 introuvable ou erreur d'usage. La
+  cadence écrit une note `prevue` dans `cadence.jsonl`.
   **Disque.** Ce qu'a écrit la soirée 131 : environ 18 Mo en base, 4 Mo de journaux de l'Arena et 100 Mo par profil
-  d'identité. Estimation pour la course : environ 1 Go, second `.venv` compris (533 Mo). Mesures : 12 Gio libres à
-  15 h 43, 9,8 Gio après la préparation du dossier. Rien à supprimer pour la course. La règle globale demande 25 Go
-  libres. Dans le projet, ce qui pèse n'est pas un cache : des sauvegardes de la base (603, 129 et 80 Mo) et des identités
-  archivées (565 Mo). C'est à Ethan de décider.
-  **Répétition** : [À COMPLÉTER : répétition]. **Lancement** : étiquette `course-i9` sur [À COMPLÉTER : commit de lancement].
-  Lancée seulement quand la coordination le dit. Décidé par : coordination, sur le « Oui » d'Ethan.
+  d'identité. La répétition 2 a écrit 106 Mo. Estimation pour la course : environ 1 Go, second `.venv` compris (533 Mo).
+  Mesures : 12 Gio libres le 16/11 à 15 h 43, 9,8 Gio après la préparation du dossier, 30 Gio le 17/11 à 8 h 41. Aucune place à
+  faire. Dans le projet, ce qui pèse n'est pas un cache : des sauvegardes de la base (603, 129 et 80 Mo) et des identités archivées
+  (565 Mo) ; c'est à Ethan de décider.
+  **Répétitions.** (1) **16/11, 17 h 11 : non tenue.** Prouvé : l'isolation ; l'arrêt brutal puis la reprise (même visiteur
+  `73855330`, visite coupée notée `interrompue`) ; la panne de Docker (2 visites notées `manquee/infrastructure`, aucune alerte) ;
+  la récolte (30 annonces sur 30, 420 champs sur 420). Cause, à la visite 11 : la porte revenait pendant une relecture de la lecture
+  humaine ; le défi de l'Arena est servi en 403 et la relecture le prenait pour une alerte. Corrigé : fusion `bb14c58` (`_relire`
+  passe par `_porte_en_cours` ; aucune visite pendant une alerte de l'identité). (2) **16/11, 19 h 23 : non tenue**, arrêtée seule à
+  19 h 33, personne ne l'a vu pendant 13 heures. La porte de 600 s a expiré pendant la visite 3 du sujet ; l'Arena a servi à deux
+  photos chargées au défilement son motif JSON `{"bloque_par":"defi-js"}` en 403 ; le moteur l'a pris pour un bannissement :
+  identité `banni`, 197 visites non faites. L'Arena n'a rien banni (aucune ligne dans `bannissements`). Témoins tous tenus ; sujet
+  2 visites réussies sur 3 ; récolte 30 sur 30 et 420 sur 420 ; 2 passages de la porte, écart le plus court 602 s. Corrigé : `a3d56e4`
+  (un défi sur une ressource n'est plus un bannissement ; la page ou le JSON `bannissement` en restent un, sur une page comme sur
+  une photo ; le moteur ne recharge rien, la page suivante repasse la porte), `d2932bc` (`course etat`, règle 11), `fa88df6`
+  (règle 6). (3) **17/11, de 9 h 15 à environ 10 h 41**, étiquette `course-i9-repetition-3` = `a3d56e4`, bilan fait avec le code de
+  `fa88df6` (qui ne change que le bilan). Déjà prouvé : l'isolation refaite (conteneurs principaux recréés à 9 h 15 min 46 s,
+  empreinte de la course inchangée) ; arrêt brutal à 9 h 29 min 00 s (`kill -9` du groupe de processus pendant la visite 5 du sujet,
+  aucun survivant, `course.sh etat` répond « arrêtée », code 1) ; reprise à 9 h 29 min 18 s (même visiteur `9d0650de`, visite 5
+  notée `interrompue` avec 2 pages, visite suivante réussie à 9 h 32 min 47 s, la sentinelle bannie n'a relancé aucune visite) ;
+  Docker arrêté à 9 h 35 min 41 s (note `manquee/infrastructure` à 9 h 37 min 41 s, Docker relancé à 9 h 37 min 42 s, aucune
+  alerte) ; témoins : négatif arrêté à la 5ᵉ visite, sentinelle refusée à la 3ᵉ (identité `banni`), classique 0 visite réussie sur 3.
+  Un défi sur une photo ne s'est pas présenté en vrai : la porte a expiré 1 s après la fin de la visite 3, puis a été repassée en page
+  à la visite 4. Bilan : [À COMPLÉTER : bilan répétition 3].
+  **Rythme et surveillance.** Rythme gardé : 45 à 180 min (D-90), sans changement, tranché par la coordination. Ethan a dit « Oui » à
+  « par moments », pas à « une visite toutes les 1 à 3 h » (formulation de la question 4). Un contrôle après les témoins du premier
+  jour, puis un au plus par jour, avec `scripts/course.sh etat` ; un code différent de 0 veut dire qu'il faut regarder. Pour la
+  répétition seulement, toutes les commandes `course.sh` (`etat`, `bilan`, `reprendre`) exigent
+  `COURSE_ENV=configs/courses/i9-repetition.env`, sinon le profil `endurancecourt` est inconnu et elles sortent en 3 ; la vraie course
+  ne passe pas de `COURSE_ENV`.
+  **Lancement prévu** (rien d'exécuté) : (1) `git tag -a course-i9 -m "Course I9 (7 jours)"` sur le commit de fusion de ces documents ;
+  (2) `mv .courses/i9/outputs .courses/repetition-3-2026-11-17` ; (3) `git -C .courses/i9 checkout --detach course-i9 && (cd .courses/i9
+  && uv sync)` ; (4) `scripts/course.sh demarrer configs/experiments/identite-7-jours.yaml`, sans `COURSE_ENV` ; (5) ensuite
+  `scripts/course.sh etat | reprendre <n°> | bilan <n°>`. Étiquette `course-i9` sur le commit de fusion de ces documents. Lancée
+  seulement quand la coordination le dit.
+  **Non vérifié** : les nuits et le passage d'une journée à l'autre ; la vraie porte de 24 h ; une vraie mise en veille du Mac ; le
+  plafond de 200 pages par jour ; un profil Chrome qui tient 7 jours ; un défi sur une photo dans un vrai Chrome devant la vraie Arena
+  (prouvé par des tests, dont 4 dans un vrai navigateur, pas en répétition) ; `course etat` : une seule visite prévue manquée la nuit
+  donne encore 0, et un blocage hors attente et hors visite ne se voit qu'à « dernière activité ».
+  Décidé par : coordination, sur le « Oui » d'Ethan.

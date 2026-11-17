@@ -194,11 +194,13 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
-- **Course de 7 jours (I9)** (D-96, 16/11) : préparée, répétition [À COMPLÉTER : répétition], non lancée. Ethan a dit « Oui » à la
-  question 4 de la conception ; I9 part avant I8. Elle tourne dans une copie figée du code, `.courses/i9/` (ports 8760, 8753 et
-  8761, projet Docker `shadowlab-course-i9`, base et identités à part), dans la session tmux `course-i9`. Bilan du § 6.3 :
-  `shadowlab course bilan <n°>`. Lancée seulement quand la coordination le dit.
-- **2 244 tests verts** (`uv run pytest`, 16/11, après la fusion de la course, 9 min 13 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
+- **Course de 7 jours (I9)** (D-96, 16/11) : préparée, non lancée. Trois répétitions : 16/11 (17 h 11) et 16/11 (19 h 23) non tenues,
+  causes corrigées ; 17/11 (9 h 15 à 10 h 41) : isolation, arrêt brutal, reprise, panne de Docker et témoins prouvés, bilan
+  [À COMPLÉTER : bilan répétition 3]. Ethan a dit « Oui » à la question 4 ; I9 part avant I8. Copie figée du code `.courses/i9/` (ports
+  8760, 8753 et 8761, projet Docker `shadowlab-course-i9`, base et identités à part), session tmux `course-i9`. Non vérifié : les
+  nuits, la vraie porte de 24 h, une vraie veille du Mac, le plafond de 200 pages par jour, un profil Chrome sur 7 jours, un défi sur
+  une photo en vrai devant la vraie Arena. Lancée seulement quand la coordination le dit.
+- **[À COMPLÉTER : tests] tests verts** (`uv run pytest`, 17/11, sur `fa88df6`) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
 - **Moteur, souris** (D-74, 13/11) : la trajectoire garde un tremblement visible au pixel, après deux blocages au
@@ -302,7 +304,8 @@ uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 uv run shadowlab public frequentation | sessions            # visites et sessions par jour ; sessions par taille (repérer un abus)
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
-scripts/course.sh etat                                  # course I9 (D-96), depuis le dossier principal : session, conteneurs, santé, journal
+scripts/course.sh etat [<n°>]                              # course I9 (D-96), depuis le dossier principal : résumé (`shadowlab course etat`), conteneurs, santé, journal ; code 0 en cours ou finie, 1 arrêtée, 2 retard de plus de 30 min / visite en cours depuis plus de 60 min / 2 visites prévues manquées de suite, 3 introuvable ; un code non nul veut dire : regarder. Répétition : toutes les commandes `course.sh` exigent `COURSE_ENV=configs/courses/i9-repetition.env` (sinon code 3)
+uv run shadowlab course etat [<n°>] [--session vivante|absente] [--json]  # le résumé seul, lu dans la copie figée
 scripts/course.sh reprendre <n°>                           # après un redémarrage du Mac ; la base de la course numérote ses campagnes à partir de 1
 scripts/course.sh bilan <n°>                               # bilan du § 6.3 (0 tout tenu, 1 sinon, 2 campagne inconnue)
 scripts/course.sh arreter                                  # arrêt d'urgence de la course (crée `ARRET` dans ses sorties)
@@ -394,7 +397,7 @@ servi par `labo.py` sous `/labo` ; le backend reste la seule source de vérité 
 - Ne pas lancer de tests ni de travaux lourds pendant une campagne de mesure : ils faussent CPU et durées.
 - **Course I9 (D-96)** : pendant la course, les tests et les campagnes du dossier principal restent permis, car elle ne mesure ni
   processeur ni durée (§ 6.3) ; c'est une exception à la règle ci-dessus. Ne jamais toucher : la session tmux `course-i9`, le projet
-  Docker `shadowlab-course-i9`, les ports 8760, 8753 et 8761, le dossier `.courses/`. Ne jamais retirer `.courses/i9` avant le bilan.
+  Docker `shadowlab-course-i9`, les ports 8760, 8753 et 8761, le dossier `.courses/`. Ne jamais retirer `.courses/i9` avant le bilan. Une campagne du dossier principal lancée pendant la course voit ses durées, et peut-être son processeur, faussés par les visites de la course : son bilan doit le dire.
 - Récolte générale (D-70) : une recette qui vise un site qui n'est pas à nous porte une ligne `autorisation`
   (D-30) ; `robots.txt` est respecté par défaut ; aucune redirection vers un autre hôte n'est suivie ; la
   commande ne clique jamais sur un défi d'un site tiers et n'a aucun solveur de CAPTCHA. Une valeur douteuse
