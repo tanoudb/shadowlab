@@ -194,6 +194,10 @@ recommander des optimisations.
   l'Arena. Réserves : une soirée, une machine, un Chrome sur macOS, `endurance` sans CAPTCHA, aucun humain qui revient, rythme réglé
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
+- **Essai de fumée Linux, étape 3.1** (17/11, D-98, `docs/recherche/fumee-linux-2026-11-17.md`) : le moteur `noezia` tourne sous Linux sans carte graphique (conteneur Ubuntu 24.04 sur OrbStack, arm64 natif et amd64
+  émulé), 6 campagnes de la base du dossier `fumee-linux` (540 passages, 0 panne). Le réglage par défaut sans écran refait la campagne 97 du poste ; en natif, Chrome 157 (amd64) 87 sur 90, Chromium (arm64) 89 sur 90, contre 15 sur 15 par niveau à
+  la 132 du poste. Incohérences, de la plus grave : WebGL absent avec interface (D-50 suppose un repli SwiftShader qui n'a lieu que sans interface), `devices_vide` (15 sur 15 en natif), `voices_vide` (Chromium), `duree_pages_reguliere`.
+  Pas de Chrome pour Linux arm64. Non vérifié : vrai serveur x86_64, architecture arm64 réelle, niveau 07. Coût disque : 13 Go (images 3,5 et 4,6 Go, cache 8,2 Go), à prévoir.
 - **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche
   `niveau-authentifie-perimetre`, rien sur `master`. Base au schéma 11 (D-92).
   Un test est intermittent, et l'était déjà avant D-87 : `tests/test_duree_cookie.py::test_dans_l_application_le_cookie_du_profil_court_expire_et_celui_du_profil_par_defaut_non` (2 échecs sur 16 avant I1, 1 sur 8 après ; non corrigé).
@@ -298,6 +302,10 @@ uv run shadowlab arreter | reprendre <n°> | rapport <n°> | liste | supprimer <
 uv run shadowlab public servir | purger | supprimer <id> | messages | effacer-message <n°>  # application publique (docs/site-public.md) ; servir exige SHADOWLAB_PUBLIC_CONTACT
 uv run shadowlab public frequentation | sessions            # visites et sessions par jour ; sessions par taille (repérer un abus)
 scripts/site-public-tunnel.sh                              # site public en ligne par tunnel Cloudflare (lancé par Ethan, exige SHADOWLAB_PUBLIC_CONTACT ; docs/site-public.md)
+scripts/fumee-linux.sh disque                                # étape 3.1 : espace libre avant de construire (prévoir 13 Go ; arrêt sous 20 Gio)
+scripts/fumee-linux.sh construire arm64 | amd64                 # image Linux sans GPU (une à la fois) ; pile : `pile` ; passage : `lancer <arch> <ecran|sans-ecran> configs/experiments/fumee-linux-<mode>.yaml`
+scripts/fumee-linux.sh sauvegarder | sonde <arch> <mode> <chrome|chromium> | arreter | retirer <arch>   # copie la base du volume, sonde le navigateur réel, rend la place (voir docs/recherche/fumee-linux-2026-11-17.md § 12)
+python3 scripts/fumee-linux-comparer.py --linux <base> --linux-campagne <n°> --poste <base du poste> --poste-campagne 132 --protections 04 05 06scorr   # signaux Linux contre poste (version des détecteurs signalée)
 uv run shadowlab arena bannir --visiteur <id> --monde <nom>  # écrit un bannissement « manuel » (monde et visiteur connus, sinon code 2 ; rien ne lève un bannissement)
 uv run shadowlab arena appliquer && uv run shadowlab campagne configs/experiments/endurance-bannissement.yaml  # profil endurance : playwright banni, noezia natif non (campagne 124, quelques minutes) ; `appliquer` sans SHADOWLAB_PROFILS_EXTRA
 uv run shadowlab campagne configs/experiments/identite-soiree-essai.yaml  # I7 : 4 bras, 3 visites (environ 15 min) ; renommer les identités (`-2`, `-3`…) avant de relancer, une identité bannie ne sert plus
