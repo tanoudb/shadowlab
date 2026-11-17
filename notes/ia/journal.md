@@ -3712,3 +3712,8 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Documents** : D-96 (répétition 3, essai, disque 29 Gio, code répété et code étiqueté), `AGENTS.md` (état, 2 345 tests), `docs/PLAN.md`, `contexte.md`. Aucun code ni test.
 - **Retiré de « Non vérifié »** : le défi sur une photo (vérifié une fois).
 - **Reste** : poser `course-i9` sur le commit de fusion, lancer quand la coordination le dit ; I8, I10.
+
+## 2026-11-17 — Claude (Opus 5.5, coordination de la course) — I9 : relecture de D-96 avant le compte rendu
+- **Corrigé dans D-96** : la répétition 3 n'a pas eu ses 8 passages de la porte tous en début de visite. 7 sont au début, 1 est au milieu de la visite 11, sur un retour à la page de liste (`porte_repassages` = 1, lu dans la base de `.courses/repetition-3-2026-11-17`). L'étape 2 du lancement (`mv` des sorties) était périmée : les sorties sont déjà rangées, il suffit de vérifier que `.courses/i9/outputs` est absent.
+- **Ajouté à « Non vérifié »** : le code 0 de `course etat` ne veut pas dire « critères tenus » (lire la ligne de l'identité, et `df -h /`) ; la vraie configuration n'a jamais démarré ; un 403 de ressource non reconnu dès la première page vaut toujours `banni` ; une mise à jour de Chrome pendant la semaine. Ne jamais changer de commit dans `.courses/i9` pendant la course.
+- **Vérifié** : suite complète sur `2fe3537` : 2 351 tests verts en 9 min 35 s ; D-96 n'existe sur aucune autre branche ; disque à 30 Gio libres. **Reste** : poser l'étiquette `course-i9` et lancer, quand la coordination le dit.
