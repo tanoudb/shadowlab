@@ -1,15 +1,18 @@
 """Les aides de `outils_proxy.py` contre elles-mêmes : faux proxys HTTP et SOCKS5, cible, écoute STUN, `proxy.json`.
 
-Aucun code de `src/` : ces tests ne dépendent pas du relais. Ils prouvent que les mesures des autres fichiers (le port
-source que la cible voit, les refus d'authentification, les connexions notées) sont justes avant de s'y fier.
+Aucun code du relais : de `src/`, ces tests n'utilisent que le certificat jetable (`arena.frontal.creer_certificat`).
+Ils prouvent que les mesures des autres fichiers (le port source que la cible voit, les refus d'authentification, les
+connexions notées) sont justes avant de s'y fier.
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -30,12 +33,15 @@ from outils_proxy import (
     get_absolu,
     get_dans_le_tunnel,
     get_direct,
+    lire_jusqu_a_fin,
     lire_reponse,
     ouvrir_connexion,
     ouvrir_tunnel,
     port_ferme,
     statut_de,
 )
+
+from shadowlab.arena.frontal import creer_certificat
 
 BASIC_BON = "Proxy-Authorization: Basic " + base64.b64encode(b"bon-user:bon-mdp").decode() + "\r\n"
 BASIC_FAUX = "Proxy-Authorization: Basic " + base64.b64encode(b"bon-user:faux-mdp").decode() + "\r\n"
@@ -197,6 +203,22 @@ def test_proxy_socks5_refuse_une_salutation_sans_mot_de_passe(proxy_socks):
 # ── La cible ───────────────────────────────────────────────────────────────
 
 
+def test_les_faux_proxys_notent_les_octets_que_leur_client_envoie_vers_la_cible(cible, proxy_http, proxy_socks):
+    reponse = get_absolu(proxy_http.port, cible.url("/page?id=O"), entetes=BASIC_BON + "Connection: close\r\n")
+    assert statut_de(reponse) == 200
+    assert attendre(lambda: proxy_http.octets_du_client.count(b" HTTP/1.1\r\n") == 1)
+    assert proxy_http.octets_du_client.startswith(b"GET /page?id=O HTTP/1.1\r\n"), (
+        "forme d'origine, comme la cible la voit"
+    )
+    code, sock = client_socks5(proxy_socks.port, "bon-user", "bon-mdp", "127.0.0.1", cible.port)
+    assert code == 0 and sock is not None
+    with sock:
+        get_dans_le_tunnel(sock, "127.0.0.1", cible.port, "/page?id=O2")
+    assert attendre(lambda: proxy_socks.octets_du_client.count(b" HTTP/1.1\r\n") == 1)
+    assert proxy_socks.octets_du_client.startswith(b"GET /page?id=O2 HTTP/1.1\r\n")
+    assert proxy_http.refus == 0 and proxy_socks.refus == 0
+
+
 def test_cible_sert_la_page_avec_image_script_et_appel_de_donnees(cible):
     statut, entetes, corps = lire_reponse(get_direct(cible.port, "/page?id=X-1"))
     assert statut == 200 and entetes["content-type"].startswith("text/html")
@@ -230,6 +252,43 @@ def test_cible_redirige_dehors_vers_localhost_sur_le_port_de_cible2():
         assert cible2.connexions_recues == [], "elle n'a rien reçu : seule la cible 1 a été jointe"
     with CibleDeTest() as seule:
         assert lire_reponse(get_direct(seule.port, "/redirige-dehors"))[0] == 404
+
+
+def test_cible_recoit_un_corps_post_en_entier_et_le_note(cible):
+    corps = bytes(i % 251 for i in range(70_000))
+    requete = f"POST /depot?id=D HTTP/1.1\r\nHost: x\r\nContent-Length: {len(corps)}\r\nConnection: close\r\n\r\n"
+    with ouvrir_connexion(cible.port) as sock:
+        sock.sendall(requete.encode() + corps)
+        statut, _, reponse = lire_reponse(lire_jusqu_a_fin(sock))
+    assert statut == 200 and reponse == f"recu={len(corps)} sha256={hashlib.sha256(corps).hexdigest()}".encode()
+    assert cible.corps_recus == [("/depot?id=D", corps)]
+    assert [r["chemin"] for r in cible.requetes] == ["/depot?id=D"], "le POST est aussi une requête notée"
+
+
+def test_cible_en_tls_sert_en_https_et_redirige_vers_l_autre_en_https(tmp_path):
+    cle, cert = creer_certificat(tmp_path)
+    contexte = ssl.create_default_context(cafile=str(cert))
+    with CibleDeTest(tls=(cle, cert)) as cible2, CibleDeTest(cible2=cible2, tls=(cle, cert)) as cible:
+        assert cible.url("/page?id=T").startswith("https://127.0.0.1:") and cible2.schema == "https"
+        with ouvrir_connexion(cible.port) as brut, contexte.wrap_socket(brut, server_hostname="127.0.0.1") as sock:
+            sock.sendall(b"GET /redirige-dehors HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+            statut, entetes, _ = lire_reponse(lire_jusqu_a_fin(sock))
+        assert statut == 302 and entetes["location"] == f"https://localhost:{cible2.port}/"
+        assert cible.connexions_recues == [cible.requetes[0]["port_source"]], "le port source vu est celui du client"
+        assert CibleDeTest().schema == "http"
+
+
+def test_cible_en_tls_une_connexion_qui_ne_parle_pas_tls_ne_bloque_pas_les_autres(tmp_path):
+    cle, cert = creer_certificat(tmp_path)
+    contexte = ssl.create_default_context(cafile=str(cert))
+    with CibleDeTest(tls=(cle, cert)) as cible:
+        muet = ouvrir_connexion(cible.port)  # Chrome ouvre des connexions d'avance et ne dit rien : elles ne gênent pas
+        try:
+            with ouvrir_connexion(cible.port) as brut, contexte.wrap_socket(brut, server_hostname="127.0.0.1") as sock:
+                sock.sendall(b"GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+                assert statut_de(lire_jusqu_a_fin(sock)) == 200
+        finally:
+            muet.close()
 
 
 def test_cible_webrtc_annonce_le_port_udp():

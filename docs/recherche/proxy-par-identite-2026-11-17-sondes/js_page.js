@@ -1,0 +1,1 @@
+function marque(i,t){var p=document.createElement('p');p.id=i;p.textContent=t;document.body.appendChild(p);document.title=t}fetch('/xhr?id=dns-A').then(function(r){return r.text()}).then(function(){marque('fini','fini')}).catch(function(){marque('erreur','erreur')});

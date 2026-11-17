@@ -110,7 +110,12 @@ class Demande(NamedTuple):
 
 
 class _RequeteInvalide(Exception):
-    pass
+    """Une requête que le relais refuse de transmettre, avec le statut et le texte à rendre au client."""
+
+    def __init__(self, statut: int = 400, explication: str = "Requête incompréhensible pour le relais.") -> None:
+        super().__init__(explication)
+        self.statut = statut
+        self.explication = explication
 
 
 class _AmontRefuse(Exception):
@@ -125,6 +130,7 @@ class _Requete(NamedTuple):
     chemin: str  # forme d'origine (`/chemin?requete`) d'une requête simple ; vide pour CONNECT
     version: str
     entetes: list[tuple[str, str]]
+    longueur: int  # octets de corps (`Content-Length`) d'une requête simple ; 0 pour CONNECT
 
 
 def _fermer(sock: socket.socket) -> None:
@@ -235,7 +241,7 @@ def _lire_requete(tete: bytes) -> _Requete:
         entetes.append((nom, valeur.strip()))
     if methode == "CONNECT":
         hote, port = _separer_hote_port(cible)
-        return _Requete(methode, hote, port, cible, "", version, entetes)
+        return _Requete(methode, hote, port, cible, "", version, entetes, 0)
     try:
         morceaux = urlsplit(cible)
         port = morceaux.port or 80
@@ -244,7 +250,22 @@ def _lire_requete(tete: bytes) -> _Requete:
     if morceaux.scheme != "http" or "@" in morceaux.netloc or not morceaux.hostname or not 1 <= port <= 65535:
         raise _RequeteInvalide
     chemin = (morceaux.path or "/") + (f"?{morceaux.query}" if morceaux.query else "")
-    return _Requete(methode, _hote_sur(morceaux.hostname), port, cible, chemin, version, entetes)
+    hote = _hote_sur(morceaux.hostname)
+    return _Requete(methode, hote, port, cible, chemin, version, entetes, _longueur_du_corps(entetes))
+
+
+def _longueur_du_corps(entetes: list[tuple[str, str]]) -> int:
+    """Le corps d'une requête simple : `Content-Length` octets, 0 sans l'en-tête. Le relais ne lit pas un corps découpé
+    (`Transfer-Encoding`) : sans sa longueur il ne saurait pas où la requête finit, donc ce qui suit lui échapperait."""
+    noms = [nom.lower() for nom, _ in entetes]
+    if "transfer-encoding" in noms:
+        raise _RequeteInvalide(501, "Corps découpé (Transfer-Encoding) : pas pris en charge par le relais.")
+    valeurs = [valeur for nom, valeur in entetes if nom.lower() == "content-length"]
+    if not valeurs:
+        return 0
+    if len(valeurs) > 1 or not re.fullmatch(r"[0-9]{1,15}", valeurs[0]):
+        raise _RequeteInvalide(400, "Content-Length invalide ou multiple.")
+    return int(valeurs[0])
 
 
 def _entetes_sortants(requete: _Requete, *supplementaires: str) -> str:
@@ -253,7 +274,7 @@ def _entetes_sortants(requete: _Requete, *supplementaires: str) -> str:
     return "".join(f"{ligne}\r\n" for ligne in (*gardes, "Connection: close", *supplementaires)) + "\r\n"
 
 
-_RAISONS = {400: "Bad Request", 403: "Forbidden", 502: "Bad Gateway"}
+_RAISONS = {400: "Bad Request", 403: "Forbidden", 501: "Not Implemented", 502: "Bad Gateway"}
 
 
 def _refuser(client: socket.socket, statut: int, explication: str) -> None:
@@ -278,10 +299,12 @@ class RelaisProxy:
     `delai_s` borne ce qu'on attend du proxy : connexion, échange d'ouverture, et pour une requête simple le début de la
     réponse (une origine plus lente que cela donne 502). Une fois un tunnel ouvert, rien n'est borné.
 
-    Une connexion du client porte une seule requête : le relais impose `Connection: close` dans les deux sens, et c'est
-    le client qui obéit (Chrome : mesuré, une demande notée par requête reçue). La recopie ne relit pas ce qu'elle
-    transporte : un client qui désobéirait enverrait sa seconde requête sans décision de périmètre (un proxy HTTP,
-    averti par `Connection: close`, la refuserait)."""
+    Une requête simple (`http://`) par connexion, imposée par le relais et non confiée au client : il transmet
+    l'en-tête et exactement `Content-Length` octets de corps (0 sans l'en-tête), et jette tout le reste, qu'il ait été
+    lu avec l'en-tête ou reçu après. Il ajoute `Connection: close` dans les deux sens pour que Chrome ne réutilise pas
+    la connexion. Un corps découpé (`Transfer-Encoding`) est refusé en 501, un `Content-Length` invalide ou multiple
+    en 400. Un tunnel `CONNECT` est recopié tel quel : la décision s'y prend par tunnel (hôte et port), pas par
+    requête."""
 
     def __init__(
         self,
@@ -419,8 +442,8 @@ class RelaisProxy:
         tete, deja_lu = lu
         try:
             requete = _lire_requete(tete)
-        except _RequeteInvalide:
-            _refuser(client, 400, "Requête incompréhensible pour le relais.")
+        except _RequeteInvalide as erreur:
+            _refuser(client, erreur.statut, erreur.explication)
             return
         if not self._autorise(requete.hote):
             self._noter(requete, "refusee_perimetre")
@@ -472,16 +495,17 @@ class RelaisProxy:
                 en_trop = self._connect_http(amont, requete, fin)
             else:
                 self._connect_socks5(amont, requete, fin)
-            return b"HTTP/1.1 200 Connection Established\r\n\r\n" + en_trop, self._aller(client, amont, deja_lu)
-        # Requête simple : `Connection: close` impose une requête par connexion.
+            aller = self._aller(self._recopier, client, amont, deja_lu)
+            return b"HTTP/1.1 200 Connection Established\r\n\r\n" + en_trop, aller
+        # Requête simple : une requête par connexion (voir `_envoyer_requete`).
         if self._amont.schema == "http":
             envoi = self._requete_pour_proxy_http(requete)
         else:
             self._connect_socks5(amont, requete, fin)
             envoi = self._requete_d_origine(requete)
-        # La recopie part avant la lecture de la réponse : une origine qui attend tout le corps pour répondre
+        # L'envoi part avant la lecture de la réponse : une origine qui attend tout le corps pour répondre
         # (formulaire) bloquerait sinon, le corps restant chez le client.
-        aller = self._aller(client, amont, envoi + deja_lu)
+        aller = self._aller(self._envoyer_requete, client, amont, envoi, deja_lu, requete.longueur)
         retour = _lire_tete(amont, fin)
         if retour is None:
             raise ConnectionError("le proxy de l'identité a fermé la connexion")
@@ -552,10 +576,33 @@ class RelaisProxy:
 
     # ── Recopie des octets ─────────────────────────────────────────────
 
-    def _aller(self, client: socket.socket, amont: socket.socket, initial: bytes) -> threading.Thread:
-        fil = threading.Thread(target=self._recopier, args=(client, amont, initial), name="relais-aller", daemon=True)
+    def _aller(self, travail, *arguments) -> threading.Thread:
+        """Lance dans un fil le sens client -> proxy."""
+        fil = threading.Thread(target=travail, args=arguments, name="relais-aller", daemon=True)
         self._lancer(fil)
         return fil
+
+    def _envoyer_requete(
+        self, client: socket.socket, amont: socket.socket, tete: bytes, deja_lu: bytes, longueur: int
+    ) -> None:
+        """Envoie au proxy l'en-tête d'une requête simple et exactement `longueur` octets de corps, rien de plus : un
+        octet de trop (déjà lu avec l'en-tête, ou reçu après) est jeté, jamais transmis, jamais jugé. C'est ce qui fait
+        « une connexion, une requête » : une seconde requête collée à la première, ou envoyée après, n'atteint pas le
+        proxy, quoi que fasse le client de `Connection: close`. Pas de demi-fermeture du proxy une fois le corps parti :
+        certains proxys et serveurs prennent un « fin d'écriture » du client pour un abandon et coupent la réponse."""
+        try:
+            corps = deja_lu[:longueur]
+            amont.sendall(tete + corps)
+            restant = longueur - len(corps)
+            while restant:
+                donnees = client.recv(min(65536, restant))
+                if not donnees:
+                    raise ConnectionError("le client est parti avant la fin du corps")
+                amont.sendall(donnees)
+                restant -= len(donnees)
+        except OSError:  # coupure franche, ou client parti : on coupe l'autre côté pour réveiller le sens retour
+            _couper(client)
+            _couper(amont)
 
     def _recopier(self, source: socket.socket, destination: socket.socket, initial: bytes = b"") -> None:
         """Recopie `source` vers `destination` jusqu'à la fin de `source`, puis ferme l'écriture de `destination` : le

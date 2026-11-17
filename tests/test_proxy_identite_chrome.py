@@ -48,6 +48,7 @@ from outils_proxy import (
     port_ferme,
 )
 
+from shadowlab.arena.frontal import creer_certificat
 from shadowlab.engines import registre
 
 # `declarer_proxy` est importé en tête : tant qu'il n'existe pas, la collecte échoue (ImportError) pour cette raison.
@@ -515,6 +516,170 @@ def test_d_le_proxy_amont_n_a_recu_aucune_connexion_vers_localhost(strict):
     assert refusees or coupee_avant, (
         f"le relais aurait dû noter un refus de périmètre pour localhost : {strict.demandes}"
     )
+
+
+# ── h. Pages https:// : le tunnel CONNECT, avec une cible TLS locale ──────────
+#
+# Les scénarios ci-dessus servent une cible en HTTP simple (Chrome pose des `GET http://…`). Ici la cible parle TLS
+# (certificat jetable de l'Arena) : Chrome ouvre un tunnel `CONNECT hote:port` par le relais, puis parle TLS dans le
+# tunnel. Le relais ne voit plus les requêtes, seulement le tunnel : la décision de périmètre se prend par hôte et port.
+
+
+@pytest.fixture(scope="module")
+def certificat_tls(tmp_path_factory) -> tuple[Path, Path]:
+    return creer_certificat(tmp_path_factory.mktemp("tls-proxy"))
+
+
+@dataclass
+class ObservationsTls:
+    pages: dict[str, list[dict]]
+    demandes: dict[str, list[tuple]]
+    cible_connexions: list[int]
+    cible_requetes: list[dict]
+    proxy_connexions: dict[str, list[dict]]
+    port_cible: int
+
+    def ports(self, lettre: str) -> set[int]:
+        return {c["port_source"] for c in self.proxy_connexions[lettre] if c["port"] == self.port_cible}
+
+    def requetes_de(self, lettre: str) -> list[dict]:
+        return [r for r in self.cible_requetes if f"id=T{lettre}" in r["chemin"]]
+
+
+@pytest.fixture(scope="module")
+def observations_tls(chrome_requis, environnement, certificat_tls) -> ObservationsTls:
+    """Deux identités, A (proxy HTTP) et B (proxy SOCKS5), chacune charge deux pages `https://127.0.0.1:<port>/…`."""
+    pages: dict[str, list[dict]] = {}
+    demandes: dict[str, list[tuple]] = {}
+    with (
+        proxy_unique_mort(),
+        CibleDeTest(tls=certificat_tls, delai_xhr_s=0.5) as cible,
+        ProxyHttpDeTest("ta-user", "secret-ta", nom="TA") as proxy_a,
+        ProxySocks5DeTest("tb-user", "secret-tb", nom="TB") as proxy_b,
+    ):
+        declarer_proxy("identite-ta", proxy_a.adresse, "ta-user", "secret-ta")
+        declarer_proxy("identite-tb", proxy_b.adresse, "tb-user", "secret-tb")
+        for lettre, nom in (("A", "identite-ta"), ("B", "identite-tb")):
+            pilote = pilote_noezia(("*",), nom)
+            pilote.open()
+            try:
+                pilote.start_session()
+                pages[lettre] = [charger(pilote, cible.url(f"/page?id=T{lettre}{i}")) for i in (1, 2)]
+                demandes[lettre] = [tuple(d) for d in pilote._relais.demandes]
+                pilote.close_session()
+            finally:
+                pilote.close()
+        time.sleep(0.5)  # les dernières connexions se terminent
+        return ObservationsTls(
+            pages=pages,
+            demandes=demandes,
+            cible_connexions=cible.connexions_recues,
+            cible_requetes=cible.requetes,
+            proxy_connexions={"A": list(proxy_a.connexions), "B": list(proxy_b.connexions)},
+            port_cible=cible.port,
+        )
+
+
+def test_h_les_pages_https_se_chargent_avec_toutes_leurs_ressources_par_les_deux_sortes_de_proxy(observations_tls):
+    for lettre, pages in observations_tls.pages.items():
+        for page in pages:
+            assert page["exception"] is None, f"{lettre} : {page['url']} a échoué : {page['exception']}"
+            assert page["statut"] == 200 and page["fini"], f"{lettre} : page incomplète : {page}"
+        chemins = {r["chemin"].split("?")[0] for r in observations_tls.requetes_de(lettre)}
+        assert {"/page", "/img.png", "/s.js", "/xhr"} <= chemins, f"{lettre} : la cible n'a vu que {sorted(chemins)}"
+
+
+def test_h_le_relais_note_un_connect_transmis_vers_l_hote_et_le_port_de_la_cible(observations_tls):
+    attendu = ("CONNECT", "127.0.0.1", observations_tls.port_cible, "transmise")
+    for lettre, demandes in observations_tls.demandes.items():
+        assert attendu in demandes, f"{lettre} : aucun CONNECT transmis vers la cible : {demandes[:6]}"
+        vers_la_cible = [d for d in demandes if d[1] == "127.0.0.1" and d[2] == observations_tls.port_cible]
+        assert {d[0] for d in vers_la_cible} == {"CONNECT"}, (
+            f"{lettre} : en https tout passe par un tunnel : {vers_la_cible}"
+        )
+        assert {d[3] for d in vers_la_cible} == {"transmise"}
+
+
+def test_h_chaque_connexion_recue_par_la_cible_tls_sort_du_proxy_de_son_identite(observations_tls):
+    ports_a, ports_b = observations_tls.ports("A"), observations_tls.ports("B")
+    assert ports_a and ports_b and not ports_a & ports_b
+    vus = set(observations_tls.cible_connexions)
+    assert vus and vus <= ports_a | ports_b, (
+        f"connexions qui ne viennent d'aucun proxy : {sorted(vus - ports_a - ports_b)}"
+    )
+    for lettre, propres, autres in (("A", ports_a, ports_b), ("B", ports_b, ports_a)):
+        requetes = observations_tls.requetes_de(lettre)
+        assert requetes, f"la cible n'a rien reçu de {lettre}"
+        for requete in requetes:
+            assert requete["port_source"] in propres and requete["port_source"] not in autres, (
+                f"{lettre} : {requete['chemin']} n'est pas passée par son proxy"
+            )
+
+
+@dataclass
+class ObservationsTlsStrictes:
+    page: dict
+    redirection: dict
+    demandes: list[tuple]
+    proxy_connexions: list[dict]
+    connexions_cible2: list[int]
+    port_cible2: int
+
+
+@pytest.fixture(scope="module")
+def strict_tls(chrome_requis, environnement, certificat_tls) -> ObservationsTlsStrictes:
+    with (
+        proxy_unique_mort(),
+        CibleDeTest(tls=certificat_tls) as cible2,
+        CibleDeTest(cible2=cible2, tls=certificat_tls) as cible,
+        ProxyHttpDeTest("s-user", "secret-s", nom="ST") as proxy,
+    ):
+        declarer_proxy("identite-st", proxy.adresse, "s-user", "secret-s")
+        pilote = pilote_noezia(("127.0.0.1",), "identite-st")  # mode strict : `localhost` n'est pas dans la liste
+        pilote.open()
+        try:
+            pilote.start_session()
+            page = charger(pilote, cible.url("/page?id=ST"))
+            # `navigate("https://localhost:…")` serait refusé par Python avant toute requête : on passe par une
+            # redirection de la cible, que ni le verrou de Python ni le filtre `route` ne voient (D-07) : seul le relais
+            # la juge.
+            redirection: dict = {"exception": None, "statut": None}
+            try:
+                redirection["statut"] = pilote.navigate(cible.url("/redirige-dehors")).status
+            except Exception as exc:  # noqa: BLE001 — l'échec de la navigation est l'effet voulu
+                redirection["exception"] = repr(exc)
+            demandes = [tuple(d) for d in pilote._relais.demandes]
+            pilote.close_session()
+        finally:
+            pilote.close()
+        time.sleep(0.5)
+        return ObservationsTlsStrictes(
+            page=page,
+            redirection=redirection,
+            demandes=demandes,
+            proxy_connexions=list(proxy.connexions),
+            connexions_cible2=cible2.connexions_recues,
+            port_cible2=cible2.port,
+        )
+
+
+def test_h_en_mode_strict_la_page_https_de_la_liste_charge_par_le_proxy(strict_tls):
+    assert strict_tls.page["exception"] is None and strict_tls.page["statut"] == 200 and strict_tls.page["fini"]
+    assert strict_tls.proxy_connexions, "le proxy n'a reçu aucune connexion : la page est passée en direct"
+
+
+def test_h_en_mode_strict_https_localhost_hors_liste_echoue_par_une_exception_sans_connexion_de_l_amont(strict_tls):
+    exception = strict_tls.redirection["exception"]
+    assert exception is not None and "ERR_TUNNEL_CONNECTION_FAILED" in exception, strict_tls.redirection
+    interdits = [
+        c
+        for c in strict_tls.proxy_connexions
+        if c["hote"].lower() == "localhost" or c["port"] == strict_tls.port_cible2
+    ]
+    assert not interdits, f"connexions du proxy vers l'hôte hors liste : {interdits}"
+    assert strict_tls.connexions_cible2 == [], "la cible hors liste a reçu une connexion"
+    refus = ("CONNECT", "localhost", strict_tls.port_cible2, "refusee_perimetre")
+    assert refus in strict_tls.demandes, f"le relais aurait dû refuser le tunnel : {strict_tls.demandes}"
 
 
 # ── f. WebRTC ──────────────────────────────────────────────────────────────

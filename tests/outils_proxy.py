@@ -17,12 +17,14 @@ Importé par `from outils_proxy import ...` (même principe que `outils_recolte.
 from __future__ import annotations
 
 import base64
+import hashlib
 import ipaddress
 import json
 import os
 import re
 import select
 import socket
+import ssl
 import sys
 import threading
 import time
@@ -143,6 +145,7 @@ class _Serveur(_Contexte):
         """Recopie les octets dans les deux sens, jusqu'à ce que les deux côtés aient fini (ou arrêt). La fin d'écriture
         d'un côté est transmise à l'autre : rien n'est coupé avant la dernière réponse."""
         if deja_lu_de_a:
+            self._vu_de_a(deja_lu_de_a)
             b.sendall(deja_lu_de_a)
         ouverts = [a, b]
         while ouverts and not self._arret.is_set():
@@ -157,7 +160,12 @@ class _Serveur(_Contexte):
                     except OSError:
                         pass
                     continue
+                if sock is a:
+                    self._vu_de_a(donnees)
                 autre.sendall(donnees)
+
+    def _vu_de_a(self, donnees: bytes) -> None:
+        """Appelé pour tout octet qui va de `a` (le client) vers `b` : les faux proxys le notent."""
 
 
 def lire_tete(sock: socket.socket) -> tuple[bytes, bytes]:
@@ -207,10 +215,22 @@ class _FauxProxy(_Serveur):
         self.noms_connus = {"localhost": HOTE, **{k.lower(): v for k, v in (noms_connus or {}).items()}}
         self.connexions: list[dict] = []
         self.refus = 0
+        self._octets = bytearray()
 
     @property
     def adresse(self) -> str:
         return f"{self.schema}://{HOTE}:{self.port}"
+
+    @property
+    def octets_du_client(self) -> bytes:
+        """Tout ce que le client du proxy a envoyé vers la cible une fois la connexion ouverte (pour HTTP : la requête
+        réécrite en forme d'origine, puis la suite). Une requête s'y compte par ses ` HTTP/1.1\\r\\n`."""
+        with self._verrou:
+            return bytes(self._octets)
+
+    def _vu_de_a(self, donnees: bytes) -> None:
+        with self._verrou:
+            self._octets += donnees
 
     def _compter_refus(self) -> None:
         with self._verrou:
@@ -430,9 +450,10 @@ class _ServeurCible(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, adresse, gestionnaire, cible: CibleDeTest):
+    def __init__(self, adresse, gestionnaire, cible: CibleDeTest, contexte_tls: ssl.SSLContext | None = None):
         super().__init__(adresse, gestionnaire)
         self.cible = cible
+        self.contexte_tls = contexte_tls
 
     def handle_error(self, request, client_address) -> None:
         # Un client qui coupe d'un coup (RST) ou une fermeture à l'arrêt est normal ici : pas de trace. Le reste
@@ -442,6 +463,10 @@ class _ServeurCible(ThreadingHTTPServer):
 
     def get_request(self):
         sock, adresse = super().get_request()
+        if self.contexte_tls is not None:
+            # La poignée de main TLS se fait au premier octet lu, dans le fil de la connexion : une connexion d'avance
+            # qui ne dit rien (Chrome en ouvre) ne bloque pas la boucle d'acceptation.
+            sock = self.contexte_tls.wrap_socket(sock, server_side=True, do_handshake_on_connect=False)
         self.cible._noter_connexion(sock, adresse[1])  # à l'ACCEPTATION : une connexion qui ne dit rien compte aussi
         return sock, adresse
 
@@ -460,6 +485,16 @@ class _GestionnaireCible(BaseHTTPRequestHandler):
             self.send_header(nom, valeur)
         self.end_headers()
         self.wfile.write(corps)
+
+    def do_POST(self) -> None:
+        """`Content-Length` octets de corps, lus en entier, notés dans `corps_recus` ; la réponse dit leur nombre et
+        leur empreinte. Pas de corps découpé : la cible ne sait pas le lire, et le relais le refuse avant."""
+        cible: CibleDeTest = self.server.cible
+        cible._noter_requete(self.path, self.client_address[1], {k.lower(): v for k, v in self.headers.items()})
+        corps = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        cible._noter_corps(self.path, corps)
+        resume = f"recu={len(corps)} sha256={hashlib.sha256(corps).hexdigest()}"
+        self._repondre(200, resume.encode(), "text/plain")
 
     def do_GET(self) -> None:
         cible: CibleDeTest = self.server.cible
@@ -482,8 +517,8 @@ class _GestionnaireCible(BaseHTTPRequestHandler):
             if cible.cible2 is None:
                 self._repondre(404, b"pas de cible2", "text/plain")
             else:
-                adresse = (
-                    f"http://localhost:{cible.cible2.port}/"  # `localhost` : un second hôte, hors d'une liste 127.0.0.1
+                adresse = (  # `localhost` : un second hôte, hors d'une liste 127.0.0.1
+                    f"{cible.cible2.schema}://localhost:{cible.cible2.port}/"
                 )
                 self._repondre(302, b"", "text/plain", entetes={"Location": adresse})
         elif url.path == "/webrtc":
@@ -500,6 +535,9 @@ class _GestionnaireCible(BaseHTTPRequestHandler):
 class CibleDeTest(_Contexte):
     """Un serveur HTTP local qui note qui s'y connecte.
 
+    - `tls` : `(cle.pem, cert.pem)` pour servir en HTTPS (`schema`, `url()` suivent) ; la poignée de main se fait dans
+      le fil de la connexion ;
+    - `corps_recus` : `(chemin, corps)` de chaque POST (n'importe quel chemin ; `Content-Length` octets lus) ;
     - `connexions_recues` : le port source de chaque connexion acceptée (liste, dans l'ordre) ;
     - `requetes` : une entrée `{"chemin", "port_source", "entetes"}` par requête (chemin avec sa requête, en-têtes en
       minuscules) ;
@@ -509,15 +547,27 @@ class CibleDeTest(_Contexte):
     Routes : `/page?id=X`, `/img.png`, `/s.js`, `/xhr`, `/redirige-dehors`, `/webrtc`, `/gros?n=N`, `/` ; le reste 404.
     """
 
-    def __init__(self, port_stun: int | None = None, cible2: CibleDeTest | None = None, delai_xhr_s: float = 0.0):
+    def __init__(
+        self,
+        port_stun: int | None = None,
+        cible2: CibleDeTest | None = None,
+        delai_xhr_s: float = 0.0,
+        tls: tuple[Path, Path] | None = None,
+    ):
         self.port_stun = port_stun
         self.cible2 = cible2
         self.delai_xhr_s = delai_xhr_s
         self._connexions: list[int] = []
         self._requetes: list[dict] = []
+        self._corps: list[tuple[str, bytes]] = []
         self._verrou = threading.Lock()
         self._sockets: set[socket.socket] = set()
-        self._serveur = _ServeurCible((HOTE, 0), _GestionnaireCible, self)
+        contexte = None
+        if tls is not None:
+            contexte = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            contexte.load_cert_chain(str(tls[1]), str(tls[0]))
+        self.schema = "https" if tls is not None else "http"
+        self._serveur = _ServeurCible((HOTE, 0), _GestionnaireCible, self, contexte)
         self.port: int = self._serveur.server_port
         self._fil: threading.Thread | None = None
 
@@ -531,17 +581,26 @@ class CibleDeTest(_Contexte):
         with self._verrou:
             return list(self._requetes)
 
+    @property
+    def corps_recus(self) -> list[tuple[str, bytes]]:
+        with self._verrou:
+            return list(self._corps)
+
     def requetes_de(self, identifiant: str) -> list[dict]:
         """Les requêtes qui portent `id=<identifiant>` (page, image, script, appel de données)."""
         return [r for r in self.requetes if f"id={identifiant}" in r["chemin"].split("?", 1)[-1].split("&")]
 
     def url(self, chemin: str, hote: str = HOTE) -> str:
-        return f"http://{hote}:{self.port}{chemin}"
+        return f"{self.schema}://{hote}:{self.port}{chemin}"
 
     def _noter_connexion(self, sock: socket.socket, port_source: int) -> None:
         with self._verrou:
             self._connexions.append(port_source)
             self._sockets.add(sock)
+
+    def _noter_corps(self, chemin: str, corps: bytes) -> None:
+        with self._verrou:
+            self._corps.append((chemin, corps))
 
     def _noter_requete(self, chemin: str, port_source: int, entetes: dict[str, str]) -> None:
         with self._verrou:

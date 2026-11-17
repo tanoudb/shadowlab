@@ -1,0 +1,1 @@
+(async function(){var pc=new RTCPeerConnection({iceServers:[{urls:'stun:127.0.0.1:5555'}]});pc.createDataChannel('x');await pc.setLocalDescription(await pc.createOffer());await new Promise(function(r){setTimeout(r,3000)});var p=document.createElement('p');p.id='fini';p.textContent='fini';document.body.appendChild(p);document.title='webrtc-fini'})()

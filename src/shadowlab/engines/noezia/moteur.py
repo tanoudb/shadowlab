@@ -70,6 +70,7 @@ HOTES_CHALLENGES = (
 # `--force-webrtc-ip-handling-policy`, souvent cité, n'a aucun effet sur ce Chrome (4 paquets). Le test WebRTC de
 # `test_proxy_identite_chrome.py` garde l'effet : un Chrome qui changerait encore de nom l'échouerait.
 ARGUMENT_WEBRTC_PROXY = "--webrtc-ip-handling-policy=disable_non_proxied_udp"
+ARGUMENTS_PROXY_IDENTITE = (ARGUMENT_WEBRTC_PROXY,)  # tous les arguments de lancement imposés par un proxy d'identité
 
 
 class DriverNoezia(Driver):
@@ -205,6 +206,8 @@ class DriverNoezia(Driver):
             proxy = self._relais.amont if self._relais is not None else identite.lire_proxy(self._nom_identite)
             if proxy is not None:
                 conf["identite_proxy"] = proxy.masque()  # le masque seul : jamais d'identifiant dans les résultats
+                # Réglage imposé par le proxy : déclaré et enregistré avec les résultats.
+                conf["identite_proxy_arguments"] = list(ARGUMENTS_PROXY_IDENTITE)
         if self._profil:
             conf["profil"] = self._profil.nom
             conf["profil_os"] = self._profil.os
@@ -339,7 +342,7 @@ class DriverNoezia(Driver):
         Avec un proxy d'identité, Chrome n'a pour proxy que le relais, sans bypass : Playwright y ajoute `<-loopback>`,
         le local passe donc aussi par le relais, qui est le verrou. Jamais `SHADOWLAB_PROXY` ni un accès direct."""
         if self._relais is not None:
-            reseau = {"proxy": {"server": self._relais.adresse}, "args": [ARGUMENT_WEBRTC_PROXY]}
+            reseau = {"proxy": {"server": self._relais.adresse}, "args": list(ARGUMENTS_PROXY_IDENTITE)}
         else:
             reseau = {"proxy": self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)}
         contexte = self._pw.chromium.launch_persistent_context(

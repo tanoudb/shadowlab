@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import base64
 import dataclasses
+import hashlib
 import importlib
 import ipaddress
 import json
@@ -31,6 +32,7 @@ import os
 import socket
 import threading
 import time
+from urllib.parse import urlsplit
 
 import pytest
 from outils_proxy import (
@@ -39,6 +41,7 @@ from outils_proxy import (
     ProxyHttpDeTest,
     ProxySocks5DeTest,
     attendre,
+    echanger,
     ecrire_proxy,
     get_absolu,
     get_dans_le_tunnel,
@@ -53,6 +56,7 @@ from outils_proxy import (
 
 from shadowlab.engines import registre
 from shadowlab.engines.noezia import identite as ident
+from shadowlab.engines.noezia import moteur
 
 NATIVE = {"identite_native": True, "headless": False, "channel": "chrome"}
 NOMS_DU_PROXY = {"cible-dns.test": "127.0.0.1"}  # un nom que seuls les faux proxys connaissent
@@ -321,7 +325,8 @@ def test_configuration_sans_proxy_pas_de_cle_et_le_reste_ne_change_pas(racine):
     assert (
         avec.get("identite_proxy") == "http://***:***@127.0.0.1:3128"
     )  # le proxy déclaré apparaît, et lui seul s'ajoute
-    assert {cle: valeur for cle, valeur in avec.items() if cle != "identite_proxy"} == sans
+    # Deux clés s'ajoutent avec un proxy : le masque et les arguments de lancement qu'il impose (voir le test suivant).
+    assert {cle: v for cle, v in avec.items() if cle not in ("identite_proxy", "identite_proxy_arguments")} == sans
 
 
 def test_configuration_chaque_identite_son_masque_et_sans_identite_pas_de_cle(racine):
@@ -332,6 +337,18 @@ def test_configuration_chaque_identite_son_masque_et_sans_identite_pas_de_cle(ra
     assert "identite_proxy" not in pilote("z").configuration()  # une identité sans fichier
     sans_identite = registre()["noezia"](("127.0.0.1",), {})
     assert "identite_proxy" not in sans_identite.configuration()
+
+
+def test_configuration_declare_les_arguments_de_lancement_imposes_par_le_proxy(racine):
+    """Règle du dépôt : tout réglage imposé est déclaré dans `configuration()` et enregistré avec les résultats."""
+    sans = pilote().configuration()
+    assert "identite_proxy_arguments" not in sans, "sans proxy déclaré : aucun argument imposé, aucune clé"
+    ecrire_proxy(racine, "x", "http://127.0.0.1:3128", "a-user", "secret-a")
+    conf = pilote().configuration()
+    assert conf["identite_proxy_arguments"] == [moteur.ARGUMENT_WEBRTC_PROXY]
+    texte = json.dumps(conf)
+    assert "secret-a" not in texte and "a-user" not in texte
+    assert "identite_proxy_arguments" not in registre()["noezia"](("127.0.0.1",), {}).configuration()
 
 
 def test_aucune_option_de_campagne_ne_porte_le_proxy(racine):
@@ -662,6 +679,129 @@ def test_une_demande_envoyee_en_morceaux_est_comprise(px, cible, amont):
             reponse = sock.recv(4096)
             assert statut_de(reponse) == 200
             assert statut_de(get_dans_le_tunnel(sock, "127.0.0.1", cible.port, "/page?id=M")) == 200
+
+
+# ── Une requête simple = une requête : en-tête + exactement `Content-Length` octets, rien de plus ──
+
+
+@pytest.fixture
+def cible2():
+    with CibleDeTest() as c:
+        yield c
+
+
+def requete_simple(url: str, methode: str = "GET", corps: bytes | None = None, entetes: str = "") -> bytes:
+    """Une requête en forme absolue ; `corps` (même vide) ajoute `Content-Length`."""
+    longueur = f"Content-Length: {len(corps)}\r\n" if corps is not None else ""
+    tete = f"{methode} {url} HTTP/1.1\r\nHost: {urlsplit(url).netloc}\r\n{entetes}{longueur}\r\n"
+    return tete.encode("latin-1") + (corps or b"")
+
+
+def nombre_de_requetes_vues_par_l_amont(amont) -> int:
+    """Combien de lignes de requête (` HTTP/1.1`) ont atteint la cible du faux proxy : les octets, pas les décisions."""
+    return amont.octets_du_client.count(b" HTTP/1.1\r\n")
+
+
+@pytest.mark.parametrize("corps", [None, b"hello"], ids=["sans corps", "avec corps"])
+@pytest.mark.parametrize("seconde", ["hors_perimetre", "autre_port_de_la_cible", "meme_hote_et_port"])
+def test_une_seconde_requete_envoyee_sur_la_meme_connexion_n_atteint_jamais_l_amont(
+    px, cible, cible2, amont, seconde, corps
+):
+    """Le relais ne compte pas sur `Connection: close` : un client qui désobéit et envoie deux requêtes d'un coup ne
+    fait passer que la première. La seconde (hôte hors périmètre, autre port) est jetée, sans décision ni refus."""
+    adresses = {
+        "hors_perimetre": f"http://10.1.2.3:{cible.port}/page?id=B",
+        "autre_port_de_la_cible": cible2.url("/page?id=B"),  # 127.0.0.1 est dans la liste : seul le port change
+        "meme_hote_et_port": cible.url("/page?id=B"),
+    }
+    methode, chemin = ("POST", "/depot?id=A") if corps is not None else ("GET", "/page?id=A")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        premiere = requete_simple(cible.url(chemin), methode, corps)
+        with ouvrir_connexion(port_de(relais), 5) as sock:
+            sock.sendall(premiere + requete_simple(adresses[seconde]))  # d'un coup, sur une seule connexion
+            reponse = lire_jusqu_a_fin(sock, 5)
+        attendre_demandes(relais, 1)
+        time.sleep(0.5)
+        decisions = vues(relais)
+    assert statut_de(reponse) == 200 and b"id=B" not in reponse
+    assert decisions == [(methode, "127.0.0.1", cible.port, "transmise")], "la seconde n'a ni décision ni refus"
+    assert nombre_de_requetes_vues_par_l_amont(amont) == 1, amont.octets_du_client
+    assert amont.contacts == 1 and [c["port"] for c in amont.connexions] == [cible.port]
+    assert [r["chemin"] for r in cible.requetes] == [chemin] and cible2.connexions_recues == []
+    if corps is not None:
+        assert cible.corps_recus == [(chemin, corps)] and amont.octets_du_client.endswith(b"\r\n\r\nhello")
+
+
+def test_un_corps_content_length_arrive_en_entier_meme_gros_et_envoye_en_morceaux(px, cible, amont):
+    corps = bytes(i % 251 for i in range(600_000))
+    tete = requete_simple(cible.url("/depot?id=G"), "POST", corps)[: -len(corps)]
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais, ouvrir_connexion(port_de(relais), 20) as sock:
+        sock.sendall(tete + corps[:100])  # l'en-tête et le début du corps, d'un coup
+        for debut in range(100, len(corps), 70_000):
+            sock.sendall(corps[debut : debut + 70_000])
+            time.sleep(0.01)
+        reponse = lire_jusqu_a_fin(sock, 20)
+    statut, _, resume = lire_reponse(reponse)
+    assert statut == 200 and resume == f"recu={len(corps)} sha256={hashlib.sha256(corps).hexdigest()}".encode()
+    assert cible.corps_recus == [("/depot?id=G", corps)]
+    assert amont.octets_du_client.endswith(corps) and nombre_de_requetes_vues_par_l_amont(amont) == 1
+
+
+@pytest.mark.parametrize(
+    "entetes",
+    [
+        "Transfer-Encoding: chunked\r\n",
+        "transfer-encoding: gzip, chunked\r\n",
+        "Transfer-Encoding: chunked\r\nContent-Length: 5\r\n",
+    ],
+    ids=["chunked", "gzip puis chunked, casse différente", "avec Content-Length"],
+)
+def test_un_corps_decoupe_est_refuse_en_501_et_rien_ne_part_vers_l_amont(px, cible, amont, entetes):
+    demande = requete_simple(cible.url("/depot?id=E"), "POST", entetes=entetes) + b"5\r\nhello\r\n0\r\n\r\n"
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        reponse = echanger(port_de(relais), demande, 5)
+        decisions = vues(relais)
+    statut, _, texte = lire_reponse(reponse)
+    assert statut == 501 and b"Transfer-Encoding" in texte, "un texte clair : ce n'est pas pris en charge"
+    assert amont.contacts == 0 and amont.connexions == [] and amont.octets_du_client == b""
+    assert decisions == [] and cible.connexions_recues == []
+
+
+@pytest.mark.parametrize(
+    "entetes",
+    [
+        "Content-Length: 5\r\nContent-Length: 5\r\n",
+        "Content-Length: 5\r\ncontent-length: 7\r\n",
+        "Content-Length: 5, 5\r\n",
+        "Content-Length: abc\r\n",
+        "Content-Length: -1\r\n",
+        "Content-Length: 1e3\r\n",
+        "Content-Length: \r\n",
+    ],
+    ids=["deux identiques", "deux différents", "liste", "texte", "négatif", "exposant", "vide"],
+)
+def test_un_content_length_invalide_ou_multiple_est_refuse_en_400_et_rien_ne_part_vers_l_amont(
+    px, cible, amont, entetes
+):
+    demande = requete_simple(cible.url("/depot?id=F"), "POST", entetes=entetes) + b"hello"
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        reponse = echanger(port_de(relais), demande, 5)
+        decisions = vues(relais)
+    assert statut_de(reponse) == 400
+    assert amont.contacts == 0 and amont.connexions == [] and amont.octets_du_client == b""
+    assert decisions == [] and cible.connexions_recues == []
+
+
+def test_un_tunnel_connect_n_est_pas_limite_a_une_requete(px, cible, amont):
+    """La décision d'un `CONNECT` se prend par tunnel : plusieurs requêtes y passent, et le relais ne les lit pas."""
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        statut, _, sock = ouvrir_tunnel(port_de(relais), "127.0.0.1", cible.port)
+        with sock:
+            premiere = b"GET /page?id=U1 HTTP/1.1\r\nHost: x\r\n\r\n"
+            sock.sendall(premiere + b"GET /page?id=U2 HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+            reponse = lire_jusqu_a_fin(sock, 5)
+    assert statut == 200 and reponse.count(b"HTTP/1.0 200") + reponse.count(b"HTTP/1.1 200") == 2
+    assert [r["chemin"] for r in cible.requetes] == ["/page?id=U1", "/page?id=U2"]
 
 
 @pytest.mark.parametrize(
