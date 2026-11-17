@@ -104,12 +104,13 @@ ARGUMENT_STOCKAGE_TIERS_PARTITIONNE = "--disable-features=" + ",".join(FONCTIONS
 
 # Identité native avec interface sur Linux sans carte graphique : un WebGL présent (D-102, mesures du 17/11 dans
 # `docs/recherche/webgl-linux-sans-gpu-2026-11-17.md`). D-50 supposait que Chromium se replie sur SwiftShader sur
-# un serveur sans GPU : avec Chromium 156, Chrome 157 et 158 lancés par Patchright et une interface, il ne le fait pas : WebGL est
-# simplement ABSENT (un Chrome lancé à la main : non essayé). Deux arguments : `--ignore-gpu-blocklist` lève le refus du rendu logiciel Mesa (llvmpipe)
-# et donne un moteur de rendu « ANGLE (Mesa, llvmpipe …, OpenGL 4.5) », au format des cartes Linux réelles ; mais il
-# active aussi le canvas 2D accéléré, dont la lecture devient instable (`getImageData` non déterministe : l'Arena le
-# relève, niveaux 05 et 06 bloqués), d'où `--disable-accelerated-2d-canvas`. SwiftShader (`--enable-unsafe-swiftshader`)
-# est écarté : l'Arena le marque déjà (`webgl_logiciel`) et c'est le plus connu des rendus logiciels.
+# un serveur sans GPU : avec Chromium 156, Chrome 157 et 158 lancés par Patchright et une interface, il ne le fait
+# pas, WebGL est ABSENT (un Chrome lancé à la main : non essayé). Deux arguments : `--ignore-gpu-blocklist` lève le
+# refus du rendu logiciel Mesa (llvmpipe) et donne un moteur de rendu « ANGLE (Mesa, llvmpipe …, OpenGL 4.5) », au
+# format des cartes Linux réelles ; mais il active aussi le canvas 2D accéléré, dont la lecture devient instable
+# (`getImageData` non déterministe : l'Arena le relève, niveaux 05 et 06 bloqués), d'où
+# `--disable-accelerated-2d-canvas`. SwiftShader (`--enable-unsafe-swiftshader`) est écarté : l'Arena le marque
+# déjà (`webgl_logiciel`) et c'est le plus connu des rendus logiciels.
 ARGUMENTS_WEBGL_SANS_GPU = ("--ignore-gpu-blocklist", "--disable-accelerated-2d-canvas")
 
 

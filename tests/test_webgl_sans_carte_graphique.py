@@ -1,8 +1,8 @@
 """WebGL en identité native avec interface sur Linux sans carte graphique (D-102).
 
-Voir `docs/recherche/webgl-linux-sans-gpu-2026-11-17.md`. Mesuré le 17/11 dans le conteneur amd64 (Chrome 158, Xvfb,
-Mesa 25.2) : un Chrome lancé par Patchright sans argument n'a PAS de WebGL (la liste de blocage des cartes graphiques écarte llvmpipe, et le
-repli sur SwiftShader n'existe plus). `--ignore-gpu-blocklist` donne un WebGL `ANGLE (Mesa, llvmpipe …, OpenGL 4.5)`
+Voir `docs/recherche/webgl-linux-sans-gpu-2026-11-17.md`. Mesuré le 17/11 dans le conteneur amd64 (Chrome 158 lancé par
+Patchright, Xvfb, Mesa 25.2) : sans argument, WebGL est ABSENT (la liste de blocage des cartes graphiques écarte llvmpipe,
+et le repli sur SwiftShader n'a pas lieu). `--ignore-gpu-blocklist` donne un WebGL `ANGLE (Mesa, llvmpipe …, OpenGL 4.5)`
 mais active aussi le canvas 2D accéléré, dont la lecture devient instable (10 essais sur 10) ;
 `--disable-accelerated-2d-canvas` le rend stable. Les deux arguments ne s'ajoutent que sur Linux sans carte graphique,
 en identité native avec interface. Ici : la règle de ce choix, sans navigateur (les mesures sont dans la note).
