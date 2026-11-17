@@ -11,6 +11,7 @@ et des domaines que nous contrôlons (voir périmètre D-15, D-16).
 
 from __future__ import annotations
 
+import glob
 import importlib.metadata
 import logging
 import os
@@ -100,6 +101,35 @@ FONCTIONS_COUPEES_SANS_PARTITIONNEMENT = (
     "msEdgeUpdateLaunchServicesPreferredVersion",
 )
 ARGUMENT_STOCKAGE_TIERS_PARTITIONNE = "--disable-features=" + ",".join(FONCTIONS_COUPEES_SANS_PARTITIONNEMENT)
+
+# Identité native avec interface sur Linux sans carte graphique : un WebGL présent (D-102, mesures du 17/11 dans
+# `docs/recherche/webgl-linux-sans-gpu-2026-11-17.md`). D-50 supposait que Chromium se replie sur SwiftShader sur
+# un serveur sans GPU : avec Chromium 156, Chrome 157 et 158 lancés par Patchright et une interface, il ne le fait
+# pas, WebGL est ABSENT (un Chrome lancé à la main : non essayé). Deux arguments : `--ignore-gpu-blocklist` lève le
+# refus du rendu logiciel Mesa (llvmpipe) et donne un moteur de rendu « ANGLE (Mesa, llvmpipe …, OpenGL 4.5) », au
+# format des cartes Linux réelles ; mais il active aussi le canvas 2D accéléré, dont la lecture devient instable
+# (`getImageData` non déterministe : l'Arena le relève, niveaux 05 et 06 bloqués), d'où
+# `--disable-accelerated-2d-canvas`. SwiftShader (`--enable-unsafe-swiftshader`) est écarté : l'Arena le marque
+# déjà (`webgl_logiciel`) et c'est le plus connu des rendus logiciels.
+ARGUMENTS_WEBGL_SANS_GPU = ("--ignore-gpu-blocklist", "--disable-accelerated-2d-canvas")
+
+
+def sans_carte_graphique(hote_os: str | None = None) -> bool:
+    """Linux sans carte graphique : aucun nœud DRM (`/dev/dri`, même virtuel) ni pilote NVIDIA (`/dev/nvidia*`).
+    Hors Linux la question ne se pose pas : toujours faux."""
+    if (hote_os or _HOTE_OS) != "linux":
+        return False
+    return not (glob.glob("/dev/dri/*") or glob.glob("/dev/nvidia*"))
+
+
+def arguments_natifs(*, headless: bool, hote_os: str, sans_gpu: bool) -> list[str]:
+    """Les arguments de lancement imposés en identité native : le partitionnement du stockage tiers (D-101) et,
+    seulement sur Linux sans carte graphique avec une interface, ceux de `ARGUMENTS_WEBGL_SANS_GPU` (D-102). Sans
+    interface, Chrome a déjà un WebGL (le SwiftShader du « headless shell ») : rien n'est ajouté."""
+    arguments = [ARGUMENT_STOCKAGE_TIERS_PARTITIONNE]
+    if not headless and hote_os == "linux" and sans_gpu:
+        arguments += ARGUMENTS_WEBGL_SANS_GPU
+    return arguments
 
 
 class DriverNoezia(Driver):
@@ -231,6 +261,9 @@ class DriverNoezia(Driver):
             "bloquer_ressources": self._bloquer_ressources,
             "verifier_tls": self._verifier_tls,
         }
+        if self._config.identite_native and not self._config.headless and sans_carte_graphique():
+            # Réglage imposé (D-102) : déclaré et enregistré ; la clé n'existe que là où il s'applique.
+            conf["webgl_sans_carte_graphique_arguments"] = list(ARGUMENTS_WEBGL_SANS_GPU)
         if self._nom_identite is not None:
             conf["identite"] = self._nom_identite
             conf["identite_age_jours"] = identite.age_jours(self._nom_identite)
@@ -326,8 +359,9 @@ class DriverNoezia(Driver):
         ]
         # ── GPU / backend graphique : cohérence avec le profil déclaré ──
         if natif:
-            # Aucun réglage de lancement ajouté, hors le partitionnement du stockage tiers rétabli (D-101).
-            args = [ARGUMENT_STOCKAGE_TIERS_PARTITIONNE]
+            # Aucun réglage de lancement ajouté, hors le partitionnement du stockage tiers (D-101) et, sur Linux sans
+            # carte graphique avec interface, les arguments WebGL (D-102).
+            args = arguments_natifs(headless=self._config.headless, hote_os=_HOTE_OS, sans_gpu=sans_carte_graphique())
         elif self._profil.os == "macos" and _HOTE_OS == "macos":
             # macOS + profil macOS : Metal réel, cohérent avec renderer Apple.
             args += ["--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist"]
@@ -382,7 +416,8 @@ class DriverNoezia(Driver):
 
         Avec un proxy d'identité, Chrome n'a pour proxy que le relais, sans bypass : Playwright y ajoute `<-loopback>`,
         le local passe donc aussi par le relais, qui est le verrou. Jamais `SHADOWLAB_PROXY` ni un accès direct."""
-        arguments = [ARGUMENT_STOCKAGE_TIERS_PARTITIONNE]  # identité native : partitionnement du stockage tiers (D-101)
+        # Identité native, toujours avec interface : stockage tiers partitionné (D-101), WebGL sans carte (D-102).
+        arguments = arguments_natifs(headless=False, hote_os=_HOTE_OS, sans_gpu=sans_carte_graphique())
         if self._relais is not None:
             proxy = {"server": self._relais.adresse}
             arguments += ARGUMENTS_PROXY_IDENTITE

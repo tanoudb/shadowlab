@@ -1,0 +1,23 @@
+# WebGL sous Linux sans carte graphique : mesure d'un réglage candidat (docs/recherche/webgl-linux-sans-gpu-2026-11-17.md).
+# Même moteur et mêmes cellules que `fumee-linux-natif.yaml` (identité native, vrai Chrome avec interface sur Xvfb, amd64),
+# en plus court : niveaux 03 à 06 sans corrélation, 3 scénarios × 2 répétitions = 24 passages. Le réglage mesuré n'est PAS dans
+# ce fichier : il vient de la variable `FUMEE_CHROME_ARGS` du conteneur (arguments ajoutés à Chrome par le lanceur de
+# docker/linux/entrypoint.sh), à noter avec le numéro de campagne. Ne vaut ni taux de passage ni validation.
+experiment:
+  name: webgl_linux_essai
+  description: >-
+    Mesure d'un réglage WebGL candidat sous Linux sans carte graphique (identité native, Chrome 157 amd64, Xvfb) : le réglage
+    vient de FUMEE_CHROME_ARGS, noté avec le numéro de campagne.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["03", "04", "05", "06scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 2
+  seed: 20261118
+  output: [json]

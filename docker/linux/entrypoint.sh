@@ -24,4 +24,14 @@ if [ "${FUMEE_ECRAN:-0}" = "1" ]; then
   export DISPLAY=:99
 fi
 
+# MESURE SEULEMENT : `FUMEE_CHROME_ARGS` ajoute des arguments de lancement à Google Chrome, par un lanceur posé à la place
+# du binaire (Playwright lance `/opt/google/chrome/chrome` ; ses enfants relancent le vrai binaire, qui garde ses
+# ressources à côté). Sert à comparer des réglages WebGL (docs/recherche/webgl-linux-sans-gpu-2026-11-17.md) avec la sonde et
+# les campagnes, sans toucher au moteur. Sans la variable : rien n'est modifié.
+if [ -n "${FUMEE_CHROME_ARGS:-}" ] && [ -x /opt/google/chrome/chrome ] && [ ! -e /opt/google/chrome/chrome.reel ]; then
+  mv /opt/google/chrome/chrome /opt/google/chrome/chrome.reel
+  printf '#!/bin/sh\nexec /opt/google/chrome/chrome.reel %s "$@"\n' "$FUMEE_CHROME_ARGS" > /opt/google/chrome/chrome
+  chmod +x /opt/google/chrome/chrome
+fi
+
 exec "$@"

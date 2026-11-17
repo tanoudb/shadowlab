@@ -12,6 +12,7 @@
 #   scripts/fumee-linux.sh lancer <arm64|amd64> <ecran|sans-ecran> <campagne.yaml>   un conteneur, en arrière-plan
 #   scripts/fumee-linux.sh suivre <arm64|amd64> <ecran|sans-ecran>       journal du conteneur
 #   scripts/fumee-linux.sh sonde <arm64|amd64> <ecran|sans-ecran> <chrome|chromium>   ce que le navigateur réel montre
+#       (FUMEE_CHROME_ARGS="--arg …" ajoute des arguments à Chrome, pour mesurer ; FUMEE_ETIQUETTE=nom suffixe le fichier)
 #   scripts/fumee-linux.sh sauvegarder                                   copie la base vers outputs/shadowlab.sqlite3
 #   scripts/fumee-linux.sh arreter                                       arrête la pile (jamais Docker ni OrbStack)
 #   scripts/fumee-linux.sh retirer <arm64|amd64>                         supprime l'image et les conteneurs de cette archi
@@ -92,7 +93,7 @@ case "$commande" in
     # shellcheck disable=SC2046
     docker run -d --name "$nom" --platform "linux/$1" --cpus "$CPUS" --memory "$MEMOIRE" --shm-size 1g \
       --add-host host.docker.internal:host-gateway -p "127.0.0.1:$PORT_SITE:$PORT_SITE" \
-      $(env_conteneur) -e "FUMEE_ECRAN=$ecran" \
+      $(env_conteneur) -e "FUMEE_ECRAN=$ecran" -e FUMEE_CHROME_ARGS \
       -v "$VOLUME:/data" -v "$SORTIES:/srv/outputs" \
       "shadowlab-linux:$1" shadowlab campagne "$3"
     echo "Conteneur $nom lancé ; journal : scripts/fumee-linux.sh suivre $1 $2"
@@ -118,9 +119,9 @@ case "$commande" in
     mkdir -p "$SORTIES/sondes"
     # shellcheck disable=SC2046
     docker run --rm --platform "linux/$1" --add-host host.docker.internal:host-gateway --shm-size 1g \
-      $(env_conteneur) -e "FUMEE_ECRAN=$ecran" -v "$SORTIES:/srv/outputs" \
+      $(env_conteneur) -e "FUMEE_ECRAN=$ecran" -e FUMEE_CHROME_ARGS -v "$SORTIES:/srv/outputs" \
       -v "$DEPOT/scripts/fumee-linux-sonde.py:/sonde.py:ro" "shadowlab-linux:$1" \
-      python /sonde.py --canal "$3" ${sans[@]+"${sans[@]}"} --sortie "/srv/outputs/sondes/$1-$2-$3.json"
+      python /sonde.py --canal "$3" ${sans[@]+"${sans[@]}"} --sortie "/srv/outputs/sondes/$1-$2-$3${FUMEE_ETIQUETTE:+-$FUMEE_ETIQUETTE}.json"
     ;;
   arreter)
     SHADOWLAB_ARENA_DIR="$SORTIES/arena" SHADOWLAB_PORT_AVAL="$PORT_AVAL" SHADOWLAB_PORT="$PORT_SITE" \

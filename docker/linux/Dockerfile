@@ -41,6 +41,13 @@ RUN (patchright install chrome > /opt/chrome-installation.txt 2>&1 && echo "chro
     || echo "chrome: NON installé pour ${TARGETARCH}" >> /opt/chrome-installation.txt; \
     rm -rf /var/lib/apt/lists/*; cat /opt/chrome-installation.txt
 
+# 3b. Mesa : rendu logiciel llvmpipe (OpenGL) et lavapipe (Vulkan), ce qu'un poste Linux de bureau sans carte graphique a
+#     presque toujours (machine virtuelle, pilote Mesa par défaut). Ajouté pour mesurer les réglages WebGL de Chrome sans
+#     carte (docs/recherche/webgl-linux-sans-gpu-2026-11-17.md) : l'essai de fumée du 17/11 n'en avait pas.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgles2 libvulkan1 mesa-vulkan-drivers \
+ && rm -rf /var/lib/apt/lists/*
+
 # 4. Le code. Le dépôt n'est pas monté : l'image est l'état exact d'un commit.
 COPY README.md ./
 COPY src ./src

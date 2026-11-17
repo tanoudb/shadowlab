@@ -1,0 +1,146 @@
+{
+ "hote": {
+  "machine": "x86_64",
+  "systeme": "Linux",
+  "version_python": "3.12.15"
+ },
+ "reglage": {
+  "canal": "chrome",
+  "sans_interface": false
+ },
+ "version_navigateur": "158.0.8127.36",
+ "sonde": {
+  "navigateur": {
+   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+   "platform": "Linux x86_64",
+   "vendor": "Google Inc.",
+   "hardwareConcurrency": 18,
+   "deviceMemory": 16,
+   "languages": [
+    "en-US",
+    "en"
+   ],
+   "webdriver": false,
+   "plugins": 5,
+   "pdfViewerEnabled": true,
+   "maxTouchPoints": 0
+  },
+  "userAgentData": {
+   "brands": [
+    {
+     "brand": "Chromium",
+     "version": "158"
+    },
+    {
+     "brand": "Not.A/Brand",
+     "version": "24"
+    },
+    {
+     "brand": "Google Chrome",
+     "version": "158"
+    }
+   ],
+   "mobile": false,
+   "platform": "Linux",
+   "haute_entropie": {
+    "architecture": "x86",
+    "bitness": "64",
+    "brands": [
+     {
+      "brand": "Chromium",
+      "version": "158"
+     },
+     {
+      "brand": "Not.A/Brand",
+      "version": "24"
+     },
+     {
+      "brand": "Google Chrome",
+      "version": "158"
+     }
+    ],
+    "fullVersionList": [
+     {
+      "brand": "Chromium",
+      "version": "158.0.8127.36"
+     },
+     {
+      "brand": "Not.A/Brand",
+      "version": "24.0.0.0"
+     },
+     {
+      "brand": "Google Chrome",
+      "version": "158.0.8127.36"
+     }
+    ],
+    "mobile": false,
+    "model": "",
+    "platform": "Linux",
+    "platformVersion": "",
+    "uaFullVersion": "158.0.8127.36",
+    "wow64": false
+   }
+  },
+  "ecran": {
+   "width": 1920,
+   "height": 1080,
+   "availWidth": 1920,
+   "availHeight": 1080,
+   "colorDepth": 24,
+   "devicePixelRatio": 1
+  },
+  "fenetre": {
+   "innerWidth": 945,
+   "innerHeight": 973,
+   "outerWidth": 945,
+   "outerHeight": 1060,
+   "screenX": 10,
+   "screenY": 10
+  },
+  "intl": {
+   "fuseau": "UTC",
+   "langue": "en-US",
+   "decalage": 0
+  },
+  "webgl": {
+   "webgl": {
+    "vendor": "Google Inc. (Mesa)",
+    "renderer": "ANGLE (Mesa, Vulkan 1.4.318 (llvmpipe (LLVM 20.1.2 128 bits) (0x00000000)), llvmpipe)",
+    "extensions": 34,
+    "maxTexture": 16384,
+    "subpixelBits": 8
+   },
+   "webgl2": {
+    "vendor": "Google Inc. (Mesa)",
+    "renderer": "ANGLE (Mesa, Vulkan 1.4.318 (llvmpipe (LLVM 20.1.2 128 bits) (0x00000000)), llvmpipe)",
+    "extensions": 29,
+    "maxTexture": 16384,
+    "subpixelBits": 8
+   }
+  },
+  "webgpu": {
+   "present": true,
+   "adaptateur": null
+  },
+  "voix": {
+   "n": 19,
+   "attente_ms": 4
+  },
+  "peripheriques": [],
+  "codecs": {
+   "h264": "probably",
+   "aac": "probably",
+   "vp9": "probably",
+   "mp3": "probably"
+  },
+  "connexion": {
+   "rtt": 100,
+   "downlink": 1.4,
+   "type": "4g"
+  },
+  "audio": {
+   "offline": true,
+   "echantillonnage": 44100
+  }
+ }
+}
