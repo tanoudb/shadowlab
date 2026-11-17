@@ -30,6 +30,12 @@ site ne répond pas avant la visite ; elle n'est pas lancée, et le même créne
 tard s'il reste dans la plage, sinon l'ordonnanceur replanifie. Les essais d'un même créneau portent la même clé
 `creneau` : une panne de 3 heures fait UNE visite manquée et 36 essais, pas 36 visites manquées.
 
+**Identité en alerte** (§ 5.5 : attente d'une heure ; la campagne le constate avant chaque créneau d'un bras qui a une
+identité persistante) : aucune visite avant la fin de l'attente. `reporter_alerte` note une ligne `attente_alerte`
+(heure prévue, fin de l'attente, `alerte_le` de l'identité) et le créneau suivant se planifie à partir de cette fin, par
+les mêmes règles (mode `fixe` : jamais avant ; `ordonnanceur` : plage, plafonds, échéance). Ce n'est pas une visite
+manquée. La note fait partie de l'état durable : une reprise pendant l'attente la relit et ne la réécrit pas.
+
 **Échéance** (`jours`, mode `ordonnanceur`) : départ + `jours`. Un créneau qui commencerait à l'échéance ou après, ou un
 réveil après elle, rend un créneau `echeance` : plus aucune visite ne commence, ce n'est ni un échec ni une visite
 manquée (la campagne compte les répétitions restantes « non faites (échéance) »).
@@ -134,12 +140,15 @@ class _Note:
     creneau: str
     essai: int
     pages: int | None
+    jusqu_a: datetime | None = None  # motif `alerte` : fin de l'attente de l'identité
 
     @property
     def reprise(self) -> datetime:
         """D'où se replanifie le créneau suivant."""
         if self.motif == "infrastructure":
             return self.constatee + timedelta(minutes=REESSAI_INFRASTRUCTURE_MIN)
+        if self.motif == "alerte" and self.jusqu_a is not None:
+            return self.jusqu_a
         return self.constatee
 
 
@@ -159,7 +168,7 @@ class Cadence:
     ) -> None:
         """`graine` : celle du bras (un créneau = une graine dérivée, recalculable) ; `depart` : départ durable de la
         course ; `faites` : visites déjà faites (début, fin, pages lues) ; `notes` : lignes de `cadence.jsonl` du bras
-        (les visites manquées comptent dans l'état) ; `noter` : écrit une note durable."""
+        (les visites manquées et les attentes d'alerte comptent dans l'état) ; `noter` : écrit une note durable."""
         self._espacement = espacement
         self._horloge = horloge or datetime.now
         self._dormir = dormir or time.sleep
@@ -169,7 +178,9 @@ class Cadence:
         reference = self._horloge()
         self._depart = au_cadran(depart, reference) if depart is not None else None
         self._faites = sorted((au_cadran(d, reference), au_cadran(f, reference), int(p)) for d, f, p in faites)
-        self._notes = [self._lire_note(n, reference) for n in notes if n.get("genre") == "manquee"]
+        notes = list(notes)
+        self._notes = [self._lire_note(n, reference) for n in notes if n.get("genre") in ("manquee", "attente_alerte")]
+        self._alertes_notees = {str(n.get("alerte_le")) for n in notes if n.get("genre") == "attente_alerte"}
         self._ordonnancer = espacement.mode == "ordonnanceur"
         self._reglages = espacement.reglages_ordonnanceur() if self._ordonnancer else None
         self._echeance = (
@@ -181,13 +192,15 @@ class Cadence:
     @staticmethod
     def _lire_note(ligne: Mapping[str, Any], reference: datetime) -> _Note:
         prevue = au_cadran(ligne["prevue"], reference)
+        alerte = ligne.get("genre") == "attente_alerte"
         return _Note(
-            motif=str(ligne.get("motif")),
+            motif="alerte" if alerte else str(ligne.get("motif")),
             prevue=prevue,
             constatee=au_cadran(ligne["constatee"], reference),
             creneau=str(ligne.get("creneau") or _ecrire(prevue)),
             essai=int(ligne.get("essai") or 1),
             pages=ligne.get("pages"),
+            jusqu_a=au_cadran(ligne["fin"], reference) if alerte else None,
         )
 
     @property
@@ -236,6 +249,7 @@ class Cadence:
             creneau = self._prochain()
             if self._echeance is not None and creneau.debut >= self._echeance:
                 return Creneau(creneau.debut, echeance=True)
+            self._annoncer(creneau)
             while (reste := (creneau.debut - self._horloge()).total_seconds()) > 0:
                 if interrompre():
                     return None
@@ -246,6 +260,12 @@ class Cadence:
             if not self._ordonnancer or not self._manque(creneau, maintenant):
                 return creneau
             self._ajouter_note(creneau, maintenant, "retard", "")
+
+    def _annoncer(self, creneau: Creneau) -> None:
+        """Note durable de la prochaine visite (genre `prevue` : heure prévue, heure d'écriture), écrite quand le
+        créneau est choisi, AVANT l'attente : `shadowlab course etat` y lit l'heure prévue et le retard. Ni la
+        cadence, ni la reprise, ni le bilan ne la comptent : ce n'est ni une visite, ni une visite manquée."""
+        self._noter({"genre": "prevue", "prevue": _ecrire(creneau.debut), "ecrite": _ecrire(self._horloge())})
 
     def _manque(self, creneau: Creneau, maintenant: datetime) -> bool:
         assert self._reglages is not None
@@ -258,6 +278,32 @@ class Cadence:
         """La visite de `creneau` n'a pas été lancée (motif `infrastructure` : l'Arena ou le site ne répond pas) : une
         note durable, puis le créneau est réessayé `REESSAI_INFRASTRUCTURE_MIN` minutes plus tard (dans la plage)."""
         self._ajouter_note(creneau, self._horloge(), motif, detail)
+
+    def reporter_alerte(self, fin: datetime, details: Mapping[str, Any]) -> None:
+        """L'identité du bras est en alerte jusqu'à `fin` : le prochain créneau n'est pas lancé. Note durable (genre
+        `attente_alerte` : heure prévue, heure constatée, fin de l'attente, puis `details`, dont `alerte_le`) ; le
+        créneau suivant se planifie à partir de `fin` (`attendre` dort jusque-là au moins). Une alerte déjà notée (même
+        `alerte_le`, relue à la reprise) ne l'est pas deux fois."""
+        cle = str(details.get("alerte_le"))
+        if cle in self._alertes_notees:
+            return
+        maintenant = self._horloge()
+        fin = au_cadran(fin, maintenant)
+        prevue = self._prochain().debut
+        self._notes.append(
+            _Note(motif="alerte", prevue=prevue, constatee=maintenant, creneau=_ecrire(prevue), essai=1, pages=None,
+                  jusqu_a=fin)
+        )  # fmt: skip
+        self._alertes_notees.add(cle)
+        self._noter(
+            {
+                "genre": "attente_alerte",
+                "prevue": _ecrire(prevue),
+                "constatee": _ecrire(maintenant),
+                "fin": _ecrire(fin),
+                **details,
+            }
+        )
 
     def _ajouter_note(self, creneau: Creneau, constatee: datetime, motif: str, detail: str) -> None:
         precedente = self._note_en_cours()

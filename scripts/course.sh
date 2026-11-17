@@ -6,7 +6,9 @@
 #   scripts/course.sh preparer <étiquette>      copie figée du code (git worktree détaché) + uv sync
 #   scripts/course.sh demarrer <configuration>  lance la campagne dans la session tmux course-i9
 #   scripts/course.sh reprendre <n°>            reprend une campagne interrompue
-#   scripts/course.sh etat                      session, conteneurs, santé de la chaîne, journal
+#   scripts/course.sh etat [<n°>]               résumé (shadowlab course etat), puis session, conteneurs, chaîne, journal ;
+#                                               sort avec le code du résumé : 0 en cours ou finie, 1 arrêtée,
+#                                               2 retard anormal ou blocage, 3 course ou campagne introuvable
 #   scripts/course.sh bilan <n°>                bilan du § 6.3 (shadowlab course bilan)
 #   scripts/course.sh arreter                   arrêt d'urgence (crée <sorties>/ARRET)
 #   scripts/course.sh empreinte                 preuve d'isolation (à comparer avant/après avec diff)
@@ -108,16 +110,27 @@ case "$commande" in
     lancer_tmux "caffeinate -i nice -n 10 uv run shadowlab reprendre $1"
     ;;
   etat)
-    exiger_course
+    # Le résumé vient d'abord ; son code est celui du script, quoi qu'il arrive ensuite (docker éteint, chaîne
+    # injoignable) : gardé dans `code`, `set -e` ne l'interrompt pas. Ici aucune erreur ne sort en 1 (« arrêtée ») ni
+    # en 2 (« retard ») : course non préparée, usage ou environnement illisibles = 3, comme « introuvable ».
+    introuvable() { echo "course.sh : $*" >&2; exit 3; }
+    [ -d "$COURSE" ] || introuvable "dossier de la course absent : $COURSE (lancer d'abord « preparer »)"
+    [ -f "$FICHIER_ENV" ] || introuvable "fichier d'environnement absent : $FICHIER_ENV"
+    [ $# -le 1 ] || introuvable "usage : etat [<n°>]"
+    [ $# -eq 0 ] || case "$1" in ''|*[!0-9]*) introuvable "le numéro de campagne doit être un entier" ;; esac
     charger_env
-    if session_vivante; then echo "tmux $SESSION : vivante"; else echo "tmux $SESSION : absente"; fi
+    if session_vivante; then etat_session=vivante; else etat_session=absente; fi
+    code=0
+    dans_course uv run shadowlab course etat "$@" --session "$etat_session" || code=$?
+    echo "--- tmux $SESSION : $etat_session"
     echo "--- conteneurs ($PROJET)"
     docker ps -a --filter "label=com.docker.compose.project=$PROJET" \
-      --format '{{.ID}}  créé {{.CreatedAt}}  {{.Names}}  {{.Status}}'
+      --format '{{.ID}}  créé {{.CreatedAt}}  {{.Names}}  {{.Status}}' || echo "(docker indisponible)"
     echo "--- chaîne"
     dans_course uv run shadowlab arena etat || true
     echo "--- journal (20 dernières lignes)"
     tail -n 20 "$(valeur_de SHADOWLAB_SORTIES)/logs/shadowlab.jsonl" 2>/dev/null || echo "(aucun journal)"
+    exit "$code"
     ;;
   bilan)
     [ $# -eq 1 ] || erreur "usage : bilan <n°>"

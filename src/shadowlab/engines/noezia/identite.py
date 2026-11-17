@@ -22,7 +22,7 @@ import json
 import os
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +75,26 @@ def age_jours(nom: str) -> int:
     except (OSError, ValueError, KeyError):
         return 0
     return max(0, (datetime.now(UTC) - creee).days)
+
+
+def lire_etat(nom: str) -> dict[str, Any] | None:
+    """L'état noté de l'identité (`identite.json`), lu sans verrou ni création : la campagne le consulte avant chaque
+    créneau d'un bras espacé (I9), y compris avant d'ouvrir le pilote. None si l'identité n'existe pas, ou illisible."""
+    fichier = racine_identites() / verifier_nom(nom) / "identite.json"
+    try:
+        donnees = json.loads(fichier.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return donnees if isinstance(donnees, dict) else None
+
+
+def fin_d_alerte(donnees: dict[str, Any], maintenant: datetime) -> datetime | None:
+    """Quand une identité en alerte pourra resservir : `alerte_le` + `ATTENTE_ALERTE_S` (même règle que
+    `controler_etat`). None si elle n'est pas en alerte. Date illisible : l'attente court depuis `maintenant`."""
+    if donnees.get("etat") != "alerte":
+        return None
+    depuis = _date(donnees.get("alerte_le")) or _aware(maintenant)
+    return depuis + timedelta(seconds=ATTENTE_ALERTE_S)
 
 
 def controler_etat(

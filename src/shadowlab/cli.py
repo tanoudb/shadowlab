@@ -129,10 +129,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=["bilan"])
     p.add_argument("campagne", type=int, help="numéro de la campagne")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
-    p = sous.add_parser("course", help="bilan de la course de 7 jours « une identité qui dure » (base et relevé)")
-    p.add_argument("action", choices=["bilan"])
-    p.add_argument("campagne", type=int, help="numéro de la campagne")
+    p = sous.add_parser("course", help="bilan et état de la course de 7 jours « une identité qui dure »")
+    p.add_argument("action", choices=["bilan", "etat"])
+    p.add_argument("campagne", type=int, nargs="?", help="numéro de la campagne (`etat` : la dernière, par défaut)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
+    p.add_argument(
+        "--session", choices=["vivante", "absente"], help="`etat` : la session tmux de la course (`scripts/course.sh`)"
+    )
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
@@ -538,6 +541,11 @@ def _course(args: argparse.Namespace, reglages) -> int:
     from . import database as db
     from .campaigns import dossier_campagne
 
+    if args.action == "etat":
+        return _course_etat(args, reglages)
+    if args.campagne is None:
+        print("Erreur : `course bilan` demande le numéro de la campagne", file=sys.stderr)
+        return 2
     cx = db.ouvrir(reglages.base_donnees)
     try:
         rapport = course.bilan(cx, args.campagne, dossier_campagne(reglages, args.campagne))
@@ -548,6 +556,39 @@ def _course(args: argparse.Namespace, reglages) -> int:
         cx.close()
     print(json_mod.dumps(rapport, ensure_ascii=False, indent=2) if args.format_json else course.texte(rapport))
     return 0 if rapport["verdict"] == course.TENU else 1
+
+
+def _course_etat(args: argparse.Namespace, reglages) -> int:
+    """`shadowlab course etat [<n°>] [--session vivante|absente]` : l'état de la course, lu sans rien écrire (base
+    ouverte en lecture seule, aucune requête vers l'Arena). Codes : 0 en cours sans anomalie ou finie, 1 arrêtée,
+    2 retard anormal ou blocage, 3 course ou campagne introuvable."""
+    import json as json_mod
+    import sqlite3
+
+    from . import course_etat
+    from .campaigns import dossier_campagne
+
+    try:
+        cx = course_etat.ouvrir_en_lecture(reglages.base_donnees)
+    except sqlite3.Error:
+        print(f"Erreur : base introuvable ({reglages.base_donnees})", file=sys.stderr)
+        return course_etat.CODE_INTROUVABLE
+    try:
+        numero = args.campagne
+        if numero is None:
+            ligne = cx.execute("SELECT MAX(id) FROM experiments").fetchone()
+            numero = ligne[0] if ligne else None
+        if numero is None:
+            print("Erreur : aucune campagne dans la base", file=sys.stderr)
+            return course_etat.CODE_INTROUVABLE
+        rapport = course_etat.etat(cx, numero, dossier_campagne(reglages, numero), session=args.session)
+    except (LookupError, ValueError, sqlite3.Error) as erreur:  # inconnue ou illisible : 3, jamais 1 (« arrêtée »)
+        print(f"Erreur : {erreur}", file=sys.stderr)
+        return course_etat.CODE_INTROUVABLE
+    finally:
+        cx.close()
+    print(json_mod.dumps(rapport, ensure_ascii=False, indent=2) if args.format_json else course_etat.texte(rapport))
+    return rapport["code"]
 
 
 def _bannir(args: argparse.Namespace, reglages) -> int:

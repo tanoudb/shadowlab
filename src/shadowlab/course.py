@@ -11,16 +11,19 @@ de la cadence (`<sorties>/campagnes/<n°>/cadence.jsonl`), sans rien écrire. Ch
 - toutes les visites faites ont abouti (une visite interrompue par une coupure, une visite manquée et une visite non
   faite après l'échéance ne sont pas des visites faites : elles sont comptées à part) ;
 - le même visiteur et la même empreinte E côté Arena à chaque visite (critères de la soirée) ;
-- la porte d'entrée revenue seulement après sa durée : les défis émis par l'Arena (`decisions`, `emis`) sont regroupés
-  en passages (émissions à moins de `RAFALE_S` de la première du groupe) ; deux passages successifs sont séparés d'au
+- la porte d'entrée revenue seulement après sa durée : un retour de la porte, ce sont tous les défis émis
+  par l'Arena (`decisions`, couche `defi-js`, décision `emis`) entre deux validations (`defi-js`, `valide`) ; son âge
+  va de la dernière validation à la première émission du retour (la première porte n'a pas d'âge). Il doit valoir au
   moins la durée du cookie du profil gardé avec le passage (`runs.protection_config`, `profil.duree_cookie_s`), moins
   `TOLERANCE_PORTE_S` (60 s, la tolérance de la récolte : l'heure notée suit de quelques secondes la pose du cookie).
-  La porte revient donc au plus une fois par période ;
+  Sans validation du tout : non mesuré. La porte revient donc au plus une fois par période ;
 - au moins 99 % des annonces et 99 % des champs exacts à la fin : la note de la récolte cumulée (`recolte`, contre
   `vitrine.verite()`) de la dernière visite qui en porte une ;
 - les visites manquées comptées à part : nombre de créneaux manqués (un créneau réessayé après une panne
   d'infrastructure compte une fois, avec son motif d'origine), motifs, essais notés. Ce critère est un relevé : il est
   tenu dès que le relevé existe, il ne juge pas le nombre (une visite manquée n'est pas un échec du moteur).
+  Aussi à part : les créneaux non lancés parce que l'identité était en alerte (`attente_alerte`, une par alerte) ou
+  bannie (`bannie`, répétitions restantes). Une attente d'alerte rend `aucune_alerte` non tenu.
 
 **Témoins** (négatif, sentinelle, classique) : les critères de la soirée, et toutes leurs visites commencées dans les
 24 premières heures de la course (`pendant_le_premier_jour`, départ = création de la campagne).
@@ -40,7 +43,6 @@ from .campaigns import FICHIER_CADENCE
 from .engines.noezia.parcours import TOLERANCE_PORTE_S
 from .soiree import NON_MESURE, NON_TENU, TENU, Bras
 
-RAFALE_S = 120.0  # émissions d'un même passage de la porte (défi rendu, puis page redemandée)
 SEUIL_RECOLTE = 0.99
 PREMIER_JOUR = timedelta(days=1)
 TEMOINS = ("temoin-negatif", "temoin-sentinelle", "temoin-classique")
@@ -108,29 +110,42 @@ def _details(ligne: sqlite3.Row) -> dict[str, Any]:
 # ═══ Critères du sujet ════════════════════════════════════════════════════════════════════════════
 
 
-def juger_porte(emissions: list[tuple[datetime, float | None]]) -> tuple[dict[str, str], dict[str, Any]]:
-    """`emissions` : (heure, durée du cookie du profil du passage) de chaque défi émis au sujet, dans l'ordre."""
-    groupes: list[tuple[datetime, float | None]] = []
-    for quand, duree in emissions:
-        if not groupes or (quand - groupes[-1][0]).total_seconds() > RAFALE_S:
-            groupes.append((quand, duree))
-    faits = {"passages": len(groupes), "duree_s": None, "ecart_min_s": None, "trop_tot": []}
-    if not groupes:
+def juger_porte(
+    emissions: list[tuple[datetime, float | None]], validations: list[datetime]
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """`emissions` : (heure, durée du cookie du profil du passage) de chaque défi émis au sujet ; `validations` :
+    l'heure de chaque défi validé (`defi-js` / `valide`). Un retour de la porte va de la première émission suivant une
+    validation à la validation qui le clôt (toutes les émissions entre les deux en font partie : photo, puis page). Son
+    âge est le temps écoulé depuis la dernière validation avant lui ; la première porte n'en a pas."""
+    evenements = sorted([(q, 0, d) for q, d in emissions] + [(q, 1, None) for q in validations], key=lambda e: e[:2])
+    retours: list[tuple[datetime, float | None, datetime | None]] = []  # (1re émission, durée, dernière validation)
+    derniere: datetime | None = None
+    ouvert = False
+    for quand, genre, duree in evenements:
+        if genre == 1:
+            derniere, ouvert = quand, False
+        elif not ouvert:
+            retours.append((quand, duree, derniere))
+            ouvert = True
+    faits = {"passages": len(retours), "duree_s": None, "ecart_min_s": None, "trop_tot": []}
+    if not retours:
         return _critere(NON_MESURE, "aucun défi émis par l'Arena : la porte n'a jamais été vue"), faits
-    durees = {d for _, d in groupes}
+    if not validations:
+        return _critere(NON_MESURE, "aucune validation du défi : l'âge du laissez-passer au retour est inconnu"), faits
+    durees = {d for _, d, _ in retours}
     if None in durees:
         return _critere(NON_MESURE, "durée de la porte inconnue (profil non gardé avec un passage)"), faits
-    ecarts = [((b - a).total_seconds(), db) for (a, _), (b, db) in zip(groupes, groupes[1:], strict=False)]
-    trop_tot = [round(e) for e, d in ecarts if e < d - TOLERANCE_PORTE_S]
+    ages = [((e - v).total_seconds(), d) for e, d, v in retours if v is not None]
+    trop_tot = [round(a) for a, d in ages if a < d - TOLERANCE_PORTE_S]
     faits.update(
         duree_s=max(durees) if len(durees) == 1 else sorted(durees),
-        ecart_min_s=round(min(e for e, _ in ecarts)) if ecarts else None,
+        ecart_min_s=round(min(a for a, _ in ages)) if ages else None,
         trop_tot=trop_tot,
     )
     duree = " ou ".join(f"{d:g}" for d in sorted(durees))
-    detail = f"{len(groupes)} passage(s) de la porte ; durée {duree} s, tolérance {TOLERANCE_PORTE_S} s"
-    if ecarts:
-        detail += f" ; écart le plus court {faits['ecart_min_s']} s"
+    detail = f"{len(retours)} passage(s) de la porte ; durée {duree} s, tolérance {TOLERANCE_PORTE_S} s"
+    if ages:
+        detail += f" ; âge le plus court au retour (dernière validation à première émission) {faits['ecart_min_s']} s"
     if trop_tot:
         detail += f" ; revenue trop tôt après {trop_tot} s"
     return _critere(NON_TENU if trop_tot else TENU, detail), faits
@@ -159,9 +174,18 @@ def compter_manquees(notes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"nombre": len(motifs), "par_motif": dict(Counter(motifs.values())), "essais": len(manquees)}
 
 
+def compter_identite(notes: list[dict[str, Any]]) -> dict[str, int]:
+    """Les créneaux non lancés à cause de l'identité du bras : attentes d'alerte (une par alerte, `alerte_le` : une
+    reprise pendant l'attente ne compte pas deux fois) et visites non faites après un bannissement (la dernière note
+    fait foi, comme pour l'échéance). Ce ne sont pas des visites faites."""
+    attentes = {n.get("alerte_le") or n.get("constatee") for n in notes if n.get("genre") == "attente_alerte"}
+    bannie = next((n.get("restantes") or 0 for n in reversed(notes) if n.get("genre") == "bannie"), 0)
+    return {"attentes_alerte": len(attentes), "visites_non_faites_bannie": bannie}
+
+
 def juger_sujet(
-    bras: Bras, emissions: list[tuple[datetime, float | None]], recolte: tuple[dict | None, int | None],
-    notes: list[dict[str, Any]] | None,
+    bras: Bras, emissions: list[tuple[datetime, float | None]], validations: list[datetime],
+    recolte: tuple[dict | None, int | None], notes: list[dict[str, Any]] | None,
 ) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:  # fmt: skip
     vide = soiree._vide(bras)
     criteres: dict[str, dict[str, str]] = {}
@@ -169,8 +193,11 @@ def juger_sujet(
         NON_TENU if bras.bannissements else TENU, f"{len(bras.bannissements)} bannissement(s) dans le monde du bras"
     )
     alertes = [v.rang for v in bras.visites if v.identite_etat in ("alerte", "banni") or v.arret]
+    identite = compter_identite(notes or [])
     criteres["aucune_alerte"] = vide or _critere(
-        NON_TENU if alertes else TENU, f"visites en alerte ou arrêtées : {alertes or 'aucune'}"
+        NON_TENU if alertes or identite["attentes_alerte"] else TENU,
+        f"visites en alerte ou arrêtées : {alertes or 'aucune'} ; "
+        f"attentes d'alerte (visites non lancées) : {identite['attentes_alerte']}",
     )
     interrompues = sum(1 for n in notes or [] if n.get("genre") == "interrompue")
     criteres["visites_faites_abouties"] = vide or _critere(
@@ -180,7 +207,7 @@ def juger_sujet(
     de_la_soiree = soiree.juger_sujet(bras)
     criteres["meme_visiteur"] = de_la_soiree["meme_visiteur"]
     criteres["meme_empreinte"] = de_la_soiree["meme_empreinte"]
-    porte, faits_porte = juger_porte(emissions)
+    porte, faits_porte = juger_porte(emissions, validations)
     criteres["porte_apres_sa_duree"] = vide or porte
     criteres["recolte_99"] = vide or juger_recolte(*recolte)
     manquees = compter_manquees(notes or [])
@@ -193,12 +220,15 @@ def juger_sujet(
         criteres["visites_manquees_a_part"] = _critere(
             TENU,
             f"{manquees['nombre']} visite(s) manquée(s) ({motifs} ; {manquees['essais']} essai(s) noté(s)) ; "
-            f"{interrompues} interrompue(s) ; {non_faites} non faite(s) (échéance)",
+            f"{interrompues} interrompue(s) ; {non_faites} non faite(s) (échéance) ; "
+            f"{identite['attentes_alerte']} attente(s) d'alerte ; "
+            f"{identite['visites_non_faites_bannie']} non faite(s) (identité bannie)",
         )
     faits = {
         "visites_manquees": manquees,
         "visites_interrompues": interrompues,
         "visites_non_faites_echeance": non_faites,
+        **identite,
         "porte": faits_porte,
         "recolte": recolte[0],
     }
@@ -245,20 +275,22 @@ def bilan(
         label = roles.get(role, soiree.ROLES[role])
         bras = soiree._lire_bras(cx, experiment_id, config, label)
         passages = _passages(cx, bras)
+        notes = None if releve is None else [n for n in releve if n.get("bras") == label]
         faits: dict[str, Any] = {}
         if role == "sujet":
-            notes = None if releve is None else [n for n in releve if n.get("bras") == label]
             emissions = _emissions(cx, passages)
+            validations = _validations(cx, passages)
             recolte: tuple[dict | None, int | None] = (None, None)
             for v in bras.visites:
                 note = _details(passages[v.session]).get("recolte")
                 if isinstance(note, dict) and "champs_attendus" in note:
                     recolte = (note, v.rang)
-            criteres, faits = juger_sujet(bras, emissions, recolte, notes)
+            criteres, faits = juger_sujet(bras, emissions, validations, recolte, notes)
         else:
             criteres = juge(bras)
             debuts = [_instant(passages[v.session]["started_at"]) for v in bras.visites]
             criteres["pendant_le_premier_jour"] = juger_premier_jour(bras, debuts, depart)
+            faits = compter_identite(notes or [])  # la sentinelle bannie : ses visites 4 à 6, non faites
         statuts += [c["statut"] for c in criteres.values()]
         rapport["bras"][role] = {
             "label": bras.label,
@@ -289,6 +321,18 @@ def _emissions(cx: sqlite3.Connection, passages: dict[str, sqlite3.Row]) -> list
         if quand is not None:
             emissions.append((quand, _duree_porte(passages[d["session_token"]])))
     return sorted(emissions, key=lambda e: e[0])
+
+
+def _validations(cx: sqlite3.Connection, passages: dict[str, sqlite3.Row]) -> list[datetime]:
+    if not passages:
+        return []
+    jetons = list(passages)
+    lignes = cx.execute(
+        "SELECT created_at FROM decisions WHERE couche = 'defi-js' AND decision = 'valide'"
+        f" AND session_token IN ({','.join('?' * len(jetons))}) ORDER BY created_at, id",
+        jetons,
+    ).fetchall()
+    return sorted(q for q in (_instant(d["created_at"]) for d in lignes) if q is not None)
 
 
 def texte(rapport: dict[str, Any]) -> str:

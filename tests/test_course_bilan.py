@@ -65,9 +65,11 @@ def heure(secondes: float) -> str:
     return (DEPART + timedelta(seconds=secondes)).isoformat(timespec="milliseconds")
 
 
-def visite_course(cx, x, label, rang, quand_s, *, emis=(), recolte=None, duree=JOUR, **champs):
+def visite_course(cx, x, label, rang, quand_s, *, emis=(), valide=None, recolte=None, duree=JOUR, **champs):
     """Une visite du bras : celle de la soirée (`test_soiree.visite`), plus son heure, les défis émis par l'Arena (à
-    `quand_s + e` secondes du départ), le profil gardé avec le passage et la récolte notée par le scénario."""
+    `quand_s + e` secondes du départ), le profil gardé avec le passage et la récolte notée par le scénario. Le défi
+    émis est validé 2 s après la dernière émission de la visite, sauf `valide` : les secondes (après `quand_s`) des
+    validations `defi-js` / `valide` voulues (`()` : aucune)."""
     jeton = visite(cx, x, label, rang, defi=len(emis), **champs)
     drapeaux = json.loads(cx.execute("SELECT drapeaux FROM runs WHERE session_token = ?", (jeton,)).fetchone()[0])
     if recolte is not None:
@@ -87,6 +89,14 @@ def visite_course(cx, x, label, rang, quand_s, *, emis=(), recolte=None, duree=J
             "INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs)"
             " VALUES (?, ?, 'defi-js', 'emis', '/lab/vitrine/annonces', '[]')",
             (jeton, heure(quand_s + e)),
+        )
+    if valide is None:
+        valide = (max(emis) + 2,) if emis else ()
+    for v in valide:
+        cx.execute(
+            "INSERT INTO decisions (session_token, created_at, couche, decision, chemin, motifs)"
+            " VALUES (?, ?, 'defi-js', 'valide', '/lab/defi/verifier', '[]')",
+            (jeton, heure(quand_s + v)),
         )
     return jeton
 
@@ -142,9 +152,10 @@ NOTES_OK = [
 ]
 
 
-def course_tenue(cx, x, reglages):
+def course_tenue(cx, x, reglages, sentinelle_refusees=(4, 5, 6)):
     """12 visites du sujet sur 7 jours (porte revenue chaque fois plus de 24 h après la précédente), 188 non faites
-    (échéance), témoins le 1er jour."""
+    (échéance), témoins le 1er jour. `sentinelle_refusees` : les visites de la sentinelle refusées par l'outil après son
+    bannissement (avant I9 : lancées, puis refusées sans requête ; depuis, plus lancées du tout)."""
     moments = (
         [3600 * h for h in (0.5, 2.5, 5)]
         + [JOUR + 3600 * h for h in (1, 3, 6)]
@@ -173,7 +184,7 @@ def course_tenue(cx, x, reglages):
         arret=True,
         identite="banni",
     )
-    for n in (4, 5, 6):
+    for n in sentinelle_refusees:
         visite_course(
             cx, x, "temoin-sentinelle", n, 1800 + 600 * n, visiteur=None, e=None, reussie=False, identite=None
         )
@@ -347,6 +358,60 @@ def test_une_reprise_apres_l_echeance_ne_double_pas_les_visites_non_faites(base,
     assert "188 non faite(s)" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
 
 
+def note_identite(genre, bras, **champs):
+    return {"genre": genre, "bras": bras, "protection": "endurance", "constatee": heure(3600), **champs}
+
+
+def test_le_temoin_de_sentinelle_sans_ses_visites_4_a_6_garde_tous_ses_criteres(base, reglages):
+    """Identité bannie à la 3e visite : les visites 4 à 6 ne sont plus lancées (une ligne `bannie`, 3 restantes). Les
+    critères de la sentinelle, de la course comme de la soirée, ne lisent ni ces visites ni leur absence."""
+    from shadowlab import soiree
+
+    cx, x = base
+    course_tenue(cx, x, reglages, sentinelle_refusees=())
+    notes(reglages, x, [note_identite("bannie", "temoin-sentinelle", repetition=4, restantes=3)])
+    rapport = course.bilan(cx, x, dossier(reglages, x))
+    sentinelle = rapport["bras"]["temoin-sentinelle"]
+    assert set(statuts(rapport, "temoin-sentinelle").values()) == {"tenu"}, sentinelle["criteres"]
+    assert sentinelle["visites_faites"] == 3 and sentinelle["visites_non_faites_bannie"] == 3
+    assert rapport["verdict"] == "tenu"
+    assert set(statuts(soiree.bilan(cx, x), "temoin-sentinelle").values()) == {"tenu"}
+
+
+def test_les_attentes_d_alerte_sont_comptees_a_part_et_aucune_alerte_n_est_pas_tenue(base, reglages):
+    """Une ligne `attente_alerte` par créneau non lancé ; une reprise pendant l'attente peut la réécrire (même
+    `alerte_le`) : comptée une fois. Ce ne sont pas des visites faites ; une alerte a eu lieu : critère non tenu."""
+    cx, x = base
+    course_tenue(cx, x, reglages)
+    a1, a2 = heure(JOUR), heure(3 * JOUR)
+    notes(
+        reglages,
+        x,
+        [
+            note_identite("attente_alerte", "sujet", alerte_le=a1, prevue=heure(JOUR + 60), fin=heure(JOUR + 3600)),
+            note_identite("attente_alerte", "sujet", alerte_le=a1, prevue=heure(JOUR + 60), fin=heure(JOUR + 3600)),
+            note_identite(
+                "attente_alerte", "sujet", alerte_le=a2, prevue=heure(3 * JOUR + 60), fin=heure(3 * JOUR + 3600)
+            ),
+        ],
+    )
+    sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
+    assert sujet["attentes_alerte"] == 2 and sujet["visites_faites"] == 12
+    assert sujet["visites_manquees"] == {"nombre": 2, "par_motif": {"retard": 1, "infrastructure": 1}, "essais": 4}
+    assert sujet["criteres"]["aucune_alerte"]["statut"] == "non tenu"
+    assert "2 attente(s) d'alerte" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
+    assert sujet["criteres"]["visites_manquees_a_part"]["statut"] == "tenu"  # un relevé, pas un jugement
+
+
+def test_le_sujet_banni_compte_ses_visites_non_faites_a_part(base, reglages):
+    cx, x = base
+    course_tenue(cx, x, reglages)
+    notes(reglages, x, [note_identite("bannie", "sujet", repetition=13, restantes=188)])
+    sujet = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]
+    assert sujet["visites_non_faites_bannie"] == 188 and sujet["visites_faites"] == 12
+    assert "188 non faite(s) (identité bannie)" in sujet["criteres"]["visites_manquees_a_part"]["detail"]
+
+
 def test_sous_commande_course_bilan(base, reglages, capsys):
     cx, x = base
     course_tenue(cx, x, reglages)
@@ -357,3 +422,48 @@ def test_sous_commande_course_bilan(base, reglages, capsys):
     bannir(cx, x, "sujet", visiteur="v1", empreinte="e1", motif="detecte:comportement")
     assert main(["course", "bilan", str(x)]) == 1
     assert main(["course", "bilan", "999999"]) == 2
+
+
+# ═══ Porte : un retour va d'une validation à la suivante (émissions photo + page comprises) ═══════════════════════════
+
+T0 = DEPART
+
+
+def _at(s):
+    return T0 + timedelta(seconds=s)
+
+
+def test_une_emission_sur_photo_puis_en_page_plus_de_2_minutes_apres_est_un_seul_retour():
+    emissions = [(_at(-2), 600.0), (_at(600), 600.0), (_at(780), 600.0)]
+    critere, faits = course.juger_porte(emissions, [_at(0), _at(782)])
+    assert critere["statut"] == "tenu", critere
+    assert faits["passages"] == 2 and faits["ecart_min_s"] == 600 and faits["trop_tot"] == []
+
+
+def test_une_emission_avant_la_duree_depuis_la_derniere_validation_est_trop_tot():
+    critere, faits = course.juger_porte([(_at(-2), 600.0), (_at(300), 600.0)], [_at(0), _at(302)])
+    assert critere["statut"] == "non tenu" and faits["trop_tot"] == [300], critere
+    assert "300" in critere["detail"]
+
+
+def test_porte_de_24_h_photo_puis_page_90_minutes_apres_est_tenue():
+    emissions = [(_at(-2), 86400.0), (_at(86400), 86400.0), (_at(86400 + 5400), 86400.0)]
+    critere, faits = course.juger_porte(emissions, [_at(0), _at(86400 + 5402)])
+    assert critere["statut"] == "tenu", critere
+    assert faits["passages"] == 2 and faits["ecart_min_s"] == 86400
+
+
+def test_des_emissions_sans_aucune_validation_sont_non_mesurees():
+    critere, _ = course.juger_porte([(_at(0), 600.0), (_at(900), 600.0)], [])
+    assert critere["statut"] == "non mesuré" and "validation" in critere["detail"]
+
+
+def test_la_porte_lue_dans_la_base_suit_les_validations_et_non_les_rafales(base, reglages):
+    """Photo en fin de visite 1, page en visite 2 (plus de 2 min après) : un seul retour, âge de 86 400 s."""
+    cx, x = base
+    visite_course(cx, x, "sujet", 1, 0, emis=(5,))  # porte 1, validée à 7 s
+    visite_course(cx, x, "sujet", 2, JOUR - 100, emis=(100,), valide=())  # photo à JOUR, sans validation
+    visite_course(cx, x, "sujet", 3, JOUR + 5400, emis=(0,), valide=(2,))  # page 90 min plus tard, puis validation
+    critere = course.bilan(cx, x, dossier(reglages, x))["bras"]["sujet"]["criteres"]["porte_apres_sa_duree"]
+    assert critere["statut"] == "tenu", critere
+    assert "2 passage(s)" in critere["detail"]

@@ -151,8 +151,9 @@ class Moteur(Protocol):
 
     # Facultatifs (le parcours les cherche avec `getattr`) :
     #   regler_lecture(legere: bool) : la prochaine page est parcourue vite (interaction légère) ou lue en entier ;
-    #   refus_ressources() -> list[(adresse, statut)] : les 403 reçus depuis le dernier appel pour des ressources de
-    #   la page (photo, appel de données) du même hôte, que la sentinelle traite comme un refus.
+    #   refus_ressources() -> list[(adresse, statut, nature du défi ou None)] : les 403 reçus depuis le dernier appel
+    #   pour des ressources de la page (photo, appel de données) du même hôte, que la sentinelle traite comme un refus,
+    #   ou comme un défi si leur corps en est un (`RefusRessource`) ; un couple (adresse, statut) vaut un refus franc.
 
 
 class MoteurDriver:
@@ -202,8 +203,9 @@ class MoteurDriver:
         if hasattr(self.driver, "lecture_legere"):
             self.driver.lecture_legere = legere
 
-    def refus_ressources(self) -> list[tuple[str, int]]:
-        """Les 403 reçus pour des ressources de la page depuis le dernier appel (rien si le pilote ne les relève)."""
+    def refus_ressources(self) -> list[tuple]:
+        """Les 403 reçus pour des ressources de la page depuis le dernier appel (rien si le pilote ne les relève) :
+        (adresse, statut, nature du défi ou None) pour le moteur `noezia`."""
         relever = getattr(self.driver, "refus_ressources", None)
         return list(relever()) if relever is not None else []
 
@@ -703,9 +705,50 @@ class Parcours:
     def _controler_ressources(self) -> Alerte | None:
         """Un 403 reçu pour une photo ou un appel de données du même hôte est un refus (au même titre que celui de la
         page) : la passe s'arrête avant toute nouvelle navigation. Sur la première page de la passe, c'est un
-        bannissement (`verdict_identite`)."""
+        bannissement (`verdict_identite`). Sauf si son corps est un défi : alerte `defi`, jamais un bannissement, et
+        rien du tout si c'est le défi de la porte qui peut être repassée (`_defi_de_porte_sur_ressource`)."""
         relever = getattr(self.moteur, "refus_ressources", None)
-        return None if relever is None else self._sentinelle.examiner_ressources(relever())
+        if relever is None:
+            return None
+        alerte = self._sentinelle.examiner_ressources(relever())
+        if alerte is not None and alerte.defi == "arena":  # le moins grave en dernier : il n'y a que des défis de porte
+            return self._defi_de_porte_sur_ressource(alerte)
+        return alerte
+
+    def _defi_de_porte_sur_ressource(self, alerte: Alerte) -> Alerte | None:
+        """Le défi de la porte de l'Arena servi à la place d'une ressource (photo, appel de données) : le laissez-passer
+        a expiré pendant la page (répétition 2 de la course I9). Il est jugé comme le même défi servi en page à ce
+        moment (`_juger_le_retour`), SANS RIEN demander ni attendre : un humain ne recharge pas la page pour une photo
+        manquante. Acceptable : aucune alerte, la visite continue ; la prochaine page rencontre le défi et repasse la
+        porte par `_porte_en_cours` (comptée, tracée) ; si la visite finit avant, la suivante passe la porte d'entrée.
+        Sinon (porte non repassable, défi revenu trop tôt, repassages épuisés, écart trop court) : l'alerte (`defi`, ou
+        `porte_revenue`), jamais un bannissement. Tracé (événement `porte_ressource`) ; pas un passage de la porte."""
+        if not self._repasser:
+            return alerte
+        vu = self._horodatage()
+        en_rafale, trop_tot, refus = self._juger_le_retour(vu)
+        trace: dict[str, Any] = {
+            "adresse": alerte.adresse,
+            "defi": alerte.defi,
+            "ecart_s": _secondes(self._dernier_passage, vu),
+            "rafale": en_rafale,
+        }
+        if trop_tot is not None:
+            trace.update(refus="duree_s", revenue_apres_s=trop_tot)
+            self._evenement(self._etat, self._passe, "porte_ressource", trace)
+            detail = self._detail_porte_revenue("porte (sur une ressource de la page)", "arena", trop_tot)
+            return Alerte("porte_revenue", detail, alerte.adresse, alerte.statut)
+        if refus is not None:
+            trace["refus"], raison = refus
+            self._evenement(self._etat, self._passe, "porte_ressource", trace)
+            self._ecran(f"Porte : défi (arena) sur une ressource ({alerte.adresse}), pas de passage : {raison}.")
+            return alerte
+        self._evenement(self._etat, self._passe, "porte_ressource", trace)
+        self._ecran(
+            f"Porte : défi (arena) servi à la place d'une ressource ({alerte.adresse}), {trace['ecart_s']:g} s après "
+            "le passage précédent : la visite continue, la porte sera repassée à la page suivante, sans action."
+        )
+        return None
 
     # ── Lecture humaine (`lecture.py`) ──────────────────────────────────
     def _regler_lecture(self) -> None:
@@ -769,8 +812,11 @@ class Parcours:
 
     def _relire(self, cible: Page) -> tuple[Alerte | None, float, bool]:
         """Demande une page déjà lue (retour à la liste, fiche revue). Même garde que `_traiter` (périmètre, sauts,
-        sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Comme `_traiter` : jamais
-        un hôte hors recette, robots.txt revérifié, son `Crawl-delay` respecté. Rend (alerte, début, page demandée)."""
+        porte, sentinelle) ; rien n'est écrit dans l'état de la passe (une page n'y est qu'une fois). Comme `_traiter` :
+        jamais un hôte hors recette, robots.txt revérifié, son `Crawl-delay` respecté, et un défi revenu en cours de
+        passe traité par `_porte_en_cours` (répétition de la course I9 : la porte de 600 s expirait sur un retour à la
+        liste, l'Arena servait son défi en 403 et la sentinelle s'arrêtait sur le statut). Rend (alerte, début, page
+        demandée)."""
         if _hote(cible.adresse) not in self._hotes:
             return None, self._horloge(), False
         crawl_delay = None
@@ -792,6 +838,10 @@ class Parcours:
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             self._evenement(self._etat, self._passe, "echec", {"adresse": cible.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut, True
+        if self._repasser:  # une relecture n'est jamais la première page : seule la porte en cours de passe s'applique
+            reponse, alerte = self._porte_en_cours(cible, reponse, relecture=True)
+            if alerte is not None:
+                return alerte, debut, True
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -1042,7 +1092,9 @@ class Parcours:
         return None, attendu
 
     # ── Repasser la porte en cours de passe (option `repassages_max`) ───
-    def _porte_en_cours(self, page: Page, reponse: Reponse) -> tuple[Reponse, Alerte | None]:
+    def _porte_en_cours(
+        self, page: Page, reponse: Reponse, *, relecture: bool = False
+    ) -> tuple[Reponse, Alerte | None]:
         """En cours de passe, la recette permettant de repasser la porte : un défi qui revient (le laissez-passer a
         expiré) est traité comme à l'entrée, SANS AUCUNE action : attente sur place (`attendre_s`), ou statut d'alerte
         périmé d'un défi franchi pendant la lecture (aucun défi dans la page, page actuelle en 2xx et sans défi).
@@ -1050,7 +1102,8 @@ class Parcours:
         (entrée comprise) ; les défis d'une même rafale (`RAFALE_PORTE_S`, `RAFALE_PORTE_MAX`) font un seul passage.
         Hors des bornes, ou avec un moteur sans JavaScript, la réponse est rendue telle quelle : la sentinelle arrête
         avec la même alerte que sans l'option. Un défi qui ne se lève pas : alerte, arrêt. Chaque défi vu ici est tracé
-        (événement `porte_repassage`, `resume.json`)."""
+        (événement `porte_repassage`, `resume.json`). `relecture` : la page est une relecture de la lecture humaine
+        (`_relire`) ; la trace le dit (`relecture: true`), son `rang` est celui de la prochaine page lue."""
         defi = detecter_defi(reponse.html, reponse.entetes)
         if defi is None and reponse.statut not in STATUTS_ALERTE:
             return reponse, None  # une page ordinaire
@@ -1063,7 +1116,7 @@ class Parcours:
         assert porte is not None
         vu = self._horodatage()
         rafale = self._rafale
-        en_rafale = rafale is not None and _secondes(rafale[0], vu) < RAFALE_PORTE_S and rafale[1] < RAFALE_PORTE_MAX
+        en_rafale, trop_tot, refus = self._juger_le_retour(vu)
         trace: dict[str, Any] = {
             "adresse": page.adresse,
             "rang": self._etat.compteurs(self._passe)["lues"] + 1,  # le rang de lecture qu'aura la page
@@ -1073,20 +1126,18 @@ class Parcours:
             "ecart_s": _secondes(self._dernier_passage, vu),  # depuis le passage précédent, ou le début de la passe
             "rafale": en_rafale,
         }
-        # Identité persistante et durée de porte déclarée : c'est la durée depuis le dernier passage (souvent la veille)
-        # qui juge, pas l'écart depuis le début de la passe. Un cookie de 24 h peut expirer quelques minutes après le
-        # début d'une visite : il se repasse sans alerte. Revenu bien avant : alerte tout de suite, sans attente.
-        ecoule = None if en_rafale else self._ecoule_depuis_la_porte()
-        if ecoule is not None and self._trop_tot(ecoule):
-            trace.update(refus="duree_s", revenue_apres_s=ecoule)
+        if relecture:
+            trace["relecture"] = True
+        ou = f"en relecture ({page.adresse})" if relecture else f"en page {trace['rang']}"
+        if trop_tot is not None:
+            trace.update(refus="duree_s", revenue_apres_s=trop_tot)
             self._tracer_repassage(trace)
-            detail = self._detail_porte_revenue("porte", trace["defi"], ecoule)
+            detail = self._detail_porte_revenue("porte", trace["defi"], trop_tot)
             return reponse, Alerte("porte_revenue", detail, page.adresse, reponse.statut)
-        refus = None if en_rafale else self._refus_repassage(trace["ecart_s"], ecart=ecoule is None)
         if refus is not None:
             trace["refus"], raison = refus
             self._tracer_repassage(trace)
-            self._ecran(f"Porte : défi ({trace['defi']}) en page {trace['rang']}, pas de nouveau passage : {raison}.")
+            self._ecran(f"Porte : défi ({trace['defi']}) {ou}, pas de nouveau passage : {raison}.")
             return reponse, None
         if defi is not None:
             apparue, attendu = self._attendre_sans_action(courante)
@@ -1111,10 +1162,26 @@ class Parcours:
             else f"repassage {self._nombre_repassages()} sur {porte.repassages_max} au plus"
         )
         self._ecran(
-            f"Porte repassée en page {trace['rang']} ({quel}) : défi ({trace['defi']}) levé seul après "
+            f"Porte repassée {ou} ({quel}) : défi ({trace['defi']}) levé seul après "
             f"{trace['attente_s']:g} s, sans action, {trace['ecart_s']:g} s après le passage précédent."
         )
         return courante, None
+
+    def _juger_le_retour(self, vu: str) -> tuple[bool, float | None, tuple[str, str] | None]:
+        """Le jugement d'un défi revenu à `vu` en cours de passe, SANS rien demander ni attendre (commun à une page,
+        `_porte_en_cours`, et à une ressource, `_defi_de_porte_sur_ressource`). Rend (en rafale ; durée depuis le
+        dernier passage si le défi revient trop tôt, sinon None ; refus de repassage (borne, raison), sinon None).
+
+        Identité persistante et durée de porte déclarée : c'est la durée depuis le dernier passage (souvent la veille)
+        qui juge, pas l'écart depuis le début de la passe. Un cookie de 24 h peut expirer quelques minutes après le
+        début d'une visite : il se repasse sans alerte. Revenu bien avant : alerte tout de suite, sans attente."""
+        rafale = self._rafale
+        if rafale is not None and _secondes(rafale[0], vu) < RAFALE_PORTE_S and rafale[1] < RAFALE_PORTE_MAX:
+            return True, None, None
+        ecoule = self._ecoule_depuis_la_porte()
+        if ecoule is not None and self._trop_tot(ecoule):
+            return False, ecoule, None
+        return False, None, self._refus_repassage(_secondes(self._dernier_passage, vu), ecart=ecoule is None)
 
     def _refus_repassage(self, ecart_s: float, *, ecart: bool = True) -> tuple[str, str] | None:
         """(borne, raison) si la porte ne doit pas être repassée : maximum atteint, ou défi revenu trop tôt (`ecart` :
