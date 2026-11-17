@@ -545,7 +545,7 @@ def test_releve_une_trace_par_page_ordinaire():
 
 @avec_node
 def test_releve_terminer_envoie_avant_la_fin_de_la_session():
-    """« Terminer ma session » est un formulaire : la trace part à l'envoi, avant que la session ne soit close."""
+    """« Terminer et voir mon résultat » est un formulaire : la trace part à l'envoi, avant la clôture de la session."""
     pas = [[10, "souris", 1, 1], [100, "soumettre"], [300, "quitter"]]
     envois = banc("pas", {"pas": pas})["pages"][0]["envois"]
     assert len(envois) == 1 and envois[0]["via"] == "beacon"

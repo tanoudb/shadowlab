@@ -1559,3 +1559,160 @@ p.credits-photos {
     transition: none !important;
   }
 }
+
+/* --- Résultat de fin de session ---------------------------------------------------------------------------
+   Pensé d'abord pour un téléphone de 390 px : une colonne, chaque niveau sur une ligne (code, nom, pastille « Humain »
+   ou « Robot » écrite en toutes lettres, avec un signe : jamais la couleur seule), le bouton de partage en pleine
+   largeur. Mêmes couleurs que le reste de l'étude, thème sombre compris. Aucune ligne ne déborde à 360 px. */
+
+.resultat > * + * {
+  margin-top: 20px;
+}
+.resultat-surtitre {
+  color: var(--discret);
+  font: 650 0.8125rem/1.2 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.resultat h1 {
+  font-size: clamp(2.125rem, 9vw, 3.125rem);
+  line-height: 1.06;
+  overflow-wrap: anywhere;
+}
+.resultat-chapeau {
+  color: var(--encre-2);
+  font: 400 1.125rem/1.5 var(--serif);
+}
+.niveaux {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--trait);
+  border-radius: 20px;
+  background: var(--carte);
+  overflow: hidden;
+}
+.niveau {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+}
+.niveau + .niveau {
+  border-top: 1px solid var(--trait);
+}
+.niveau-code {
+  color: var(--discret);
+  font: 650 0.875rem/1 var(--mono);
+}
+.niveau-nom {
+  font-weight: 550;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.niveau-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1.5px solid var(--t2);
+  border-radius: 999px;
+  color: var(--encre);
+  font: 650 0.875rem/1 var(--sans);
+  white-space: nowrap;
+}
+.niveau-verdict::before {
+  content: "\2713";
+}
+.niveau-robot .niveau-verdict {
+  border-color: var(--grenat);
+  background: var(--grenat-doux);
+}
+.niveau-robot .niveau-verdict::before {
+  content: "\2715";
+  color: var(--grenat);
+}
+.niveau-humain .niveau-verdict::before {
+  color: var(--t2);
+}
+.resultat-raisons h2 {
+  font-size: 1.25rem;
+}
+.resultat-raisons ul {
+  margin: 10px 0 0;
+  padding-left: 1.2em;
+}
+.resultat-raisons li + li {
+  margin-top: 8px;
+}
+.resultat-honnete {
+  padding-left: 14px;
+  border-left: 4px solid var(--or);
+  color: var(--encre-2);
+  font: 400 1.0625rem/1.55 var(--serif);
+}
+.partage {
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--smalt-doux);
+}
+.partage-texte {
+  font: 400 1.125rem/1.45 var(--serif);
+}
+.partage-adresse {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--encre-2);
+  font: 0.875rem/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+.partage .bouton-principal {
+  width: 100%;
+  margin-top: 16px;
+}
+.partage [hidden] {
+  display: none;
+}
+.partage-statut {
+  min-height: 1.4em;
+  margin-top: 8px;
+  color: var(--encre-2);
+  font-size: 0.875rem;
+  text-align: center;
+}
+.resultat-limites {
+  padding: 12px 16px;
+  border: 1px solid var(--trait);
+  border-radius: 16px;
+  background: var(--carte);
+}
+.resultat-limites summary {
+  min-height: 24px;
+  color: var(--smalt);
+  font-weight: 650;
+  cursor: pointer;
+}
+.resultat-limites p {
+  margin-top: 10px;
+  color: var(--encre-2);
+  font-size: 0.9375rem;
+}
+.resultat-etat {
+  padding: 14px 16px;
+  border: 1px solid var(--trait);
+  border-radius: 14px;
+  background: var(--or-doux);
+  color: var(--encre);
+}
+.page-resultat .encadre {
+  margin-top: 26px;
+}
+.resultat > .niveaux {
+  margin-top: 1.25rem;
+}
+.partage-statut:empty {
+  min-height: 0;
+  margin-top: 0;
+}

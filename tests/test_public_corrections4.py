@@ -79,7 +79,9 @@ def test_commande_sessions_les_plus_grosses_d_abord(monkeypatch, reglages_public
         for _ in range(3):
             assert collecter(c, grosse, payload={"remplissage": "a" * 5000}).status_code == 204
         champs = champs_du_formulaire(c.get("/lab/vitrine").text, "/session/terminer")
-        assert c.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
+        assert (
+            c.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE}).status_code == 200
+        )
     capsys.readouterr()
     assert cli.main(["public", "sessions"]) == 0
     sortie = capsys.readouterr().out
@@ -359,7 +361,9 @@ def test_la_valeur_csrf_change_a_l_ouverture_et_terminer_marche(client):
     assert neuve and neuve != csrf
     champs = champs_du_formulaire(client.get("/lab/social/fil").text, "/session/terminer")
     assert champs["csrf"] == neuve
-    assert client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
+    assert (
+        client.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE}).status_code == 200
+    )
 
 
 # --- Vérité des textes de consentement (C4, C5, localisation, frappes et souris) ---------------------

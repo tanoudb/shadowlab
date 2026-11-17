@@ -1307,3 +1307,39 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `scroll_regulier`. Révise, pour ces deux règles, la décision du 15/11 « aucune règle ne change ». Décidé par : coordination, à
   la demande de la session de coordination ; Ethan a laissé la main : « je te laisse tout continue a travailler sur d'autre
   chose ».
+
+- **D-97 — 17/11/2026 — Site public : le visiteur voit son résultat à la fin de la session, niveau par niveau, et peut le partager.**
+  **Ce qu'a dit Ethan.** Le 17/11, à la proposition de montrer au visiteur, à la fin, si nos détecteurs l'ont pris pour un
+  humain ou un robot : « oui bonne idee ». Les choix ci-dessous sont ceux de la session chargée du travail, transmis à la
+  coordination. **Le calcul.** Quand la session est terminée, le site lance un sous-processus du laboratoire
+  (`python -m shadowlab.resultat_public`, jeton sur l'entrée standard, jamais dans les arguments). Il ouvre la base publique
+  en lecture seule et refait la décision des niveaux 01 à 07 avec `rejeu._rejouer_session(..., publique=True)` : aucune
+  règle recopiée, aucun niveau ajouté (`SHADOWLAB_PROFILS_EXTRA` est retirée). Le site public n'importe toujours aucun
+  module du laboratoire. Coût mesuré : de 0 à 0,5 s par session réelle (base publique en lecture seule, 7 sessions,
+  jusqu'à 18 pages), 0,43 s pour 8 pages fabriquées ; il croît à peu près comme le carré du nombre de pages. Garde-fous :
+  priorité basse (`nice` 10), un calcul à la fois pour tout le site, 30 s au plus puis le sous-processus est tué, aucun
+  calcul au-delà de 80 pages. Le site attend 4 s ; au-delà, une page « calcul en cours » se recharge seule vers « Ma
+  session » (sans script). **Rien de plus stocké.** Le résultat reste 15 minutes en mémoire, un échec 2 minutes (sinon chaque
+  rechargement relancerait un calcul) ; il est recalculé si le visiteur rouvre « Ma session » plus tard, et oublié quand
+  il supprime sa session. **Ce qu'on montre.** Le verdict de chaque niveau (« Humain » ou « Robot ») ; une phrase de tête
+  sur les niveaux 02 à 07, car le 01 n'a aucune protection ; les raisons en six familles de mots simples (traces
+  d'automatisation, gestes, navigateur incohérent, fonctions modifiées, petits indices additionnés, lien ou champ piège),
+  jamais un nom de détecteur ni de signal ; celles du moment où un niveau aurait arrêté la session. Un message honnête :
+  un humain pris pour un robot est une erreur de nos détecteurs, ce que l'étude cherche. **Pas d'oracle en cours de
+  route.** Aucun résultat tant que la base dit la session en cours, même si le visiteur retire le cookie de session.
+  **Seuil : 4 pages avec empreinte.** Plusieurs règles ne jugent qu'à partir de 3 ou 4 pages (trajectoire de la souris,
+  régularité des durées, navigation linéaire) ; en dessous, « Humain » voudrait seulement dire « pas encore jugé ». Sous
+  le seuil, « Terminer » ne clôt pas la session : la page « Encore un peu » propose de continuer, ou de terminer quand
+  même, sans verdict. **Notice.** Version `2026-11-17.1` : nouvelle section « Votre résultat », « plus tard et hors ligne »
+  devient « plus tard ». Une session acceptée sous une notice plus ancienne n'a pas de résultat (elle n'avait pas été
+  annoncée). **Partage.** Le bouton (`partage.js`, fichier statique en liste fermée) ouvre le partage du téléphone, sinon
+  copie la phrase du score et l'adresse nue du site (`location.origin` + « / ») : rien de la session. Le bouton de fin
+  devient « Terminer et voir mon résultat », et l'accroche de l'accueil promet le résultat. **Limites.** Le résultat ne
+  juge que l'empreinte et le comportement : ni TLS, ni HTTP/2, ni corrélation entre sessions, ni défis, ni CAPTCHA, ni
+  WAF. Un auteur de robots peut s'en servir comme banc d'essai : familles seulement, à la fin seulement, plafond de
+  sessions par jour inchangé. Les partages faits pendant le tunnel rapide mourront avec son adresse : un nom d'hôte
+  stable reste à la charge d'Ethan. Non essayé : Safari, iPhone, Firefox, et le partage natif sur un vrai téléphone. La
+  finalité ne change pas : mesurer et améliorer nos détecteurs ; les sessions publiques ne règlent jamais le moteur.
+  **Relecture indépendante** (un agent qui n'a rien écrit) : aucun défaut bloquant. Corrigé : les lectures de la base de
+  « Ma session » et de « Terminer » passent par le pool de fils (elles bloquaient la boucle) ; un échec n'est plus gardé
+  15 minutes mais 2 ; le seuil de la notice suit `PAGES_MIN`.

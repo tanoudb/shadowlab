@@ -297,6 +297,17 @@ h2 {
   background: var(--enregistre);
   animation: enregistre 2s ease-out infinite;
 }
+@media (max-width: 400px) {
+  /* Le libellé « Terminer et voir mon résultat » doit tenir sur un petit téléphone : au besoin, sur deux lignes. */
+  .session-publique button {
+    max-width: calc(100vw - 28px);
+    padding: 8px 18px 8px 14px;
+    font-size: 0.875rem;
+    line-height: 1.2;
+    text-align: left;
+    white-space: normal;
+  }
+}
 .session-publique button:hover {
   background: var(--capsule-survol);
 }

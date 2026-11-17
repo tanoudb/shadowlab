@@ -292,7 +292,7 @@ T: dict[str, Texte] = {
         "Observation session in progress: your browsing on this site is being recorded. Keep this tab visible.",
     ),
     "ma_session": ("Ma session", "My session"),
-    "terminer": ("Terminer ma session", "End my session"),
+    "terminer": ("Terminer et voir mon résultat", "End and see my result"),
     "sans_participer": (
         "Site fictif. Vous visitez sans participer : rien n'est relevé sur vous, hors le journal technique des erreurs décrit dans {notice}.",
         "Fictional site. You are browsing without taking part: nothing is collected about you, apart from the technical error log described in {notice}.",

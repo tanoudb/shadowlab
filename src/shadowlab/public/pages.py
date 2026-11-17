@@ -18,13 +18,14 @@ from ..config import ReglagesPublics
 from ..site.vitrine import MARQUE
 from . import social as reseau_social
 from .donnees import ENTETES_GARDES, PREFIXES_GARDES
+from .resultat import FAMILLES, PAGES_MIN
 from .social import EMBLEME
 from .social import MARQUE as MARQUE_SOCIAL
 from .textes import ERREURS, LANGUES, RELEVES_TRACE, RESUME_RELEVE, T
 from .trace import BALISE as BALISE_RELEVE
 
 # Version du texte d'information : enregistrée avec chaque consentement. À changer quand le texte change.
-VERSION_INFORMATION = "2026-11-14.9"
+VERSION_INFORMATION = "2026-11-17.1"
 
 # Empreinte du navigateur : une entrée par clé de `collecter()` dans observateur.js.
 DONNEES_RELEVEES: list[tuple[str, str]] = [
@@ -423,6 +424,8 @@ def _page(
     contact: bool = False,
     bascule: str | None = None,
     vitrine: bool = False,
+    scripts: tuple[str, ...] = (),
+    rafraichir: str | None = None,
 ) -> str:
     """Gabarit des pages de l'étude (accueil, notice, session, contact, erreurs), classe `classe` sur `body`.
 
@@ -431,7 +434,9 @@ def _page(
     « / » ou « /contact… » : pendant une session, la base noterait toute requête /lab/ (à la milliseconde), donc
     l'ouverture du formulaire. Sa feuille de style, la même, est servie sous /contact/.
 
-    `vitrine` : le site d'annonces est visible (`ReglagesPublics.vitrine`) ; caché, le pied parle d'un seul site."""
+    `vitrine` : le site d'annonces est visible (`ReglagesPublics.vitrine`) ; caché, le pied parle d'un seul site.
+    `scripts` : scripts externes de la page (jamais en ligne). `rafraichir` : adresse où la page se recharge seule, au
+    bout de 3 secondes (`<meta http-equiv="refresh">`, sans script)."""
     langue = langue_sure(langue)
     marque = _t(langue, "marque")
     # En haut : la marque et la langue seulement. Les liens utiles sont au pied de chaque page (« Ma session » y est le
@@ -455,6 +460,8 @@ def _page(
         if bascule is not None
         else ""
     )
+    meta_rafraichir = f'\n<meta http-equiv="refresh" content="3;url={escape(rafraichir)}">' if rafraichir else ""
+    balises_scripts = "".join(f'\n<script src="{escape(src)}" defer></script>' for src in scripts)
     entete_titre = escape(titre) if titre == marque else f"{escape(titre)} — {marque}"
     return f"""<!doctype html>
 <html lang="{langue}">
@@ -463,7 +470,7 @@ def _page(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="sl-sans-tiers" content="1">
 <title>{entete_titre}</title>
-<link rel="stylesheet" href="{feuille}">
+<link rel="stylesheet" href="{feuille}">{meta_rafraichir}{balises_scripts}
 </head>
 <body class="etude {classe}">
 <header class="etude-entete"><div class="conteneur">
@@ -667,6 +674,13 @@ def notice(reglages: ReglagesPublics, duree_session_s: int, langue: str) -> str:
 <p>{_t(langue, "base_legale")}</p>
 </section>
 
+<section class="notice-section" id="resultat">
+<h2>{_t(langue, "h_resultat")}</h2>
+<p>{_t(langue, "resultat_calcul", min=PAGES_MIN)}</p>
+<p>{_t(langue, "resultat_memoire")}</p>
+<p>{_t(langue, "resultat_partage")}</p>
+</section>
+
 <section class="notice-section" id="duree">
 <h2>{_t(langue, "h_duree")}</h2>
 <p>{_t(langue, "duree", jours=jours)}</p>
@@ -710,26 +724,161 @@ def _encadre_session(jeton: str, suppression: str, csrf: str, jours: int, en_cou
 </div>"""
 
 
-def merci(jeton: str, suppression: str, csrf: str, jours: int, langue: str, *, vitrine: bool = False) -> str:
-    corps = f"""<article class="message">
+ETATS_SANS_VERDICT = {
+    "courte": "res_courte",
+    "longue": "res_longue",
+    "indisponible": "res_indisponible",
+    "en_cours": "res_en_cours",
+    "ancienne": "res_ancienne",
+    "pendant": "res_pendant",
+}
+Etat = tuple[str, object] | None  # (nom, donnée) : « verdict » et le dict du calcul, ou un des ETATS_SANS_VERDICT
+
+
+def _note_etat(nom: str, langue: str) -> str:
+    return f'<p class="resultat-etat" role="status">{_t(langue, ETATS_SANS_VERDICT[nom], min=PAGES_MIN)}</p>'
+
+
+def _niveaux_arretes(verdict: dict) -> int:
+    """Niveaux 02 à 07 qui auraient arrêté la session : le 01 n'a aucune protection, il ne compte pas dans la phrase."""
+    return sum(1 for niveau in verdict["niveaux"] if niveau["arrete"] and niveau["code"] != "01")
+
+
+def _carte_resultat(verdict: dict, langue: str, adresse: str) -> str:
+    """Le résultat : phrase de tête, un niveau par ligne (code, nom, « Humain » ou « Robot » en toutes lettres), raisons
+    par famille en mots simples (jamais un nom de détecteur), message honnête, partage. Rien n'est écrit en ligne."""
+    arretes = _niveaux_arretes(verdict)
+    if arretes:
+        cle = "res_tete_robot_un" if arretes == 1 else "res_tete_robot"
+        tete, partage = _t(langue, cle, k=arretes), _t(langue, cle.replace("tete", "partage"), k=arretes)
+    else:
+        tete, partage = _t(langue, "res_tete_ok"), _t(langue, "res_partage_ok")
+    lignes = "".join(
+        f'<li class="niveau {"niveau-robot" if n["arrete"] else "niveau-humain"}">'
+        f'<span class="niveau-code">{escape(n["code"])}</span>'
+        f'<span class="niveau-nom">{_t(langue, "niveau_" + n["code"])}</span>'
+        f'<span class="niveau-verdict">{_t(langue, "res_robot" if n["arrete"] else "res_humain")}</span></li>'
+        for n in verdict["niveaux"]
+    )
+    familles = [f for f in FAMILLES if any(f in n["familles"] for n in verdict["niveaux"])]
+    raisons = (
+        f'<div class="resultat-raisons"><h2>{_t(langue, "res_raisons_titre")}</h2><ul>'
+        + "".join(f"<li>{_t(langue, 'raison_' + f)}</li>" for f in familles)
+        + "</ul></div>"
+        if arretes and familles
+        else ""
+    )
+    honnete = _t(langue, "res_honnete_robot" if arretes else "res_honnete_ok")
+    return f"""<section class="resultat" aria-labelledby="resultat-titre">
+<p class="resultat-surtitre">{_t(langue, "res_surtitre")}</p>
+<h1 id="resultat-titre">{_insecable(tete)}</h1>
+<p class="resultat-chapeau">{_t(langue, "res_chapeau")}</p>
+<ol class="niveaux" aria-label="{_t(langue, "res_niveaux_aria")}">{lignes}</ol>
+{raisons}
+<p class="resultat-honnete">{honnete}</p>
+<div class="partage">
+<p class="partage-texte">{escape(partage)}<br><span class="partage-adresse">{escape(adresse)}</span></p>
+<button class="bouton-principal" type="button" data-partage hidden data-texte="{escape(partage)}" data-copie="{_t(langue, "res_copie")}" data-echec="{_t(langue, "res_echec")}">{_t(langue, "res_partager")}</button>
+<p class="partage-statut" role="status"></p>
+</div>
+<details class="resultat-limites">
+<summary>{_t(langue, "res_limites_titre")}</summary>
+<p>{_t(langue, "res_limites")}</p>
+</details>
+<p class="discret">{_t(langue, "res_non_enregistre")}</p>
+</section>"""
+
+
+def _reglages_page(etat: Etat) -> dict:
+    """Scripts et rechargement d'une page de fin : le script de partage seulement avec un verdict, le rechargement seul
+    pendant le calcul."""
+    if etat and etat[0] == "verdict":
+        return {"scripts": ("/public/static/partage.js",)}
+    if etat and etat[0] == "en_cours":
+        return {"rafraichir": "/session"}
+    return {}
+
+
+def merci(
+    jeton: str,
+    suppression: str,
+    csrf: str,
+    jours: int,
+    langue: str,
+    *,
+    vitrine: bool = False,
+    etat: Etat = None,
+    adresse: str = "",
+) -> str:
+    """Page de fin de session. `etat` : ce que le résultat en dit (voir `Etat`) ; sans lui, le seul remerciement."""
+    session = _encadre_session(jeton, suppression, csrf, jours, False, langue)
+    suite = (
+        f'<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>'
+    )
+    if etat and etat[0] == "verdict":
+        corps = f'<article class="message page-resultat">\n{_carte_resultat(etat[1], langue, adresse)}\n{session}\n{suite}\n</article>'
+        titre = _t(langue, "titre_resultat")
+    else:
+        note = _note_etat(etat[0], langue) if etat else ""
+        corps = f"""<article class="message">
 <div class="merci-fleuron">{FLEURON}</div>
 <h1>{_t(langue, "merci_h1")}</h1>
 <p class="chapeau">{_t(langue, "merci_chapeau")}</p>
-{_encadre_session(jeton, suppression, csrf, jours, False, langue)}
-<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
+{note}
+{session}
+{suite}
 </article>"""
-    return _page(_t(langue, "titre_merci"), corps, langue, classe="page-merci", vitrine=vitrine)
+        titre = _t(langue, "titre_merci")
+    return _page(titre, corps, langue, classe="page-merci", vitrine=vitrine, **_reglages_page(etat))
+
+
+def encore_un_peu(csrf: str, langue: str, pages: int, *, vitrine: bool = False) -> str:
+    """« Terminer » avant le seuil de pages : la session n'est pas close. Continuer la visite, ou terminer quand même
+    (même formulaire avec `force=1`, donc sans verdict)."""
+    corps = f"""<article class="message">
+<h1>{_t(langue, "encore_h1")}</h1>
+<p class="chapeau">{_t(langue, "encore_texte", min=PAGES_MIN, pages=pages)}</p>
+<div class="actions">
+<a class="bouton-principal" href="{SOCIAL}">{_t(langue, "encore_continuer")}</a>
+<form class="en-ligne" method="post" action="/session/terminer">
+<input type="hidden" name="csrf" value="{escape(csrf)}">
+<input type="hidden" name="force" value="1">
+<button class="bouton-secondaire" type="submit">{_t(langue, "encore_terminer")}</button>
+</form>
+</div>
+</article>"""
+    return _page(_t(langue, "titre_encore"), corps, langue, classe="page-session", vitrine=vitrine)
 
 
 def ma_session(
-    jeton: str, suppression: str, csrf: str, jours: int, en_cours: bool, langue: str, *, vitrine: bool = False
+    jeton: str,
+    suppression: str,
+    csrf: str,
+    jours: int,
+    en_cours: bool,
+    langue: str,
+    *,
+    vitrine: bool = False,
+    etat: Etat = None,
+    adresse: str = "",
 ) -> str:
-    corps = f"""<article class="message">
+    session = _encadre_session(jeton, suppression, csrf, jours, en_cours, langue)
+    suite = (
+        f'<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>'
+    )
+    if etat and etat[0] == "verdict":
+        corps = f'<article class="message page-resultat">\n{_carte_resultat(etat[1], langue, adresse)}\n{session}\n{suite}\n</article>'
+        titre = _t(langue, "titre_resultat")
+    else:
+        note = _note_etat(etat[0], langue) if etat else ""
+        corps = f"""<article class="message">
 <h1>{_t(langue, "titre_ma_session")}</h1>
-{_encadre_session(jeton, suppression, csrf, jours, en_cours, langue)}
-<p class="message-suite"><a class="bouton-secondaire" href="{SOCIAL}">{_t(langue, "revenir_site")}</a></p>
+{note}
+{session}
+{suite}
 </article>"""
-    return _page(_t(langue, "titre_ma_session"), corps, langue, classe="page-session", vitrine=vitrine)
+        titre = _t(langue, "titre_ma_session")
+    return _page(titre, corps, langue, classe="page-session", vitrine=vitrine, **_reglages_page(etat))
 
 
 def aucune_session(langue: str, *, vitrine: bool = False) -> str:

@@ -18,7 +18,7 @@ import sqlite3
 import sys
 import time
 from collections import deque
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,12 +27,13 @@ from urllib.parse import parse_qs, urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.routing import APIRoute
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
 from ..arena import secret as signature
 from ..config import ReglagesPublics
 from ..site import vitrine
-from . import donnees, messages, pages, script_public, social, trace
+from . import donnees, messages, pages, resultat, script_public, social, trace
 from .textes import LANGUES
 
 STATIQUES = Path(__file__).resolve().parents[1] / "site" / "static"
@@ -51,6 +52,7 @@ FICHIERS_PUBLICS = {
     "social.css": "text/css",
     "social.js": "text/javascript",
     "releve.js": "text/javascript",
+    "partage.js": "text/javascript",  # bouton « Partager mon résultat » (page de fin de session)
 }
 PREFIXE_LANGUE = re.compile(r"/(fr|en)(?:/|$)")  # « /fr », « /en/information » ; pas « /english »
 CSP = (
@@ -240,7 +242,12 @@ def _trop_profond(valeur: object, maximum: int = PROFONDEUR_MAX) -> bool:
     return False
 
 
-def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None) -> FastAPI:
+def creer_app_publique(
+    reglages: ReglagesPublics,
+    limites: Limites | None = None,
+    calcul_resultat: Callable[[Path, str], Awaitable[dict | None]] | None = None,
+) -> FastAPI:
+    """`calcul_resultat` (async `(base, jeton) -> dict | None`) remplace le sous-processus du laboratoire (essais)."""
     _verifier_reglages(reglages)
     limites = limites or Limites(sessions_par_jour=reglages.sessions_par_jour)
     messages.chemin(reglages.base_donnees)  # refuse une base qui porterait le nom du fichier des messages
@@ -255,6 +262,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
     prefixe = "__Host-" if reglages.https else ""  # le préfixe interdit à un sous-domaine d'écraser le cookie
     cookie_session, cookie_csrf = f"{prefixe}slp-session", f"{prefixe}slp-csrf"
     cookie_droits = f"{prefixe}slp-droits"  # retrouver et supprimer sa session, dans ce navigateur
+    resultats = resultat.Resultats(calcul_resultat or resultat.calculer_par_processus)
     limiteur = Limiteur(limites.sessions_par_adresse)
     limiteur_messages = Limiteur(limites.messages_par_adresse)
     limiteur_messages_jour = Limiteur(limites.messages_par_adresse_jour, fenetre_s=UNE_JOURNEE_S)
@@ -604,6 +612,29 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         poser(reponse, cookie_csrf, secrets.token_hex(16))
         return reponse
 
+    def adresse_du_site(request: Request) -> str:
+        """Adresse nue du site, « schéma://hôte/ » : l'hôte vient de l'en-tête déjà contrôlé par la garde."""
+        return f"{'https' if reglages.https else 'http'}://{request.headers.get('host', '').lower()}/"
+
+    async def etat_du_resultat(jeton: str, version: str | None, pages_vues: int) -> pages.Etat:
+        """Ce que le résultat d'une session terminée permet d'afficher ; le calcul (avec attente bornée) n'a lieu que
+        pour une notice qui l'annonce et au moins `PAGES_MIN` pages."""
+        if not resultat.annonce_resultat(version):
+            return ("ancienne", None)
+        if pages_vues < resultat.PAGES_MIN:
+            return ("courte", None)
+        sortie = await resultats.obtenir(reglages.base_donnees, jeton)
+        if sortie is resultat.EN_COURS:
+            return ("en_cours", None)
+        if not isinstance(sortie, dict):
+            return ("indisponible", None)
+        if sortie["jugeable"]:
+            return ("verdict", sortie)
+        return (
+            "longue" if sortie["raison"] == "longue" else "courte" if sortie["raison"] == "courte" else "indisponible",
+            None,
+        )
+
     @app.post("/session/terminer", response_class=HTMLResponse)
     async def terminer(request: Request) -> Response:
         if not meme_origine(request):
@@ -614,6 +645,16 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         jeton = request.state.session
         if jeton is None:  # déjà terminée ou expirée : la page « Ma session » dit ce qu'il en reste
             return RedirectResponse("/session", status_code=303)
+        langue = langue_de(request)
+
+        def lire() -> tuple[str | None, int]:
+            with base() as cx:
+                return donnees.version_de_session(cx, jeton), donnees.pages_vues(cx, jeton)
+
+        version, vues = await run_in_threadpool(lire)  # SQLite hors de la boucle d'événements
+        # Trop peu de pages pour un verdict : la session reste ouverte, sauf si le visiteur insiste (`force=1`).
+        if resultat.annonce_resultat(version) and champs.get("force") != "1" and vues < resultat.PAGES_MIN:
+            return avec_csrf(request, lambda csrf: pages.encore_un_peu(csrf, langue, vues, vitrine=reglages.vitrine))
         with base() as cx:
             close = donnees.clore_session(cx, jeton)
         if not close:  # un autre « Terminer » de la même session (double clic) l'a close entre-temps : rien à compter
@@ -622,11 +663,19 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             return reponse
         compter("terminees")  # une fois par session : seule la requête qui l'a close arrive ici
         suppression = signer("supprimer", jeton)
-        langue = langue_de(request)
+        etat = await etat_du_resultat(jeton, version, vues)
+        adresse = adresse_du_site(request)
         reponse = avec_csrf(
             request,
             lambda csrf: pages.merci(
-                jeton, suppression, csrf, reglages.conservation_jours, langue, vitrine=reglages.vitrine
+                jeton,
+                suppression,
+                csrf,
+                reglages.conservation_jours,
+                langue,
+                vitrine=reglages.vitrine,
+                etat=etat,
+                adresse=adresse,
             ),
         )
         effacer(reponse, cookie_session)  # le cookie de droits reste : « Ma session » sert encore à supprimer
@@ -638,25 +687,52 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
             request.state.langue_session = donnees.langue_de_session(cx, jeton)
 
     @app.get("/session", response_class=HTMLResponse)
-    def ma_session(request: Request) -> HTMLResponse:
+    async def ma_session(request: Request) -> HTMLResponse:
         jeton = lire_signe("supprimer", request.cookies.get(cookie_droits, ""))
-        if jeton is not None:
+
+        def lire() -> tuple[bool, str | None, int, bool]:
+            """Toutes les lectures de la base d'un coup : (session connue, version de notice, pages, en cours)."""
             with base() as cx:
-                if donnees.session_existe(cx, jeton):
-                    noter_langue_de(request, cx, jeton)
-                else:
-                    jeton = None
+                if not donnees.session_existe(cx, jeton):
+                    return False, None, 0, False
+                noter_langue_de(request, cx, jeton)
+                # Selon la base, pas selon le cookie : sans le cookie de session, une session ouverte reste ouverte.
+                return (
+                    True,
+                    donnees.version_de_session(cx, jeton),
+                    donnees.pages_vues(cx, jeton),
+                    donnees.session_en_cours(cx, jeton, limites.duree_session_s),
+                )
+
+        version, vues, vivante = None, 0, False
+        if jeton is not None:
+            connue, version, vues, vivante = await run_in_threadpool(lire)  # SQLite hors de la boucle d'événements
+            if not connue:
+                jeton = None
         langue = langue_de(request)
         if jeton is None:
             reponse = HTMLResponse(pages.aucune_session(langue, vitrine=reglages.vitrine))
             if cookie_droits in request.cookies:
                 effacer(reponse, cookie_droits)
             return reponse
+        if vivante:  # aucun résultat, aucun calcul, tant que la session n'est pas terminée
+            etat: pages.Etat = ("pendant", None) if resultat.annonce_resultat(version) else None
+        else:
+            etat = await etat_du_resultat(jeton, version, vues)
+        adresse = adresse_du_site(request)
         suppression, en_cours = signer("supprimer", jeton), request.state.session == jeton
         return avec_csrf(
             request,
             lambda csrf: pages.ma_session(
-                jeton, suppression, csrf, reglages.conservation_jours, en_cours, langue, vitrine=reglages.vitrine
+                jeton,
+                suppression,
+                csrf,
+                reglages.conservation_jours,
+                en_cours,
+                langue,
+                vitrine=reglages.vitrine,
+                etat=etat,
+                adresse=adresse,
             ),
         )
 
@@ -673,6 +749,7 @@ def creer_app_publique(reglages: ReglagesPublics, limites: Limites | None = None
         with base() as cx:
             noter_langue_de(request, cx, jeton)
             existait = donnees.effacer_session(cx, jeton)
+        resultats.oublier(jeton)
         reponse = HTMLResponse(pages.supprimee(existait, langue_de(request), vitrine=reglages.vitrine))
         effacer(reponse, cookie_session)
         effacer(reponse, cookie_droits)

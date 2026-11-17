@@ -91,7 +91,10 @@ def test_terminer_en_rafale_ne_compte_qu_une_session(reglages_publics):
             await commencer_asgi(c)
             page = (await c.get("/lab/vitrine")).text
             champs = champs_du_formulaire(page, "/session/terminer")
-            rafale = [c.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}) for _ in range(20)]
+            rafale = [
+                c.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE})
+                for _ in range(20)
+            ]
             reponses = await asyncio.gather(*rafale)
             assert all(r.status_code in (200, 303) for r in reponses)
             return (await c.get("/fr")).text

@@ -3669,3 +3669,30 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Vérifié** : 2 213 tests rapides verts, lint propre ; `test_soiree_inchangee.py` vert. Tests d'intégration non lancés (le changement de `conftest.py` touche tous les tests qui prennent `reglages`).
 - **Non changé, à surveiller** : `examiner_ressources` : une photo ou un appel de données qui tombe juste après l'expiration de la porte reçoit un 403 (JSON) et arrête la visite ; le pilote ne rend que (adresse, statut), il ne peut pas distinguer une porte d'un bannissement. Un témoin en espacement `fixe` qui passe en alerte attend l'heure entière (pas d'échéance en `fixe`). Une identité déjà bannie au lancement ne laisse plus de ligne d'erreur, seulement la ligne `bannie` et un avertissement au journal (bilan « non mesuré »).
 - **Reste** : relancer la répétition (nouvelles identités) pour le prouver dans un vrai Chrome ; aucune décision numérotée prise.
+
+## 2026-11-17 — Claude (Opus 5.5, session « résultat public ») — Résultat de fin de session sur le site public (D-97)
+- **Fait** (tests d'abord, vus en échec, puis code par deux sous-agents Sonnet ; relecture indépendante) : à la fin d'une
+  session, le site public montre le verdict de nos détecteurs aux niveaux 01 à 07 (« Humain » ou « Robot »), les raisons
+  en six familles de mots simples, un message honnête et un bouton de partage (adresse nue du site). Calcul par
+  `rejeu._rejouer_session` dans un sous-processus du labo (`python -m shadowlab.resultat_public`, lecture seule, jeton sur
+  l'entrée standard), rien d'écrit en base (cache en mémoire 15 min, un échec 2 min), aucun résultat pendant la session
+  (état lu dans la base), seuil de 4 pages (« Encore un peu » sinon), notice `2026-11-17.1`, bouton de fin « Terminer et
+  voir mon résultat », accroche de l'accueil qui promet le résultat.
+- **Fichiers** : nouveaux `src/shadowlab/resultat_public.py`, `src/shadowlab/public/resultat.py`,
+  `src/shadowlab/public/static/partage.js`, `tests/test_resultat_public.py`, `tests/test_public_resultat.py` ; modifiés
+  `public/app.py`, `donnees.py`, `pages.py`, `textes.py`, `social.py`, `static/public.css`, `static/social.css`, six fichiers
+  `tests/test_public*.py` (nouveau libellé, `force=1` sous le seuil, modules interdits, `partage.js` sans marque) ;
+  `docs/site-public.md` (section « Résultat de fin de session », messages à envoyer), `docs/DECISIONS.md` (D-97), `AGENTS.md`.
+- **Mesuré** : rejeu de 0 à 0,5 s par session réelle (base publique en lecture seule, 7 sessions) ; sous-processus 0,43 s
+  pour 8 pages fabriquées. Calcul réel sur l'instance d'essai : un Chromium sans tête, sans geste humain, est pris pour un
+  robot de 02 à 07 (famille « navigateur incohérent »).
+- **Vérifié** : tests du site public, du calcul et du rejeu verts (712), tests rapides 2 335 verts (2 sautés, 49 avec navigateur non lancés), lint propre ;
+  captures `outputs/resultat-public/` (téléphone 390 px et ordinateur, FR et EN : humain partout = résultat injecté,
+  arrêté = calcul réel, trop courte et « Encore un peu » ; bandeau du réseau social à 360 px).
+- **Relecture indépendante** : aucun défaut bloquant ; corrigés : lectures SQLite de « Ma session » et « Terminer » hors de
+  la boucle d'événements, échec gardé 2 min au lieu de 15, seuil de la notice lié à `PAGES_MIN`.
+- **Non vérifié** : Safari, iPhone, Firefox ; le partage natif et la copie dans un vrai navigateur (`partage.js` jamais
+  exécuté) ; le site en ligne (rien n'y est déployé) ; la suite avec navigateurs (course de 7 jours en cours).
+- **Reste, à la charge d'Ethan ou de la coordination** : fusionner la branche (conflit attendu en ajout dans
+  `docs/DECISIONS.md`, D-96 étant sur `niveau-authentifie-perimetre` : garder les deux) ; relancer l'application en ligne
+  pour servir la nouvelle version ; un nom d'hôte stable pour que les liens partagés durent.
