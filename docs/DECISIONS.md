@@ -1349,7 +1349,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   cadence écrit une note `prevue` dans `cadence.jsonl`.
   **Disque.** Ce qu'a écrit la soirée 131 : environ 18 Mo en base, 4 Mo de journaux de l'Arena et 100 Mo par profil
   d'identité. La répétition 2 a écrit 106 Mo. Estimation pour la course : environ 1 Go, second `.venv` compris (533 Mo).
-  Mesures : 12 Gio libres le 16/11 à 15 h 43, 9,8 Gio après la préparation du dossier, 30 Gio le 17/11 à 8 h 41. Aucune place à
+  Mesures : 12 Gio libres le 16/11 à 15 h 43, 9,8 Gio après la préparation du dossier, 30 Gio le 17/11 à 8 h 41, 29 Gio à 11 h 02 (de la place a été libérée hors du projet ; règle de la coordination : pas de départ sous 20 Gio libres). Aucune place à
   faire. Dans le projet, ce qui pèse n'est pas un cache : des sauvegardes de la base (603, 129 et 80 Mo) et des identités archivées
   (565 Mo) ; c'est à Ethan de décider.
   **Répétitions.** (1) **16/11, 17 h 11 : non tenue.** Prouvé : l'isolation ; l'arrêt brutal puis la reprise (même visiteur
@@ -1363,7 +1363,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   2 visites réussies sur 3 ; récolte 30 sur 30 et 420 sur 420 ; 2 passages de la porte, écart le plus court 602 s. Corrigé : `a3d56e4`
   (un défi sur une ressource n'est plus un bannissement ; la page ou le JSON `bannissement` en restent un, sur une page comme sur
   une photo ; le moteur ne recharge rien, la page suivante repasse la porte), `d2932bc` (`course etat`, règle 11), `fa88df6`
-  (règle 6). (3) **17/11, de 9 h 15 à environ 10 h 41**, étiquette `course-i9-repetition-3` = `a3d56e4`, bilan fait avec le code de
+  (règle 6). (3) **17/11, de 9 h 15 à 10 h 41, tenue**, étiquette `course-i9-repetition-3` = `a3d56e4`, bilan fait avec le code de
   `fa88df6` (qui ne change que le bilan). Déjà prouvé : l'isolation refaite (conteneurs principaux recréés à 9 h 15 min 46 s,
   empreinte de la course inchangée) ; arrêt brutal à 9 h 29 min 00 s (`kill -9` du groupe de processus pendant la visite 5 du sujet,
   aucun survivant, `course.sh etat` répond « arrêtée », code 1) ; reprise à 9 h 29 min 18 s (même visiteur `9d0650de`, visite 5
@@ -1371,7 +1371,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Docker arrêté à 9 h 35 min 41 s (note `manquee/infrastructure` à 9 h 37 min 41 s, Docker relancé à 9 h 37 min 42 s, aucune
   alerte) ; témoins : négatif arrêté à la 5ᵉ visite, sentinelle refusée à la 3ᵉ (identité `banni`), classique 0 visite réussie sur 3.
   Un défi sur une photo ne s'est pas présenté en vrai : la porte a expiré 1 s après la fin de la visite 3, puis a été repassée en page
-  à la visite 4. Bilan : [À COMPLÉTER : bilan répétition 3].
+  à la visite 4. Bilan : **TENUE à tous les critères**. Code 0 de `course bilan 1`, avec le code de `a3d56e4` comme avec celui de `fa88df6`. Finie seule à l'échéance à 10 h 41 ; `course etat` répond « finie ». Sujet : 30 visites réussies sur 30 ; 1 visiteur et 1 empreinte E ; aucune alerte, 0 bannissement ; 8 passages de la porte (600 s), tous sur la première page d'une visite, âge le plus court au retour 603 s ; récolte : 30 annonces sur 30 et 420 champs exacts sur 420, en 29 passes ; 1 visite manquée (infrastructure) et 1 visite interrompue, notées à part ; 170 visites non faites à l'échéance. Témoins tenus : le négatif est arrêté à la 5ᵉ visite (2 bannissements) ; la sentinelle est refusée à la 3ᵉ visite, ne demande aucune page après le refus, identité `banni` ; le classique fait 0 visite réussie sur 3, refusé par l'Arena. Pendant la répétition, la suite complète a tourné dans le dossier principal : 2 345 tests verts en 9 min 11 s. Sorties gardées dans `.courses/repetition-3-2026-11-17` (125 Mo).
+  **Essai ciblé de la porte** (17/11, 10 h 48 à 11 h 01, demandé par la coordination avant le départ). But : revoir dans un vrai Chrome, devant la vraie Arena, le cas qui a fait tomber la répétition 2 (la porte expire en pleine visite). Code figé : étiquette `course-i9-essai-porte` = `da41a39`, dans le dossier de la course. Réglage : profil `enduranceporte150`, porte de 150 s (`configs/arena/profils-endurance-essai-porte.yaml`) ; pas 60 à 120 s, parce qu'un défi revenu moins de 120 s après le précédent passe par la branche « rafale » du moteur, qui n'est pas celle de la vraie course. Vitrine de 60 annonces ; 3 visites du sujet en espacement fixe d'1 min, 40 pages au plus (`configs/experiments/essai-porte-en-visite.yaml`, `configs/courses/i9-essai-porte.env`). Visite 1 : porte validée à 10 h 48 min 47,8 s ; à 10 h 51 min 19,9 s, 152 s plus tard, les photos `AN-000019` et `AN-000020` reçoivent le défi (403), même cas et mêmes photos que la répétition 2 ; le moteur le note `porte_ressource` (`defi: arena`, écart 146 s, hors rafale), sans alerte ; la page suivante (`AN-000018`) reçoit le défi 0,9 s après et la porte est repassée à 10 h 51 min 22,6 s (`porte_repassage`, rang 19) ; visite réussie, 34 pages, 1 repassage. Visite 2 : porte repassée au milieu de la visite, sur une page (`AN-000043`, rang 46, écart 157 s) ; réussie, 29 pages, 2 passages. Visite 3 : réussie. Fin : identité `ok`, 0 ligne dans `bannissements`, 1 visiteur et 1 empreinte E. Bilan, bloc du sujet : tous les critères tenus ; 5 passages de la porte ; âge le plus court au retour 152 s (durée 150 s, tolérance 60 s) ; récolte 60 sur 60 et 840 champs exacts sur 840 ; verdict global « non mesuré », faute de témoin. Sorties gardées dans `.courses/essai-porte-2026-11-17` (108 Mo). Ce point est donc vérifié, une fois.
   **Rythme et surveillance.** Rythme gardé : 45 à 180 min (D-90), sans changement, tranché par la coordination. Ethan a dit « Oui » à
   « par moments », pas à « une visite toutes les 1 à 3 h » (formulation de la question 4). Un contrôle après les témoins du premier
   jour, puis un au plus par jour, avec `scripts/course.sh etat` ; un code différent de 0 veut dire qu'il faut regarder. Pour la
@@ -1381,10 +1382,9 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   **Lancement prévu** (rien d'exécuté) : (1) `git tag -a course-i9 -m "Course I9 (7 jours)"` sur le commit de fusion de ces documents ;
   (2) `mv .courses/i9/outputs .courses/repetition-3-2026-11-17` ; (3) `git -C .courses/i9 checkout --detach course-i9 && (cd .courses/i9
   && uv sync)` ; (4) `scripts/course.sh demarrer configs/experiments/identite-7-jours.yaml`, sans `COURSE_ENV` ; (5) ensuite
-  `scripts/course.sh etat | reprendre <n°> | bilan <n°>`. Étiquette `course-i9` sur le commit de fusion de ces documents. Lancée
+  `scripts/course.sh etat | reprendre <n°> | bilan <n°>`. Étiquette `course-i9` sur le commit de fusion de ces documents, qui n'ajoute que des documents. **Code répété et code étiqueté** : la répétition 3 a tourné sur `a3d56e4`. Entre `a3d56e4` et `da41a39`, le code n'a changé que dans `src/shadowlab/course.py`, le calcul du bilan (`fa88df6`) ; le reste, ce sont des tests et trois fichiers de configuration de l'essai (`configs/arena/profils-endurance-essai-porte.yaml`, `configs/courses/i9-essai-porte.env`, `configs/experiments/essai-porte-en-visite.yaml`), qu'aucune lecture de la vraie course ne charge. Lancée
   seulement quand la coordination le dit.
   **Non vérifié** : les nuits et le passage d'une journée à l'autre ; la vraie porte de 24 h ; une vraie mise en veille du Mac ; le
-  plafond de 200 pages par jour ; un profil Chrome qui tient 7 jours ; un défi sur une photo dans un vrai Chrome devant la vraie Arena
-  (prouvé par des tests, dont 4 dans un vrai navigateur, pas en répétition) ; `course etat` : une seule visite prévue manquée la nuit
+  plafond de 200 pages par jour ; un profil Chrome qui tient 7 jours ; `course etat` : une seule visite prévue manquée la nuit
   donne encore 0, et un blocage hors attente et hors visite ne se voit qu'à « dernière activité ».
   Décidé par : coordination, sur le « Oui » d'Ethan.

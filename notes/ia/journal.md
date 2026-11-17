@@ -3706,3 +3706,9 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Fichiers** : `docs/DECISIONS.md`, `docs/PLAN.md`, `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code, test ni configuration ; aucune commande `shadowlab`.
 - **Trous** : `[À COMPLÉTER : bilan répétition 3]` et `[À COMPLÉTER : tests]`. Étiquette `course-i9` à poser sur le commit de fusion de ces documents.
 - **Reste** : bilan de la répétition 3, lancement (coordination), I8, I10.
+
+## 2026-11-17 (midi) — Claude (Sonnet 5.5, sous-agent) — D-96 : répétition 3 tenue, essai ciblé de la porte
+- **Fait** : fusion de `da41a39`. Répétition 3 : tenue à tous les critères (code 0 de `course bilan 1`, 30 visites sur 30, 8 passages de la porte, âge le plus court 603 s, récolte 30 et 420 sur 420, 170 visites non faites à l'échéance, témoins tenus). Essai ciblé de la porte (10 h 48 à 11 h 01, profil de 150 s) : défi sur deux photos noté `porte_ressource`, porte repassée sur la page suivante, 3 visites réussies, 60 sur 60 et 840 sur 840.
+- **Documents** : D-96 (répétition 3, essai, disque 29 Gio, code répété et code étiqueté), `AGENTS.md` (état, 2 345 tests), `docs/PLAN.md`, `contexte.md`. Aucun code ni test.
+- **Retiré de « Non vérifié »** : le défi sur une photo (vérifié une fois).
+- **Reste** : poser `course-i9` sur le commit de fusion, lancer quand la coordination le dit ; I8, I10.
