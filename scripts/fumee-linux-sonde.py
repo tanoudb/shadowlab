@@ -69,6 +69,21 @@ async () => {
               vp9: v.canPlayType('video/webm; codecs="vp9"'), mp3: v.canPlayType('audio/mpeg')};
   r.connexion = navigator.connection ? {rtt: navigator.connection.rtt, downlink: navigator.connection.downlink, type: navigator.connection.effectiveType} : null;
   r.audio = {offline: typeof OfflineAudioContext !== 'undefined', echantillonnage: new (window.AudioContext || window.webkitAudioContext)().sampleRate};
+  // Même contrôle que `canvasConsistencyTest` de l'Arena (observateur.js), répété 10 fois : deux lectures de suite d'un
+  // même canvas 2D doivent donner les mêmes octets.
+  let instables = 0;
+  for (let k = 0; k < 10; k++) {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f60'; ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#069'; ctx.fillRect(32, 0, 32, 32);
+    ctx.font = '14px Arial'; ctx.fillText('test', 2, 50);
+    const stable = c.toDataURL() === c.toDataURL();
+    const a = ctx.getImageData(0, 0, 64, 64).data, b = ctx.getImageData(0, 0, 64, 64).data;
+    let meme = true; for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) { meme = false; break; } }
+    if (!stable || !meme) instables++;
+  }
+  r.canvas = {essais: 10, instables};
   return r;
 }
 """
