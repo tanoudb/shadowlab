@@ -1,0 +1,10 @@
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!README.md
+!src
+!configs
+!docker/linux/entrypoint.sh
+**/__pycache__
+**/*.pyc
