@@ -114,6 +114,11 @@ sur nos propres cibles (site vitrine factice, tor-i).
   `deltas_uniformes`, `scroll_timing_regulier`, `screen_position_zero`), elle passe de 01 à 07 ; `23a7b8a2` aussi de 05 à 07 ;
   `414f351a` reste arrêtée dès 03. La base publique est déjà au schéma 11 (vérifié). Reste I8, I9, I10, la molette à crans, deux
   chiffres à compléter (tests, campagne de contrôle de D-95). Détail : `docs/DECISIONS.md`, `docs/PLAN.md` § 2.
+- **17/11 : D-96, course de 7 jours (I9) préparée, non lancée.** Ethan a dit « Oui » (question 4) ; I9 part avant I8. Copie figée du
+  code dans `.courses/i9/` (ports 8760, 8753, 8761 ; projet Docker `shadowlab-course-i9`), pilotée par `scripts/course.sh`. Trois
+  répétitions : les deux du 16/11 non tenues (causes corrigées), celle du 17/11 tenue à tous les critères (30 visites sur 30). Essai ciblé de la porte le 17/11 (150 s, 10 h 48 à 11 h 01) : défi sur une photo repassé sans alerte, 3 visites sur 3. Lancement
+  seulement quand la coordination le dit ; contrôle `scripts/course.sh etat` au plus une fois par jour. Ne pas toucher à la session
+  tmux `course-i9` ni à `.courses/`. Tests du dossier principal permis, mais leurs durées sont faussées. Reste I8, I10.
 
 ## Chantiers (12/11, 16 h 25)
 Fusionnés dans `niveau-authentifie-perimetre` et poussés : `formulaire-contact` (D-57), identité native

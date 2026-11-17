@@ -3662,6 +3662,12 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Décision** : aucune prise (texte proposé à la coordination).
 - **Reste** : la répétition (environ 1 h 30) dans un vrai Chrome, puis la course ; rien n'est vérifié contre l'Arena réelle.
 
+## 2026-11-16 (soir) — Claude (Sonnet 5.5, sous-agent) — D-96 : course de 7 jours (I9) avant I8, documentation
+- **Fait** : D-96 écrite (« Oui » d'Ethan, exception à l'ordre du § 7, isolation, dossier `.courses/i9/`, règles de la course, disque). `AGENTS.md` : état, règle (exception aux tests pendant la course, interdits), commandes `scripts/course.sh`, carte du code, 2 244 tests. `docs/PLAN.md` : § 4 et § 8. `contexte.md`.
+- **Fichiers** : `docs/DECISIONS.md`, `docs/PLAN.md`, `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code, test ni configuration touché ; aucun test, aucune commande `shadowlab`.
+- **Vérifié dans le code** : 10 min de retard (`RETARD_MAX_MIN`), réessai 5 min, tolérance de la porte 60 s, ports et projet Docker de `i9.env`, `/.courses/` dans `.gitignore`.
+- **Décision** : D-96 (coordination, sur le « Oui » d'Ethan).
+- **Reste** : deux marqueurs `[À COMPLÉTER : répétition]` et `[À COMPLÉTER : commit de lancement]` à remplir après la répétition et au lancement ; I8, I10 ; le bilan de la course.
 ## 2026-11-16 (nuit) — Claude (Opus 5.5, sous-agent) — I9 : porte revenue sur une relecture, identité en alerte = aucune visite
 - **Cause confirmée** (répétition de la course, visite 11 du sujet) : `Parcours._relire` (retour à la liste, fiche revue, D-94) appelait `Sentinelle.examiner` sans passer par `_porte_en_cours` ; la page de défi de l'Arena arrive en 403 et `examiner` regarde le statut avant le défi : « statut 403 », identité en alerte. Vu en échec : 6 tests sur 6 arrêtés sur `signe: statut` avant le correctif.
 - **Fait** (tests d'abord, vus en échec) : `_relire` passe par `_porte_en_cours` (trace `relecture: true`) ; les deux appels à `examiner` de `parcours.py` passent maintenant par la porte. Campagne : avant chaque créneau d'un bras espacé qui a une identité, l'état est lu par son nom (`identite.lire_etat`) ; en alerte, aucune visite, ligne `attente_alerte` dans `cadence.jsonl` (prévue, fin, `alerte_le`), créneau suivant planifié à partir de la fin (`Cadence.reporter_alerte`, plage et échéance tenues, note relue à la reprise) ; bannie, plus aucune visite, ligne `bannie` (restantes). Même règle avant d'ouvrir le pilote (reprise : le refus écrivait toutes les répétitions restantes en erreur). `course bilan` compte ces lignes à part ; une attente d'alerte rend `aucune_alerte` non tenu. `soiree.py` inchangé.
@@ -3694,3 +3700,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Vérifié dans une vraie base** (`outputs/shadowlab.sqlite3`, lecture seule, campagne 131) : les lignes `defi-js` / `valide` portent le jeton du passage, chemin `/lab/defi/verifier` ; par jeton, l'ordre est `emis` puis `valide` ; les rares `emis` qui suivent un `valide` du même jeton (333 dans toute la base) tombent à la durée du cookie (600 s, 3 600 s), jamais à quelques secondes. Cas 1 rejoué sur l'ancienne fonction : NON TENU, « revenue trop tôt après [180] s » (le défaut).
 - **Suite complète** : 2 342 réussis, 3 sautés (`frontend/dist` absent), 9 min 30 s.
 - **Reste** : le bilan d'une course lancée avant ce correctif se relit sans rien changer (lecture seule). Aucune course 7 jours réelle n'a été relue avec le nouveau bilan.
+
+## 2026-11-17 — Claude (Sonnet 5.5, sous-agent) — D-96 mise à jour : trois répétitions, `course etat`, lancement prévu
+- **Fait** : fusion de `niveau-authentifie-perimetre` (`fa88df6`), journal gardé des deux côtés. D-96 : répétitions 1 à 3, règle 6 (porte mesurée depuis sa validation), règle 11 (`course etat`, codes 0 à 3), disque (30 Gio le 17/11), rythme 45 à 180 min, surveillance, lancement prévu, non vérifié. `AGENTS.md` (état, commandes, exception), `docs/PLAN.md` § 4 et § 8, `contexte.md`.
+- **Fichiers** : `docs/DECISIONS.md`, `docs/PLAN.md`, `AGENTS.md`, `notes/ia/contexte.md`, ce journal. Aucun code, test ni configuration ; aucune commande `shadowlab`.
+- **Trous** : `[À COMPLÉTER : bilan répétition 3]` et `[À COMPLÉTER : tests]`. Étiquette `course-i9` à poser sur le commit de fusion de ces documents.
+- **Reste** : bilan de la répétition 3, lancement (coordination), I8, I10.
+
+## 2026-11-17 (midi) — Claude (Sonnet 5.5, sous-agent) — D-96 : répétition 3 tenue, essai ciblé de la porte
+- **Fait** : fusion de `da41a39`. Répétition 3 : tenue à tous les critères (code 0 de `course bilan 1`, 30 visites sur 30, 8 passages de la porte, âge le plus court 603 s, récolte 30 et 420 sur 420, 170 visites non faites à l'échéance, témoins tenus). Essai ciblé de la porte (10 h 48 à 11 h 01, profil de 150 s) : défi sur deux photos noté `porte_ressource`, porte repassée sur la page suivante, 3 visites réussies, 60 sur 60 et 840 sur 840.
+- **Documents** : D-96 (répétition 3, essai, disque 29 Gio, code répété et code étiqueté), `AGENTS.md` (état, 2 345 tests), `docs/PLAN.md`, `contexte.md`. Aucun code ni test.
+- **Retiré de « Non vérifié »** : le défi sur une photo (vérifié une fois).
+- **Reste** : poser `course-i9` sur le commit de fusion, lancer quand la coordination le dit ; I8, I10.
