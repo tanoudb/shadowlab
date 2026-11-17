@@ -3821,3 +3821,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Résultat** (`docs/recherche/detecteurs-publics-2026-11-17.md`) : `noezia` natif passe Sannysoft sans échec, rebrowser sauf `storagePartitioning`, CreepJS 0 % headless 0 % stealth (31 % like headless) ; `noezia` réécrit : rebrowser 4 rouges (webdriver, Chrome 130 contre Chromium 156, fonctions natives enveloppées, user agent), CreepJS 60 % stealth ; les témoins `patchright` et `playwright` sont arrêtés partout.
 - **À étudier** : `storagePartitioning` rouge en identité native (arguments par défaut de Patchright) ; 31 % like headless à comparer avec un Chrome d'humain. Aucun changement de moteur fait.
 - **Fichiers** : `scripts/detecteurs-publics.py`, `docs/recherche/detecteurs-publics-2026-11-17.md` et `-donnees/`, `AGENTS.md`. Un défaut du script (chemin relatif) corrigé, métadonnées de `resultats.json` réparées à la main (aucune valeur mesurée touchée).
+
+## 2026-11-17 (21h50) — Claude (Fable 5.2, coordination) — Place disque : Docker nettoyé sur le mot d'Ethan
+
+- Ethan : « Oui, supprime » (question : les 8,9 Go inutilisés dans Docker). Supprimé, après avoir vérifié qu'aucun conteneur ne s'en
+  sert : les images `ghcr.io/usestrix/strix-sandbox:1.3.0`, `postgres:17`, `nginx:stable`, `ubuntu:24.04`, `alpine:latest` (sans
+  `-f`), et le cache de construction inutilisé (`docker builder prune -af`, 2,48 Go). Images `monespace` non touchées. Aucun
+  redémarrage de Docker ni d'OrbStack ; les 14 conteneurs tournent toujours, `course.sh etat` rend 0.
+- Docker : images 28,81 → 22,06 Go, cache 2,63 → 0,15 Go, soit 9,2 Go rendus côté Docker. Côté Mac : 25 → 28 Gio libres juste
+  après ; le reste dépend du moment où OrbStack rend la place de son disque (non vérifié). `ubuntu:24.04` sera retéléchargée
+  (169 Mo) à la prochaine construction de l'essai Linux.
+- Relevé des pages publiques de test fusionné (`23781cd`) ; suite confiée à la session `fumee-linux` : décision écrite pour ces
+  pages et défaut `storagePartitioning` (tests d'abord), campagne de contrôle à lancer du dossier principal après fusion.
