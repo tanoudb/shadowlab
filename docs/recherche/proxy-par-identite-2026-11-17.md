@@ -27,9 +27,10 @@ tout le trafic de Chrome pour cette identité passe par lui, ressources de page 
    (http et https seulement), mais tout passe encore par le proxy. Le filtre `route` de Playwright (`_filtrer`) reste inchangé.
 4. **Sans proxy déclaré : aucun changement** (ni relais, ni argument de lancement). `SHADOWLAB_PROXY` (proxy unique du processus, mode illimité, sans identité) reste tel quel ;
    une identité qui déclare un proxy ne retombe **jamais** dessus ni sur un accès direct : si le relais ou le fichier est invalide, le lancement est refusé.
-5. **Fuite WebRTC** : l'UDP de WebRTC ignore le proxy. Pour une identité qui a un proxy, Chrome est lancé avec `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`
-   (aucune autre option de lancement ; l'identité native reste native pour tout le reste). Effet sur les détecteurs de l'Arena non mesuré : cet argument n'existe que pour les
-   identités qui ont un proxy, il n'y en a aucune dans les campagnes à ce jour.
+5. **Fuite WebRTC** : l'UDP de WebRTC ignore le proxy. Pour une identité qui a un proxy, Chrome est lancé avec `--webrtc-ip-handling-policy=disable_non_proxied_udp`
+   (aucune autre option de lancement ; l'identité native reste native pour tout le reste). **Mesuré sur Chrome 156 (macOS)** avec un STUN local : sans l'argument 4 paquets UDP sortent, avec lui 0 ;
+   le nom `--force-webrtc-ip-handling-policy`, souvent cité, n'a aucun effet (4 paquets) : la première version de cette conception le nommait, le test l'a montré. Effet sur les détecteurs de l'Arena non mesuré :
+   cet argument n'existe que pour les identités qui ont un proxy, il n'y en a aucune dans les campagnes à ce jour.
 6. **`configuration()`** enregistre `identite_proxy` = adresse sans identifiants + `***` (exemple `http://***:***@127.0.0.1:3128`). Le mot de passe n'apparaît ni dans
    `repr`, ni dans les messages d'erreur, ni dans les journaux.
 
@@ -51,7 +52,7 @@ src/shadowlab/engines/noezia/identite.py   (ajouts)
 src/shadowlab/engines/noezia/moteur.py   (changements)
     open()       : lit `identite.lire_proxy(nom)` AVANT de prendre le verrou de l'identité ; s'il y a un proxy, démarre le relais (et l'arrête dans close()).
     _lancer_identite() : avec relais -> proxy={"server": relais.adresse} (pas de bypass : Playwright ajoute <-loopback>, le local passe donc aussi par le relais)
-                  + args=["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] ; sans relais -> exactement comme avant.
+                  + args=["--webrtc-ip-handling-policy=disable_non_proxied_udp"] ; sans relais -> exactement comme avant.
     configuration() : + "identite_proxy": masque, seulement s'il y a un proxy.
 ```
 
@@ -78,8 +79,56 @@ vers autre chose que le relais.
 
 ## 5. Ce que « deux adresses » veut dire sur un seul poste
 
-(rempli en fin d'étape)
+Sur ce poste, il n'y a qu'une adresse réseau utile (`127.0.0.1`) : macOS n'en offre pas d'autres sur `lo0` sans réglage administrateur (Linux offrirait `127.0.0.2`, `127.0.0.3` ; non utilisé). « Deux adresses » veut donc
+dire ici **deux points de sortie distincts**, que la cible distingue par le **port source** de chaque connexion : chaque faux proxy note le port local de ses connexions sortantes, la cible note le port source de chaque connexion
+reçue ; les deux jeux de ports sont disjoints, et chaque port vu par la cible est celui d'un proxy (donc aucune connexion directe de Chrome).
+
+- **Prouvé par les tests** : le routage (A par le proxy A seulement, B par le proxy B seulement, ressources de la page comprises) ; l'absence de connexion directe ; le refus d'un mauvais mot de passe sans repli direct ;
+  le nom d'hôte résolu par le proxy et non en local ; le verrou de périmètre qui tient avec un proxy (refus de `localhost` hors liste, de `example.com`) ; l'absence d'identifiants dans `configuration()`, `versions()`, les journaux,
+  `demandes` et les fichiers de l'identité autres que `proxy.json` ; l'absence de paquet UDP vers un STUN local avec proxy.
+- **Ne sera prouvé qu'avec de vrais proxys** : que deux vrais proxys donnent deux **adresses IP publiques** différentes (il faudra un service qui renvoie l'adresse vue, à nous, comme la vitrine de l'étape 3.4) ;
+  la réputation de ces adresses ; ce qu'un fournisseur réel accepte (beaucoup limitent `CONNECT` aux ports 80 et 443, ou exigent un nom d'utilisateur qui porte la session ou le pays) ; les en-têtes qu'un proxy réel ajoute
+  (`Via`, `X-Forwarded-For`) ; la durée de vie d'une adresse (rotation) ; la latence ; un proxy HTTPS (`https://`, non géré) ; Linux (tout a tourné sur macOS).
 
 ## 6. Fuites hors proxy
 
-(rempli en fin d'étape)
+Légende : **test** = couvert par un test du dépôt, rejouable ; **sonde** = observé une fois par une sonde jetable de l'agent qui a écrit le code (hors dépôt, non rejouable) ; **lecture** = déduit du code ; **non vérifié**.
+
+**Ce qui passe par le proxy de l'identité**
+- Page, image, script, appel de données (XHR) d'une page en `http://` : **test** (`test_proxy_identite_chrome.py`, scénario a, proxy HTTP pour A et SOCKS5 pour B ; cible : aucune connexion directe).
+- Le nom des hôtes de la page : **test** (scénario e) : un nom que seul le proxy connaît se charge, Chrome n'a rien résolu en local ; avec SOCKS5, le nom part tel quel (type « domaine », RFC 1928) : **test** (relais).
+- `https://` par `CONNECT`, tunnel intact (le ClientHello de Chrome ne change pas) : **test** au niveau du relais (octets bruts, `tests/test_proxy_identite.py`) ; avec un vrai Chrome et un serveur TLS local : **sonde**.
+- Le trafic de fond de Chrome (Google, gstatic, googleapis, `update.googleapis.com`) : **sonde** : il passe par le relais, donc par le proxy ; en mode strict, `www.google.com` et `www.gstatic.com` passent (ils sont dans `HOTES_CHALLENGES`),
+  `accounts.google.com` et `update.googleapis.com` sont refusés par le périmètre.
+- Les sockets de l'arbre de processus de Chrome : **test** (scénario g, échantillon `psutil` toutes les 0,2 s) : aucune connexion TCP vers autre chose que le relais.
+- Un refus du relais : en `http://` une page d'erreur 403 (hors périmètre) ou 502 (le proxy refuse), jamais une demande d'identifiants ; en `https://` une erreur `net::ERR_TUNNEL_CONNECTION_FAILED` : **sonde** ; le fait qu'aucune connexion directe ne suive : **test**.
+
+**Ce qui ne passe pas par le proxy, ou y passe mal**
+1. **WebRTC (UDP)** : l'UDP ignore le proxy. Sans correction 4 paquets arrivent directement à un STUN local (**sonde**, avec proxy mais sans l'argument). **Corrigé** par `--webrtc-ip-handling-policy=disable_non_proxied_udp` (0 paquet : **test**, scénario f).
+   Le nom `--force-webrtc-ip-handling-policy` n'a aucun effet sur Chrome 156 (première version de la conception, corrigée). Reste : la correction est mesurée sur Chrome 156 macOS seulement ; son effet sur les détecteurs de l'Arena (`webrtc_test`) n'est pas mesuré ;
+   un Chrome qui renommerait encore l'argument ferait échouer le test f, pas la production.
+2. **DNS local du mode strict** : `Driver.verifier()` et le filtre `route` (`_filtrer`) appellent `perimetre.verifier_url`, qui résout en local (`getaddrinfo`) le nom des hôtes de la liste. Le relais, lui, ne résout rien (**test**). Pas de fuite en mode illimité
+   (le défaut de la phase interne). **Lecture.** Non corrigé : changer `perimetre.py` touche tous les moteurs.
+3. **Le relais n'a pas d'authentification** : tout processus du poste qui trouve le port sur `127.0.0.1` sort par le proxy de l'identité. **Lecture.** Correction possible (un jeton aléatoire par lancement donné à Chrome comme identifiant du proxy local), non faite : elle remet les identifiants de Chrome
+   dans le circuit de Playwright, et le seul danger est un autre processus de la même machine.
+4. **Les identifiants circulent en clair jusqu'au proxy** (Basic pour un proxy HTTP, utilisateur/mot de passe pour SOCKS5) : inhérent à ces deux protocoles ; un proxy `https://` n'est pas géré (refusé à l'analyse).
+5. **Le local passe aussi par le proxy** : Playwright ajoute `<-loopback>`, le trafic vers `127.0.0.1` part donc vers le proxy, qui ne peut pas joindre le poste d'un vrai fournisseur. Une identité avec proxy ne sert donc pas contre l'Arena locale.
+   `PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK` retirerait cet ajout et enverrait le local en direct. **Lecture.**
+6. **Requêtes `http://` : une connexion par requête** (`Connection: close` imposé dans les deux sens). Un site en clair voit ce détail ; le trafic `https://` (le cas réel) n'est pas touché. **Test** (12 requêtes, 12 ports sources) et **lecture**.
+7. **Bornes du relais** : `demandes` grossit sans borne (une ligne par demande) ; un tunnel à demi fermé garde son fil jusqu'à `arreter()` ; une requête simple dont l'origine tarde plus de 15 s (`delai_s`) avant son premier octet donne 502.
+
+**Non vérifié**
+- QUIC / HTTP/3 : on attend que Chrome ne l'utilise pas à travers un proxy HTTP ou SOCKS5 ; non mesuré.
+- Les processus voisins de Chrome qui ont leur propre pile réseau (mise à jour de Google Chrome, envoi des rapports de plantage) : non observés ; ils ne reçoivent pas le proxy de Chrome.
+- Mises à jour de composants, Safe Browsing, DNS sécurisé (DoH) au démarrage d'un profil neuf : seuls les passages par le relais ont été vus (sonde) ; une résolution du navigateur hors proxy ne se voit pas avec `psutil`.
+- UDP autre que WebRTC (mDNS, découverte du réseau local) : aucun socket UDP vu par l'échantillonnage, mais il ne voit pas les paquets.
+- Un vrai fournisseur (HTTP ou SOCKS5), Linux, un Chrome autre que 156.
+
+## 7. Résultat (17/11)
+
+- Code : `src/shadowlab/engines/noezia/proxy_identite.py` (nouveau, ~580 lignes, bibliothèque standard), `identite.py` (+54 : `declarer_proxy`, `lire_proxy`), `moteur.py` (+~30 : relais à `open()`, arrêt à `close()`, lancement, masque dans `configuration()`).
+  Aucune option dans `options_permises`.
+- Tests : 125 rapides (`tests/test_proxy_identite.py`) + 36 d'aides (`tests/test_outils_proxy.py`) + 18 avec un vrai Chrome 156 (`tests/test_proxy_identite_chrome.py`, 24 s) ; les trois tests d'identité d'avant (`test_integration.py -k identite`) passent encore ; suite rapide :
+  2 451 réussis, 2 sautés. Les tests ont été écrits et committés avant le code (commit `ee72107`, en échec par `ModuleNotFoundError`).
+- Écarts décidés pendant le code : un refus (`403`) d'une **requête simple** est la réponse de l'origine et passe tel quel (l'Arena en sert, la sentinelle en a besoin), seul un `407` du proxy devient `502` ; `open()` qui échoue appelle `close()` (le verrou de l'identité est rendu :
+  avant, il restait pris) ; `analyser` refuse aussi un port absent, un chemin ou une requête dans l'adresse, des identifiants SOCKS5 de plus de 255 octets ; `lire_proxy` refuse un lien symbolique et tout fichier non ordinaire.
