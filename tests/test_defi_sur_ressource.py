@@ -30,6 +30,7 @@ from __future__ import annotations
 import threading
 from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -225,14 +226,28 @@ def arena_locale():
     serveur.server_close()
 
 
+COURSE_NATIVE = {"identite_native": True, "headless": False, "channel": "chrome", "identite": "defi-ressource"}
+
+
 @pytest.mark.integration
+@pytest.mark.parametrize("mode", ["chromium", "chrome-course"])
 @pytest.mark.parametrize(
     ("refus", "attendu"), [((PAGE_DEFI, "defi-js"), "arena"), ((PAGE_BLOCAGE, "bannissement"), None)]
 )
-def test_dans_un_vrai_chromium_la_nature_du_defi_d_une_photo_et_d_un_appel_de_donnees(arena_locale, refus, attendu):
+def test_dans_un_vrai_navigateur_la_nature_du_defi_d_une_photo_et_d_un_appel_de_donnees(
+    arena_locale, tmp_path, monkeypatch, refus, attendu, mode
+):
+    """`chromium` : le Chromium de Playwright, sans interface. `chrome-course` : le réglage de la course (vrai Chrome,
+    identité native, avec interface, identité persistante sur disque)."""
+    options: dict = {"interaction_post_page": False, "resoudre_defis": False}
+    if mode == "chrome-course":
+        if not Path("/Applications/Google Chrome.app").exists():
+            pytest.skip("Google Chrome n'est pas installé (channel: chrome)")
+        monkeypatch.setenv("SHADOWLAB_IDENTITES", str(tmp_path / "identites"))
+        options.update(COURSE_NATIVE)
     arena_locale.refus = refus
     base = f"http://127.0.0.1:{arena_locale.server_port}"
-    pilote = DriverNoezia(("127.0.0.1",), {"interaction_post_page": False, "resoudre_defis": False})
+    pilote = DriverNoezia(("127.0.0.1",), options)
     pilote.open()
     try:
         pilote.start_session()
