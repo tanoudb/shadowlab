@@ -8,6 +8,7 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-17 — Un domaine à toi et un compte Cloudflare pour la vitrine (étape 3.4) : pas encore.** Sans eux, pas de mesure contre une protection du commerce : un tunnel rapide n'est pas dans une zone à toi (à ma connaissance on n'y règle ni Bot Fight Mode ni règles WAF ; non vérifié). Le détail des offres (Cloudflare gratuit puis Pro, AWS WAF Bot Control, DataDome sur essai écrit) est dans `docs/recherche/anti-bot-essais-pour-3-4-2026-11-17.md`. **Ce qu'il faut de toi** : acheter ou choisir un domaine, créer le compte Cloudflare gratuit et y ajouter le domaine (créer le compte, payer et acheter sont à toi, pas à l'assistant). Recommandation : un domaine bon marché dédié au labo, sans lien avec un client, pour garder le cloisonnement ; le plan gratuit d'abord. Entre-temps on peut avancer sans domaine : les pages publiques de test de détecteurs (CreepJS, Sannysoft, `rebrowser-bot-detector`, BrowserScan).
 - **2026-11-16 — La session Windows `23a7b8a2` (14/11, Chrome sur Windows) est-elle un humain connu ?** D-95 a corrigé quatre règles
   avec `c7c5142c` seule ; `23a7b8a2` passe maintenant aussi de 05 à 07. Si tu la connais, `navigation_lineaire` et le seuil de
   `trajectoire_lineaire` s'appuient sur deux humains connus au lieu d'un. Recommandation : confirmer si c'est vrai ; sinon, dis-le.
