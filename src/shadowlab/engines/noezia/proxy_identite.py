@@ -268,9 +268,32 @@ def _longueur_du_corps(entetes: list[tuple[str, str]]) -> int:
     return int(valeurs[0])
 
 
+def _entete_hote(requete: _Requete) -> str:
+    """`Host: <hôte>[:port]` de la cible jugée : port omis s'il vaut 80, crochets autour d'une adresse IPv6."""
+    hote = f"[{requete.hote}]" if ":" in requete.hote else requete.hote
+    return f"Host: {hote}" if requete.port == 80 else f"Host: {hote}:{requete.port}"
+
+
 def _entetes_sortants(requete: _Requete, *supplementaires: str) -> str:
-    """Les en-têtes du client sans ceux du saut, puis `Connection: close` et les `supplementaires`, et la ligne vide."""
-    gardes = [f"{nom}: {valeur}" for nom, valeur in requete.entetes if nom.lower() not in _ENTETES_DE_SAUT]
+    """Les en-têtes du client sans ceux du saut, puis `Connection: close` et les `supplementaires`, et la ligne vide.
+
+    Le `Host` du client est remplacé par celui de la cible jugée (`_entete_hote`), à la place du premier `Host` reçu ;
+    les suivants sont jetés, et sans `Host` du client celui-ci est ajouté en tête (RFC 7230 § 5.4)."""
+    hote = _entete_hote(requete)
+    gardes: list[str] = []
+    place = False
+    for nom, valeur in requete.entetes:
+        minuscule = nom.lower()
+        if minuscule in _ENTETES_DE_SAUT:
+            continue
+        if minuscule == "host":
+            if not place:
+                gardes.append(hote)
+                place = True
+            continue
+        gardes.append(f"{nom}: {valeur}")
+    if not place:
+        gardes.insert(0, hote)
     return "".join(f"{ligne}\r\n" for ligne in (*gardes, "Connection: close", *supplementaires)) + "\r\n"
 
 
@@ -304,7 +327,11 @@ class RelaisProxy:
     lu avec l'en-tête ou reçu après. Il ajoute `Connection: close` dans les deux sens pour que Chrome ne réutilise pas
     la connexion. Un corps découpé (`Transfer-Encoding`) est refusé en 501, un `Content-Length` invalide ou multiple
     en 400. Un tunnel `CONNECT` est recopié tel quel : la décision s'y prend par tunnel (hôte et port), pas par
-    requête."""
+    requête.
+
+    Le périmètre d'une requête simple est jugé sur son adresse absolue (`GET http://hote/…`), donc l'en-tête `Host`
+    envoyé à l'amont est celui de cette cible et jamais celui du client (RFC 7230 § 5.4 : un proxy qui reçoit la forme
+    absolue ignore le `Host` reçu) : un client ne peut pas faire juger un hôte et en faire adresser un autre."""
 
     def __init__(
         self,

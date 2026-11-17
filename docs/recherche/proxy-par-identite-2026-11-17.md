@@ -32,7 +32,7 @@ tout le trafic de Chrome pour cette identité passe par lui, ressources de page 
    le nom `--force-webrtc-ip-handling-policy`, souvent cité, n'a aucun effet (4 paquets) : la première version de cette conception le nommait, le test l'a montré. Effet sur les détecteurs de l'Arena non mesuré :
    cet argument n'existe que pour les identités qui ont un proxy, il n'y en a aucune dans les campagnes à ce jour. **Lecture du code** (`DetecteurWebRTC`, `detection.py`) : les seules règles sont `rtc_patche` (0,4, `RTCPeerConnection.toString()`
    non natif : un argument de lancement n'y change rien) et `rtc_host_leak` (poids 0,0, informatif) ; `disponible: false` ne donne aucun signal. Zéro candidat « host » ne déclencherait donc rien ; non confirmé par une campagne.
-6. **`configuration()`** enregistre `identite_proxy` = adresse sans identifiants + `***` (exemple `http://***:***@127.0.0.1:3128`). Le mot de passe n'apparaît ni dans
+6. **`configuration()`** enregistre `identite_proxy` = adresse sans identifiants + `***` (exemple `http://***:***@127.0.0.1:3128`), ou `"invalide"` si `proxy.json` est inutilisable (`configuration()` ne lève jamais à cause du proxy : une campagne l'appelle avant `open()` ; `open()`, lui, refuse de démarrer). Le mot de passe n'apparaît ni dans
    `repr`, ni dans les messages d'erreur, ni dans les journaux.
 
 ## 3. Interfaces
@@ -54,13 +54,13 @@ src/shadowlab/engines/noezia/moteur.py   (changements)
     open()       : lit `identite.lire_proxy(nom)` AVANT de prendre le verrou de l'identité ; s'il y a un proxy, démarre le relais (et l'arrête dans close()).
     _lancer_identite() : avec relais -> proxy={"server": relais.adresse} (pas de bypass : Playwright ajoute <-loopback>, le local passe donc aussi par le relais)
                   + args=["--webrtc-ip-handling-policy=disable_non_proxied_udp"] ; sans relais -> exactement comme avant.
-    configuration() : + "identite_proxy": masque, seulement s'il y a un proxy.
+    configuration() : + "identite_proxy": masque, seulement s'il y a un proxy ("invalide" si le fichier est inutilisable ; jamais d'exception).
 ```
 
 Le relais (client = Chrome) :
 - `CONNECT hote:port HTTP/1.1` : décision de périmètre ; connexion au proxy de l'identité ; réponse `200 Connection Established` puis recopie dans les deux sens. Refus de périmètre : `403` ;
   échec ou refus du proxy (407, 403, mauvais mot de passe SOCKS5, connexion impossible) : `502` (jamais `407` à Chrome, qui afficherait une demande d'identifiants) ; **jamais de repli sur une connexion directe**.
-- Requête `http://hote[:port]/chemin` (forme absolue) : même décision ; proxy HTTP : la requête part telle quelle avec `Proxy-Authorization` et `Connection: close` ; proxy SOCKS5 : connexion au
+- Requête `http://hote[:port]/chemin` (forme absolue) : même décision ; proxy HTTP : la requête part avec `Proxy-Authorization`, `Connection: close` et un `Host` réécrit (celui de la cible jugée, jamais celui du client : RFC 7230 § 5.4) ; proxy SOCKS5 : connexion au
   nom d'hôte par SOCKS5, requête réécrite en forme d'origine avec `Connection: close`. Une connexion du client porte une seule requête.
 - Aucun nom n'est résolu localement par le relais (le nom part au proxy), y compris pour juger du périmètre (§ 2.3). **Reste hors du relais** : en mode strict, `Driver.verifier()` et le filtre `route` (`_filtrer`) appellent encore `perimetre.verifier_url`, donc résolvent localement le nom des hôtes de la liste ; fuite DNS du mode strict, à lister (§ 6), pas à corriger ici. Les identifiants ne sont jamais écrits dans un message d'erreur ni dans `demandes`.
 
@@ -129,8 +129,8 @@ Légende : **test** = couvert par un test du dépôt, rejouable ; **sonde** = ob
 
 - Code : `src/shadowlab/engines/noezia/proxy_identite.py` (nouveau, ~580 lignes, bibliothèque standard), `identite.py` (+54 : `declarer_proxy`, `lire_proxy`), `moteur.py` (+~30 : relais à `open()`, arrêt à `close()`, lancement, masque dans `configuration()`).
   Aucune option dans `options_permises`.
-- Tests : 162 rapides (`tests/test_proxy_identite.py`) + 40 d'aides (`tests/test_outils_proxy.py`) + 23 avec un vrai Chrome 156 (`tests/test_proxy_identite_chrome.py`, 31 s) ; les trois tests d'identité d'avant (`test_integration.py -k identite`) passent encore ; suite rapide :
-  2 492 réussis, 2 sautés ; suite complète non lancée. Les tests ont été écrits et committés avant le code (commit `ee72107`, en échec par `ModuleNotFoundError`) ; les compléments (arguments de lancement dans `configuration()`, requête simple bornée) l'ont été de même, vus en échec (34 des 40 tests de bornage).
+- Tests : 218 rapides (`tests/test_proxy_identite.py`) + 41 d'aides (`tests/test_outils_proxy.py`) + 23 avec un vrai Chrome 156 (`tests/test_proxy_identite_chrome.py`, 31 s) ; les trois tests d'identité d'avant (`test_integration.py -k identite`) passent encore ; suite rapide :
+  2 549 réussis, 2 sautés ; suite complète non lancée. Les tests ont été écrits et committés avant le code (commit `ee72107`, en échec par `ModuleNotFoundError`) ; les compléments (arguments de lancement dans `configuration()`, requête simple bornée) l'ont été de même, vus en échec (34 des 40 tests de bornage).
   Un test d'avant a été mis à jour à la main : `test_configuration_sans_proxy_pas_de_cle_et_le_reste_ne_change_pas` exclut maintenant les deux clés que le proxy ajoute (`identite_proxy` et `identite_proxy_arguments`).
 - Sondes jetables des agents (le cas des requêtes simples, `open()` qui échoue, refus du relais, WebRTC) : `docs/recherche/proxy-par-identite-2026-11-17-sondes/` (rejouables depuis la racine du dépôt ; la sonde HTTPS est devenue un test).
 - Écarts décidés pendant le code : un refus (`403`) d'une **requête simple** est la réponse de l'origine et passe tel quel (l'Arena en sert, la sentinelle en a besoin), seul un `407` du proxy devient `502` ; `open()` qui échoue appelle `close()` (le verrou de l'identité est rendu :

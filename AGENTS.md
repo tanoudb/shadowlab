@@ -320,7 +320,7 @@ uv run shadowlab rejeu [--base <base publique>] [--json]   # humains arrêtés p
 uv run shadowlab moteurs etat                              # disponibilité des moteurs
 uv run pytest                                              # tests Python (navigateurs réels + e2e UI)
 uv run pytest -m "not integration"                         # < 3 s, sans navigateur
-uv run pytest tests/test_proxy_identite_chrome.py -q                  # proxy par identité avec un vrai Chrome (23 tests, 31 s, ouvre des fenêtres) ; les 162 tests rapides : tests/test_proxy_identite.py
+uv run pytest tests/test_proxy_identite_chrome.py -q                  # proxy par identité avec un vrai Chrome (23 tests, 31 s, ouvre des fenêtres) ; les 218 tests rapides : tests/test_proxy_identite.py
 uv run ruff check src tests && uv run ruff format --check src tests
 npm --prefix frontend test                                 # tests front (vitest)
 npm --prefix frontend run dev                              # dev UI : http://localhost:5173/labo (proxy /api → 8770)

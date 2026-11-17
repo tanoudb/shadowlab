@@ -43,7 +43,7 @@ from .defis import turnstile as defi_turnstile
 from .furtivite.patches import injecter as injecter_furtivite
 from .profils.generateur import ProfilNavigateur, generer_profil
 from .profils.stockage import charger_ou_creer
-from .proxy_identite import RelaisProxy
+from .proxy_identite import ProxyInvalide, RelaisProxy
 from .sentinelle import RefusRessource, detecter_defi_ressource
 
 log = logging.getLogger(__name__)
@@ -203,11 +203,19 @@ class DriverNoezia(Driver):
             conf["identite"] = self._nom_identite
             conf["identite_age_jours"] = identite.age_jours(self._nom_identite)
             # Le proxy réellement utilisé si le relais tourne (le fichier a pu changer depuis), sinon celui déclaré.
-            proxy = self._relais.amont if self._relais is not None else identite.lire_proxy(self._nom_identite)
-            if proxy is not None:
-                conf["identite_proxy"] = proxy.masque()  # le masque seul : jamais d'identifiant dans les résultats
-                # Réglage imposé par le proxy : déclaré et enregistré avec les résultats.
-                conf["identite_proxy_arguments"] = list(ARGUMENTS_PROXY_IDENTITE)
+            # Une campagne enregistre cette configuration avant `open()` : un fichier inutilisable ne la fait pas
+            # planter (c'est `open()` qui refuse de démarrer). Le marqueur ne dit rien du fichier : ni valeurs, ni
+            # chemin, ni message d'erreur. `OSError` aussi : `lire_proxy` en laisse passer une pour un dossier nommé
+            # `proxy.json` (`IsADirectoryError`).
+            try:
+                proxy = self._relais.amont if self._relais is not None else identite.lire_proxy(self._nom_identite)
+            except (ProxyInvalide, OSError):
+                conf["identite_proxy"] = "invalide"
+            else:
+                if proxy is not None:
+                    conf["identite_proxy"] = proxy.masque()  # le masque seul : jamais d'identifiant dans les résultats
+                    # Réglage imposé par le proxy : déclaré et enregistré avec les résultats.
+                    conf["identite_proxy_arguments"] = list(ARGUMENTS_PROXY_IDENTITE)
         if self._profil:
             conf["profil"] = self._profil.nom
             conf["profil_os"] = self._profil.os

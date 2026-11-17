@@ -36,6 +36,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from outils_proxy import (
+    AmontEnregistreur,
     AmontMuet,
     CibleDeTest,
     ProxyHttpDeTest,
@@ -229,6 +230,98 @@ def test_declarer_remplace_un_fichier_existant_et_remet_0600(racine):
     assert "ancien" not in chemin.read_text(encoding="utf-8")
 
 
+# Durcissement : un lien symbolique posé dans le dossier de l'identité ne doit jamais faire écrire `declarer_proxy`
+# ailleurs.
+TEMOIN = b"TEMOIN-INTACT\n"
+
+
+def poser_temoin(tmp_path, mode=0o644):
+    """Un fichier hors du dossier de l'identité que `declarer_proxy` ne doit jamais toucher (contenu ni droits)."""
+    temoin = tmp_path / "temoin.txt"
+    temoin.write_bytes(TEMOIN)
+    temoin.chmod(mode)
+    return temoin
+
+
+def dossier_d_identite(racine, nom="a"):
+    dossier = racine / nom
+    dossier.mkdir(parents=True)
+    dossier.chmod(0o700)
+    return dossier
+
+
+def verifier_temoin_intact(temoin, mode=0o644):
+    assert temoin.read_bytes() == TEMOIN, "le fichier visé par le lien a été écrit"
+    assert temoin.stat().st_mode & 0o777 == mode, "les droits du fichier visé par le lien ont changé"
+
+
+def verifier_proxy_ordinaire_en_0600(chemin):
+    assert chemin.is_file() and not chemin.is_symlink(), "proxy.json doit être un fichier ordinaire, pas un lien"
+    assert chemin.stat().st_mode & 0o777 == 0o600
+    attendu = {"serveur": "http://h:3128", "utilisateur": "u", "mot_de_passe": "p"}
+    assert json.loads(chemin.read_text(encoding="utf-8")) == attendu
+
+
+def test_declarer_ne_suit_pas_un_lien_symbolique_proxy_tmp_vers_un_fichier(racine, tmp_path):
+    temoin = poser_temoin(tmp_path)
+    dossier = dossier_d_identite(racine)
+    (dossier / "proxy.tmp").symlink_to(temoin)
+    chemin = ident.declarer_proxy("a", "http://h:3128", "u", "p")
+    verifier_temoin_intact(temoin)
+    verifier_proxy_ordinaire_en_0600(chemin)
+    assert not (dossier / "proxy.tmp").exists() and not (dossier / "proxy.tmp").is_symlink(), "rien ne reste"
+
+
+def test_declarer_ne_cree_rien_par_un_lien_symbolique_proxy_tmp_pendant(racine, tmp_path):
+    cible = tmp_path / "cree-par-erreur.txt"
+    dossier = dossier_d_identite(racine)
+    (dossier / "proxy.tmp").symlink_to(cible)  # le lien pend : écrire « à travers » créerait ce fichier
+    chemin = ident.declarer_proxy("a", "http://h:3128", "u", "p")
+    assert not cible.exists(), "le lien pendant a été suivi : un fichier a été créé ailleurs"
+    verifier_proxy_ordinaire_en_0600(chemin)
+
+
+def test_declarer_remplace_un_lien_symbolique_proxy_json_sans_toucher_sa_cible(racine, tmp_path):
+    temoin = poser_temoin(tmp_path)
+    dossier = dossier_d_identite(racine)
+    (dossier / "proxy.json").symlink_to(temoin)
+    chemin = ident.declarer_proxy("a", "http://h:3128", "u", "p")
+    verifier_temoin_intact(temoin)
+    verifier_proxy_ordinaire_en_0600(chemin)
+
+
+@pytest.mark.parametrize("mode", [0o600, 0o666, 0o000])
+def test_declarer_n_est_pas_arrete_par_un_proxy_tmp_ordinaire_laisse_par_un_plantage(racine, mode):
+    dossier = dossier_d_identite(racine)
+    reste = dossier / "proxy.tmp"
+    reste.write_text('{"serveur": "http://ancien:1", "mot_de_passe": "ancien-mdp"}', encoding="utf-8")
+    reste.chmod(mode)
+    chemin = ident.declarer_proxy("a", "http://h:3128", "u", "p")
+    verifier_proxy_ordinaire_en_0600(chemin)
+    assert not reste.exists(), "le reste du plantage est remplacé, pas gardé"
+    assert "ancien" not in chemin.read_text(encoding="utf-8")
+
+
+def test_declarer_refuse_encore_si_un_lien_reapparait_apres_la_suppression_du_temporaire(racine, tmp_path, monkeypatch):
+    """Deuxième ligne de défense : le lien posé entre la suppression de `proxy.tmp` et son ouverture. On simule une
+    suppression qui n'a pas pris (le lien est encore là à l'ouverture) : l'ouverture exclusive, sans suivre de lien,
+    échoue au lieu d'écrire à travers."""
+    temoin = poser_temoin(tmp_path)
+    dossier = dossier_d_identite(racine)
+    (dossier / "proxy.tmp").symlink_to(temoin)
+    vrai = os.unlink
+
+    def unlink_qui_ne_prend_pas(chemin, *arguments, **options):
+        if not str(chemin).endswith("proxy.tmp"):
+            vrai(chemin, *arguments, **options)
+
+    monkeypatch.setattr(os, "unlink", unlink_qui_ne_prend_pas)
+    with pytest.raises(OSError):
+        ident.declarer_proxy("a", "http://h:3128", "u", "p")
+    verifier_temoin_intact(temoin)
+    assert not (dossier / "proxy.json").exists() and not (dossier / "proxy.json").is_symlink(), "rien n'est publié"
+
+
 def test_declarer_laisse_l_identite_ouvrable_et_le_proxy_lisible(racine):
     ident.declarer_proxy("a", "http://h:3128", "u", "p")
     ident.ouvrir("a").liberer()
@@ -349,6 +442,72 @@ def test_configuration_declare_les_arguments_de_lancement_imposes_par_le_proxy(r
     texte = json.dumps(conf)
     assert "secret-a" not in texte and "a-user" not in texte
     assert "identite_proxy_arguments" not in registre()["noezia"](("127.0.0.1",), {}).configuration()
+
+
+# Durcissement : une campagne enregistre `configuration()` AVANT `open()`. Un `proxy.json` inutilisable ne doit donc
+# pas la faire planter ici (c'est `open()` qui refuse de démarrer) ; la configuration le dit par un marqueur, sans
+# rien d'autre.
+JETON = "jeton-secret-xyz"  # présent dans l'utilisateur, le mot de passe et l'hôte des fichiers de ces tests
+FICHIERS_INUTILISABLES = {
+    "droits 0644": {"mode": 0o644},
+    **{f"contenu : {nom}": {"brut": brut} for nom, brut in MAUVAIS_FICHIERS.items()},
+}
+
+
+def configuration_a_froid_avec_proxy_inutilisable(racine, cas):
+    """La configuration d'un pilote dont `proxy.json` est inutilisable, après celle d'un pilote sans fichier."""
+    sans = pilote().configuration()
+    ecrire_proxy(racine, "x", f"http://hote-{JETON}.test:3128", f"user-{JETON}", f"mdp-{JETON}", **cas)
+    return sans, pilote().configuration()
+
+
+def verifier_marqueur_invalide(sans, conf, racine):
+    assert conf["identite_proxy"] == "invalide"
+    assert "identite_proxy_arguments" not in conf, "aucun argument de lancement n'est imposé par un proxy inutilisable"
+    assert {cle: v for cle, v in conf.items() if cle != "identite_proxy"} == sans, "le reste ne change pas"
+    texte = json.dumps(conf)
+    # Rien du fichier : ni ses valeurs, ni le chemin, ni le message d'erreur de `lire_proxy`.
+    for morceau in (JETON, "secret-brut", str(racine), "proxy.json", "droits", "0600", "JSON", "symbolique", "attendu"):
+        assert morceau not in texte, f"{morceau!r} dans la configuration : {texte}"
+
+
+@pytest.mark.parametrize("cas", FICHIERS_INUTILISABLES.values(), ids=FICHIERS_INUTILISABLES.keys())
+def test_configuration_ne_leve_jamais_a_cause_du_proxy_et_ne_cite_rien_du_fichier(racine, cas):
+    sans, conf = configuration_a_froid_avec_proxy_inutilisable(racine, cas)  # ne lève pas
+    verifier_marqueur_invalide(sans, conf, racine)
+
+
+def test_configuration_d_un_proxy_json_lien_symbolique_donne_le_marqueur(racine, tmp_path):
+    sans = pilote().configuration()
+    (racine / "x").mkdir(parents=True)
+    (racine / "x").chmod(0o700)
+    temoin = ecrire_proxy(tmp_path / "ailleurs", "t", f"http://hote-{JETON}.test:1", f"user-{JETON}", f"mdp-{JETON}")
+    (racine / "x" / "proxy.json").symlink_to(temoin)  # un fichier valide en 0600, mais atteint par un lien
+    verifier_marqueur_invalide(sans, pilote().configuration(), racine)
+
+
+def test_configuration_d_un_proxy_json_qui_est_un_dossier_donne_le_marqueur(racine):
+    """`lire_proxy` laisse alors passer une `OSError` (`IsADirectoryError`, levée par `os.fdopen`) et non une
+    `ProxyInvalide` : `configuration()` ne doit pas planter pour autant."""
+    sans = pilote().configuration()
+    (racine / "x").mkdir(parents=True)
+    (racine / "x").chmod(0o700)
+    (racine / "x" / "proxy.json").mkdir()
+    verifier_marqueur_invalide(sans, pilote().configuration(), racine)
+
+
+@pytest.mark.parametrize("cas", [{"mode": 0o644}, {"brut": "{pas du json"}], ids=["droits 0644", "json invalide"])
+def test_open_refuse_encore_apres_une_configuration_et_ne_prend_ni_verrou_ni_relais(racine, px, cas):
+    conduite = pilote()
+    ecrire_proxy(racine, "x", f"http://hote-{JETON}.test:3128", f"user-{JETON}", f"mdp-{JETON}", **cas)
+    assert conduite.configuration()["identite_proxy"] == "invalide"  # la campagne enregistre d'abord la configuration…
+    avant = set(threading.enumerate())
+    with pytest.raises(px.ProxyInvalide) as erreur:  # …puis `open()` refuse, aucun repli direct
+        conduite.open()
+    assert JETON not in str(erreur.value)
+    assert conduite._relais is None and conduite.identite_courante is None
+    assert not [fil for fil in set(threading.enumerate()) - avant if fil.is_alive()], "aucun fil de relais"
+    ident.ouvrir("x").liberer()  # le verrou de l'identité n'a pas été pris
 
 
 def test_aucune_option_de_campagne_ne_porte_le_proxy(racine):
@@ -641,6 +800,126 @@ def test_requete_simple_http_forme_absolue_par_les_deux_sortes_de_proxy(px, cibl
         assert "proxy-authorization" not in entetes and "bon-mdp" not in json.dumps(entetes)
     assert decisions == [("GET", "127.0.0.1", cible.port, "transmise")] * 2
     assert [c["port"] for c in amont.connexions] == [cible.port] * 2 and amont.refus == 0
+
+
+# Durcissement (RFC 7230 § 5.4) : le périmètre est jugé sur l'adresse absolue de la requête ; l'en-tête `Host` envoyé à
+# l'amont est donc celui de la cible jugée, jamais celui du client (qui pourrait viser un autre hôte virtuel).
+
+
+def entetes_vus_par_l_amont(amont) -> list[tuple[str, str]]:
+    """Les en-têtes de la requête telle que le faux proxy l'a reçue de la cible (HTTP : après sa réécriture en forme
+    d'origine ; SOCKS5 : ce que le relais envoie), dans l'ordre et avec leur casse."""
+    assert attendre(lambda: b"\r\n\r\n" in amont.octets_du_client), amont.octets_du_client
+    return entetes_de(amont.octets_du_client)
+
+
+def entetes_de(octets: bytes) -> list[tuple[str, str]]:
+    tete = octets.split(b"\r\n\r\n", 1)[0].decode("latin-1").split("\r\n")
+    return [(nom.strip(), valeur.strip()) for nom, _, valeur in (ligne.partition(":") for ligne in tete[1:])]
+
+
+@pytest.mark.parametrize(
+    "faux_hote", ["autre.exemple", "10.1.2.3:8080", ""], ids=["un autre nom", "une adresse", "vide"]
+)
+def test_le_host_du_client_est_remplace_par_celui_de_la_cible_jugee_a_la_meme_place(px, cible, amont, faux_hote):
+    juge = f"127.0.0.1:{cible.port}"
+    demande = (
+        f"GET {cible.url('/page?id=H')} HTTP/1.1\r\nAccept: text/html\r\nHost: {faux_hote}\r\nX-Test: 1\r\n\r\n"
+    ).encode("latin-1")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        reponse = echanger(port_de(relais), demande, 5)
+        decisions = vues(relais)
+    assert statut_de(reponse) == 200 and decisions == [("GET", "127.0.0.1", cible.port, "transmise")]
+    assert entetes_vus_par_l_amont(amont) == [
+        ("Accept", "text/html"),
+        ("Host", juge),  # à la place de celui du client
+        ("X-Test", "1"),
+        ("Connection", "close"),
+    ]
+    if faux_hote:
+        assert faux_hote.encode() not in amont.octets_du_client, "l'amont ne voit jamais le Host du client"
+    (requete,) = cible.requetes
+    assert requete["entetes"]["host"] == juge
+
+
+@pytest.mark.parametrize("ecriture", ["host", "HOST", "hOsT"])
+def test_le_nom_de_l_en_tete_host_se_comprend_sans_egard_a_la_casse(px, cible, amont, ecriture):
+    juge = f"127.0.0.1:{cible.port}"
+    demande = f"GET {cible.url('/page?id=C')} HTTP/1.1\r\n{ecriture}: autre.exemple\r\n\r\n".encode("latin-1")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        assert statut_de(echanger(port_de(relais), demande, 5)) == 200
+    assert entetes_vus_par_l_amont(amont) == [("Host", juge), ("Connection", "close")]
+    assert b"autre.exemple" not in amont.octets_du_client
+
+
+def test_sans_host_du_client_l_en_tete_est_ajoute_en_premiere_position(px, cible, amont):
+    juge = f"127.0.0.1:{cible.port}"
+    demande = f"GET {cible.url('/page?id=B')} HTTP/1.1\r\nAccept: text/html\r\n\r\n".encode("latin-1")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        reponse = echanger(port_de(relais), demande, 5)
+    assert statut_de(reponse) == 200
+    assert entetes_vus_par_l_amont(amont) == [("Host", juge), ("Accept", "text/html"), ("Connection", "close")]
+    (requete,) = cible.requetes
+    assert requete["entetes"]["host"] == juge
+
+
+def test_avec_le_bon_host_l_en_tete_part_inchange_a_sa_place(px, cible, amont):
+    juge = f"127.0.0.1:{cible.port}"
+    demande = (
+        f"GET {cible.url('/page?id=G')} HTTP/1.1\r\nAccept: text/html\r\nHost: {juge}\r\nX-Test: 1\r\n\r\n"
+    ).encode("latin-1")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        assert statut_de(echanger(port_de(relais), demande, 5)) == 200
+    assert entetes_vus_par_l_amont(amont) == [
+        ("Accept", "text/html"),
+        ("Host", juge),
+        ("X-Test", "1"),
+        ("Connection", "close"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "hotes",
+    [("JUGE", "deuxieme.exemple"), ("autre.exemple", "JUGE"), ("autre.exemple", "deuxieme.exemple")],
+    ids=["bon puis autre", "autre puis bon", "deux autres"],
+)
+def test_un_seul_host_part_meme_si_le_client_en_envoie_deux(px, cible, amont, hotes):
+    juge = f"127.0.0.1:{cible.port}"
+    premier, second = (juge if h == "JUGE" else h for h in hotes)
+    demande = (
+        f"GET {cible.url('/page?id=D')} HTTP/1.1\r\nHost: {premier}\r\nX-Test: 1\r\nHost: {second}\r\n\r\n"
+    ).encode("latin-1")
+    with relais_vers(px, amont, ("127.0.0.1",)) as relais:
+        assert statut_de(echanger(port_de(relais), demande, 5)) == 200
+    assert entetes_vus_par_l_amont(amont) == [("Host", juge), ("X-Test", "1"), ("Connection", "close")]
+    for autre in {premier, second} - {juge}:
+        assert autre.encode() not in amont.octets_du_client
+
+
+@pytest.mark.parametrize(
+    ("adresse", "attendu"),
+    [
+        ("http://127.0.0.1/x", "127.0.0.1"),  # port implicite : 80, omis
+        ("http://127.0.0.1:80/x", "127.0.0.1"),  # port 80 écrit : omis aussi
+        ("http://127.0.0.1:8080/x", "127.0.0.1:8080"),
+        ("http://nom.test:80/x", "nom.test"),
+        ("http://nom.test:8080/x", "nom.test:8080"),
+        ("http://[::1]/x", "[::1]"),  # IPv6 : entre crochets
+        ("http://[::1]:80/x", "[::1]"),
+        ("http://[::1]:8080/x", "[::1]:8080"),
+        ("http://[2001:db8::7]:81/x", "[2001:db8::7]:81"),
+    ],
+)
+def test_le_host_envoye_omet_le_port_80_et_met_l_ipv6_entre_crochets(px, adresse, attendu):
+    """Pas de vraie cible sur le port 80 : un amont HTTP qui note l'en-tête que le relais lui envoie, sans répondre."""
+    with AmontEnregistreur() as enregistreur:
+        amont = px.analyser(enregistreur.adresse, "u", "p")
+        with px.RelaisProxy(amont, ("*",), delai_s=5) as relais, ouvrir_connexion(port_de(relais)) as sock:
+            sock.sendall(f"GET {adresse} HTTP/1.1\r\nHost: autre.exemple\r\n\r\n".encode("latin-1"))
+            assert attendre(lambda: b"\r\n\r\n" in enregistreur.octets_recus), enregistreur.octets_recus
+        envoye = enregistreur.octets_recus
+    assert [valeur for nom, valeur in entetes_de(envoye) if nom.lower() == "host"] == [attendu]
+    assert b"autre.exemple" not in envoye
 
 
 def test_un_nom_inconnu_du_proxy_donne_502_et_rien_n_arrive_a_la_cible(px, cible, amont):

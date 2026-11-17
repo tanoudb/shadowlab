@@ -392,6 +392,30 @@ class AmontMuet(_Serveur):
         self._arret.wait()
 
 
+class AmontEnregistreur(AmontMuet):
+    """Comme `AmontMuet` (aucune réponse, jamais), mais note tout ce que le relais lui envoie : `octets_recus`, toutes
+    connexions confondues. De quoi lire l'en-tête exact d'une requête sans avoir de vraie cible (port 80, IPv6…)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._recu = bytearray()
+
+    @property
+    def octets_recus(self) -> bytes:
+        with self._verrou:
+            return bytes(self._recu)
+
+    def _servir(self, client: socket.socket) -> None:
+        while not self._arret.is_set():
+            if not select.select([client], [], [], 0.2)[0]:
+                continue
+            donnees = client.recv(65536)
+            if not donnees:
+                return
+            with self._verrou:
+                self._recu += donnees
+
+
 def attendre(condition, delai_s: float = 3.0) -> bool:
     """Vrai dès que `condition()` l'est, faux au bout de `delai_s` (les aides notent en fils, après la réponse)."""
     fin = time.monotonic() + delai_s
