@@ -1,0 +1,56 @@
+# Essai court : la porte d'entrée de l'Arena expire AU MILIEU d'une visite du sujet, dans un vrai Chrome.
+#
+# But : voir en vrai le cas qui a fait tomber une répétition : la porte expire pendant une page, et l'Arena sert son
+# défi à une photo chargée au défilement (JSON {"bloque_par":"defi-js"}, 403). Corrigé dans le code et couvert par des
+# tests, jamais vu en vrai. Un seul bras, `sujet` ; profil `enduranceporte150` (porte de 150 s, configs/arena/
+# profils-endurance-essai-porte.yaml ; 150 s et pas moins, pour sortir de la rafale de 120 s : voir ce fichier).
+# Vitrine de 60 annonces (SHADOWLAB_VITRINE_TAILLE=60) : 63 pages par passe complète (3 de liste, 60 fiches). La 1re
+# visite part d'une récolte neuve, donc d'une passe complète, et lit 40 pages : avec la lecture humaine (environ 8 s par
+# page), plusieurs minutes, donc plusieurs expirations de la porte en pleine visite. Les visites 2 et 3 reprennent la passe (23 pages restantes,
+# puis une passe incrémentale). 3 visites, espacées d'1 min (fixe, de la fin d'une visite au début de la suivante).
+#
+# Critère (tout doit être vrai) :
+#   - le défi revient en cours de visite, sur une photo si possible ;
+#   - le moteur repasse la porte sans alerte ; les 3 visites finissent réussies ;
+#   - l'identité reste `ok` ; aucune ligne dans la table `bannissements`.
+#
+# Durée estimée : 20 à 30 minutes (3 visites de 40, 23 puis 3 pages environ, lecture humaine, 2 écarts d'1 min).
+#
+# Préalables :
+#   1. Arena lancée, puis, AVEC le profil de l'essai :
+#        SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml uv run shadowlab arena appliquer
+#   2. Identité à usage unique : pour recommencer, changer le suffixe (`essai-porte-visite-2`…).
+# Commande (la variable aussi : la campagne lit le profil pour la durée de la porte) :
+#   SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml SHADOWLAB_VITRINE_TAILLE=60 caffeinate -i \
+#     uv run shadowlab campagne configs/experiments/essai-porte-en-visite.yaml
+# Dans le dossier isolé de la course : `scripts/course.sh demarrer` avec COURSE_ENV=configs/courses/i9-essai-porte.env.
+# Après l'essai, sans la variable : uv run shadowlab arena appliquer
+#
+# Où regarder le résultat :
+#   - table `decisions`, détecteur `defi-js` : `emis` sur un chemin de photo /lab/vitrine/photos/…, puis `valide` ;
+#   - événements `porte_ressource` et `porte_repassage` de l'état de la récolte du bras (dossier de la campagne,
+#     recolte/sujet-enduranceporte150) ;
+#   - `porte_repassages` dans les détails du passage (runs.drapeaux, details_scenario) ;
+#   - table `bannissements` : vide ; état de l'identité essai-porte-visite-1 : `ok` (outputs/identites/) ;
+#   - `uv run shadowlab course bilan <n°>` lit le bras `sujet` (aucune_alerte, porte_apres_sa_duree…) ; les autres bras
+#     n'existent pas ici, donc le verdict global n'est pas « tenu » : lire le bloc sujet seulement.
+experiment:
+  name: essai_porte_en_visite
+  description: >-
+    Essai court : porte de 150 s (profil enduranceporte150) qui expire au milieu d'une visite du sujet, vitrine de 60
+    annonces, 3 visites de 40 pages au plus, un seul bras.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: essai-porte-visite-1}
+  protections: [enduranceporte150]
+  scenarios: [visite]
+  repetitions: 3
+  pages_par_visite: 40
+  espacement: {mode: fixe, minutes: 1}
+  concurrency: 1
+  monde: serie
+  seed: 20276150
+  output: [json, html]
