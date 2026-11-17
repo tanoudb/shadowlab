@@ -213,6 +213,9 @@ def etat(
         etat_course = FINIE
     elif sujet is None and campagne_finie:
         etat_course = FINIE
+    elif sujet is not None and sujet["etat"] != "actif":  # `complet` : toutes ses visites écrites, avant l'échéance
+        etat_course = ARRETEE
+        raisons.append(f"le sujet ({sujet['label']}) n'a plus de visite à faire avant l'échéance ({sujet['etat']})")
     elif campagne_finie:
         etat_course = ARRETEE
         raisons.append(f"campagne finie avant l'échéance (état {statut})")
@@ -227,7 +230,7 @@ def etat(
                 continue
             if b["retard_min"] is not None and b["retard_min"] > RETARD_ANORMAL_MIN:
                 raisons.append(
-                    f"retard anormal : {b['label']} devait commencer à {b['prochaine']}, "
+                    f"retard anormal : {b['label']} devait commencer à {_heure(b['prochaine'])}, "
                     f"{b['retard_min']:g} min de retard"
                 )
             if b["en_cours"] is not None and b["en_cours"]["minutes"] > BLOCAGE_MIN:

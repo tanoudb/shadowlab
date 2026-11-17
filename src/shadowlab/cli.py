@@ -582,7 +582,7 @@ def _course_etat(args: argparse.Namespace, reglages) -> int:
             print("Erreur : aucune campagne dans la base", file=sys.stderr)
             return course_etat.CODE_INTROUVABLE
         rapport = course_etat.etat(cx, numero, dossier_campagne(reglages, numero), session=args.session)
-    except (LookupError, sqlite3.Error) as erreur:
+    except (LookupError, ValueError, sqlite3.Error) as erreur:  # inconnue ou illisible : 3, jamais 1 (« arrêtée »)
         print(f"Erreur : {erreur}", file=sys.stderr)
         return course_etat.CODE_INTROUVABLE
     finally:

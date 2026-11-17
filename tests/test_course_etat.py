@@ -284,6 +284,27 @@ def test_visites_manquees_comptees_par_bras(base, reglages):
     assert bras(etat(cx, x, reglages))["manquees"] == 1
 
 
+def test_sujet_sans_visite_a_faire_avant_l_echeance_est_arrete_meme_si_un_temoin_est_actif(base, reglages):
+    """« Démarrage impossible » écrit toutes les répétitions restantes en erreur : le sujet est `complet`, sans note
+    d'échéance, alors qu'un témoin tourne encore."""
+    cx, x = base
+    configuration = json.loads(cx.execute("SELECT configuration FROM experiments WHERE id = ?", (x,)).fetchone()[0])
+    configuration["engines"][0]["visites"] = 2
+    cx.execute("UPDATE experiments SET configuration = ? WHERE id = ?", (json.dumps(configuration), x))
+    fait(cx, x, "sujet", 1, 90)
+    fait(cx, x, "sujet", 2, 60, reussie=False)
+    rapport = etat(cx, x, reglages)
+    assert bras(rapport)["etat"] == "complet" and bras(rapport, "temoin-negatif")["etat"] == "actif"
+    assert rapport["etat"] == "arrêtée" and rapport["code"] == 1
+
+
+def test_configuration_illisible_code_3_pas_1(base, reglages, capsys):
+    cx, x = base
+    cx.execute('UPDATE experiments SET configuration = \'{"name": "x"}\' WHERE id = ?', (x,))
+    assert main(["course", "etat", str(x)]) == 3
+    assert "Erreur" in capsys.readouterr().err
+
+
 def test_campagne_inconnue_code_3(base, reglages, capsys):
     cx, x = base
     with pytest.raises(LookupError):
@@ -354,6 +375,21 @@ def test_la_cadence_ecrit_la_note_prevue_avant_d_attendre_en_mode_ordonnanceur()
     assert espacement.au_cadran(prevues[0]["ecrite"], horloge.now()) == datetime(2026, 11, 17, 9, 0)
 
 
+def test_hors_plage_la_cadence_ecrit_le_soir_une_note_qui_vise_le_lendemain_matin():
+    """Vraie cadence, horloge factice : après la dernière heure de début (fermeture à 23 h), le créneau est le lendemain
+    à 8 h au plus tôt ; la note est écrite à 22 h 45, avant l'attente de la nuit."""
+    soir = datetime(2026, 11, 17, 22, 45)
+    horloge = Horloge(soir)
+    faites = [(soir - timedelta(minutes=30), soir - timedelta(minutes=20), 15)]
+    c, notes = cadence_notee(horloge, "ordonnanceur", depart=soir - timedelta(days=1), faites=faites, jours=7)
+    creneau = c.attendre()
+    prevue = next(n for n in notes if n["genre"] == "prevue")
+    ecrite = espacement.au_cadran(prevue["ecrite"], soir)
+    prochaine = espacement.au_cadran(prevue["prevue"], soir)
+    assert ecrite == soir and prochaine == creneau.debut
+    assert prochaine.date() == datetime(2026, 11, 18).date() and prochaine.hour >= 8
+
+
 def test_la_cadence_ecrit_la_note_prevue_en_mode_fixe():
     horloge = Horloge(datetime(2026, 11, 17, 9, 0))
     c, notes = cadence_notee(horloge, "fixe", minutes=10)
@@ -414,13 +450,7 @@ def test_les_lecteurs_de_cadence_jsonl_ignorent_le_genre_prevue(base, reglages):
         )  # fmt: skip
         creneau = cadence._prochain()
         rapport = course.bilan(cx, x, dossier)
-        return (
-            faites,
-            creneau.debut,
-            len(cadence._notes),
-            rapport["bras"]["sujet"]["visites_manquees"],
-            rapport["verdict"],
-        )
+        return faites, creneau.debut, len(cadence._notes), rapport  # le bilan ENTIER : aucun critère ne bouge
 
     sans_prevue = lecture(sans)
     (dossier / campaigns.FICHIER_CADENCE).unlink()
@@ -489,7 +519,7 @@ def test_course_sh_etat_sans_numero_et_numero_invalide(depot_factice):
     r = subprocess.run(["bash", str(script), "etat"], capture_output=True, text=True, env=env)
     assert r.returncode == 0 and "course etat --session absente" in r.stdout
     r = subprocess.run(["bash", str(script), "etat", "x"], capture_output=True, text=True, env=env)
-    assert r.returncode != 0 and "entier" in r.stderr
+    assert r.returncode == 3 and "entier" in r.stderr  # une erreur d'usage n'est jamais lue « arrêtée » (1)
 
 
 def test_course_sh_etat_rend_3_si_la_course_n_est_pas_preparee(depot_factice):

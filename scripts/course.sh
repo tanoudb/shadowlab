@@ -111,10 +111,13 @@ case "$commande" in
     ;;
   etat)
     # Le résumé vient d'abord ; son code est celui du script, quoi qu'il arrive ensuite (docker éteint, chaîne
-    # injoignable) : gardé dans `code`, `set -e` ne l'interrompt pas. Course non préparée : code 3, comme le résumé.
-    [ -d "$COURSE" ] || { echo "course.sh : dossier de la course absent : $COURSE (lancer d'abord « preparer »)" >&2; exit 3; }
-    [ $# -le 1 ] || erreur "usage : etat [<n°>]"
-    [ $# -eq 0 ] || case "$1" in ''|*[!0-9]*) erreur "le numéro de campagne doit être un entier" ;; esac
+    # injoignable) : gardé dans `code`, `set -e` ne l'interrompt pas. Ici aucune erreur ne sort en 1 (« arrêtée ») ni
+    # en 2 (« retard ») : course non préparée, usage ou environnement illisibles = 3, comme « introuvable ».
+    introuvable() { echo "course.sh : $*" >&2; exit 3; }
+    [ -d "$COURSE" ] || introuvable "dossier de la course absent : $COURSE (lancer d'abord « preparer »)"
+    [ -f "$FICHIER_ENV" ] || introuvable "fichier d'environnement absent : $FICHIER_ENV"
+    [ $# -le 1 ] || introuvable "usage : etat [<n°>]"
+    [ $# -eq 0 ] || case "$1" in ''|*[!0-9]*) introuvable "le numéro de campagne doit être un entier" ;; esac
     charger_env
     if session_vivante; then etat_session=vivante; else etat_session=absente; fi
     code=0
