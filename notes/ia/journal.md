@@ -3867,3 +3867,25 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Place rendue** : pile arrêtée, image amd64 effacée, cache de construction effacé par identifiant (images 26,79 Go puis 22,06 Go ; cache 4,95 Go puis 0,15 Go) ; `df` 23 Gio avant et après (le Mac ne récupère pas tout de suite) ; base copiée dans `outputs/fumee-linux-webgl-2026-11-18.sqlite3` du dossier principal.
 - **Corrections de relecture** : « Chrome de série » reformulé en « Chrome lancé par Patchright » (un Chrome lancé à la main n'a pas été essayé) ; D-50 barrée sur la partie fausse ; la sonde ne peut pas montrer le correctif (elle ne passe pas par le moteur) : la preuve est la campagne 11 dans la base.
 - **Reste** : `devices_vide`, `voices_vide`, `duree_pages_reguliere` ; une règle « WebGL absent » de l'Arena serait une étape à part ; llvmpipe annonce « 128 bits » sous Rosetta (non vérifié sur un vrai x86_64).
+
+## 2026-11-18 (0h50) — Claude (Fable 5.2, coordination) — Course I9 : NON TENUE à la 6ᵉ visite du sujet ; D-102 contrôlée
+
+- **Contrôle quotidien (0 h 31)** : `scripts/course.sh etat` rend 2 (« sujet a un passage en_cours depuis 168,8 min ») ;
+  `scripts/course.sh bilan 1` rend 1 : `aucun_bannissement` non tenu (1 bannissement dans le monde du sujet). Les trois témoins
+  tiennent tous leurs critères. Récolte du sujet : 67 annonces sur 300.
+- **Faits lus dans la base de la course (lecture seule)** : visite 6 du sujet le 17/11 à 21 h 43 min 12 s (passage 19, session
+  `fd227558…`). Fiche AN-000068 (4,4 s, 0 défilement), liste (3,4 s, 0 défilement), fiche AN-000069 ; à 21 h 43 min 27,987 s l'Arena
+  bloque une photo : `composite` 0,6 (seuil 0,5 du profil `endurance`), signaux `pas_de_scroll` et `navigation_lineaire` ; visiteur
+  `0405c585…` banni (`detecte:composite`). Visite 5, réussie : première fiche sans défilement, puis la liste avec 58 défilements.
+  Même fenêtre aux deux visites (hauteur intérieure 770, visible, focus) : la cause est le tirage du rythme de lecture du moteur.
+- **Second défaut** : après le refus (photos, puis l'appel de données en 403), plus aucune requête ni ligne de journal ; le passage
+  est resté `en_cours` plus de 3 heures, l'identité est restée notée `ok` ; fil principal en attente dans la boucle de Playwright
+  (échantillon `sample`, sans rien toucher). La course n'a pas été arrêtée : la décision revient à Ethan.
+- **Non établi** : la part des visites qui tirent cet enchaînement (ni la soirée 131 ni les répétitions ne l'avaient montré) ;
+  l'endroit exact de l'attente sans borne.
+- **Lancé** : un sous-agent (Opus, worktree) pour comprendre et corriger les deux défauts du moteur, tests d'abord, sans toucher à
+  l'Arena ni à la course ; essais sur l'Arena par la coordination après fusion.
+- **D-102 (WebGL sous Linux sans carte graphique)** : vérifiée dans `outputs/fumee-linux-webgl-2026-11-18.sqlite3` (campagne 11 : 15
+  sur 15 aux six niveaux, `webgl.disponible` vrai et canvas stable sur 90 empreintes sur 90, contre 0 sur 90 à la campagne 6 ;
+  moteur de rendu `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 128 bits), OpenGL 4.5)`), fusionnée en local (`b13a9d1`) ; suite complète en
+  cours avant de pousser.
