@@ -216,3 +216,15 @@ def test_l_application_refuse_de_demarrer_s_il_reste_un_nom_interdit(reglages_pu
     monkeypatch.setattr(script_public, "REMPLACEMENTS_OBSERVATEUR", script_public.REMPLACEMENTS_OBSERVATEUR[1:])
     with pytest.raises(script_public.ScriptPublicInvalide, match="nom interdit"):
         fabriquer(reglages_publics)
+
+
+# === Le script de partage du résultat (partage.js) ====================================================
+
+
+def test_partage_js_est_servi_sans_citer_le_projet(client) -> None:
+    assert "partage.js" in application.FICHIERS_PUBLICS
+    r = client.get("/public/static/partage.js")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/javascript")
+    assert not _noms_trouves(r.text)
+    assert not _noms_trouves("\n".join(f"{k}: {v}" for k, v in r.headers.multi_items()))

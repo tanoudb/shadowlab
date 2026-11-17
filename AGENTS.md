@@ -91,7 +91,12 @@ recommander des optimisations.
   caché par défaut (`SHADOWLAB_PUBLIC_VITRINE=1` pour le rallumer). Plafond : 500 sessions par jour. **Accueil court** (D-80, 14/11) : une phrase, un seul bouton
   « J'accepte et je commence » (plus de case à cocher), « 2 minutes », détail replié, menu du haut réduit à la marque
   et à la langue. **Le site ne cite jamais le projet ni le laboratoire** (D-81), script d'observation compris :
-  copie dérivée par `public/script_public.py`, garde `tests/test_public_sans_marque.py`. Avant une annonce publique, à la charge
+  copie dérivée par `public/script_public.py`, garde `tests/test_public_sans_marque.py`. **Résultat de fin de session**
+  (D-97, 17/11, branche `claude/resultat-public-a943e4`, pas encore fusionnée) : « Terminer et voir mon résultat » montre
+  le verdict de nos détecteurs aux niveaux 01 à 07, avec les raisons en six familles de mots simples, et un bouton de
+  partage (adresse nue du site). Calcul par `rejeu._rejouer_session` dans un sous-processus du labo
+  (`python -m shadowlab.resultat_public`), rien d'écrit en base, aucun résultat pendant la session, 4 pages au moins
+  (sinon « Encore un peu »), notice `2026-11-17.2` ; détail dans `docs/site-public.md`, « Résultat de fin de session ». Avant une annonce publique, à la charge
   d'Ethan : un nom d'hôte stable (tunnel nommé sur un domaine, pas le tunnel rapide), une règle de limitation de
   débit chez Cloudflare, le plafond de sessions réglé ; liste dans `docs/site-public.md` (« Avant d'annoncer le
   site publiquement »). Non essayé : Safari, iPhone, Firefox. Vrai tunnel
@@ -367,9 +372,11 @@ src/shadowlab/
 ├── cli.py           # Interface ligne de commande
 ├── reports.py       # Rapports HTML/CSV/JSON
 ├── rejeu.py         # Rejeu des sessions humaines contre chaque niveau (jalon A)
+├── resultat_public.py  # Résultat de fin de session du site public (D-97) : sous-processus, lecture seule, même code que le rejeu
 ├── labo.py          # Sert l'interface construite (frontend/dist) sous /labo
 ├── public/          # Application publique : étude « Humain ou robot ? », réseau social fictif (social.py), relevé (trace.py,
-│                    #   static/releve.js), textes des deux langues (textes.py) ; seule à se mettre en ligne
+│                    #   static/releve.js), textes des deux langues (textes.py), résultat de fin de session (resultat.py,
+│                    #   static/partage.js, D-97) ; seule à se mettre en ligne
 └── tableau.py       # Ancien tableau de bord (déprécié, remplacé par /labo)
 frontend/            # Interface React + TypeScript (Vite), consomme /api
 │   ├── src/screens/ # Configurer, Experiences, Suivi, Passage, Comparer, Moteurs, Protections

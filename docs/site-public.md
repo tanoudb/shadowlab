@@ -32,7 +32,10 @@ Une petite application Python, **à part du laboratoire**, faite pour être mise
 - la feuille des pages de l'étude, `public.css`, sous `/public/static/` (même liste fermée) et sous
   `/contact/style.css` pour les pages de contact ;
 - le relevé enrichi, `releve.js` (D-76), sous `/public/static/` (même liste fermée), chargé seulement pendant une
-  session sur les pages des deux sites de démonstration : voir « Relevé enrichi ».
+  session sur les pages des deux sites de démonstration : voir « Relevé enrichi » ;
+- le résultat de fin de session (D-97) : à « Terminer », puis sur « Ma session », le verdict de nos détecteurs niveau
+  par niveau, et le bouton « Partager mon résultat » (`partage.js`, sous `/public/static/`, même liste fermée) : voir
+  « Résultat de fin de session ».
 
 **Deux langues** (D-75), français et anglais, sans cookie de plus : la langue d'une page est celle du préfixe de
 l'adresse (`/fr`, `/en`), sinon celle notée avec l'accord de la session en cours, sinon celle préférée par le
@@ -46,7 +49,10 @@ une seule fois dans `public/pages.py`. Le résumé de ce qui est relevé, sur l'
 Toute page servie en `GET` répond aussi à `HEAD`, sans corps (D-77) ; un chargement de l'accueil n'est compté qu'en
 `GET`. Tout le reste répond 404 : l'API, `/labo`, `/tableau`, la documentation OpenAPI, `/manuel`, la connexion de
 test, la démo reCAPTCHA, `/lab/verdict` et les autres pages du labo. Ces modules ne sont même pas importés
-(ni l'API, ni le gardien, ni le frontal, ni les détecteurs, ni les moteurs).
+(ni l'API, ni le gardien, ni le frontal, ni les détecteurs, ni les moteurs). Seule exception, dans un processus à
+part : le calcul du résultat de fin de session (`python -m shadowlab.resultat_public`, D-97) charge le rejeu, donc le
+gardien et les détecteurs, le temps d'un calcul ; l'application, elle, ne les importe pas
+(`test_aucun_module_du_labo_n_est_charge`).
 
 L'application du laboratoire (`shadowlab site`) ne se met **jamais** en ligne : son API lance des
 navigateurs vers n'importe quelle adresse.
@@ -698,6 +704,66 @@ avant correction, inchangés ; corrections : `tests/test_public_corrections4.py`
 - Les envois `trace` (D-76) et les requêtes `POST /lab/collecte` qui les portent sont dans la base, mais le rejeu
   les ignore (`test_rejeu_ignore_les_traces` : même résultat avec et sans) ; aucun détecteur ne les lit encore.
 
+## Résultat de fin de session (D-97)
+
+À la fin, le visiteur voit si nos détecteurs l'ont pris pour un humain ou pour un robot, niveau par niveau, et peut
+partager son score. Décidé par Ethan le 17/11 (« oui bonne idee ») ; choix et raisons : D-97.
+
+**Parcours.**
+- « Terminer et voir mon résultat » (bandeau des deux sites, « Ma session ») : avec au moins 4 pages vues (`PAGES_MIN`,
+  lignes `observations_js` de sorte `empreinte`), la session est close et la page de fin montre le résultat. En dessous,
+  la session reste ouverte (la page le dit) : « Encore un peu », avec « Continuer la visite » et « Terminer quand même » (`force=1`,
+  session close sans verdict). Une session n'est donc comptée « terminée » qu'à ce moment-là.
+- « Ma session » montre le résultat d'une session que la base dit terminée (ou arrivée au bout de sa durée), jamais
+  pendant la session, même sans le cookie `slp-session`.
+- Une session acceptée sous une notice d'avant `2026-11-17.1` n'a pas de résultat (une phrase le dit).
+- États sans verdict : trop courte, trop longue (plus de 80 pages), calcul indisponible, calcul en cours (la page se
+  recharge seule au bout de 3 s par `<meta http-equiv="refresh">`, sans script).
+
+**Calcul** (`src/shadowlab/resultat_public.py`, côté laboratoire, lancé par `public/resultat.py`).
+- Un sous-processus `python -m shadowlab.resultat_public` : entrée `{"base", "jeton"}` sur l'entrée standard (jamais dans
+  les arguments, donc jamais dans la liste des processus), base publique ouverte en lecture seule, priorité basse
+  (`nice` 10), `SHADOWLAB_PROFILS_EXTRA` retirée. Il refait la décision des niveaux 01 à 07 avec
+  `rejeu._rejouer_session(..., publique=True)`, le code de `shadowlab rejeu` : aucune règle recopiée.
+- Sortie : verdict par niveau et familles de raisons, rien d'autre (ni nom de détecteur, ni signal, ni jeton). Le site
+  la contrôle clé par clé (`resultat.valider`) avant de l'afficher. Sur une erreur, le sous-processus n'écrit rien,
+  pas même sur sa sortie d'erreur.
+- Garde-fous de charge : un seul calcul à la fois pour tout le site, un seul par session, 30 s au plus (puis le
+  processus est tué), aucun calcul au-delà de 80 pages, 4 s d'attente avant la page « calcul en cours ». Mesuré : de 0
+  à 0,5 s par session réelle (7 sessions, jusqu'à 18 pages), 0,43 s pour 8 pages fabriquées.
+- Rien n'est écrit : le résultat reste 15 minutes en mémoire (1 000 sessions au plus ; un échec, 2 minutes), il est recalculé
+  si le visiteur revient plus tard sur « Ma session », oublié à la suppression de la session. Un redémarrage de
+  l'application vide ce cache.
+
+**Ce qu'on montre.** Le verdict de chaque niveau (« Humain » ou « Robot », en toutes lettres, avec ✓ ou ✕) ; une phrase
+de tête sur les niveaux 02 à 07 (le 01 n'a aucune protection) ; les raisons en six familles de mots simples
+(`FAMILLE_DE` : chaque détecteur, plus les motifs `composite` et `honeypot`, a une famille, test à l'appui), celles du
+moment où un niveau aurait arrêté la session ; un message honnête ; ce que le résultat mesure (replié) ; « non
+enregistré » ; puis l'identifiant et la suppression, comme avant.
+
+**Partage.** Le paragraphe visible donne la phrase du score et l'adresse nue du site (`schéma://hôte/`, l'hôte déjà
+contrôlé par la garde). `partage.js` ouvre le partage du téléphone (`navigator.share`, adresse `location.origin` + « / »),
+sinon copie la phrase et l'adresse ; il n'est chargé que par une page qui montre un verdict. Rien de la session dans ce
+qui est partagé. Les liens partagés pendant le tunnel rapide meurent avec son adresse.
+
+**Ce que le résultat ne mesure pas.** Le site d'étude ne fait passer ni défi, ni CAPTCHA, ni WAF, et le rejeu public
+écarte TLS, HTTP/2 et la corrélation entre sessions (« Limites connues, pour le rejeu de l'étape 1.7 ») : le résultat ne
+juge que l'empreinte et le comportement.
+
+**Tests.** `tests/test_resultat_public.py` (calcul : même verdict que `_rejouer_session`, familles, seuils, sortie sans
+nom de détecteur ni jeton, base inchangée, ligne de commande, profils ajoutés ignorés, erreurs muettes) ;
+`tests/test_public_resultat.py` (pages FR et EN, « Encore un peu », calcul lent, échec gardé, oracle, ancienne notice,
+cache et suppression, trois cookies, CSP, partage sans jeton, notice, `valider`, sous-processus : délai, taille, jeton
+par l'entrée standard). `partage.js` est aussi couvert par `tests/test_public_sans_marque.py`.
+
+**Captures** (17/11, instance d'essai sur le port 8795, base d'essai) : `outputs/resultat-public/`. « Humain partout » :
+résultat injecté (aucun robot de nos essais ne passe partout). « Arrêté » : calcul réel, Chromium sans tête et sans geste
+humain, pris pour un robot de 02 à 07. « Mixte » : résultat injecté, arrêté de 05 à 07 avec deux familles (le cas qu'un
+humain a le plus de chances de voir), en clair et en sombre. « Trop courte » : une page, « Encore un peu », puis
+« Terminer quand même ». Bandeau du réseau social à 360 px. Bouton de partage cliqué dans un vrai Chromium : la copie
+donne la phrase, une espace et l'adresse nue, sans jeton, et affiche « Copié » ; un partage natif simulé réussi ne
+copie rien ; un échec simulé retombe sur la copie.
+
 ## Message à envoyer avec le lien
 
 Prêt à copier. Les sessions utiles sont celles faites **sur ordinateur** (le plan en demande au moins 10) ;
@@ -707,8 +773,9 @@ Version courte :
 
 > Tu peux me rendre un service de 5 minutes ? Depuis un ordinateur (pas le téléphone), ouvre ce lien :
 > LIEN
-> C'est un faux réseau social de photos. Tu coches la case, « Commencer la session », tu te balades comme sur
-> un vrai (quelques publications, quelques profils), puis « Terminer ma session » en haut. Ça m'aide à vérifier
+> C'est un faux réseau social de photos. Tu cliques sur « J'accepte et je commence », tu te balades comme sur
+> un vrai (quelques publications, quelques profils), puis « Terminer et voir mon résultat » : tu sauras si mes
+> détecteurs t'ont pris pour un robot. Ça m'aide à vérifier
 > qu'un détecteur de robots ne prend pas les vraies personnes pour des robots. Le site relève ton navigateur et
 > ta façon de naviguer (souris, clics, défilement, rythme des touches), mais jamais ce que tu tapes, ni ton nom,
 > ni ton e-mail, ni ton adresse IP, et tu peux tout effacer d'un clic.
@@ -719,9 +786,10 @@ Version détaillée, pour quelqu'un qui veut savoir avant de cliquer :
 > j'ai besoin de quelques visites de vraies personnes sur un faux réseau social de photos.
 > - Depuis un ordinateur, ouvre LIEN et lis la page d'accueil (et la notice complète, à un clic) : elles disent
 >   exactement ce qui est relevé.
-> - Coche la case, clique sur « Commencer la session », puis navigue 5 à 10 minutes comme tu le ferais
+> - Clique sur « J'accepte et je commence », puis navigue 5 à 10 minutes comme tu le ferais
 >   vraiment : ouvre des publications, des profils, fais défiler, change de page. Garde l'onglet au premier plan.
-> - Clique sur « Terminer ma session » dans le bandeau du haut.
+> - Clique sur « Terminer et voir mon résultat » : le site te montre, niveau par niveau, si mes détecteurs t'ont pris
+>   pour un humain ou pour un robot.
 > Ce qui est relevé : les caractéristiques techniques de ton navigateur et ta façon de naviguer, sous forme
 > de nombres (mouvements de la souris, clics, défilement, l'instant où une touche est enfoncée puis relâchée).
 > Jamais ce que tu tapes (ni le texte, ni les touches), ni ton nom, ni ton e-mail, ni ton adresse IP. Tout est effacé au bout de 90 jours, et la page « Ma session » permet de tout

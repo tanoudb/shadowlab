@@ -217,6 +217,26 @@ def session_existe(cx: sqlite3.Connection, jeton: str) -> bool:
     return ligne is not None
 
 
+def pages_vues(cx: sqlite3.Connection, jeton: str) -> int:
+    """Nombre de pages d'une session avec empreinte : les lignes `observations_js` de sorte « empreinte » (le même
+    compte que le calcul du résultat côté laboratoire)."""
+    ligne = cx.execute(
+        "SELECT COUNT(*) FROM observations_js WHERE session_token = ? AND kind = 'empreinte'", (jeton,)
+    ).fetchone()
+    return int(ligne[0])
+
+
+def version_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
+    """Version de la notice acceptée avec la session (`protection_config`), ou None (absente, illisible)."""
+    ligne = cx.execute("SELECT protection_config FROM runs WHERE session_token = ?", (jeton,)).fetchone()
+    try:
+        accord = json.loads(ligne[0]) if ligne and ligne[0] else None
+    except ValueError:
+        return None
+    version = accord.get("texte_information") if isinstance(accord, dict) else None
+    return version if isinstance(version, str) else None
+
+
 def langue_de_session(cx: sqlite3.Connection, jeton: str) -> str | None:
     """Langue notée avec l'accord de la session (`protection_config`), ou None (session absente, accord plus ancien
     que les deux langues, valeur illisible). L'appelant la vérifie contre les langues servies."""

@@ -42,7 +42,7 @@ COOKIES = {"__Host-slp-csrf", "__Host-slp-session", "__Host-slp-droits"}
 MARQUEURS = {
     "fr": (
         "Ma session",
-        "Terminer ma session",
+        "Terminer et voir mon résultat",
         "Supprimer ma session",
         "Revenir",
         "Participer",
@@ -55,7 +55,7 @@ MARQUEURS = {
     ),
     "en": (
         "My session",
-        "End my session",
+        "End and see my result",
         "Delete my session",
         "Back to",
         "Take part",
@@ -226,7 +226,7 @@ def test_langue_de_la_session_avant_celle_du_navigateur(client):
     assert langue_html(client.get("/session", headers=francais).text) == "en"
     assert langue_html(client.get("/contact", headers=francais).text) == "en"
     bandeau = bandeau_de(client.get("/lab/vitrine", headers=francais).text)
-    assert "End my session" in bandeau and "Terminer ma session" not in bandeau
+    assert "End and see my result" in bandeau and "Terminer et voir mon résultat" not in bandeau
     assert langue_html(client.get("/fr", headers=francais).text) == "fr", "le préfixe passe avant la session"
 
 
@@ -256,7 +256,7 @@ def parcours_complet(client: TestClient, langue: str) -> dict[str, str]:
     pages["vitrine-en-session"] = bandeau_de(client.get("/lab/vitrine", headers=autre).text)
     pages["accueil-en-session"] = client.get("/", headers=autre).text
     champs = champs_du_formulaire(pages["ma-session"], "/session/terminer")
-    merci = client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE, **autre})
+    merci = client.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE, **autre})
     assert merci.status_code == 200
     pages["merci"] = merci.text
     champs = champs_du_formulaire(merci.text, "/session/supprimer")
@@ -366,12 +366,12 @@ PUBLIC_CSS = Path(__file__).parents[1] / "src" / "shadowlab" / "public" / "stati
 TEXTES_ACCUEIL = {
     "fr": (
         "Humain ou robot ?",
-        "Baladez-vous 2 minutes sur un faux réseau social de photos. Votre façon de naviguer nous aide à mieux "
-        "distinguer un humain d'un robot.",
+        "Baladez-vous 2 minutes sur un faux réseau social de photos, puis découvrez si nos détecteurs vous ont "
+        "pris pour un robot.",
     ),
     "en": (
         "Human or bot?",
-        "Spend 2 minutes on a fake photo-sharing network. The way you browse helps us tell humans from bots.",
+        "Spend 2 minutes on a fake photo-sharing network, then find out whether our detectors took you for a bot.",
     ),
 }
 LIEN_HABITAT = {
@@ -630,7 +630,7 @@ def frequentation(reglages: ReglagesPublics) -> list[tuple]:
 
 def terminer_session(client: TestClient):
     champs = champs_du_formulaire(client.get("/session").text, "/session/terminer")
-    r = client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE})
+    r = client.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE})
     assert r.status_code == 200
     return r
 

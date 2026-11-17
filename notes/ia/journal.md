@@ -3723,3 +3723,32 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Premières visites** (11 h 21 à 11 h 23) : sujet réussi (9 pages, identité `ok`), sentinelle réussie, négatif réussi, classique arrêté. Porte du sujet : cookie `sl_defi` de 86 400 s dans son Chrome. `scripts/course.sh etat` sans tube : code 0.
 - **Fichiers** : `AGENTS.md` (état « en cours », contrôle quotidien, tests à 2 351), D-96 (« Lancée »), `docs/PLAN.md`, `notes/ia/contexte.md`.
 - **Reste** : contrôle des témoins le 18/11 et contrôle quotidien (coordination) ; bilan à l'échéance par une session neuve (`scripts/course.sh bilan 1`, D-96).
+
+## 2026-11-17 — Claude (Opus 5.5, session « résultat public ») — Résultat de fin de session sur le site public (D-97)
+- **Fait** (tests d'abord, vus en échec, puis code par deux sous-agents Sonnet ; relecture indépendante) : à la fin d'une
+  session, le site public montre le verdict de nos détecteurs aux niveaux 01 à 07 (« Humain » ou « Robot »), les raisons
+  en six familles de mots simples, un message honnête et un bouton de partage (adresse nue du site). Calcul par
+  `rejeu._rejouer_session` dans un sous-processus du labo (`python -m shadowlab.resultat_public`, lecture seule, jeton sur
+  l'entrée standard), rien d'écrit en base (cache en mémoire 15 min, un échec 2 min), aucun résultat pendant la session
+  (état lu dans la base), seuil de 4 pages (« Encore un peu » sinon), notice `2026-11-17.1`, bouton de fin « Terminer et
+  voir mon résultat », accroche de l'accueil qui promet le résultat.
+- **Fichiers** : nouveaux `src/shadowlab/resultat_public.py`, `src/shadowlab/public/resultat.py`,
+  `src/shadowlab/public/static/partage.js`, `tests/test_resultat_public.py`, `tests/test_public_resultat.py` ; modifiés
+  `public/app.py`, `donnees.py`, `pages.py`, `textes.py`, `social.py`, `static/public.css`, `static/social.css`, six fichiers
+  `tests/test_public*.py` (nouveau libellé, `force=1` sous le seuil, modules interdits, `partage.js` sans marque) ;
+  `docs/site-public.md` (section « Résultat de fin de session », messages à envoyer), `docs/DECISIONS.md` (D-97), `AGENTS.md`.
+- **Mesuré** : rejeu de 0 à 0,5 s par session réelle (base publique en lecture seule, 7 sessions) ; sous-processus 0,43 s
+  pour 8 pages fabriquées. Calcul réel sur l'instance d'essai : un Chromium sans tête, sans geste humain, est pris pour un
+  robot de 02 à 07 (famille « navigateur incohérent »).
+- **Vérifié** : tests du site public, du calcul et du rejeu verts (712), tests rapides 2 335 verts (2 sautés, 49 avec navigateur non lancés), lint propre ;
+  captures `outputs/resultat-public/` (téléphone 390 px et ordinateur, FR et EN : humain partout = résultat injecté,
+  arrêté = calcul réel, mixte 05 à 07 = résultat injecté, aussi en mode sombre, trop courte et « Encore un peu » ;
+  bandeau du réseau social à 360 px) ; bouton de partage cliqué dans Chromium (copie exacte sans jeton, partage natif
+  simulé : réussite sans copie, échec avec repli sur la copie). « Encore un peu » dit que la session reste ouverte, et la
+  notice (`2026-11-17.2`) annonce cette étape.
+- **Relecture indépendante** : aucun défaut bloquant ; corrigés : lectures SQLite de « Ma session » et « Terminer » hors de
+  la boucle d'événements, échec gardé 2 min au lieu de 15, seuil de la notice lié à `PAGES_MIN`.
+- **Non vérifié** : Safari, iPhone, Firefox ; le partage natif d'un vrai téléphone ; le site en ligne (rien n'y est déployé) ; la suite avec navigateurs (course de 7 jours en cours).
+- **Reste, à la charge d'Ethan ou de la coordination** : fusionner la branche (conflit attendu en ajout dans
+  `docs/DECISIONS.md`, D-96 étant sur `niveau-authentifie-perimetre` : garder les deux) ; relancer l'application en ligne
+  pour servir la nouvelle version ; un nom d'hôte stable pour que les liens partagés durent.

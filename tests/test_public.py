@@ -107,9 +107,9 @@ def champs_du_formulaire(html: str, action: str) -> dict[str, str]:
 
 
 def terminer(client: TestClient):
-    """« Terminer ma session » : le bouton du bandeau des pages vitrine."""
+    """« Terminer et voir mon résultat » : le bouton du bandeau des pages vitrine."""
     champs = champs_du_formulaire(client.get("/lab/vitrine").text, "/session/terminer")
-    return client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE})
+    return client.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE})
 
 
 def ouvrir(reglages: ReglagesPublics):
@@ -227,6 +227,8 @@ def test_aucun_module_du_labo_n_est_charge():
         "shadowlab.detection",
         "shadowlab.correlation",
         "shadowlab.passages",
+        "shadowlab.resultat_public",  # le calcul du résultat se lance en sous-processus, jamais en import
+        "shadowlab.rejeu",
     }
     assert not interdits & charges
     assert not any(m.startswith("shadowlab.engines") for m in charges)
@@ -1119,7 +1121,9 @@ def test_terminer_exige_post_et_csrf(client, reglages_publics):
     attaque = client.post("/session/terminer", data=champs, headers={"Origin": "https://attaquant.example"})
     assert attaque.status_code == 403
     assert statut() == "en_cours"
-    assert client.post("/session/terminer", data=champs, headers={"Origin": ORIGINE}).status_code == 200
+    assert (
+        client.post("/session/terminer", data={**champs, "force": "1"}, headers={"Origin": ORIGINE}).status_code == 200
+    )
     assert statut() == "reussi"
 
 
@@ -1682,7 +1686,7 @@ def test_journal_ne_garde_que_les_erreurs(client, fichier_de_journal):
 
 
 def test_page_d_information_dit_la_verite_sur_le_journal_et_l_adresse(client):
-    assert VERSION_INFORMATION == "2026-11-14.9", "le texte a changé : nouvelle version du texte accepté"
+    assert VERSION_INFORMATION == "2026-11-17.2", "le texte a changé : nouvelle version du texte accepté"
     texte = client.get("/fr/information").text
     for phrase in (
         "Un journal technique ne garde que les erreurs (réponses de code 400 ou plus) : la page demandée, "
