@@ -3841,3 +3841,18 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Tests d'abord, vus en échec** (commits `d669e89` : 5 rouges sur 6 ; `b7927be` : `ImportError`), puis correctif. 7 tests dans `tests/test_stockage_tiers_partitionne.py` (3 rapides sur la configuration, 2 avec un vrai Chrome — natif et identité persistante —, 1 de garde du réglage par défaut, 1 de la liste copiée). Tests du proxy et de l'identité toujours verts (289 avec Chrome, 3 d'identité) ; suite rapide 2 553 réussis, 2 sautés ; lint propre ; suite complète non lancée.
 - **Visite de contrôle unique** de la page rebrowser : `storagePartitioning` vert, 16 verts, 4 non déclenchés, aucun rouge ni jaune. Le même défaut reste dans l'identité réécrite et chez les témoins (non changé, dit seulement).
 - **Reste** : campagne de contrôle à lancer par la coordination depuis le dossier principal (`controle-vrai-chrome.yaml`) ; à regarder : les iframes Turnstile et reCAPTCHA (clés de test) des niveaux 05 et 06 ; la raison pour laquelle Playwright coupe cette fonction n'a pas été lue en détail.
+
+## 2026-11-17 (22h45) — Claude (Fable 5.2, coordination) — D-100 et D-101 contrôlées, fusionnées ; campagne 134
+
+- **Fusion** : branche `claude/fumee-linux-43d3e8` jusqu'à `8d43541` (commit `06319e3`) : D-100 (exception bornée à D-30 pour trois
+  pages publiques de test) et D-101 (partitionnement du stockage tiers rétabli en identité native). Journal : les deux côtés gardés.
+- **Contrôle** : tests commités avant le code (`d669e89`, `b7927be`, puis `b763008`) ; diff relu (un second `--disable-features=`
+  sans `ThirdPartyStoragePartitioning`, déclaré dans `configuration()`, identité réécrite inchangée) ; suite complète sur `06319e3` :
+  2 762 tests verts en 12 min 31 s, lint propre.
+- **Campagne 134** (`controle-vrai-chrome.yaml`, 22 h 01 à 22 h 40, lancée du dossier principal dans tmux, encadrée par
+  `arena appliquer`) : mêmes taux que la 132 dans les 9 cellules ; `noezia` natif 15, 15 et 15 sur 15 (moteur 248, réglage
+  `stockage_tiers_partitionne` vrai), Chrome sans comportement 10, 15 et 0, `patchright` 0 sur 45. La course I9 tournait : durées non
+  comparables. Empreinte de la course (`course.sh empreinte`) identique avant et après.
+- **Non mesuré** : lancement avec identité persistante, niveaux 06 et 07 complets, « 31 % like headless » de CreepJS sans humain de
+  référence.
+- **Reste** : corrections Linux (WebGL avec interface d'abord), une architecture à la fois, 33 Gio libres au départ.
