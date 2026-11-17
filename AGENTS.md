@@ -195,7 +195,7 @@ recommander des optimisations.
   contre les détecteurs de notre Arena. Reste I8 (humains qui reviennent, attend Ethan), I9 (7 jours) et I10 (comptes). Les quatre
   questions de la conception restent ouvertes.
 - **Essai de fumée Linux, étape 3.1** (17/11, D-98, `docs/recherche/fumee-linux-2026-11-17.md`) : le moteur `noezia` tourne sous Linux sans carte graphique (conteneur Ubuntu 24.04 sur OrbStack, arm64 natif et amd64
-  émulé), 6 campagnes de la base du dossier `fumee-linux` (540 passages, 0 panne). Le réglage par défaut sans écran refait la campagne 97 du poste ; en natif, Chrome 157 (amd64) 87 sur 90, Chromium (arm64) 89 sur 90, contre 15 sur 15 par niveau à
+  émulé), 6 campagnes de la base du dossier `fumee-linux`, conservée dans le dossier principal sous `outputs/fumee-linux-2026-11-17.sqlite3` (campagnes 1 à 6, 540 passages, 0 panne ; numérotation à part de `outputs/shadowlab.sqlite3`). Le réglage par défaut sans écran refait la campagne 97 du poste ; en natif, Chrome 157 (amd64) 87 sur 90, Chromium (arm64) 89 sur 90, contre 15 sur 15 par niveau à
   la 132 du poste. Incohérences, de la plus grave : WebGL absent avec interface (D-50 suppose un repli SwiftShader qui n'a lieu que sans interface), `devices_vide` (15 sur 15 en natif), `voices_vide` (Chromium), `duree_pages_reguliere`.
   Pas de Chrome pour Linux arm64. Non vérifié : vrai serveur x86_64, architecture arm64 réelle, niveau 07. Coût disque : 13 Go (images 3,5 et 4,6 Go, cache 8,2 Go), à prévoir.
 - **2 169 tests verts** (`uv run pytest`, 16/11, après la fusion du calibrage D-95, 9 min 28 s) ; lint propre ; 11 tests de l'interface (vitest). Branche

@@ -77,6 +77,10 @@ Le conteneur amd64 voit un processeur « VirtualApple @ 2.50GHz » dans `/proc/c
 
 ## 4. Les campagnes (base du dossier `fumee-linux`, 15 passages par niveau)
 
+**Où vivent les campagnes 1 à 6** : dans le dossier principal, `outputs/fumee-linux-2026-11-17.sqlite3` (copie de la base du dossier `fumee-linux`, faite par la session de coordination ; 48 Mo,
+non versionnée). Les autres exemplaires : `outputs/shadowlab.sqlite3` du dossier `fumee-linux`, le volume Docker `fumee-linux-data` et le dossier de notes partagé. Les numéros « campagne 1 à 6 » de ce document sont ceux de cette base,
+sans rapport avec la numérotation de `outputs/shadowlab.sqlite3` du dossier principal (où la campagne 132 est la référence du poste).
+
 Les chiffres sont des passages réussis sur 15 (champ `success` de la base). Aux niveaux 05 et 06, des CAPTCHA en clés de test sont servis à
 tout le monde : les passages sont étiquetés `captcha_test` (décisions `turnstile` et `recaptcha`, 15 passages par niveau et par fournisseur
 atteint) et ne valent **jamais** comme résultat contre un vrai CAPTCHA.
@@ -257,8 +261,8 @@ scripts/fumee-linux.sh pile                            # configurations + pile N
 scripts/fumee-linux.sh lancer arm64 sans-ecran configs/experiments/fumee-linux-sans-ecran.yaml
 scripts/fumee-linux.sh lancer arm64 ecran configs/experiments/fumee-linux-ecran-virtuel.yaml
 scripts/fumee-linux.sh lancer amd64 ecran configs/experiments/fumee-linux-natif.yaml           # Chrome 157 : amd64 seulement
-scripts/fumee-linux.sh sauvegarder                     # copie la base du volume vers outputs/shadowlab.sqlite3
-python3 scripts/fumee-linux-comparer.py --linux outputs/shadowlab.sqlite3 --linux-campagne 6 --linux-label noezia-natif \
+scripts/fumee-linux.sh sauvegarder                     # copie la base du volume vers outputs/shadowlab.sqlite3 (celle de l'essai du 17/11 : outputs/fumee-linux-2026-11-17.sqlite3 du dossier principal)
+python3 scripts/fumee-linux-comparer.py --linux outputs/fumee-linux-2026-11-17.sqlite3 --linux-campagne 6 --linux-label noezia-natif \
   --poste ~/dev/noezia-shadowlab/outputs/shadowlab.sqlite3 --poste-campagne 132 --poste-label noezia-natif --protections 04 05 06scorr
 scripts/fumee-linux.sh arreter && scripts/fumee-linux.sh retirer amd64                      # rendre la place
 ```
