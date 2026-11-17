@@ -72,6 +72,35 @@ HOTES_CHALLENGES = (
 ARGUMENT_WEBRTC_PROXY = "--webrtc-ip-handling-policy=disable_non_proxied_udp"
 ARGUMENTS_PROXY_IDENTITE = (ARGUMENT_WEBRTC_PROXY,)  # tous les arguments de lancement imposés par un proxy d'identité
 
+# Identité native : le partitionnement du stockage tiers est rétabli (D-101). Playwright et Patchright le coupent par
+# défaut : leur `--disable-features=…` liste `ThirdPartyStoragePartitioning` (« playwright/issues/32230 »), et une page
+# le lit (rebrowser-bot-detector, test `storagePartitioning`) : une iframe du site B dans une page du site A voit le
+# `localStorage` de B, ce qu'un vrai Chrome ne permet pas. Un `--enable-features` n'y change rien (mesuré : le
+# `--disable-features` l'emporte) ; un second `--disable-features=…` remplace le premier (le dernier gagne, mesuré sur
+# Chrome 156). On le repasse donc avec la liste de Playwright MOINS cette fonction : les autres contournements de
+# Playwright (par exemple `BlockOriginHeaderModificationOnRedirect`, que l'interception des requêtes du moteur exige)
+# restent coupés. Liste copiée de Patchright 1.64.4 (`chromiumSwitches.ts`, sans `MediaRouter` que Patchright retire) ;
+# `tests/test_stockage_tiers_partitionne.py` compare cette copie à l'installé : une mise à jour qui la change échoue là.
+FONCTIONS_COUPEES_SANS_PARTITIONNEMENT = (
+    "AvoidUnnecessaryBeforeUnloadCheckSync",
+    "DestroyProfileOnBrowserClose",
+    "DialMediaRouteProvider",
+    "GlobalMediaControls",
+    "HttpsUpgrades",
+    "LensOverlay",
+    "PaintHolding",
+    "BlockOriginHeaderModificationOnRedirect",
+    "AvoidCorsURLLoaderRestartOnRedirect",
+    "Translate",
+    "AutoDeElevate",
+    "OptimizationHints",
+    "NetworkTimeServiceQuerying",
+    "AimEnabled",
+    "msForceBrowserSignIn",
+    "msEdgeUpdateLaunchServicesPreferredVersion",
+)
+ARGUMENT_STOCKAGE_TIERS_PARTITIONNE = "--disable-features=" + ",".join(FONCTIONS_COUPEES_SANS_PARTITIONNEMENT)
+
 
 class DriverNoezia(Driver):
     name = "noezia"
@@ -184,6 +213,9 @@ class DriverNoezia(Driver):
             "browser": "chromium-patchright",
             "channel": self._config.channel,
             "identite_native": self._config.identite_native,
+            # Réglage imposé en identité native (D-101) : le partitionnement du stockage tiers est rétabli ; l'identité
+            # réécrite garde le réglage par défaut de Patchright (coupé).
+            "stockage_tiers_partitionne": self._config.identite_native,
             "headless": self._config.headless,
             "locale": self._config.locale if reecrite else None,
             "viewport": f"{self._config.viewport_width}x{self._config.viewport_height}" if reecrite else None,
@@ -294,7 +326,8 @@ class DriverNoezia(Driver):
         ]
         # ── GPU / backend graphique : cohérence avec le profil déclaré ──
         if natif:
-            args = []  # aucun réglage de lancement : ceux de Patchright seulement
+            # Aucun réglage de lancement ajouté, hors le partitionnement du stockage tiers rétabli (D-101).
+            args = [ARGUMENT_STOCKAGE_TIERS_PARTITIONNE]
         elif self._profil.os == "macos" and _HOTE_OS == "macos":
             # macOS + profil macOS : Metal réel, cohérent avec renderer Apple.
             args += ["--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist"]
@@ -349,17 +382,20 @@ class DriverNoezia(Driver):
 
         Avec un proxy d'identité, Chrome n'a pour proxy que le relais, sans bypass : Playwright y ajoute `<-loopback>`,
         le local passe donc aussi par le relais, qui est le verrou. Jamais `SHADOWLAB_PROXY` ni un accès direct."""
+        arguments = [ARGUMENT_STOCKAGE_TIERS_PARTITIONNE]  # identité native : partitionnement du stockage tiers (D-101)
         if self._relais is not None:
-            reseau = {"proxy": {"server": self._relais.adresse}, "args": list(ARGUMENTS_PROXY_IDENTITE)}
+            proxy = {"server": self._relais.adresse}
+            arguments += ARGUMENTS_PROXY_IDENTITE
         else:
-            reseau = {"proxy": self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)}
+            proxy = self._proxy_navigateur(tuple(self.hotes_autorises) + HOTES_CHALLENGES)
         contexte = self._pw.chromium.launch_persistent_context(
             user_data_dir=str(self._identite.dossier_profil),
             channel=self._config.channel,
             headless=False,
             no_viewport=True,
             ignore_https_errors=not self._verifier_tls,
-            **reseau,
+            proxy=proxy,
+            args=arguments,
         )
         self._version_chrome = contexte.browser.version if contexte.browser else None
         self._pages_visite = 0
