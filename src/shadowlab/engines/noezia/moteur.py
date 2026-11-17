@@ -43,6 +43,7 @@ from .defis import turnstile as defi_turnstile
 from .furtivite.patches import injecter as injecter_furtivite
 from .profils.generateur import ProfilNavigateur, generer_profil
 from .profils.stockage import charger_ou_creer
+from .sentinelle import RefusRessource, detecter_defi_ressource
 
 log = logging.getLogger(__name__)
 
@@ -115,8 +116,9 @@ class DriverNoezia(Driver):
         # Lecture rapide de la prochaine page (réglée par le parcours, `lecture.py`) : l'interaction légère au lieu de
         # l'interaction complète. Faux par défaut : aucun autre appelant ne change.
         self.lecture_legere = False
-        # 403 reçus pour des ressources de la page (photo, appel de données) du même hôte (`refus_ressources`).
-        self._refus_ressources: list[tuple[str, int]] = []
+        # Réponses 403 reçues pour des ressources de la page (photo, appel de données) du même hôte, gardées jusqu'à
+        # `refus_ressources`, qui lit leur corps.
+        self._refus_ressources: list[Any] = []
         self._signatures = extraction.Signatures(RACINE / "outputs" / "signatures_adaptatives.json")
         self._profil: ProfilNavigateur | None = None
         self._pw = None
@@ -477,7 +479,9 @@ class DriverNoezia(Driver):
             self._reponse = reponse
             self._pages_visite += 1
         elif reponse.status == 403 and self._meme_hote(reponse.url):
-            self._refus_ressources.append((reponse.url, 403))
+            # Le corps n'est pas lu ici : l'API synchrone de Playwright ne le permet pas dans un gestionnaire
+            # d'événement. Il est lu par `refus_ressources`.
+            self._refus_ressources.append(reponse)
 
     def _meme_hote(self, url: str) -> bool:
         """`url` est-elle sur le même hôte que la page affichée ?"""
@@ -487,8 +491,9 @@ class DriverNoezia(Driver):
             return False
         return bool(hote_page) and (urlsplit(url).hostname or "").lower() == hote_page
 
-    def refus_ressources(self) -> list[tuple[str, int]]:
-        """Les 403 reçus pour des ressources de la page (photo, appel de données du même hôte) depuis le dernier appel.
+    def refus_ressources(self) -> list[RefusRessource]:
+        """Les 403 reçus pour des ressources de la page (photo, appel de données du même hôte) depuis le dernier appel :
+        (adresse, 403, nature du défi servi à la place, ou None pour un refus franc).
 
         L'API synchrone de Playwright ne livre ses événements que pendant un appel : un appel léger les fait arriver
         avant de lire la liste."""
@@ -498,7 +503,18 @@ class DriverNoezia(Driver):
             except Exception:  # noqa: BLE001 — page fermée ou en navigation : on rend ce qu'on a
                 pass
         refus, self._refus_ressources = self._refus_ressources, []
-        return refus
+        return [RefusRessource(r.url, 403, self._defi_de_ressource(r)) for r in refus]
+
+    @staticmethod
+    def _defi_de_ressource(reponse) -> str | None:
+        """La nature du défi servi à la place de la ressource (`detecter_defi_ressource`), lue dans son corps et ses
+        en-têtes. Corps illisible (page fermée, corps oublié par le navigateur) : None, donc refus franc, comme
+        avant."""
+        try:
+            corps, entetes = reponse.text(), reponse.headers
+        except Exception:  # noqa: BLE001 — erreur de Playwright, corps binaire : prudence
+            return None
+        return detecter_defi_ressource(corps, entetes)
 
     def _compter(self, champ: str) -> None:
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
