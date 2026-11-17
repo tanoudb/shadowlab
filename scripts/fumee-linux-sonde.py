@@ -23,9 +23,30 @@ from pathlib import Path
 PAGE = b"<!doctype html><meta charset=utf-8><title>sonde</title><body>sonde</body>"
 
 POLICES = [
-    "Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Verdana", "Trebuchet MS", "Impact",
-    "Comic Sans MS", "Tahoma", "Segoe UI", "Calibri", "Cambria", "Consolas", "Menlo", "SF Pro", "Helvetica Neue",
-    "Ubuntu", "DejaVu Sans", "Liberation Sans", "Liberation Mono", "Noto Sans", "Noto Color Emoji", "Apple Color Emoji",
+    "Arial",
+    "Helvetica",
+    "Times New Roman",
+    "Courier New",
+    "Georgia",
+    "Verdana",
+    "Trebuchet MS",
+    "Impact",
+    "Comic Sans MS",
+    "Tahoma",
+    "Segoe UI",
+    "Calibri",
+    "Cambria",
+    "Consolas",
+    "Menlo",
+    "SF Pro",
+    "Helvetica Neue",
+    "Ubuntu",
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Liberation Mono",
+    "Noto Sans",
+    "Noto Color Emoji",
+    "Apple Color Emoji",
 ]
 
 SCRIPT = """
@@ -96,8 +117,12 @@ class Silencieux(BaseHTTPRequestHandler):
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--canal", choices=["chrome", "chromium"], required=True,
-                   help="chrome : Google Chrome installé ; chromium : le Chromium embarqué de Patchright")
+    p.add_argument(
+        "--canal",
+        choices=["chrome", "chromium"],
+        required=True,
+        help="chrome : Google Chrome installé ; chromium : le Chromium embarqué de Patchright",
+    )
     p.add_argument("--sans-interface", action="store_true", help="headless (sinon : avec interface, il faut un écran)")
     p.add_argument("--sortie", required=True)
     args = p.parse_args()
@@ -108,7 +133,11 @@ def main() -> int:
     threading.Thread(target=serveur.serve_forever, daemon=True).start()
     url = f"http://localhost:{serveur.server_address[1]}/"
     resultat: dict = {
-        "hote": {"machine": platform.machine(), "systeme": platform.system(), "version_python": platform.python_version()},
+        "hote": {
+            "machine": platform.machine(),
+            "systeme": platform.system(),
+            "version_python": platform.python_version(),
+        },
         "reglage": {"canal": args.canal, "sans_interface": args.sans_interface},
     }
     try:

@@ -28,9 +28,29 @@ from pathlib import Path
 
 # Propriétés trop changeantes d'un passage à l'autre pour être comparées (durées, graines, hachages, compteurs).
 BRUIT = (
-    "duree_collecte_ms", "timing", "raf_timing", "paint_timing", "timing_precision", "hash", "canvas", "sum",
-    "rects", "debugger_delta_ms", "heap_ratio", "jsHeap", "usedJSHeapSize", "totalJSHeapSize", "downlink", "rtt",
-    "screenX", "screenY", "stack", "error_stack_lines", "empty_script_tags", "cdp_resource_entries", "sonde",
+    "duree_collecte_ms",
+    "timing",
+    "raf_timing",
+    "paint_timing",
+    "timing_precision",
+    "hash",
+    "canvas",
+    "sum",
+    "rects",
+    "debugger_delta_ms",
+    "heap_ratio",
+    "jsHeap",
+    "usedJSHeapSize",
+    "totalJSHeapSize",
+    "downlink",
+    "rtt",
+    "screenX",
+    "screenY",
+    "stack",
+    "error_stack_lines",
+    "empty_script_tags",
+    "cdp_resource_entries",
+    "sonde",
 )
 
 
@@ -51,18 +71,19 @@ def passages(cx: sqlite3.Connection, campagne: int, label: str | None, protectio
     return [ligne for ligne in lignes if json.loads(ligne["configuration"]).get("label") == label]
 
 
-def signaux_du_passage(
-    cx: sqlite3.Connection, passage: sqlite3.Row, versions: dict[str, str]
-) -> set[tuple[str, str]]:
+def signaux_du_passage(cx: sqlite3.Connection, passage: sqlite3.Row, versions: dict[str, str]) -> set[tuple[str, str]]:
     """Les (détecteur, code) d'un passage ; `versions` reçoit la version de chaque détecteur qui a tourné."""
     vus: set[tuple[str, str]] = set()
-    for d in cx.execute("SELECT detector_name, detector_version, signals FROM detections WHERE run_id = ?", (passage["id"],)):
+    for d in cx.execute(
+        "SELECT detector_name, detector_version, signals FROM detections WHERE run_id = ?", (passage["id"],)
+    ):
         versions[d["detector_name"]] = d["detector_version"]
         for s in json.loads(d["signals"]):
             vus.add((d["detector_name"], s.get("code", "?")))
     # Un passage arrêté par le gardien n'a pas fait tourner tous les détecteurs : ses motifs sont dans `decisions`.
     for dec in cx.execute(
-        "SELECT motifs FROM decisions WHERE session_token = ? AND couche IN ('fingerprinting', 'fingerprinting-differe')",
+        "SELECT motifs FROM decisions WHERE session_token = ?"
+        " AND couche IN ('fingerprinting', 'fingerprinting-differe')",
         (passage["session_token"],),
     ):
         try:
@@ -127,8 +148,10 @@ def main() -> int:
     p.add_argument("--protections", nargs="+", required=True)
     p.add_argument("--proprietes", action="store_true", help="comparer aussi les propriétés brutes de l'empreinte")
     p.add_argument(
-        "--sonde", nargs="+", metavar="CHEMIN",
-        help="au lieu de comparer : valeurs de ces propriétés (ex. webgl.disponible ecran.width), par niveau, des deux côtés",
+        "--sonde",
+        nargs="+",
+        metavar="CHEMIN",
+        help="au lieu de comparer : valeurs de ces propriétés (ex. webgl.disponible ecran.width), par niveau",
     )
     args = p.parse_args()
 
