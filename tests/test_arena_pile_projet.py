@@ -107,6 +107,19 @@ def test_fichier_environnement_de_la_repetition():
     assert (RACINE / valeurs["SHADOWLAB_PROFILS_EXTRA"]).exists()
 
 
+def test_fichier_environnement_de_l_essai_de_la_porte():
+    valeurs = {}
+    for ligne in (RACINE / "configs" / "courses" / "i9-essai-porte.env").read_text(encoding="utf-8").splitlines():
+        if ligne.strip() and not ligne.startswith("#"):
+            cle, _, valeur = ligne.partition("=")
+            valeurs[cle] = valeur
+    assert valeurs == {
+        "SHADOWLAB_PROFILS_EXTRA": "configs/arena/profils-endurance-essai-porte.yaml",
+        "SHADOWLAB_VITRINE_TAILLE": "60",
+    }
+    assert (RACINE / valeurs["SHADOWLAB_PROFILS_EXTRA"]).exists()
+
+
 def test_course_sh_syntaxe():
     chemin = RACINE / "scripts" / "course.sh"
     assert subprocess.run(["bash", "-n", str(chemin)]).returncode == 0

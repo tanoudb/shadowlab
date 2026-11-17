@@ -1,0 +1,91 @@
+# Profil `enduranceporte150` : le profil `endurance` de configs/arena/profils.yaml à l'identique, sauf `duree_cookie_s: 150`
+# (la porte d'entrée liée au visiteur vaut 150 s au lieu de 86 400 s) et `description`. Même développement de l'ancre
+# `detecteurs_06` que profils-endurance-court.yaml. À régénérer si `endurance` change ; tests/test_essai_porte.py vérifie
+# qu'ils ne diffèrent que par ces deux champs.
+# Pourquoi : faire expirer la porte AU MILIEU d'une visite, dans un vrai Chrome, y compris sur une photo chargée au
+# défilement (défi servi à une ressource : JSON {"bloque_par":"defi-js"}, 403). Cas jamais vu en vrai.
+# Pourquoi 150 s et pas 60 à 120 s : un défi revenu moins de RAFALE_PORTE_S (120 s, parcours.py) après le passage précédent
+# passe par la branche « rafale » de `_juger_le_retour` : il fait partie du passage en cours, ne compte pas comme
+# repassage et n'est pas jugé par la durée de la porte. Ce n'est pas la branche de la vraie course (porte de 24 h). À
+# 150 s le défi revient hors rafale, est jugé par la durée (150 s, tolérance TOLERANCE_PORTE_S = 60 s : trop tôt avant 90 s)
+# et repassé comme dans la vraie course.
+# Chargé par SHADOWLAB_PROFILS_EXTRA (un seul fichier) : `shadowlab arena appliquer` AVEC la variable avant l'essai, la
+# campagne AVEC la variable, puis `shadowlab arena appliquer` SANS elle après.
+enduranceporte150:
+  bannissement:
+    actif: true
+    pages_par_heure: 240
+    pages_par_jour: 2000
+  captcha:
+    actif: false
+  connexion:
+    actif: true
+    tentatives_max: 5
+  defi_js:
+    actif: true
+    difficulte: 18
+    lier_tls: true
+    par_visiteur: true
+  description: 'Niveau 06 pour un visiteur qui revient : une porte par visiteur, bannissement, aucun CAPTCHA ; porte de 150 s
+    au lieu de 24 h (essai : la porte expire au milieu d''une visite)'
+  duree_cookie_s: 150
+  fingerprinting:
+    actif: true
+    bloquer: tout
+    detecteurs:
+    - regles-http
+    - tls
+    - botd
+    - regles-js
+    - coherence
+    - comportement
+    - prototypes
+    - coherence-profonde
+    - headless
+    - chrome-apis
+    - langues
+    - media-codecs
+    - integrite-proprietes
+    - stack-trace
+    - stack-getter
+    - automation-globals
+    - css-media
+    - prototype-chain
+    - enumerable-props
+    - proxy-uadata
+    - entropie-interaction
+    - scroll
+    - canvas-empreinte
+    - canvas-consistency
+    - raf-timing
+    - worker-consistency
+    - paint-timing
+    - timing-precision
+    - coherence-environnement
+    - connection-dynamic
+    - permissions-etendu
+    - position-fenetre
+    - webrtc
+    - audio-context
+    - polices
+    - math-constants
+    - domrect
+    - iframe-consistency
+    - deep-proxy
+    - cdp
+    - correlation-session
+    seuil_composite: 0.5
+  honeypots:
+    actif: true
+  limitation:
+    debit: 2
+    rafale: 4
+  nom: Endurance
+  recaptcha:
+    actif: false
+  turnstile:
+    actif: false
+  waf:
+    mode: blocage
+    paranoia: 3
+    seuil: 3
