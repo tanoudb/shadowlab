@@ -114,7 +114,7 @@ Légende : **test** = couvert par un test du dépôt, rejouable ; **sonde** = ob
 4. **Les identifiants circulent en clair jusqu'au proxy** (Basic pour un proxy HTTP, utilisateur/mot de passe pour SOCKS5) : inhérent à ces deux protocoles ; un proxy `https://` n'est pas géré (refusé à l'analyse).
 5. **Le local passe aussi par le proxy** : Playwright ajoute `<-loopback>`, le trafic vers `127.0.0.1` part donc vers le proxy, qui ne peut pas joindre le poste d'un vrai fournisseur. Une identité avec proxy ne sert donc pas contre l'Arena locale.
    `PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK` retirerait cet ajout et enverrait le local en direct. **Lecture.**
-6. **Requêtes `http://` : une connexion par requête** (`Connection: close` imposé dans les deux sens). Un site en clair voit ce détail ; le trafic `https://` (le cas réel) n'est pas touché. **Test** (12 requêtes, 12 ports sources) et **lecture**.
+6. **Requêtes `http://` : une connexion par requête** (`Connection: close` imposé dans les deux sens). Un site en clair voit ce détail ; le trafic `https://` (le cas réel) n'est pas touché. **Sonde** (12 requêtes reçues par la cible pour 12 demandes transmises, 12 ports sources distincts, en HTTP et en SOCKS5) et **lecture**.
 7. **Bornes du relais** : `demandes` grossit sans borne (une ligne par demande) ; un tunnel à demi fermé garde son fil jusqu'à `arreter()` ; une requête simple dont l'origine tarde plus de 15 s (`delai_s`) avant son premier octet donne 502.
 
 **Non vérifié**
