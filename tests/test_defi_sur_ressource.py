@@ -39,6 +39,7 @@ from test_bannissement import MONDE, Navigateur, _entetes, experience, nouvelle_
 from test_parcours_porte_en_cours import PiloteNavigateur, recette
 from test_relecture_porte import DUREE_PORTE_S, PAS_S, Chrome, instant
 from test_ressources_de_page import _frontal
+from test_visite_refus_en_cours import Chien
 
 from shadowlab.arena import bannissements
 from shadowlab.engines.noezia import identite as ident
@@ -158,38 +159,48 @@ class ReponseFactice:
 def _pilote_noezia() -> DriverNoezia:
     d = DriverNoezia(("*",), {"interaction_post_page": True, "resoudre_defis": False})
     d._page = SimpleNamespace(
-        url="http://127.0.0.1:8770/lab/vitrine/annonces", main_frame=object(), evaluate=lambda _: 0
+        url="http://127.0.0.1:8770/lab/vitrine/annonces",
+        main_frame=object(),
+        evaluate=lambda _: 0,
+        wait_for_timeout=lambda _ms: None,
     )
     return d
+
+
+def recue(d: DriverNoezia, *reponses: ReponseFactice) -> None:
+    """Ce que Playwright livre au moteur pour chaque réponse : `response`, puis `requestfinished` (corps arrivé)."""
+    for r in reponses:
+        d._noter_reponse(r)
+        d._noter_fin_de_requete(r.request)
 
 
 def test_le_moteur_rend_la_nature_du_defi_lue_apres_l_evenement():
     d = _pilote_noezia()
     defi = ReponseFactice(PHOTO_19, 403, *DEFI_PHOTO)
     blocage = ReponseFactice(PHOTO_20, 403, *BLOCAGE_PHOTO)
-    d._noter_reponse(defi)
-    d._noter_reponse(blocage)
+    recue(d, defi, blocage)
     assert defi.lectures == blocage.lectures == 0  # rien n'est lu dans le gestionnaire d'événement
-    assert d.refus_ressources() == [(PHOTO_19, 403, "arena"), (PHOTO_20, 403, None)]
+    assert d.refus_ressources() == [(PHOTO_19, 403, "arena", "defi-js"), (PHOTO_20, 403, None, "bannissement")]
     assert d.refus_ressources() == []
 
 
 def test_un_corps_illisible_reste_un_refus_franc():
     """Prudence : sans corps lisible, on ne sait pas que c'est un défi ; le refus est traité comme avant."""
     d = _pilote_noezia()
-    d._noter_reponse(ReponseFactice(PHOTO_19, 403, corps=None))
-    assert d.refus_ressources() == [(PHOTO_19, 403, None)]
+    recue(d, ReponseFactice(PHOTO_19, 403, corps=None))
+    assert d.refus_ressources() == [(PHOTO_19, 403, None, None)]
 
 
 def test_le_moteur_de_parcours_transmet_la_nature_du_defi():
     d = _pilote_noezia()
-    d._noter_reponse(ReponseFactice(PHOTO_19, 403, *DEFI_PHOTO))
-    assert MoteurDriver(d, "navigateur").refus_ressources() == [(PHOTO_19, 403, "arena")]
+    recue(d, ReponseFactice(PHOTO_19, 403, *DEFI_PHOTO))
+    assert MoteurDriver(d, "navigateur").refus_ressources() == [(PHOTO_19, 403, "arena", "defi-js")]
 
 
 class _ArenaLocale(BaseHTTPRequestHandler):
-    """Une page qui charge une photo et fait un appel de données (comme `vitrine.js`) ; les deux reçoivent le refus
-    que construit `gardien._refus` à partir de l'`Accept` réellement envoyé par Chromium (défi ou bannissement)."""
+    """Une page qui charge une photo et fait un appel de données (comme `vitrine.js` : le corps d'une réponse en échec
+    n'est pas lu) ; les deux reçoivent le refus que construit `gardien._refus` à partir de l'`Accept` réellement envoyé
+    par Chromium (défi ou bannissement), avec ses en-têtes (`Cache-Control: no-store` compris : course I9, défaut B)."""
 
     def do_GET(self):  # noqa: N802
         if self.path == "/":
@@ -207,6 +218,7 @@ class _ArenaLocale(BaseHTTPRequestHandler):
             corps = reponse.body
             self.send_response(reponse.status_code)
             self.send_header("Content-Type", reponse.headers["content-type"])
+            self.send_header("Cache-Control", reponse.headers["cache-control"])
         self.send_header("Content-Length", str(len(corps)))
         self.end_headers()
         self.wfile.write(corps)
@@ -238,7 +250,10 @@ def test_dans_un_vrai_navigateur_la_nature_du_defi_d_une_photo_et_d_un_appel_de_
     arena_locale, tmp_path, monkeypatch, refus, attendu, mode
 ):
     """`chromium` : le Chromium de Playwright, sans interface. `chrome-course` : le réglage de la course (vrai Chrome,
-    identité native, avec interface, identité persistante sur disque)."""
+    identité native, avec interface, identité persistante sur disque).
+
+    La photo finit : son corps est lu. L'appel de données, refusé `no-store` et dont la page ne lit pas le corps, ne
+    finit jamais : le moteur le rend « corps non lu » au lieu d'attendre sans fin (course I9, défaut B)."""
     options: dict = {"interaction_post_page": False, "resoudre_defis": False}
     if mode == "chrome-course":
         if not Path("/Applications/Google Chrome.app").exists():
@@ -248,16 +263,19 @@ def test_dans_un_vrai_navigateur_la_nature_du_defi_d_une_photo_et_d_un_appel_de_
     arena_locale.refus = refus
     base = f"http://127.0.0.1:{arena_locale.server_port}"
     pilote = DriverNoezia(("127.0.0.1",), options)
-    pilote.open()
-    try:
-        pilote.start_session()
-        assert pilote.navigate(f"{base}/").status == 200
-        assert pilote.wait_for_element("body[data-fini]") is not None
-        rendus = pilote.refus_ressources()
-        pilote.close_session()
-    finally:
-        pilote.close()
-    assert sorted(rendus) == [(f"{base}/api", 403, attendu), (f"{base}/photo.svg", 403, attendu)]
+    with Chien(60) as chien:
+        pilote.open()
+        try:
+            pilote.start_session()
+            assert pilote.navigate(f"{base}/").status == 200
+            assert pilote.wait_for_element("body[data-fini]") is not None
+            rendus = pilote.refus_ressources()
+            pilote.close_session()
+        finally:
+            pilote.close()
+    assert not chien.aboye, "le moteur attendait sans fin le corps d'un refus (pile écrite plus haut)"
+    motif = refus[1]
+    assert sorted(rendus) == [(f"{base}/api", 403, None, "corps-non-lu"), (f"{base}/photo.svg", 403, attendu, motif)]
     assert "text/html" not in arena_locale.accepts["/photo.svg"]  # d'où le motif JSON, pas la page
     assert arena_locale.accepts["/api"] == ACCEPT_DONNEES
 
@@ -490,6 +508,35 @@ def test_sans_identite_l_ecart_minimal_juge_le_defi_d_une_photo(site, tmp_path, 
     else:
         assert bilan.statut == "limitee", bilan.arret
         assert lu(tmp_path / "r")["porte_repassages"]["nombre"] == 1
+
+
+def test_le_motif_bannissement_sur_une_photo_en_cours_de_visite_bannit(site, identite, tmp_path):
+    """Course I9, défaut B : le visiteur est banni pendant la 2ᵉ page ; le corps du refus d'une photo dit
+    `bannissement`, celui de l'appel de données n'est jamais arrivé. L'identité est bannie, 0 page demandée après."""
+    pilote = ChromeEtSesPhotos(site, identite)
+    porte_passee_avant_la_premiere_page(pilote, identite, 60)
+    donnees = f"{BASE_SITE}/lab/vitrine/api/annonces/AN-000019/similaires"
+    refus = [(donnees, 403, None, "corps-non-lu"), (PHOTO_19, 403, None, "bannissement")]
+    a_la_requete(pilote, 2, lambda: setattr(pilote, "refus", refus))
+    _, bilan = lancer(tmp_path / "r", pilote)
+    assert bilan.code == 3 and bilan.arret["signe"] == "statut" and bilan.arret["statut"] == 403
+    assert bilan.arret["adresse"] == PHOTO_19 and pilote.requetes_pages == 2
+    assert identite.etat()["etat"] == "banni"
+
+
+def test_un_appel_de_donnees_sans_corps_ne_cache_pas_le_defi_de_la_porte(site, identite, tmp_path):
+    """La porte expire pendant une page : la photo reçoit le défi, l'appel de données un refus dont le corps n'arrive
+    pas. Jugé comme le défi de la porte : la visite continue et la page suivante repasse la porte."""
+    pilote = ChromeEtSesPhotos(site, identite)
+    porte_passee_avant_la_premiere_page(pilote, identite, DUREE_PORTE_S - 10)
+    donnees = f"{BASE_SITE}/lab/vitrine/api/annonces/AN-000019/similaires"
+    refus = [(donnees, 403, None, "corps-non-lu"), (PHOTO_19, 403, "arena", "defi-js")]
+    a_la_requete(pilote, 1, lambda: setattr(pilote, "refus", refus))
+    defi_en_page(pilote, 2)
+    _, bilan = lancer(tmp_path / "r", pilote)
+    assert bilan.code == 0 and bilan.statut == "limitee", bilan.arret
+    assert identite.etat()["etat"] == "ok"
+    assert lu(tmp_path / "r")["porte_repassages"]["nombre"] == 1
 
 
 def test_un_pilote_qui_rend_des_couples_reste_lu_comme_avant(site, tmp_path):
