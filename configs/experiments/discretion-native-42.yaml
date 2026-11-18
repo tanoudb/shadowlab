@@ -1,0 +1,23 @@
+# Discrétion, mesure du 18/11 avec le code du jour (après D-74, D-79, D-94, D-95, D-101, D-103) : le fichier de la
+# campagne 100 (`discretion-native-30.yaml`) à 14 répétitions, soit 42 passages par niveau. À 42 sur 42, la borne basse
+# de Wilson est de 91,6 % (88,6 % à 30 sur 30). Niveau 06 sans corrélation ici ; le 06 complet est mesuré à part, un
+# monde par passage (`correlation-06-mondes-42.yaml`). Encadrer par `shadowlab arena appliquer` avec
+# `SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml` avant, sans la variable après.
+experiment:
+  name: discretion_identite_native_42
+  description: >-
+    noezia en identité native, 42 passages par niveau de 01 à 06 (06 sans corrélation entre sessions),
+    code et Arena du 18/11.
+  environment: local
+  engines:
+    - name: noezia
+      label: noezia-natif
+      options: {headless: false, channel: chrome, identite_native: true}
+  protections: ["01", "02", "03", "04", "05", "06scorr"]
+  scenarios:
+    - static_html
+    - javascript_content
+    - pagination
+  repetitions: 14
+  seed: 20261118
+  output: [json, html]

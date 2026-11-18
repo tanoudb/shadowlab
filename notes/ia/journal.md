@@ -4020,3 +4020,18 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   retiré (branche fusionnée, 545 Mo), sauvegarde d'avant la migration 8 compressée (632 Mo devenus 51 Mo, archive vérifiée avant de
   retirer l'original). Dit à Ethan.
 - **Contrôle quotidien** : inchangé (`scripts/course.sh etat; echo $?` sans tube, `scripts/course.sh bilan 1`, `df -h /`).
+
+## 2026-11-18 (19h10) — Claude (Fable 5.2, coordination) — Reprise : contrôle de la course, disque, mesure de discrétion lancée
+
+- **Course (deuxième départ), contrôle de 19 h 02** : `scripts/course.sh etat` rend 0 ; sujet 5 visites réussies sur 5, identité `ok`,
+  prochaine visite à 20 h 25 ; témoins finis comme prévu (classique 0 sur 4, sentinelle bannie à la 3ᵉ, négatif 4 sur 6). Bilan :
+  tous les critères du sujet tenus sauf `recolte_99` (62 annonces sur 300, attendu à ce stade).
+- **Disque : 18 Gio libres**, sous le seuil de 20 (20 à 10 h 05). Depuis ce matin : cache `uv` de 36 à 39 Go, fichiers temporaires
+  des sessions Claude d'autres projets (`/private/tmp/claude-501` : 6,4 Go, dont 3,8 pour `omni-trad` et 2,2 pour `cockpit`),
+  application Claude de 15 à 16 Go. Ce projet : 7,4 Go. Rien supprimé hors du projet ; dit à Ethan.
+- **Site public** : en ligne ; 110 chargements de l'accueil, 17 sessions commencées, 7 terminées en tout (1, 0 et 0 aujourd'hui).
+- **Suite choisie** (le palier 3 attend de la place disque et un domaine, I10 attend la course, I8 attend Ethan) : la mesure de
+  discrétion de l'objectif (§ 1 du plan) avec le code du jour, sans besoin de disque. Lancée à 19 h 05 du dossier principal :
+  `discretion-native-42.yaml` (`noezia` natif, 42 passages par niveau de 01 à 06 sans corrélation), `discretion-temoins-15.yaml`
+  (`patchright` et `playwright`, 15 par niveau), `correlation-06-mondes-42.yaml` (06 complet, un monde par passage, 42 passages).
+  Environ 2 heures ; la course tourne en même temps, les durées ne seront pas comparables.
