@@ -3968,3 +3968,14 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   (`noezia` natif 15, 15 et 15 sur 15 ; Chrome sans comportement 10, 15 et 0 ; `patchright` 0 sur 45).
 - **En cours** : campagne 140 (mesure 2 au rythme corrigé, 30 visites, fin vers 8 h 30). **Reste** : mesure 5 (bannissement pendant
   une visite), puis une répétition de la course avant de proposer une nouvelle course à Ethan.
+
+## 2026-11-18 (8h15) — Claude (Fable 5.2, coordination) — D-103, mesure 2 : campagne 140, 30 visites sur 30
+
+- **Campagne 140** (`d103-passes-incrementales-2.yaml`, 30 visites de 8 pages espacées de 3 min, vitrine de 30 annonces, profil
+  `endurance`, 6 h 25 à 8 h 10) : 30 visites réussies sur 30 ; la 1ʳᵉ passe finit à la 6ᵉ visite (30 annonces sur 30), puis 24 passes
+  incrémentales de 3 pages ; 0 blocage, 0 `pas_de_scroll`, 0 `navigation_lineaire`, 0 `duree_pages_reguliere`, aucun bannissement,
+  identité `ok`.
+- **Piège noté** : `sqlite3 -readonly outputs/shadowlab.sqlite3` échoue (« unable to open database file ») quand aucune campagne ne
+  tient la base ouverte ; le verdict se lit alors avec `"file:outputs/shadowlab.sqlite3?immutable=1"` (seulement si rien n'écrit).
+- **Lancée à 8 h 12** : mesure 5 (`d103-bannissement-en-visite.yaml`), bannissement écrit par un guetteur 60 s après le début de
+  la visite 2.
