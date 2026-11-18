@@ -1,0 +1,58 @@
+# D-103, mesure 4 : la liste d'entrée d'une visite reprise, devant la vraie Arena (docs/recherche/course-i9-visite-6-2026-11-18.md,
+# § 5 et « Comment mesurer »).
+#
+# Depuis D-103, une visite qui reprend la passe entre par la dernière liste lue : cette liste est la première page de la
+# visite, elle passe donc par la porte d'entrée et par la règle de la première page. Vérifié sur pilote factice seulement.
+# Deux bras, chacun dans son monde, profil `enduranceporte150` (le profil `endurance` avec une porte de 150 s,
+# configs/arena/profils-endurance-essai-porte.yaml), vitrine de 60 annonces (63 pages par passe, 60 au plus en 4 visites
+# de 15 pages : les visites 2 à 5 reprennent la passe) :
+#   - sujet : 5 visites de 15 pages au plus, écart fixe de 3 min (180 s, plus que les 150 s de la porte) : à chaque visite
+#     reprise, la porte a expiré, le défi tombe sur la liste d'entrée, il est passé et la visite continue ;
+#   - banni : 4 visites prévues ; avant la 3e, la campagne bannit son visiteur dans son monde (`bannir_avant_visite`, même
+#     code que `shadowlab arena bannir`) : la 3e visite, reprise, est refusée sur la liste d'entrée, identité `banni`, 0 page
+#     après ; la 4e n'est pas jouée (identité bannie).
+#
+# Critère : sujet, 5 visites réussies sur 5, un `defi-js emis` sur `/lab/vitrine/annonces` en tête de chaque visite 2 à 5
+# puis `valide`, identité `ok`, aucun bannissement dans son monde, `porte_revenue` jamais ; banni, visites 1 et 2 réussies,
+# visite 3 en échec sur « statut 403 » avec 1 seul document demandé (la liste), identité `banni`, pas de visite 4.
+#
+# Préalables :
+#   1. Arena lancée, puis, AVEC le profil de l'essai :
+#        SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml uv run shadowlab arena appliquer
+#   2. Identités à usage unique : pour recommencer, changer les suffixes (`d103-porte-2`, `d103-banni-2`).
+# Commande (la variable aussi : la campagne lit le profil pour la durée de la porte) :
+#   SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml SHADOWLAB_VITRINE_TAILLE=60 caffeinate -i \
+#     uv run shadowlab campagne configs/experiments/d103-entree-par-la-liste.yaml
+# Après la campagne, SANS la variable : uv run shadowlab arena appliquer
+# Durée estimée : environ 25 min (sujet : 5 visites d'environ 2 min et 4 écarts de 3 min ; les deux bras en parallèle).
+# Verdict (lecture seule) :
+#   sqlite3 -readonly -header -column -cmd ".parameter set @n <n°>" outputs/shadowlab.sqlite3 < scripts/mesures-d103.sql
+experiment:
+  name: d103_entree_par_la_liste
+  description: >-
+    D-103, mesure 4 : la liste d'entrée d'une visite reprise ; porte de 150 s expirée entre deux visites (sujet), visiteur
+    banni entre deux visites (banni) ; vitrine de 60 annonces.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      visites: 5
+      espacement: {mode: fixe, minutes: 3}
+      options: {headless: false, channel: chrome, identite_native: true, identite: d103-porte-1}
+    - name: noezia
+      label: banni
+      recolte_incrementale: true
+      visites: 4
+      bannir_avant_visite: 3
+      espacement: {mode: fixe, minutes: 3}
+      options: {headless: false, channel: chrome, identite_native: true, identite: d103-banni-1}
+  protections: [enduranceporte150]
+  scenarios: [visite]
+  repetitions: 5
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 3}
+  concurrency: 2
+  monde: serie
+  seed: 20261120
+  output: [json, html]

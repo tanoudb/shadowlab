@@ -1,0 +1,47 @@
+# D-103, mesure 5 : un bannissement PENDANT une visite reprise, devant la vraie Arena (docs/recherche/
+# course-i9-visite-6-2026-11-18.md, § 5 et « Comment mesurer »). Ce fichier ne suffit pas : le bannissement est un geste à
+# la main (`shadowlab arena bannir`) pendant la visite 2.
+#
+# Un seul bras, le sujet de la course, profil `endurance`, vitrine de 300 annonces, 3 visites de 40 pages au plus (environ
+# 5 min chacune : le temps de bannir en pleine visite), écart fixe d'1 min.
+#
+# Marche :
+#   1. Arena lancée, puis, SANS SHADOWLAB_PROFILS_EXTRA : uv run shadowlab arena appliquer
+#   2. SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab campagne configs/experiments/d103-bannissement-en-visite.yaml
+#   3. Quand la visite 2 a commencé depuis environ 1 min, dans un autre terminal du dossier principal, lire le monde et le
+#      visiteur de la visite en cours :
+#        sqlite3 -readonly outputs/shadowlab.sqlite3 "SELECT m.nom, v.visiteur FROM runs r JOIN visites v ON
+#          v.session_token = r.session_token JOIN mondes m ON m.id = v.monde_id WHERE r.status = 'en_cours'"
+#      puis : uv run shadowlab arena bannir --visiteur <visiteur> --monde <nom>
+#   4. Identité à usage unique : pour recommencer, changer le suffixe (`d103-ban-en-visite-2`…).
+#
+# Ce qui doit arriver : la visite 2 s'arrête dans les secondes qui suivent, sans page demandée après le premier refus, en
+# échec sur « statut 403 ». Deux issues sont justes, selon ce que l'Arena refuse en premier :
+#   - une photo chargée au défilement (motif JSON `bannissement` lu) : identité `banni` tout de suite, pas de visite 3 ;
+#   - le document suivant (page de refus, sans motif lisible) : identité `alerte` (D-91) ; la campagne attend la fin de
+#     l'alerte (1 h), puis la visite 3 est refusée dès sa liste d'entrée : identité `banni`.
+#   Jamais : une visite qui ne finit pas, une page demandée après le refus, une identité `ok`.
+# Durée estimée : environ 15 min (issue `banni` à la visite 2), ou environ 1 h 15 (issue `alerte`, puis la visite 3) ; on
+# peut s'arrêter après la visite 2 (`uv run shadowlab arreter`) si l'issue est `alerte`.
+# Verdict (lecture seule) :
+#   sqlite3 -readonly -header -column -cmd ".parameter set @n <n°>" outputs/shadowlab.sqlite3 < scripts/mesures-d103.sql
+experiment:
+  name: d103_bannissement_en_visite
+  description: >-
+    D-103, mesure 5 : le sujet de la course, identité neuve, récolte qui dure, 3 visites de 40 pages espacées d'1 min,
+    profil endurance ; le visiteur est banni à la main pendant la visite 2.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: d103-ban-en-visite-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 3
+  pages_par_visite: 40
+  espacement: {mode: fixe, minutes: 1}
+  concurrency: 1
+  monde: serie
+  seed: 20261121
+  output: [json, html]
