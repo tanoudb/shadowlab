@@ -246,6 +246,12 @@ recommander des optimisations.
   CAPTCHA en clés de test aux niveaux 05 et 06, niveau 06 complet à 0 sur 15 (corrélation entre sessions,
   campagne 101), aucun humain en base, une machine, un Chrome sur macOS, pas de témoin, rien contre une
   protection réelle ; l'identité native n'est pas le réglage par défaut. Le produit n'est pas atteint.
+- **Campagnes 145 à 147** (18/11, code `1cf6fc4`, `docs/PLAN.md` § 2) : `noezia` en identité native, 42 passages
+  par niveau de 01 à 06 sans corrélation, 252 sur 252 ; la borne basse de Wilson est à 91,6 % à chaque niveau, pour
+  la première fois au-dessus de 90 %. Témoins `patchright` et `playwright` : 0 sur 150 du niveau 02 au 06. Niveau 06
+  complet, un monde par passage : 42 sur 42 (première visite seulement). Mêmes réserves que les campagnes 100 et
+  101 (CAPTCHA en clés de test, peu de sessions humaines, une machine, identité native non par défaut, rien contre
+  une protection réelle) ; la course I9 tournait en même temps, durées non comparables ; Arena sur le port 8748.
 - **Récolte générale** (D-70, fusionnée le 12/11 dans cette branche, commit `b1a40ed`, rien sur `master`) :
   `shadowlab recolte lancer | reprendre | etat | essayer | noter`. Une **recette** YAML par site
   (`configs/recettes/`), un parcours avec état SQLite et reprise, `robots.txt` respecté, rythme, sentinelle

@@ -1018,6 +1018,53 @@ En identité native, Linux déclenche `devices_vide` (15 sur 15, 0 au poste) et,
 SwiftShader qui n'a lieu que sans interface. Liste classée des incohérences, sondes, coût disque réel (13 Go, pas 2) : `docs/recherche/fumee-linux-2026-11-17.md`. Non vérifié : vrai serveur x86_64, architecture
 arm64 réelle face à l'annonce x86_64, niveau 07, référence du poste pour l'identité réécrite avec écran.
 
+### Campagnes 145 à 147 : discrétion de l'identité native, 42 passages par niveau (18/11, 474 passages, 0 panne)
+
+Elles refont la mesure de discrétion de l'objectif (§ 1) avec le code du jour (`1cf6fc4`, après D-94 à D-103), à
+42 passages par niveau : il en faut au moins 35 sans un échec pour que la borne basse de Wilson atteigne 90 %
+(voir la campagne 100). 19 h 08 à 21 h 25, heure locale, Chrome 156 sur macOS.
+
+**Campagne 145** (`configs/experiments/discretion-native-42.yaml`, 19 h 08 à 20 h 32) : `noezia` en identité native
+(`headless: false`, `channel: chrome`, `identite_native: true`), niveaux 01 à 06, niveau 06 sans corrélation
+(`06scorr`), 3 scénarios × 14 répétitions.
+
+| Niveau | Réussis sur 42 | Taux | Wilson à 95 % | dont `captcha_test` (réussis / passages) | Durée médiane d'un passage réussi |
+|--------|----------------|------|---------------|------------------------------------------|-----------------------------------|
+| 01 | 42 | 100 % | 91,6 à 100 % | 0 / 0 | 8,1 s |
+| 02 | 42 | 100 % | 91,6 à 100 % | 0 / 0 | 8,0 s |
+| 03 | 42 | 100 % | 91,6 à 100 % | 0 / 0 | 8,1 s |
+| 04 | 42 | 100 % | 91,6 à 100 % | 0 / 0 | 7,4 s |
+| 05 | 42 | 100 % | 91,6 à 100 % | 42 / 42 | 23,3 s |
+| 06 sans corrélation | 42 | 100 % | 91,6 à 100 % | 42 / 42 | 21,5 s |
+
+Total : 252 passages réussis sur 252, tous `extraction_reussie`.
+
+**Campagne 146** (`discretion-temoins-15.yaml`, 20 h 32 à 21 h 03) : les deux témoins, 15 passages par niveau.
+`patchright` et `playwright` font 15 sur 15 au niveau 01, puis 0 sur 15 à chacun des niveaux 02 à 06 sans
+corrélation (0 sur 150 ; Wilson de 0 sur 15 : 0 à 20,4 %) : `bloque` aux niveaux 02 et 03, `challenge_non_valide`
+aux niveaux 04 à 06.
+
+**Campagne 147** (`correlation-06-mondes-42.yaml`, 21 h 03 à 21 h 25) : niveau 06 complet, avec la corrélation, un
+monde par passage (`monde: passage`). `noezia` natif : 42 sur 42 (91,6 à 100 %), 42 mondes, aucun bannissement,
+42 passages `captcha_test`, médiane 23,1 s. Comme la 119 (30 sur 30), c'est une première visite dans un monde
+neuf : elle ne remplace pas le 4 sur 15 de la campagne 120 (15 passages dans un seul monde, arrêt voulu à la
+5ᵉ session neuve de même empreinte).
+
+Ce que la base dit :
+- **Les trois conditions de discrétion du § 1 sont remplies sur l'Arena par `noezia` en identité native** : taux
+  ≥ 90 % à chacun des six niveaux, au moins 30 passages par niveau, intervalle de Wilson affiché. Pour la première
+  fois, la borne basse de cet intervalle est au-dessus de 90 % à chaque niveau (91,6 %) ; la campagne 100 donnait
+  179 sur 180 et une borne basse à 88,6 %.
+- Les témoins sont arrêtés dès le niveau 02 : l'Arena juge toujours.
+- **Réserves** : CAPTCHA en clés de test aux niveaux 05 et 06 (126 passages `captcha_test`, à ne pas confondre
+  avec un vrai CAPTCHA) ; niveau 06 sans corrélation, ou complet mais en première visite seulement ; Arena calibrée
+  sur quelques sessions humaines, pas sur un nombre (§ 7) ; une machine, un Chrome sur macOS ; l'identité native
+  n'est pas le réglage par défaut ; rien contre une protection réelle ni depuis un serveur Linux (la seconde moitié
+  de la ligne « Discrétion » du § 1). Le produit n'est pas atteint.
+- **Conditions de la mesure** : la course I9 tournait en même temps, donc les durées ne se comparent pas à celles
+  des autres campagnes. Frontal de l'Arena sur le port 8748 (`SHADOWLAB_PORT_ARENA`), le 8743 étant pris par un
+  autre projet du poste : le port ne change rien au jugement. Campagnes 142 à 144 : créées vides, à ignorer.
+
 ## 3. Pourquoi on a perdu du temps
 
 - Pas de définition de « fini » : la cible a changé trois fois en trois jours.

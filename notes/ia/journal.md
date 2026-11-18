@@ -4046,3 +4046,21 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   temporaires de sessions Claude d'autres projets. Rien supprimé hors du projet.
 - **Dans le projet** : profils Chrome (`chrome/`) des 18 identités d'essais terminés retirés de `outputs/identites` (environ 1 Go ;
   `identite.json` et `visites.jsonl` gardés, les mesures sont en base). Les identités de la course ne sont pas dans ce dossier.
+
+## 2026-11-18 (21h45) — Claude (Fable 5.2, coordination) — Mesure de discrétion finie (42 sur 42 par niveau) ; course à 6 visites sur 6 ; disque à 6 Gio
+
+- **Mesure de discrétion (campagnes 145 à 147, 19 h 08 à 21 h 25, code `1cf6fc4`)** : `noezia` en identité native, 42 passages par
+  niveau de 01 à 06 sans corrélation : **252 sur 252** (Wilson : 91,6 à 100 % à chaque niveau ; première fois que la borne basse passe
+  90 %). Témoins `patchright` et `playwright` : 15 sur 15 au niveau 01, 0 sur 150 du niveau 02 au 06. Niveau 06 complet, un monde par
+  passage : 42 sur 42, aucun bannissement. 0 panne sur 474 passages. Réserves : CAPTCHA en clés de test aux niveaux 05 et 06
+  (126 passages `captcha_test`), 06 complet en première visite seulement, peu de sessions humaines, une machine, identité native non
+  par défaut, rien contre une protection réelle. La course tournait en même temps (durées non comparables) ; Arena sur le port 8748.
+  Écrit dans `docs/PLAN.md` § 2 (« Campagnes 145 à 147 ») et `AGENTS.md`.
+- **Course I9 (contrôle de 21 h 28)** : `scripts/course.sh etat` code 0 ; sujet **6 visites réussies sur 6**, identité `ok` : la 6ᵉ
+  visite (20 h 25), celle où la première course était tombée, est passée. Prochaine visite à 21 h 37. Témoins finis comme prévu.
+- **Disque : 6 Gio libres à 21 h 26** (16 à 19 h 10). Causes mesurées, toutes hors de ce projet : un modèle de 27 Go téléchargé dans
+  le cache commun Hugging Face entre 20 h 50 et 21 h 06 (cache passé de 42 à 63 Go) ; fichier d'échange de macOS passé de 8,6 à
+  16 Go (8 fichiers créés entre 21 h 14 et 21 h 22). Ce projet pèse 6,3 Go et n'a pas grossi. Rien supprimé hors du projet ; Ethan
+  prévenu par notification. Sous ce niveau, la course peut s'arrêter (Chrome et SQLite ne peuvent plus écrire).
+- **Reste** : place à libérer par Ethan (ou sur son mot) ; contrôle de la course demain matin ; suites Linux et étape 3.3 toujours
+  bloquées par le disque.
