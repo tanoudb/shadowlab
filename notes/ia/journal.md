@@ -3952,3 +3952,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Lancé à 5 h 27, à la suite** : mesure 4 (`d103-entree-par-la-liste.yaml`), mesure 3 (campagne de contrôle), mesure 2 au rythme
   corrigé (`d103-passes-incrementales-2.yaml`, 30 visites de 8 pages espacées de 3 min). Reste la mesure 5 (bannissement pendant
   une visite, geste à la main).
+
+## 2026-11-18 (6h45) — Claude (Fable 5.2, coordination) — Course I9 arrêtée sur le mot d'Ethan ; mesures 4 et 3 de D-103
+
+- **Course arrêtée** : Ethan, « Oui » (question : arrêter la course bloquée, qui ne peut plus réussir). `scripts/course.sh arreter`
+  (fichier `ARRET`), puis fin du seul processus bloqué de la course (le passage 19) ; la campagne a alors écrit ses rapports et s'est
+  terminée d'elle-même (`interrompu`), Chrome compris, la session tmux `course-i9` s'est fermée ; conteneurs
+  `shadowlab-course-i9` arrêtés (`docker stop`, pas supprimés). `scripts/course.sh etat` rend 1 (« arrêtée »). Données gardées :
+  `.courses/i9` (base, identités, rapports). Les mesures en cours dans le dossier principal n'ont pas été touchées.
+- **Campagne 138** (mesure 4, `d103-entree-par-la-liste.yaml`, profil `enduranceporte150`, 5 h 26 à 5 h 48) : bras `sujet` 5 visites
+  sur 5, identité `ok`, le défi de la porte est émis sur la liste d'entrée et validé à chacune des visites 2 à 5 ; bras `banni` :
+  bannissement écrit avant la visite 3, visite 3 en échec (« statut 403 ») sur sa liste d'entrée, identité `banni`, 1 document, rien
+  d'autre demandé, pas de visite 4. Tous les critères écrits dans la note sont tenus.
+- **Campagne 139** (mesure 3, `controle-vrai-chrome.yaml`, 5 h 48 à 6 h 25) : mêmes taux que la 132 et la 134 dans les 9 cellules
+  (`noezia` natif 15, 15 et 15 sur 15 ; Chrome sans comportement 10, 15 et 0 ; `patchright` 0 sur 45).
+- **En cours** : campagne 140 (mesure 2 au rythme corrigé, 30 visites, fin vers 8 h 30). **Reste** : mesure 5 (bannissement pendant
+  une visite), puis une répétition de la course avant de proposer une nouvelle course à Ethan.
