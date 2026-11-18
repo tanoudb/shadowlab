@@ -4035,3 +4035,14 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `discretion-native-42.yaml` (`noezia` natif, 42 passages par niveau de 01 à 06 sans corrélation), `discretion-temoins-15.yaml`
   (`patchright` et `playwright`, 15 par niveau), `correlation-06-mondes-42.yaml` (06 complet, un monde par passage, 42 passages).
   Environ 2 heures ; la course tourne en même temps, les durées ne seront pas comparables.
+
+## 2026-11-18 (19h15) — Claude (Fable 5.2, coordination) — Port de l'Arena pris par un autre projet ; disque à 16 Gio
+
+- **Mesure de discrétion** : le premier lancement (19 h 05) n'a rien mesuré : le site de test ne démarrait pas, le port 8743 (frontal
+  de l'Arena du dossier principal) étant tenu depuis ce matin par le serveur d'un autre projet du poste (non touché). Campagnes 142,
+  143 et 144 : créées vides, notées `interrompu`, à ignorer. Relancée à 19 h 08 avec `SHADOWLAB_PORT_ARENA=8748` (campagne 145 et
+  suivantes) ; le port ne change rien au jugement de l'Arena.
+- **Disque : 16 Gio libres à 19 h 10** (18 à 19 h 02). Écrivains repérés, tous hors de ce projet : les conversations et fichiers
+  temporaires de sessions Claude d'autres projets. Rien supprimé hors du projet.
+- **Dans le projet** : profils Chrome (`chrome/`) des 18 identités d'essais terminés retirés de `outputs/identites` (environ 1 Go ;
+  `identite.json` et `visites.jsonl` gardés, les mesures sont en base). Les identités de la course ne sont pas dans ce dossier.
