@@ -3994,3 +3994,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   complète, l'ordonnanceur, une nuit, la porte de 24 h.
 - **Reste** : une répétition de la course avec ce code (nouvelle étiquette, sorties de la course du 17/11 à ranger d'abord), puis une
   nouvelle course de 7 jours : question posée à Ethan.
+
+## 2026-11-18 (8h40) — Claude (Fable 5.2, coordination) — Répétition 4 de la course lancée, sur le mot d'Ethan
+
+- Ethan : « Oui » (question : une répétition complète puis, si elle tient, une nouvelle course de 7 jours).
+- Sorties de la course du 17/11 rangées sans rien supprimer : `.courses/i9/outputs` devient `.courses/course-2026-11-17/` (base,
+  identités, rapports, journal, 219 Mo).
+- Étiquette `course-i9-repetition-4` = `7143d24` (le code corrigé par D-103, poussée) ; copie figée `.courses/i9` passée à cette
+  étiquette, `uv sync` fait.
+- Répétition lancée à 8 h 34 min 24 s : `COURSE_ENV=configs/courses/i9-repetition.env scripts/course.sh demarrer
+  configs/experiments/identite-7-jours-repetition.yaml` (environ 1 h 30). Surveillance par `course.sh etat` chaque minute.
+- Suite prévue : si le bilan tient tous ses critères, ranger ses sorties, poser une étiquette de course et lancer la course de
+  7 jours ; sinon, s'arrêter et dire pourquoi.
