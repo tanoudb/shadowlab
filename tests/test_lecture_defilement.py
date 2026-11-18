@@ -14,14 +14,16 @@ Les causes, dans le moteur (l'Arena ne change pas) :
    liste, fiche). La propriété de D-94 « un chemin répété dès la quatrième requête » ne tient que si la visite
    commence sur la liste (soirée 131 : toutes les visites commençaient sur la liste) ;
 2. une page sous 5 s est parcourue vite (`lecture.py`) ; avec les durées tirées par blocs de trois, les deux premières
-   pages d'une visite sont toutes deux légères avec une probabilité de 1/3 × 0,633 = 0,211 ;
+   pages d'une visite sont toutes deux légères dans 31 % des visites qui reprennent la passe (ce banc, code d'avant :
+   28 sur 91 ; une première estimation à la main donnait 21 %, démentie par le banc) ;
 3. l'interaction légère (`DriverNoezia._interaction_post_clic_navigation`) ne défile qu'avec une probabilité de 0,4 :
    deux pages légères de suite sans aucun défilement, 0,6 × 0,6 = 0,36.
-D'où, pour une visite qui commence sur une fiche : 0,211 × 0,36 = 7,6 % des visites portent l'enchaînement.
+D'où, pour une visite qui commence sur une fiche : 0,31 × 0,36 = 11 % ; le banc en bloque 11 sur 91 (12 %).
 4. Trouvé par ce banc : dans une passe incrémentale (la course y serait passée vers son 3ᵉ jour), chaque fiche déjà
    lue, évitée sans requête, prenait quand même une durée au plan de lecture : le tirage par blocs de trois ne valait
    plus pour les pages lues (deux premières pages légères dans 30 % des visites, `duree_pages_reguliere` dans 5 %),
-   et `pas_de_scroll` avec `duree_pages_reguliere` (0,75) arrêtait environ 1 visite incrémentale sur 80.
+   et `pas_de_scroll` avec `duree_pages_reguliere` (0,75) arrêtait environ 1 visite incrémentale sur 75 (3 sur 226
+   visites commencées sur une liste, banc de 250 visites, vitrine de 300 annonces).
 
 Le banc rejoue des visites avec le code réel : le parcours (`Parcours.visiter`, état durable, lecture humaine de D-94,
 pages par visite tirées comme l'ordonnanceur), l'interaction du moteur (`DriverNoezia._interaction_selon_lecture`,

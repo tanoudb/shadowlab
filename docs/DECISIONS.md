@@ -1113,7 +1113,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-91 — 15/11/2026 — Palier 2, étape I6 : la sentinelle d'identité.** Constat : la sentinelle de la récolte s'arrête
   au premier signe d'alerte, mais ne dit rien à l'identité persistante de D-88, qui pourrait resservir tout de suite.
   Décision (conception § 5.5) : `sentinelle.verdict_identite` classe l'alerte : `banni` pour un 403 sur la **première
-  page** d'un passage, `alerte` pour tout autre signe (429 et autres statuts, défi en cours de passe, hors site, porte
+  page** d'un passage ~~seulement~~ (révisé par D-103 : aussi à toute page quand le corps du refus d'une ressource dit
+  `bannissement`), `alerte` pour tout autre signe (429 et autres statuts, défi en cours de passe, hors site, porte
   d'entrée revenue trop tôt…). Elle ne fait que classer : aucune requête, aucune action. `parcours.py` écrit le verdict
   dans l'identité (`identite.marquer`, avec `alerte_le` ou `banni_le` et la raison). États : `ok` ; `alerte` : l'identité
   est refusée pendant 1 h (`identite.ATTENTE_ALERTE_S`), sauf option `maintenant` ; `banni` : refusée toujours, et rien ne
@@ -1252,7 +1253,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   médiane 4,5 s, maximum 30 s) tirées par blocs de trois pour que chaque début de visite soit dispersé ; une page sous 5 s est
   parcourue vite (interaction légère) ; retour obligatoire à la liste après la première fiche, puis retours et fiches déjà lues
   revues au hasard, pris sur le budget de pages de la visite, jamais en plus. (2) Sentinelle (`sentinelle.py`) : un 403 sur une
-  ressource ou un appel de données du même hôte arrête avant toute navigation (banni sur la première page, sinon alerte).
+  ressource ou un appel de données du même hôte arrête avant toute navigation (banni sur la première page, ~~sinon alerte~~
+  ; révisé par D-103 : sinon alerte, sauf motif `bannissement` lu dans le corps du refus, qui bannit).
   (3) Une relecture respecte `robots.txt`, son `Crawl-delay` et les hôtes de la recette (D-70). Preuve : tests écrits d'abord
   (`d9549c2`, en échec avant le code), code `3145957`, test `a378418`, correctif `7827fa1`, fusion `6a751e5`.
   **Essai 129** (`configs/experiments/identite-rythme-essai.yaml`, sujet seul) : 8 visites sur 8 réussies, 1 visiteur, 1
@@ -1479,3 +1481,32 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Choisi parce que, parmi les réglages qui donnent un WebGL, il a la chaîne de moteur de rendu au format des cartes Linux réelles, qu'aucune règle de l'Arena ne marque, et qu'il ne coûte aucun signal de plus (campagne 10 : 24 sur 24, `devices_vide` seul). **Non établi** : quelle part des vrais postes Linux sans carte a un WebGL ; si un Chrome lancé à la main en a un ; `/dev/dri` sur une machine virtuelle réelle (le correctif ne s'y appliquerait pas si un nœud d'affichage existe sans rendu matériel : à contrôler à l'étape 3.3) ; si des détecteurs du commerce marquent llvmpipe ou l'absence de WebGL ; sous Rosetta llvmpipe annonce « 128 bits » (sur un vrai x86_64 on attend « 256 bits »).
   **Remesure** : campagne 11 (identité native, Chrome 158, 90 passages, sans argument injecté) : 15 sur 15 aux six niveaux (campagne 6 : 15, 15, 15, 15, 15, 12), WebGL présent et canvas stable sur 90 empreintes sur 90 ; **pas la preuve que le réglage améliore les taux** (15 passages par niveau, `duree_pages_reguliere` encore sur 5 passages, Chrome 157 vers 158). L'Arena n'est pas modifiée ; une règle « WebGL absent » serait une étape à part. **Preuve** : tests écrits d'abord, vus en échec (commit `78fe124`, 25 rouges, `AttributeError`),
   code ensuite ; suite rapide 2 578 verts, tests du proxy et du stockage tiers avec un vrai Chrome verts. **Tenu en garde** : le crochet `FUMEE_CHROME_ARGS` (le conteneur remplace le binaire de Chrome par un lanceur) est un outil de mesure, jamais utilisé par le moteur. Décidé par : la session qui a fait l'étape, à la demande de la coordination.
+- **D-103 — 18/11/2026 — Course I9 tombée à la 6ᵉ visite du sujet : défilement en début de visite et entrée par la liste (défaut A), corps d'un refus attendu un temps borné et motif `bannissement` lu (défaut B) ; moteur seulement.**
+  **Constat** (base de la course, lecture seule ; 17/11, 20 h 43 UTC, passage 19) : à la 6ᵉ visite, l'Arena bloque une photo de la 3ᵉ page sur le score
+  0,6 (seuil 0,5 d'`endurance`) : `pas_de_scroll` (deux pages défilables de suite, fiche puis liste, 52 mouvements de souris, 0 défilement) et
+  `navigation_lineaire` (4 chemins distincts) ; le visiteur est banni (D-92). Puis la visite ne finit jamais : passage `en_cours` plus de 3 heures,
+  identité `ok`, aucune requête. **Causes A** (moteur) : (1) une visite qui reprend la passe commence sur la fiche suivante de la file
+  (`parcours.py:683` avant correction), donc le retour obligatoire à la liste de D-94 va à une liste jamais vue de la session ; (2) une page sous
+  5 s est parcourue vite (D-94) ; (3) l'interaction légère ne défile qu'à 40 % (`moteur.py:751` avant correction) ; (4) trouvé par le banc : en
+  passe incrémentale, une fiche évitée sans requête prenait une durée au plan de lecture (`parcours.py:688`), ce qui cassait les blocs de trois.
+  **Estimation** (banc sans navigateur, `tests/test_lecture_defilement.py`, code d'avant) : 11 visites bloquées sur les 91 qui reprennent la
+  1ʳᵉ passe en commençant sur une fiche (12 %), recoupé par le calcul 0,31 (deux premières pages parcourues vite, mesuré) × 0,36 (aucun défilement
+  sur les deux) = 11 % ; risque d'au moins un échec en 5 visites reprises : 47 %. Cause 4 : 3 visites incrémentales bloquées sur 226 (environ 1
+  sur 75). Compatible avec la soirée 131 (24 visites, toutes commencées sur la liste), la répétition 3 (30 visites, une seule commencée sur une
+  fiche) et la course (visites 2 à 6 commencées sur une fiche, échec à la 5ᵉ) ; aucun ne le prouve à lui seul.
+  **Cause B** : le moteur lit le corps de chaque 403 d'une ressource (`moteur.py:628` avant correction, `reponse.text()`) ; Playwright attend sans
+  limite le corps d'une requête qui ne finit pas ; le refus de l'Arena est `no-store` (`gardien.py:108`) et `vitrine.js:37` ne lit pas le corps
+  d'une réponse en échec : la requête de l'appel de données ne finit jamais (mesuré dans un vrai Chromium : seulement avec `no-store`).
+  **Décision** (l'Arena ne change pas : `detection.py`, `scoring.py`, profils intacts) : (A1) `moteur.py` : la première page défilable de chaque
+  visite est toujours défilée, même parcourue vite ; les suivantes gardent le tirage à 0,4. (A2) `parcours.py` : une visite qui reprend la passe
+  (lecture humaine allumée) entre par la dernière liste lue, relue et prise sur le budget, sauf s'il reste moins de 2 pages ou si, en passe
+  incrémentale, la page n'est pas à revoir. (A3) la durée de lecture n'est tirée que pour une page demandée. (B1) `moteur.py` : le corps d'un
+  refus n'est lu qu'une fois sa requête finie (`requestfinished`), attendu au plus 2 s (`ATTENTE_CORPS_MS`), sinon le refus est rendu
+  `corps-non-lu`. (B2) `sentinelle.py` : le motif JSON de l'Arena est lu dans le corps (`motif_de_refus`, `RefusRessource.motif`) ; le motif
+  `bannissement` bannit l'identité à toute page de la passe (D-91 reste vrai pour les autres refus : `banni` sur la première page, `alerte`
+  après) ; un corps non lu ne masque pas un corps lu ; seul, il compte comme un refus franc.
+  **Preuve** : tests écrits d'abord et vus en échec (A : `54bbb7c` ; B : `b4b31ff`), code ensuite (A : `80b8ac5` ; B : `55baf97`).
+  Suite rapide (`-m "not integration"`) : 2 730 verts, 2 ignorés ; avec un vrai navigateur : les 4 cas du petit serveur et la visite de bout en bout verts (avant correction : 5 sur 5 bloqués, arrêtés par le garde-fou dans `Response.text`), 13 tests voisins verts (identité, récolte par le navigateur, périmètre, témoin) ; lint propre. **Non vérifié** : rien devant la vraie Arena après correction (aucune campagne) ; le banc ne juge que `comportement` ; un
+  défi de la porte servi au seul appel de données n'est pas reconnu (corps non lu : refus franc) ; un refus en page au motif `bannissement` après
+  la première page reste une alerte ; l'attente de 2 s n'est vérifiée qu'en local. **À mesurer avant de relancer une course** : note
+  `docs/recherche/course-i9-visite-6-2026-11-18.md` § 5. Décidé par : la session chargée du défaut, à la demande de la coordination.

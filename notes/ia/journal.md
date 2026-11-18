@@ -3867,3 +3867,22 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Place rendue** : pile arrêtée, image amd64 effacée, cache de construction effacé par identifiant (images 26,79 Go puis 22,06 Go ; cache 4,95 Go puis 0,15 Go) ; `df` 23 Gio avant et après (le Mac ne récupère pas tout de suite) ; base copiée dans `outputs/fumee-linux-webgl-2026-11-18.sqlite3` du dossier principal.
 - **Corrections de relecture** : « Chrome de série » reformulé en « Chrome lancé par Patchright » (un Chrome lancé à la main n'a pas été essayé) ; D-50 barrée sur la partie fausse ; la sonde ne peut pas montrer le correctif (elle ne passe pas par le moteur) : la preuve est la campagne 11 dans la base.
 - **Reste** : `devices_vide`, `voices_vide`, `duree_pages_reguliere` ; une règle « WebGL absent » de l'Arena serait une étape à part ; llvmpipe annonce « 128 bits » sous Rosetta (non vérifié sur un vrai x86_64).
+
+## 2026-11-18 — Claude (Opus 5.5, session du défaut de la course I9) — Sujet tombé à la 6ᵉ visite : défauts A et B corrigés (D-103)
+
+- **Fait** (worktree `worktree-agent-ac4f38c973462d3ea`, rien poussé ni fusionné) : la course I9 a échoué le 17/11 à 20 h 43 UTC. Défaut A :
+  deux pages défilables de suite sans défilement (`pas_de_scroll`) et 4 chemins distincts (`navigation_lineaire`), score 0,6. Défaut B : après le
+  bannissement, la visite ne finissait jamais (le moteur attendait sans fin le corps d'un 403 `no-store` d'un appel de données que la page ne lit
+  pas). Note complète : `docs/recherche/course-i9-visite-6-2026-11-18.md` ; décision D-103.
+- **Commits** : `54bbb7c` (banc A, en échec), `80b8ac5` (code A), `b4b31ff` (tests B, en échec), `55baf97` (code B), puis les docs (D-103, note, journal).
+- **Fichiers** : `engines/noezia/moteur.py` (première page défilable d'une visite toujours défilée ; corps d'un refus lu après `requestfinished`,
+  attente de 2 s au plus), `parcours.py` (entrée par la dernière liste d'une visite qui reprend la passe ; durée tirée pour une page demandée),
+  `sentinelle.py` (motif de l'Arena lu, `bannissement` = banni à toute page, corps non lu) ; tests `test_lecture_defilement.py`,
+  `test_visite_refus_en_cours.py`, `test_defi_sur_ressource.py`, `test_course_visite.py`, `test_souris_trajectoire.py` (banc qui imite
+  `start_session`).
+- **Estimation A** (banc sans navigateur, code d'avant relancé sur une copie de `54bbb7c`) : 11 visites bloquées sur 91 qui reprennent la passe
+  en commençant sur une fiche (12 %), recoupé par 0,31 × 0,36 = 11 % ; ~1 visite incrémentale sur 75 (cause 4). Une première estimation à la main
+  (7,6 %) supposait 21 % de doubles pages légères : le banc mesure 31 %, elle est abandonnée. Après correction : 0 sur 160 au banc.
+- **Tests** : Suite rapide (`-m "not integration"`) : 2 730 verts, 2 ignorés ; avec un vrai navigateur : les 4 cas du petit serveur et la visite de bout en bout verts (avant correction : 5 sur 5 bloqués, arrêtés par le garde-fou dans `Response.text`), 13 tests voisins verts (identité, récolte par le navigateur, périmètre, témoin) ; lint propre.
+- **Reste** : rien mesuré devant la vraie Arena (liste au § 5 de la note) ; `AGENTS.md` et `docs/PLAN.md` laissés à la coordination ; numéro D-103
+  vérifié libre sur les 59 branches locales et distantes au 18/11 vers 1 h 30 (une autre session pourrait le prendre avant la fusion).
