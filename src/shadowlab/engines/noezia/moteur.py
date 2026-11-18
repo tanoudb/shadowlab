@@ -45,9 +45,15 @@ from .furtivite.patches import injecter as injecter_furtivite
 from .profils.generateur import ProfilNavigateur, generer_profil
 from .profils.stockage import charger_ou_creer
 from .proxy_identite import ProxyInvalide, RelaisProxy
-from .sentinelle import RefusRessource, detecter_defi_ressource
+from .sentinelle import MOTIF_NON_LU, RefusRessource, detecter_defi_ressource, motif_de_refus
 
 log = logging.getLogger(__name__)
+
+# Le corps d'un refus (403 d'une ressource) n'est lu qu'une fois sa requête finie : Playwright attend sans limite le
+# corps d'une requête qui ne finit pas (un refus `no-store` dont la page ne lit pas le corps, course I9, D-103). Le
+# moteur l'attend au plus ATTENTE_CORPS_MS, par pas de PAS_CORPS_MS, puis le rend « corps non lu ».
+ATTENTE_CORPS_MS = 2_000
+PAS_CORPS_MS = 100
 
 
 def _detecter_hote_os() -> str:
@@ -197,8 +203,9 @@ class DriverNoezia(Driver):
         # défilable suivante l'est, même parcourue vite (D-103, `pas_de_scroll`).
         self._defile_dans_la_visite = False
         # Réponses 403 reçues pour des ressources de la page (photo, appel de données) du même hôte, gardées jusqu'à
-        # `refus_ressources`, qui lit leur corps.
+        # `refus_ressources`, qui lit leur corps ; et l'`id` des requêtes de ces réponses qui ont fini (corps arrivé).
         self._refus_ressources: list[Any] = []
+        self._refus_finis: set[int] = set()
         self._signatures = extraction.Signatures(RACINE / "outputs" / "signatures_adaptatives.json")
         self._profil: ProfilNavigateur | None = None
         self._pw = None
@@ -512,6 +519,7 @@ class DriverNoezia(Driver):
         self._page.on("request", lambda _: self._compter("request_count"))
         self._page.on("requestfailed", lambda _: self._compter("error_count"))
         self._page.on("response", self._noter_reponse)
+        self._page.on("requestfinished", self._noter_fin_de_requete)
         self._reponse = None
         if profil is None:  # taille réelle de la fenêtre, pour les mouvements de souris
             largeur, hauteur = self._page.evaluate("[window.innerWidth, window.innerHeight]")
@@ -612,6 +620,12 @@ class DriverNoezia(Driver):
             # d'événement. Il est lu par `refus_ressources`.
             self._refus_ressources.append(reponse)
 
+    def _noter_fin_de_requete(self, requete) -> None:
+        """Événement `requestfinished` : si c'est la requête d'un refus gardé, son corps est arrivé et se lit sans
+        attendre. Playwright livre `response` avant `requestfinished`."""
+        if any(r.request is requete for r in self._refus_ressources):
+            self._refus_finis.add(id(requete))
+
     def _meme_hote(self, url: str) -> bool:
         """`url` est-elle sur le même hôte que la page affichée ?"""
         try:
@@ -622,28 +636,36 @@ class DriverNoezia(Driver):
 
     def refus_ressources(self) -> list[RefusRessource]:
         """Les 403 reçus pour des ressources de la page (photo, appel de données du même hôte) depuis le dernier appel :
-        (adresse, 403, nature du défi servi à la place, ou None pour un refus franc).
+        (adresse, 403, nature du défi servi à la place ou None, motif lu dans le corps).
 
         L'API synchrone de Playwright ne livre ses événements que pendant un appel : un appel léger les fait arriver
-        avant de lire la liste."""
+        avant de lire la liste. Un corps pas encore arrivé est attendu au plus `ATTENTE_CORPS_MS` (D-103)."""
         if self._page is not None:
             try:
                 self._page.evaluate("0")
+                for _ in range(ATTENTE_CORPS_MS // PAS_CORPS_MS):
+                    if all(id(r.request) in self._refus_finis for r in self._refus_ressources):
+                        break
+                    self._page.wait_for_timeout(PAS_CORPS_MS)
             except Exception:  # noqa: BLE001 — page fermée ou en navigation : on rend ce qu'on a
                 pass
         refus, self._refus_ressources = self._refus_ressources, []
-        return [RefusRessource(r.url, 403, self._defi_de_ressource(r)) for r in refus]
+        finis, self._refus_finis = self._refus_finis, set()
+        return [RefusRessource(r.url, 403, *self._lire_le_refus(r, id(r.request) in finis)) for r in refus]
 
     @staticmethod
-    def _defi_de_ressource(reponse) -> str | None:
-        """La nature du défi servi à la place de la ressource (`detecter_defi_ressource`), lue dans son corps et ses
-        en-têtes. Corps illisible (page fermée, corps oublié par le navigateur) : None, donc refus franc, comme
-        avant."""
+    def _lire_le_refus(reponse, finie: bool) -> tuple[str | None, str | None]:
+        """(nature du défi servi à la place de la ressource, motif de l'Arena), lus dans son corps et ses en-têtes
+        (`detecter_defi_ressource`, `motif_de_refus`). Requête pas finie : le corps n'est pas demandé (Playwright
+        l'attendrait sans fin), `(None, MOTIF_NON_LU)`. Corps illisible (page fermée, corps oublié par le
+        navigateur) : `(None, None)`, donc refus franc, comme avant."""
+        if not finie:
+            return None, MOTIF_NON_LU
         try:
             corps, entetes = reponse.text(), reponse.headers
         except Exception:  # noqa: BLE001 — erreur de Playwright, corps binaire : prudence
-            return None
-        return detecter_defi_ressource(corps, entetes)
+            return None, None
+        return detecter_defi_ressource(corps, entetes), motif_de_refus(corps)
 
     def _compter(self, champ: str) -> None:
         setattr(self.mesures, champ, getattr(self.mesures, champ) + 1)
@@ -693,6 +715,7 @@ class DriverNoezia(Driver):
     def navigate(self, url: str) -> ResultatNavigation:
         self.verifier(url)
         self._refus_ressources = []  # ceux de la page d'avant ont déjà été lus (ou n'ont plus de sens)
+        self._refus_finis = set()
         debut = time.perf_counter()
         # Mode rapide : DOM prêt suffit (on n'attend pas les ressources, déjà coupées).
         attente = "domcontentloaded" if self._bloquer_ressources else "load"

@@ -27,6 +27,7 @@ Ce qu'ils ne prouvent pas : la vraie Arena (frontal TLS, Nginx, Coraza) ; une vi
 from __future__ import annotations
 
 import faulthandler
+import json
 import random
 import sys
 import threading
@@ -199,10 +200,24 @@ def test_un_corps_non_lu_ne_masque_pas_le_defi_de_la_porte():
 
 
 def test_un_corps_non_lu_seul_reste_un_refus():
-    """Rien d'autre n'est su : prudence, la passe s'arrête comme pour un corps illisible (refus franc)."""
+    """Rien d'autre n'est su : prudence, la passe s'arrête comme pour un corps illisible (refus franc), donc `banni`
+    sur la première page de la passe (D-91), `alerte` après."""
     alerte = Sentinelle(["127.0.0.1"]).examiner_ressources([RefusRessource(DONNEES, 403, None, NON_LU)])
     assert alerte is not None and alerte.signe == "statut" and alerte.motif == NON_LU
     assert verdict_identite(alerte, premiere_page=False) == "alerte"
+    assert verdict_identite(alerte, premiere_page=True) == "banni"
+
+
+def test_les_refus_de_la_visite_6_donnent_un_bannissement():
+    """Ce que la base de la course montre pour la fiche AN-000069 : la 1ʳᵉ photo refusée par la détection (motif
+    `fingerprinting`), les trois suivantes par le bannissement, l'appel de données aussi (corps jamais arrivé)."""
+    photos = [f"{BASE_SITE}/lab/vitrine/photos/AN-000069/{n}.svg" for n in range(1, 5)]
+    refus = [RefusRessource(photos[0], 403, None, "fingerprinting")]
+    refus += [RefusRessource(photo, 403, None, "bannissement") for photo in photos[1:]]
+    refus.append(RefusRessource(DONNEES, 403, None, NON_LU))
+    alerte = Sentinelle(["127.0.0.1"]).examiner_ressources(refus)
+    assert alerte is not None and alerte.motif == "bannissement" and alerte.adresse == photos[1]
+    assert verdict_identite(alerte, premiere_page=False) == "banni"
 
 
 def test_une_alerte_sans_motif_se_construit_comme_avant():
@@ -338,6 +353,21 @@ def _visiter(site, experience: int, repetition: int, pages: int, dossier: Path):
     return jeton, issue
 
 
+def _releves(site, jeton: str) -> list[dict]:
+    """Les relevés de comportement envoyés par l'observateur pendant la session."""
+    cx = db.ouvrir(site.base_donnees)
+    try:
+        return [
+            json.loads(ligne["payload"])
+            for ligne in cx.execute(
+                "SELECT payload FROM observations_js WHERE session_token = ? AND kind = 'comportement' ORDER BY id",
+                (jeton,),
+            )
+        ]
+    finally:
+        cx.close()
+
+
 @pytest.mark.integration
 def test_un_bannissement_pendant_une_fiche_termine_la_visite_sans_autre_page(
     site_en_direct, banni_pendant_la_fiche, tmp_path
@@ -347,8 +377,12 @@ def test_un_bannissement_pendant_une_fiche_termine_la_visite_sans_autre_page(
     site = site_en_direct
     experience = nouvelle_experience(site, "endurance")
     dossier = tmp_path / "recolte-sujet"
-    _, premiere = _visiter(site, experience, 1, 2, dossier)
+    jeton_1, premiere = _visiter(site, experience, 1, 2, dossier)
     assert premiere.success, premiere.details  # la liste et AN-000001 ; la porte franchie, le visiteur connu
+    # Défaut A, dans un vrai Chrome : deux pages courtes (parcourues vite), défilables ; la première défilable l'est.
+    releves = _releves(site, jeton_1)
+    assert sum(1 for r in releves if r.get("page_defilable")) >= 2, releves
+    assert sum(r.get("evenements", {}).get("scroll", 0) for r in releves if r.get("page_defilable")) > 0, releves
 
     debut = time.monotonic()
     with Chien(BORNE_S) as chien:
@@ -358,13 +392,14 @@ def test_un_bannissement_pendant_une_fiche_termine_la_visite_sans_autre_page(
     assert banni_pendant_la_fiche == [jeton], "le bannissement n'a pas été écrit pendant la visite 2"
 
     # La visite est finie, en échec, et dit pourquoi.
+    print(f"visite 2 : {duree:.1f} s ; refus : {issue.details['refus']}")
     assert duree < BORNE_S
     assert not issue.success
     assert issue.details["statut"] == "arretee", issue.details
     assert "403" in issue.details["refus"] and "ressource" in issue.details["refus"], issue.details["refus"]
     # L'identité est bannie : l'Arena l'a dit dans le corps du refus d'une photo.
     assert issue.details["identite"]["etat"] == "banni", issue.details["identite"]
-    assert ident.ouvrir(IDENTITE).etat()["etat"] == "banni"
+    assert ident.lire_etat(IDENTITE)["etat"] == "banni"  # `ouvrir` la refuse désormais
 
     # Aucune page demandée après le premier refus : rien après les refus de la fiche AN-000003 (ses photos, son appel
     # de données), et aucun document de plus.

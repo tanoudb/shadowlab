@@ -151,9 +151,10 @@ class Moteur(Protocol):
 
     # Facultatifs (le parcours les cherche avec `getattr`) :
     #   regler_lecture(legere: bool) : la prochaine page est parcourue vite (interaction légère) ou lue en entier ;
-    #   refus_ressources() -> list[(adresse, statut, nature du défi ou None)] : les 403 reçus depuis le dernier appel
-    #   pour des ressources de la page (photo, appel de données) du même hôte, que la sentinelle traite comme un refus,
-    #   ou comme un défi si leur corps en est un (`RefusRessource`) ; un couple (adresse, statut) vaut un refus franc.
+    #   refus_ressources() -> list[(adresse, statut, nature du défi ou None, motif ou None)] : les 403 reçus depuis le
+    #   dernier appel pour des ressources de la page (photo, appel de données) du même hôte, que la sentinelle traite
+    #   comme un refus, ou comme un défi si leur corps en est un (`RefusRessource`) ; le motif `bannissement` bannit
+    #   l'identité (D-103) ; un couple (adresse, statut) vaut un refus franc.
 
 
 class MoteurDriver:

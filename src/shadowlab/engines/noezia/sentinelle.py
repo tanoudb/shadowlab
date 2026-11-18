@@ -81,6 +81,20 @@ def detecter_defi(html: str, entetes: Mapping[str, str] | None = None) -> str | 
 # page qu'elle sert à une navigation (`gardien._refus`). Seuls ceux d'une page de défi sont des défis ; les autres
 # (`bannissement`, `fingerprinting`, `composite-differe`…) accompagnent la page de refus : un refus franc.
 _MOTIFS_DEFI_ARENA = {"defi-js": "arena", "turnstile": "turnstile", "recaptcha": "recaptcha", "captcha": "captcha"}
+# Le motif d'un refus qui dit que le visiteur est banni : un bannissement, à toute page de la passe (D-103).
+MOTIF_BANNISSEMENT = "bannissement"
+# Le motif d'un refus dont le corps n'est jamais arrivé (attendu un temps borné par le moteur, D-103) : rien n'est su.
+MOTIF_NON_LU = "corps-non-lu"
+
+
+def motif_de_refus(corps: str) -> str | None:
+    """Le motif JSON de l'Arena (`{"bloque_par": …}`, `gardien._refus`) lu dans le corps d'un refus, ou None."""
+    try:
+        donnees = json.loads(corps)
+    except ValueError:
+        return None
+    motif = donnees.get("bloque_par") if isinstance(donnees, dict) else None
+    return motif if isinstance(motif, str) else None
 
 
 def detecter_defi_ressource(corps: str, entetes: Mapping[str, str] | None = None) -> str | None:
@@ -92,21 +106,19 @@ def detecter_defi_ressource(corps: str, entetes: Mapping[str, str] | None = None
     defi = detecter_defi(corps, entetes)
     if defi is not None:
         return defi
-    try:
-        donnees = json.loads(corps)
-    except ValueError:
-        return None
-    motif = donnees.get("bloque_par") if isinstance(donnees, dict) else None
-    return _MOTIFS_DEFI_ARENA.get(motif) if isinstance(motif, str) else None
+    motif = motif_de_refus(corps)
+    return _MOTIFS_DEFI_ARENA.get(motif) if motif is not None else None
 
 
 class RefusRessource(NamedTuple):
     """Un 403 reçu pour une ressource de la page (`refus_ressources` du moteur) ; `defi` : la nature du défi servi à sa
-    place (`detecter_defi_ressource`), None pour un refus franc ou un corps illisible."""
+    place (`detecter_defi_ressource`), None pour un refus franc ou un corps illisible ; `motif` : le motif JSON de
+    l'Arena lu dans le corps (`motif_de_refus`), `MOTIF_NON_LU` si le corps n'est jamais arrivé, sinon None."""
 
     adresse: str
     statut: int
     defi: str | None = None
+    motif: str | None = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,7 @@ class Alerte:
     adresse: str
     statut: int | None = None
     defi: str | None = None  # alerte `defi` d'une ressource (`examiner_ressources`) : la nature du défi
+    motif: str | None = None  # refus d'une ressource : le motif lu dans son corps (`RefusRessource.motif`)
 
     def message(self) -> str:
         return f"signe d'alerte ({self.detail}) sur {self.adresse}"
@@ -123,9 +136,10 @@ class Alerte:
 
 def verdict_identite(alerte: Alerte, premiere_page: bool) -> str:
     """Ce que l'alerte veut dire pour l'identité (§ 5.5) : `banni` pour un refus franc (403) dès la première page de la
-    passe, `alerte` pour tout le reste (429 et autres statuts, défi, retour à la connexion, hors site, porte revenue
-    trop tôt…). Ne fait que classer : aucune requête, aucune action."""
-    if alerte.signe == "statut" and alerte.statut == 403 and premiere_page:
+    passe, ou à toute page quand le site dit lui-même que le visiteur est banni (motif `bannissement` lu dans le corps
+    du refus d'une ressource, D-103) ; `alerte` pour tout le reste (429 et autres statuts, défi, retour à la connexion,
+    hors site, porte revenue trop tôt…). Ne fait que classer : aucune requête, aucune action."""
+    if alerte.signe == "statut" and alerte.statut == 403 and (premiere_page or alerte.motif == MOTIF_BANNISSEMENT):
         return "banni"
     return "alerte"
 
@@ -170,21 +184,29 @@ class Sentinelle:
         qui ne lit pas le corps. Un 403 dont le corps est un défi (`detecter_defi_ressource`, lu par le moteur) n'est
         pas un refus franc : alerte `defi` (jamais un bannissement, `verdict_identite`), comme le même défi servi à la
         place d'une page ; le parcours l'excuse quand c'est le défi de sa porte d'entrée et qu'elle peut être repassée.
-        Du plus grave au moins grave : un refus franc, puis un défi d'une autre nature, puis le défi de la porte de
-        l'Arena (`arena`)."""
+        Du plus grave au moins grave : un refus au motif `bannissement`, un autre refus franc, un défi d'une autre
+        nature, le défi de la porte de l'Arena (`arena`), puis un refus dont le corps n'est jamais arrivé
+        (`MOTIF_NON_LU`) : rien n'en est su, il ne compte que seul, comme un refus franc (D-103)."""
         retenu: tuple[int, RefusRessource] | None = None
         for brut in refus:
             r = RefusRessource(*brut)
             if r.statut != 403 or (urlsplit(r.adresse).hostname or "").lower() not in self._hotes:
                 continue
-            gravite = 0 if r.defi is None else 1 if r.defi != "arena" else 2
+            if r.motif == MOTIF_NON_LU:
+                gravite = 3
+            elif r.defi is None:
+                gravite = -1 if r.motif == MOTIF_BANNISSEMENT else 0
+            else:
+                gravite = 1 if r.defi != "arena" else 2
             if retenu is None or gravite < retenu[0]:
                 retenu = (gravite, r)
         if retenu is None:
             return None
         r = retenu[1]
         if r.defi is None:
-            return Alerte("statut", "statut 403 sur une ressource de la page", r.adresse, 403)
+            precision = {MOTIF_BANNISSEMENT: " (motif bannissement)", MOTIF_NON_LU: " (corps non lu)"}.get(r.motif, "")
+            detail = f"statut 403 sur une ressource de la page{precision}"
+            return Alerte("statut", detail, r.adresse, 403, motif=r.motif)
         return Alerte("defi", f"page de défi ({r.defi}) sur une ressource de la page", r.adresse, 403, r.defi)
 
     def noter(self, type_page: str, decision: str, adresse: str = "") -> Alerte | None:
