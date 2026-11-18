@@ -143,7 +143,11 @@ def simuler(sessions: int, graine: int) -> list[list[PageSimulee]]:
                     _defilement=SimulateurDefilement(
                         page, mode=config.defilement.mode, pixels_par_tick=config.defilement.pixels_par_tick
                     ),
+                    _page=page,
+                    _defile_dans_la_visite=False,
                 )
+                # La vraie règle (D-103) : la page factice ne dit pas si elle défile, la règle répond « non ».
+                pilote._premiere_page_defilable = lambda p=pilote: DriverNoezia._premiere_page_defilable(p)
                 pages: list[PageSimulee] = []
                 for _ in range(PAGES_PAR_SESSION):
                     souris_page.mouvements, souris_page.molette = [], []

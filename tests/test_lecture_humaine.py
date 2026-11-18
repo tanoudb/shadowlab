@@ -412,7 +412,8 @@ def test_le_moteur_retient_les_403_des_ressources_du_meme_hote_et_les_rend_une_f
     d._noter_reponse(_reponse(PHOTO, 200))  # une ressource servie : rien
     d._noter_reponse(_reponse("http://127.0.0.1:8770/lab/vitrine/photos/x.svg", 404))  # pas un refus
     d._noter_reponse(_reponse("https://cdn.exemple.test/x.js", 403))  # un autre hôte
-    assert d.refus_ressources() == [(PHOTO, 403, None), (API, 403, None)]  # sans corps lisible : refus francs
+    # Aucune requête finie (pas d'événement `requestfinished`) : corps non lus, rendus sans attendre leur corps (D-103).
+    assert d.refus_ressources() == [(PHOTO, 403, None, "corps-non-lu"), (API, 403, None, "corps-non-lu")]
     assert d.refus_ressources() == []
 
 
@@ -449,7 +450,7 @@ def test_le_moteur_de_parcours_transmet_la_lecture_et_les_refus_au_pilote():
     moteur.regler_lecture(True)
     assert d.lecture_legere is True
     d._noter_reponse(_reponse(PHOTO, 403))
-    assert moteur.refus_ressources() == [(PHOTO, 403, None)]
+    assert moteur.refus_ressources() == [(PHOTO, 403, None, "corps-non-lu")]
 
 
 def test_un_pilote_sans_ces_fonctions_est_accepte(site):

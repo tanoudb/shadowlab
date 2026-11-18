@@ -108,12 +108,18 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
     dossier = tmp_path / "recolte-sujet"
     lues_avant: set[str] = set()
     issues, rang = [], 0
+    suivante = None  # une visite de la passe 2, si la passe 1 a fini pile à la fin d'une visite (reprise vide)
     while True:  # première passe : 3 listes, 45 fiches, des retours ; 10 pages par visite au plus
         rang += 1
         assert rang < 20, "la première passe ne finit pas"
         jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
         pilote = Chrome(site)
         issue = visiter(pilote, jeton, dossier, 10, rang)
+        if issue.details["passe"] != 1:
+            # La passe 1 avait tout lu à la visite d'avant (finie `limitee` sur sa dernière page) : cette visite ne
+            # trouve rien à reprendre et commence la passe incrémentale, sans sortir de la visite (`Parcours.visiter`).
+            suivante = (pilote, issue)
+            break
         issues.append(issue)
         assert issue.success is True, issue.details
         assert issue.details["pages_visite"] == len(pages_de(pilote)) <= 10  # le budget, relectures comprises
@@ -122,7 +128,11 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
         if rang > 1:
             neuves = [c for c in fiches if c not in lues_avant]
             assert neuves, "une visite de reprise doit avancer"
-            assert chemins(pilote)[0] not in lues_avant  # la reprise part de la première page encore à lire
+            # La reprise part de la première page encore à lire ; si c'est une fiche, elle entre d'abord par la dernière
+            # liste lue (D-103), comme un visiteur qui revient sur la liste qu'il parcourait.
+            debut = chemins(pilote)
+            if debut[0] in lues_avant:
+                assert "/AN-" not in debut[0] and "/AN-" in debut[1] and debut[1] not in lues_avant, debut[:3]
         assert issue.details["relectures"] >= (1 if len(fiches) >= 2 else 0)  # lecture humaine active à chaque visite
         lues_avant |= set(chemins(pilote))
         if issue.details["statut"] == "terminee":
@@ -134,10 +144,13 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
     total = sum(len(a) for a in vitrine.verite(GRAINE, TAILLE)["annonces"])
     assert note["champs_attendus"] == note["champs_exacts"] == total  # sur toutes les annonces attendues
     # la passe suivante est incrémentale : les listes seulement (fiches déjà lues évitées), avec des retours à la liste
-    rang += 1
-    jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
-    pilote = Chrome(site)
-    issue = visiter(pilote, jeton, dossier, 10, rang)
+    if suivante is None:
+        rang += 1
+        jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
+        pilote = Chrome(site)
+        issue = visiter(pilote, jeton, dossier, 10, rang)
+    else:
+        pilote, issue = suivante
     assert issue.success is True and issue.details["passe"] == 2 and issue.details["incrementale"] is True
     assert not any("/AN-" in c for c in chemins(pilote))
     liste1, liste2 = "/lab/vitrine/annonces", "/lab/vitrine/annonces?page=2"
@@ -284,6 +297,60 @@ def test_la_porte_revenue_au_milieu_d_une_visite(site_porte, identite, tmp_path,
     else:
         assert bilan.code == 0 and bilan.statut == "terminee", bilan.arret
         assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() > avant
+
+
+def _visite(dossier, pilote, pages):
+    """Une visite de la course sur le pilote factice : lecture humaine (instantanée), porte de 24 h, état durable."""
+    p = fabriquer(
+        dossier,
+        pilote,
+        texte=recette_24h(),
+        options=Options(lecture=scenarios.LECTURE_HUMAINE_VISITE, entree_a_chaque_lancement=True),
+        horloge=pilote.horloge,
+        horodatage=lambda: instant(pilote, 0).isoformat(timespec="seconds"),
+    )
+    n = len(pilote.demandes)
+    bilan = p.visiter(pages_max=pages)
+    return bilan, [d for d in pilote.demandes[n:] if not d.startswith("/robots.txt")]
+
+
+def test_la_porte_expiree_entre_deux_visites_est_passee_sur_la_liste_d_entree(site_porte, identite, tmp_path):
+    """D-103 : une visite qui reprend la passe entre par la dernière liste lue. Le lendemain, la porte de 24 h a expiré :
+    le défi tombe sur cette liste d'entrée, il est passé comme la porte d'entrée, et la visite reprend sa file."""
+    pilote = PiloteIdentite(site_porte, identite, pas_s=20)
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=3600))
+    premiere, _ = _visite(tmp_path / "r", pilote, 3)  # la liste, AN-000001, retour à la liste
+    assert premiere.statut == "limitee", premiere.arret
+
+    pilote.horloge.t += 86400
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=86400 + 10))
+    avant = identite.porte_franchie_le()
+    pilote.reponses[LISTE] = (200, PAGE_ARENA)
+    pilote.apres_attente = [(200, PAGE_ARENA), (200, vraie(pilote))]
+    bilan, demandes = _visite(tmp_path / "r", pilote, 2)
+
+    assert bilan.code == 0 and bilan.statut == "limitee", bilan.arret
+    assert demandes == ["/lab/vitrine/annonces", "/lab/vitrine/annonces/AN-000002"]
+    assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() > avant
+
+
+def test_un_visiteur_banni_qui_revient_est_arrete_sur_la_liste_d_entree_et_rend_sa_page(site_porte, identite, tmp_path):
+    """Le visiteur a été banni entre deux visites : le refus tombe sur la liste d'entrée, première page de la passe
+    reprise, donc `banni` ; rien n'est demandé après ; la fiche suivante de la file y reste (elle n'est pas perdue)."""
+    pilote = PiloteIdentite(site_porte, identite, pas_s=20)
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=3600))
+    premiere, _ = _visite(tmp_path / "r", pilote, 3)
+    assert premiere.statut == "limitee", premiere.arret
+
+    pilote.reponses[LISTE] = (403, pages_du_site.page_blocage())
+    bilan, demandes = _visite(tmp_path / "r", pilote, 5)
+    assert bilan.code == 3 and bilan.arret["signe"] == "statut" and bilan.arret["statut"] == 403
+    assert demandes == ["/lab/vitrine/annonces"]
+    assert identite.etat()["etat"] == "banni"
+
+    del pilote.reponses[LISTE]  # le parcours ne lit pas l'état de l'identité (le moteur et la campagne, si)
+    _, demandes = _visite(tmp_path / "r", pilote, 2)
+    assert demandes == ["/lab/vitrine/annonces", "/lab/vitrine/annonces/AN-000002"]
 
 
 def test_la_porte_courte_de_la_repetition_suit_la_meme_regle(site_porte, identite, tmp_path):
