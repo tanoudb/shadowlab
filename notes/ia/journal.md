@@ -3920,3 +3920,21 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   un geste à la main (`shadowlab arena bannir`), deux issues justes (`banni` si une photo est refusée la première, sinon `alerte` puis `banni`).
 - **Non vérifié** : aucune de ces campagnes n'a tourné ; les durées sont estimées (soirée 131 : environ 2 min par visite de 15 pages) ;
   la requête n'a été essayée que sur la base de la course (lecture seule) et sur une base de test.
+
+## 2026-11-18 (3h50) — Claude (Fable 5.2, coordination) — D-103 fusionnée et poussée ; mesure 1 (campagne 135) ; mesure refaite
+
+- **Fusion et contrôle** : correction des deux défauts du moteur (`e6e86c9`), suite complète 2 814 tests verts en 11 min 55 s ;
+  campagnes d'essai et requête de verdict (`configs/experiments/d103-*.yaml`, `scripts/mesures-d103.sql`) fusionnées, poussé.
+- **Campagne 135** (mesure 1 telle qu'écrite : 21 visites de 15 pages espacées d'1 min, profil `endurance`, vitrine de 300,
+  2 h 17 à 3 h 44) : visites 1 à 9 réussies, les 8 visites reprises entrent toutes par la liste, 0 `pas_de_scroll`, 0
+  `navigation_lineaire`, 0 `duree_pages_reguliere`, 88 annonces. La 10ᵉ est arrêtée par l'Arena pour une autre raison :
+  `debit:pages_par_heure` (241 pages comptées en 27 minutes, environ 25 par visite avec les appels de données ; seuil 240 par
+  heure). C'est le rythme de l'essai qui est en cause, pas le comportement : la course, elle, est bornée à 120 pages par heure par
+  l'ordonnanceur. Le défaut B est vu corrigé sur l'Arena une fois : la visite 10 finit en 44 s (échec, « statut 403 », identité en
+  `alerte` car c'est une page et non une ressource qui est refusée), rien n'est demandé après la page refusée et ses ressources ;
+  après l'heure d'attente, la visite 11 est refusée sur sa liste d'entrée, identité `banni`, 1 document, la campagne s'arrête.
+- **Limite** : 8 visites reprises sans blocage ne prouvent pas la correction (avec 12 % par visite, 36 % de chances de n'en voir
+  aucun). La mesure 2 écrite a le même défaut de rythme (30 visites espacées d'1 min) : à corriger avant de la lancer.
+- **Mesure 1 refaite** : `configs/experiments/d103-visites-reprises-2.yaml`, 24 visites de 8 pages espacées de 3 min (environ 195
+  pages comptées par heure). Campagne 136 : ce fichier arrêté après une visite (libellé faux, corrigé) ; relancée à 3 h 47 avec
+  l'identité `d103-reprise-3`.

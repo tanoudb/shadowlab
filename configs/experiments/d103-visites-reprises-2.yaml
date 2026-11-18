@@ -1,0 +1,50 @@
+# D-103, mesure 1 refaite (18/11). La première (campagne 135, 21 visites de 15 pages espacées d'1 min) a été arrêtée à la
+# 10ᵉ visite par la règle de débit de l'Arena (`debit:pages_par_heure`, plus de 240 pages comptées en une heure : chaque
+# visite en compte environ 25, appels de données compris), pas par un signal de comportement. Ici : 24 visites de 8 pages
+# espacées de 3 min, soit environ 195 pages comptées par heure, sous le seuil. La campagne 136 (identité
+# `d103-reprise-2`) est ce même fichier arrêté après une visite : son libellé était faux.
+# D-103, mesure 1 : des visites qui REPRENNENT la passe, devant la vraie Arena (docs/recherche/course-i9-visite-6-2026-11-18.md,
+# § 5 et « Comment mesurer »).
+#
+# But : le cas de la course I9 (sujet tombé à sa 6e visite, `pas_de_scroll` + `navigation_lineaire`), corrigé dans le moteur
+# (D-103 : entrée par la dernière liste lue, première page défilable toujours défilée). Un seul bras, le sujet de la course
+# (`noezia` en identité native, identité persistante neuve, récolte qui dure d'une visite à l'autre), profil `endurance`,
+# vitrine de 300 annonces comme la course. 21 visites de 15 pages au plus (relectures comprises), écart fixe d'1 min : en
+# 20 visites, 300 pages au plus, la 1re passe en a 315 ; elle n'est donc pas finie avant la 21e visite, et les visites 2 à
+# 21 reprennent toutes la passe (20 visites reprises).
+#
+# Critère : 21 visites réussies sur 21 ; aucun blocage ; aucun bannissement ; `pas_de_scroll`, `navigation_lineaire` et
+# `duree_pages_reguliere` à 0 à chaque visite ; chaque visite reprise commence par la liste, puis une fiche jamais lue
+# (`L > L/AN-0000xx`, xx = annonces retrouvées à la visite d'avant + 1), même passe (1), annonces retrouvées en hausse.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer
+#   2. Identité à usage unique : pour recommencer, changer le suffixe (`d103-reprise-2`…) ; ne jamais recopier un dossier
+#      de `outputs/identites/`.
+#   3. Rien de lourd à côté (durées).
+# Commande (une fenêtre de Chrome s'ouvre à chaque visite) :
+#   SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab campagne configs/experiments/d103-visites-reprises.yaml
+# Durée estimée : environ 1 h 05 (21 visites d'environ 2 min, comme la soirée 131 à 15 pages, et 20 écarts d'1 min).
+# Verdict (lecture seule) :
+#   sqlite3 -readonly -header -column -cmd ".parameter set @n <n°>" outputs/shadowlab.sqlite3 < scripts/mesures-d103.sql
+experiment:
+  name: d103_visites_reprises_2
+  description: >-
+    D-103, mesure 1 : le sujet de la course, identité neuve, récolte qui dure, 24 visites de 8 pages espacées de 3 min,
+    profil endurance, vitrine de 300 annonces ; les visites 2 à 24 reprennent la passe.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: d103-reprise-3}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 24
+  pages_par_visite: 8
+  espacement: {mode: fixe, minutes: 3}
+  concurrency: 1
+  monde: serie
+  seed: 20261118
+  output: [json, html]
