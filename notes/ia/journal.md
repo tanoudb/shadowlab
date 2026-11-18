@@ -3979,3 +3979,18 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   tient la base ouverte ; le verdict se lit alors avec `"file:outputs/shadowlab.sqlite3?immutable=1"` (seulement si rien n'écrit).
 - **Lancée à 8 h 12** : mesure 5 (`d103-bannissement-en-visite.yaml`), bannissement écrit par un guetteur 60 s après le début de
   la visite 2.
+
+## 2026-11-18 (8h30) — Claude (Fable 5.2, coordination) — D-103, mesure 5 : campagne 141 ; bilan des mesures
+
+- **Campagne 141** (`d103-bannissement-en-visite.yaml`, 8 h 12 à 8 h 20) : visite 1 réussie (40 pages) ; bannissement écrit par un
+  guetteur 60 s après le début de la visite 2 (`shadowlab arena bannir`, 8 h 20 min 06,96 s) ; la page suivante (fiche AN-000035) est
+  refusée à 8 h 20 min 07,16 s ; la visite finit 3 s plus tard (62,9 s en tout, échec, « statut 403 », identité `alerte` : c'est une
+  page et non une ressource qui est refusée) ; rien n'est demandé après la page refusée et ses ressources. Campagne arrêtée ensuite
+  (`shadowlab arreter`) pour ne pas attendre l'heure d'alerte ; la suite « alerte, puis visite suivante refusée, `banni` » a été vue à
+  la campagne 135.
+- **Bilan des cinq mesures de D-103** : écrit dans D-103, `docs/PLAN.md` § 2 et `AGENTS.md` (campagnes 135, 137, 138, 139, 140, 141).
+  Toutes tiennent ; aucune visite sans fin ; aucun signal de comportement sur 31 visites reprises et 24 passes incrémentales.
+- **Non mesuré** : le cas exact de la course sur l'Arena (photos et appel de données refusés après un document servi), une répétition
+  complète, l'ordonnanceur, une nuit, la porte de 24 h.
+- **Reste** : une répétition de la course avec ce code (nouvelle étiquette, sorties de la course du 17/11 à ranger d'abord), puis une
+  nouvelle course de 7 jours : question posée à Ethan.
