@@ -4006,3 +4006,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   configs/experiments/identite-7-jours-repetition.yaml` (environ 1 h 30). Surveillance par `course.sh etat` chaque minute.
 - Suite prévue : si le bilan tient tous ses critères, ranger ses sorties, poser une étiquette de course et lancer la course de
   7 jours ; sinon, s'arrêter et dire pourquoi.
+
+## 2026-11-18 (10h05) — Claude (Fable 5.2, coordination) — Répétition 4 tenue ; deuxième course de 7 jours lancée
+
+- **Répétition 4** (8 h 34 min 26 s à 10 h 00, `scripts/course.sh bilan 1` rend 0, « TENU ») : sujet 32 visites sur 32, aucun
+  bannissement, aucune alerte, 1 visiteur, 1 empreinte E, porte de 600 s repassée 8 fois, récolte 30 sur 30 (420 champs sur 420,
+  31 passes) ; témoin négatif arrêté à la visite 5 (2 bannissements), sentinelle refusée à la visite 3 (0 page après, identité
+  `banni`), témoin classique 0 sur 3. Sorties rangées dans `.courses/repetition-4-2026-11-18/`.
+- **Deuxième course** : étiquette `course-i9-2` = `7143d24` (poussée), copie figée à cette étiquette, lancée le 18/11 à
+  10 h 03 min 00 s (`scripts/course.sh demarrer configs/experiments/identite-7-jours.yaml`), échéance le 25/11 vers 10 h 03.
+- **Disque** : tombé de 29 à 20 Gio libres pendant la répétition, hors de ce projet pour l'essentiel (cache Hugging Face de 35 à
+  42 Go, `omni-trad` de 48 à 50 Go, données de l'application Claude de 27 à 30 Go). Dans le projet : dossier de travail du sous-agent
+  retiré (branche fusionnée, 545 Mo), sauvegarde d'avant la migration 8 compressée (632 Mo devenus 51 Mo, archive vérifiée avant de
+  retirer l'original). Dit à Ethan.
+- **Contrôle quotidien** : inchangé (`scripts/course.sh etat; echo $?` sans tube, `scripts/course.sh bilan 1`, `df -h /`).
