@@ -1113,7 +1113,7 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
 - **D-91 — 15/11/2026 — Palier 2, étape I6 : la sentinelle d'identité.** Constat : la sentinelle de la récolte s'arrête
   au premier signe d'alerte, mais ne dit rien à l'identité persistante de D-88, qui pourrait resservir tout de suite.
   Décision (conception § 5.5) : `sentinelle.verdict_identite` classe l'alerte : `banni` pour un 403 sur la **première
-  page** d'un passage ~~seulement~~ (révisé par D-103 : aussi à toute page quand le corps du refus d'une ressource dit
+  page** d'un passage (révisé par D-103 : aussi à toute page quand le corps du refus d'une ressource dit
   `bannissement`), `alerte` pour tout autre signe (429 et autres statuts, défi en cours de passe, hors site, porte
   d'entrée revenue trop tôt…). Elle ne fait que classer : aucune requête, aucune action. `parcours.py` écrit le verdict
   dans l'identité (`identite.marquer`, avec `alerte_le` ou `banni_le` et la raison). États : `ok` ; `alerte` : l'identité
@@ -1491,8 +1491,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   passe incrémentale, une fiche évitée sans requête prenait une durée au plan de lecture (`parcours.py:688`), ce qui cassait les blocs de trois.
   **Estimation** (banc sans navigateur, `tests/test_lecture_defilement.py`, code d'avant) : 11 visites bloquées sur les 91 qui reprennent la
   1ʳᵉ passe en commençant sur une fiche (12 %), recoupé par le calcul 0,31 (deux premières pages parcourues vite, mesuré) × 0,36 (aucun défilement
-  sur les deux) = 11 % ; risque d'au moins un échec en 5 visites reprises : 47 %. Cause 4 : 3 visites incrémentales bloquées sur 226 (environ 1
-  sur 75). Compatible avec la soirée 131 (24 visites, toutes commencées sur la liste), la répétition 3 (30 visites, une seule commencée sur une
+  sur les deux) = 11 % ; risque d'au moins un échec en 5 visites reprises : 47 %. Cause 4 : 2 visites incrémentales bloquées sur 231 (environ 1
+  sur 115 ; après correction 0 sur 250). Compatible avec la soirée 131 (24 visites, toutes commencées sur la liste), la répétition 3 (30 visites, une seule commencée sur une
   fiche) et la course (visites 2 à 6 commencées sur une fiche, échec à la 5ᵉ) ; aucun ne le prouve à lui seul.
   **Cause B** : le moteur lit le corps de chaque 403 d'une ressource (`moteur.py:628` avant correction, `reponse.text()`) ; Playwright attend sans
   limite le corps d'une requête qui ne finit pas ; le refus de l'Arena est `no-store` (`gardien.py:108`) et `vitrine.js:37` ne lit pas le corps
@@ -1506,7 +1506,8 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   `bannissement` bannit l'identité à toute page de la passe (D-91 reste vrai pour les autres refus : `banni` sur la première page, `alerte`
   après) ; un corps non lu ne masque pas un corps lu ; seul, il compte comme un refus franc.
   **Preuve** : tests écrits d'abord et vus en échec (A : `54bbb7c` ; B : `b4b31ff`), code ensuite (A : `80b8ac5` ; B : `55baf97`).
-  Suite rapide (`-m "not integration"`) : 2 730 verts, 2 ignorés ; avec un vrai navigateur : les 4 cas du petit serveur et la visite de bout en bout verts (avant correction : 5 sur 5 bloqués, arrêtés par le garde-fou dans `Response.text`), 13 tests voisins verts (identité, récolte par le navigateur, périmètre, témoin) ; lint propre. **Non vérifié** : rien devant la vraie Arena après correction (aucune campagne) ; le banc ne juge que `comportement` ; un
+  Suite rapide (`-m "not integration"`) : 2 732 verts, 2 ignorés ; avec un vrai navigateur : les 4 cas du petit serveur et la visite de bout en bout verts (avant correction : 5 sur 5 bloqués, arrêtés par le garde-fou dans `Response.text`), 13 tests voisins verts (identité, récolte par le navigateur, périmètre, témoin) ; lint propre. **Non vérifié** : rien devant la vraie Arena après correction (aucune campagne) ; l'entrée par la liste (porte expirée,
+  visiteur banni) n'est vérifiée que sur pilote factice ; le banc ne juge que `comportement` ; un
   défi de la porte servi au seul appel de données n'est pas reconnu (corps non lu : refus franc) ; un refus en page au motif `bannissement` après
   la première page reste une alerte ; l'attente de 2 s n'est vérifiée qu'en local. **À mesurer avant de relancer une course** : note
   `docs/recherche/course-i9-visite-6-2026-11-18.md` § 5. Décidé par : la session chargée du défaut, à la demande de la coordination.

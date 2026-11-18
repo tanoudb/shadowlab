@@ -57,13 +57,14 @@ journal ; le passage reste `en_cours` plus de 3 heures, l'identité reste `ok`.
   11 %. La course commence ses visites sur une fiche tant que la 1ʳᵉ passe n'est pas finie (300 annonces, environ 15 pages
   par visite : une vingtaine de visites). Risque d'au moins un échec en 5 visites reprises : 1 − 0,88⁵ = 47 % ; en 20 :
   92 %.
-- **Cause 4** (banc de 250 visites, vitrine de 300 annonces, code d'avant) : parmi les 226 visites qui commencent sur
-  une liste, deux premières pages légères dans 30 %, `duree_pages_reguliere` dans 5 %, et 3 bloquées sur `pas_de_scroll`
-  avec `duree_pages_reguliere` (0,75), environ 1 sur 75.
+- **Cause 4** (banc de 250 visites, vitrine de 300 annonces, graine 1, code d'avant relancé le 18/11) : parmi les 231
+  visites qui commencent sur une liste, deux premières pages légères dans 31 %, `duree_pages_reguliere` dans 7 %, et
+  **2 bloquées** sur `pas_de_scroll` avec `duree_pages_reguliere` (0,75), environ 1 sur 115. Même banc après correction :
+  0 bloquée sur 250, `duree_pages_reguliere` 1 fois (0,4 %), deux premières pages légères dans 16 %.
 - **Cohérence avec ce qui a tenu** : soirée 131, 24 visites qui commencent toutes sur la liste (aucune exposée aux causes
   1 à 3), 24 sur 24 ; répétition 3, 30 visites du sujet dont **une seule** commence sur une fiche (la 2ᵉ ; d'après les
-  pages de départ, la 1ʳᵉ passe de la vitrine de 30 annonces finit à cette visite), 30 sur 30 — chance de passer : 88 % pour cette visite, environ 69 % pour les 28
-  visites incrémentales (cause 4). Course I9 : visites 2 à 6 commencent sur une fiche (`AN-000009`, `23`, `45`, `54`, `68`),
+  pages de départ, la 1ʳᵉ passe de la vitrine de 30 annonces finit à cette visite), 30 sur 30 — chance de passer : 88 % pour cette visite, environ 78 % pour les 28
+  visites incrémentales (cause 4, 1 sur 115). Course I9 : visites 2 à 6 commencent sur une fiche (`AN-000009`, `23`, `45`, `54`, `68`),
   échec à la 5ᵉ d'entre elles. Les trois résultats sont compatibles avec l'estimation ; aucun ne la prouve à lui seul.
 
 ### La correction (moteur seulement)
@@ -75,6 +76,10 @@ journal ; le passage reste `en_cours` plus de 3 heures, l'identité reste `ok`.
 - `parcours.py` : une visite qui **reprend la passe entre par la dernière liste lue** (relue comme les retours de D-94,
   prise sur le budget de pages), sauf s'il reste moins de 2 pages ou, en passe incrémentale, si la page n'est pas à revoir.
 - `parcours.py` : la durée de lecture n'est tirée **que pour une page demandée**.
+- La liste d'entrée devient la première page de la passe reprise : elle passe par la porte d'entrée et par la règle de
+  la première page. Vérifié sur pilote factice (tests de `test_course_visite.py`) : porte de 24 h expirée entre deux
+  visites, le défi tombe sur la liste d'entrée et il est passé, la visite reprend sa file ; visiteur banni entre deux
+  visites, le refus tombe sur la liste d'entrée, identité `banni`, rien de plus demandé, la fiche suivante reste en file.
 - Banc après correction (mêmes graines) : 0 visite bloquée sur 100 visites reprises et 60 visites incrémentales ;
   `pas_de_scroll`, `navigation_lineaire` et `duree_pages_reguliere` vus 0 fois ; toutes commencent sur la liste ; les tests
   de D-94 restent verts.
@@ -134,6 +139,8 @@ le voyait pas : son serveur ne renvoyait pas l'en-tête `Cache-Control` du gardi
 - La règle « première page défilable toujours défilée » est un comportement de plus, propre au moteur : un détecteur qui
   chercherait « le premier défilement arrive toujours sur la première page longue » le verrait ; aucun ne le fait dans
   l'Arena.
+- L'entrée par la liste (première page de la passe reprise, porte d'entrée comprise) n'est vérifiée que sur pilote
+  factice ; la répétition 1 était tombée sur une couture de ce genre (porte et relecture).
 - L'entrée par la liste ajoute une page déjà lue à chaque visite reprise : une récolte un peu plus lente (une page sur 5
   à 40), jamais au-delà du budget.
 - Un défi de la porte servi au seul appel de données, sans photo refusée dans la même page, n'est pas reconnu (corps non
@@ -152,5 +159,9 @@ le voyait pas : son serveur ne renvoyait pas l'en-tête `Cache-Control` du gardi
    aucune `duree_pages_reguliere` sur le sujet.
 3. Une campagne de contrôle (même fichier que la 132) : mêmes taux à chaque cellule, pour s'assurer que la règle de
    défilement ne change rien ailleurs.
-4. Un bannissement en cours de visite devant la vraie Arena (`shadowlab arena bannir` pendant une visite, ou témoin
+4. L'entrée par la liste devant la vraie Arena : une visite reprise après l'expiration de la porte (profil
+   `enduranceporte150`, porte de 150 s, comme l'essai du 17/11) passe le défi sur la liste d'entrée sans alerte ; une
+   visite reprise d'un visiteur banni (`shadowlab arena bannir` entre deux visites) s'arrête sur la liste d'entrée,
+   identité `banni`, 0 page après.
+5. Un bannissement en cours de visite devant la vraie Arena (`shadowlab arena bannir` pendant une visite, ou témoin
    sentinelle) : la visite finit, identité `banni`, 0 page après.

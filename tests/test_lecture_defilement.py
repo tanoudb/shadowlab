@@ -21,9 +21,9 @@ Les causes, dans le moteur (l'Arena ne change pas) :
 D'où, pour une visite qui commence sur une fiche : 0,31 × 0,36 = 11 % ; le banc en bloque 11 sur 91 (12 %).
 4. Trouvé par ce banc : dans une passe incrémentale (la course y serait passée vers son 3ᵉ jour), chaque fiche déjà
    lue, évitée sans requête, prenait quand même une durée au plan de lecture : le tirage par blocs de trois ne valait
-   plus pour les pages lues (deux premières pages légères dans 30 % des visites, `duree_pages_reguliere` dans 5 %),
-   et `pas_de_scroll` avec `duree_pages_reguliere` (0,75) arrêtait environ 1 visite incrémentale sur 75 (3 sur 226
-   visites commencées sur une liste, banc de 250 visites, vitrine de 300 annonces).
+   plus pour les pages lues (deux premières pages légères dans 31 % des visites, `duree_pages_reguliere` dans 7 %),
+   et `pas_de_scroll` avec `duree_pages_reguliere` (0,75) arrêtait 2 visites sur 231 commencées sur une liste (banc de
+   250 visites, vitrine de 300 annonces, graine 1).
 
 Le banc rejoue des visites avec le code réel : le parcours (`Parcours.visiter`, état durable, lecture humaine de D-94,
 pages par visite tirées comme l'ordonnanceur), l'interaction du moteur (`DriverNoezia._interaction_selon_lecture`,
@@ -350,8 +350,8 @@ def test_aucune_visite_n_atteint_le_seuil_du_profil_endurance(visites_reprises, 
 def test_seules_les_pages_demandees_tirent_une_duree(tmp_path, monkeypatch):
     """Dans une passe incrémentale, les fiches déjà lues sont évitées sans requête : elles ne doivent pas prendre de
     durée au plan de lecture, sinon le tirage par blocs de trois (D-94) ne vaut plus pour les pages vraiment lues
-    (banc : 30 % des visites incrémentales avec deux premières pages légères au lieu de 21 %, `duree_pages_reguliere`
-    dans 4,9 % au lieu de moins de 0,5 %)."""
+    (banc de 250 visites, graine 1 : deux premières pages légères dans 31 % des visites avant correction, 16 % après ;
+    `duree_pages_reguliere` dans 6,9 % avant, 0,4 % après)."""
     from shadowlab.engines.noezia.lecture import PlanDeLecture
 
     tirees = []

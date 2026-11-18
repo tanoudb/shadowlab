@@ -299,6 +299,60 @@ def test_la_porte_revenue_au_milieu_d_une_visite(site_porte, identite, tmp_path,
         assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() > avant
 
 
+def _visite(dossier, pilote, pages):
+    """Une visite de la course sur le pilote factice : lecture humaine (instantanée), porte de 24 h, état durable."""
+    p = fabriquer(
+        dossier,
+        pilote,
+        texte=recette_24h(),
+        options=Options(lecture=scenarios.LECTURE_HUMAINE_VISITE, entree_a_chaque_lancement=True),
+        horloge=pilote.horloge,
+        horodatage=lambda: instant(pilote, 0).isoformat(timespec="seconds"),
+    )
+    n = len(pilote.demandes)
+    bilan = p.visiter(pages_max=pages)
+    return bilan, [d for d in pilote.demandes[n:] if not d.startswith("/robots.txt")]
+
+
+def test_la_porte_expiree_entre_deux_visites_est_passee_sur_la_liste_d_entree(site_porte, identite, tmp_path):
+    """D-103 : une visite qui reprend la passe entre par la dernière liste lue. Le lendemain, la porte de 24 h a expiré :
+    le défi tombe sur cette liste d'entrée, il est passé comme la porte d'entrée, et la visite reprend sa file."""
+    pilote = PiloteIdentite(site_porte, identite, pas_s=20)
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=3600))
+    premiere, _ = _visite(tmp_path / "r", pilote, 3)  # la liste, AN-000001, retour à la liste
+    assert premiere.statut == "limitee", premiere.arret
+
+    pilote.horloge.t += 86400
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=86400 + 10))
+    avant = identite.porte_franchie_le()
+    pilote.reponses[LISTE] = (200, PAGE_ARENA)
+    pilote.apres_attente = [(200, PAGE_ARENA), (200, vraie(pilote))]
+    bilan, demandes = _visite(tmp_path / "r", pilote, 2)
+
+    assert bilan.code == 0 and bilan.statut == "limitee", bilan.arret
+    assert demandes == ["/lab/vitrine/annonces", "/lab/vitrine/annonces/AN-000002"]
+    assert identite.etat()["etat"] == "ok" and identite.porte_franchie_le() > avant
+
+
+def test_un_visiteur_banni_qui_revient_est_arrete_sur_la_liste_d_entree_et_rend_sa_page(site_porte, identite, tmp_path):
+    """Le visiteur a été banni entre deux visites : le refus tombe sur la liste d'entrée, première page de la passe
+    reprise, donc `banni` ; rien n'est demandé après ; la fiche suivante de la file y reste (elle n'est pas perdue)."""
+    pilote = PiloteIdentite(site_porte, identite, pas_s=20)
+    identite.noter_porte(instant(pilote, 0) - timedelta(seconds=3600))
+    premiere, _ = _visite(tmp_path / "r", pilote, 3)
+    assert premiere.statut == "limitee", premiere.arret
+
+    pilote.reponses[LISTE] = (403, pages_du_site.page_blocage())
+    bilan, demandes = _visite(tmp_path / "r", pilote, 5)
+    assert bilan.code == 3 and bilan.arret["signe"] == "statut" and bilan.arret["statut"] == 403
+    assert demandes == ["/lab/vitrine/annonces"]
+    assert identite.etat()["etat"] == "banni"
+
+    del pilote.reponses[LISTE]  # le parcours ne lit pas l'état de l'identité (le moteur et la campagne, si)
+    _, demandes = _visite(tmp_path / "r", pilote, 2)
+    assert demandes == ["/lab/vitrine/annonces", "/lab/vitrine/annonces/AN-000002"]
+
+
 def test_la_porte_courte_de_la_repetition_suit_la_meme_regle(site_porte, identite, tmp_path):
     pilote = PiloteIdentite(site_porte, identite, pas_s=20)
     identite.noter_porte(instant(pilote, 100) - timedelta(seconds=610))
