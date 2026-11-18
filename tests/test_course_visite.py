@@ -108,12 +108,18 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
     dossier = tmp_path / "recolte-sujet"
     lues_avant: set[str] = set()
     issues, rang = [], 0
+    suivante = None  # une visite de la passe 2, si la passe 1 a fini pile à la fin d'une visite (reprise vide)
     while True:  # première passe : 3 listes, 45 fiches, des retours ; 10 pages par visite au plus
         rang += 1
         assert rang < 20, "la première passe ne finit pas"
         jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
         pilote = Chrome(site)
         issue = visiter(pilote, jeton, dossier, 10, rang)
+        if issue.details["passe"] != 1:
+            # La passe 1 avait tout lu à la visite d'avant (finie `limitee` sur sa dernière page) : cette visite ne
+            # trouve rien à reprendre et commence la passe incrémentale, sans sortir de la visite (`Parcours.visiter`).
+            suivante = (pilote, issue)
+            break
         issues.append(issue)
         assert issue.success is True, issue.details
         assert issue.details["pages_visite"] == len(pages_de(pilote)) <= 10  # le budget, relectures comprises
@@ -122,7 +128,11 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
         if rang > 1:
             neuves = [c for c in fiches if c not in lues_avant]
             assert neuves, "une visite de reprise doit avancer"
-            assert chemins(pilote)[0] not in lues_avant  # la reprise part de la première page encore à lire
+            # La reprise part de la première page encore à lire ; si c'est une fiche, elle entre d'abord par la dernière
+            # liste lue (D-103), comme un visiteur qui revient sur la liste qu'il parcourait.
+            debut = chemins(pilote)
+            if debut[0] in lues_avant:
+                assert "/AN-" not in debut[0] and "/AN-" in debut[1] and debut[1] not in lues_avant, debut[:3]
         assert issue.details["relectures"] >= (1 if len(fiches) >= 2 else 0)  # lecture humaine active à chaque visite
         lues_avant |= set(chemins(pilote))
         if issue.details["statut"] == "terminee":
@@ -134,10 +144,13 @@ def test_chaque_visite_reprend_la_passe_puis_une_passe_incrementale_commence(sit
     total = sum(len(a) for a in vitrine.verite(GRAINE, TAILLE)["annonces"])
     assert note["champs_attendus"] == note["champs_exacts"] == total  # sur toutes les annonces attendues
     # la passe suivante est incrémentale : les listes seulement (fiches déjà lues évitées), avec des retours à la liste
-    rang += 1
-    jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
-    pilote = Chrome(site)
-    issue = visiter(pilote, jeton, dossier, 10, rang)
+    if suivante is None:
+        rang += 1
+        jeton = nouveau_passage(reglages, experience, repetition=rang, monde=MONDE)
+        pilote = Chrome(site)
+        issue = visiter(pilote, jeton, dossier, 10, rang)
+    else:
+        pilote, issue = suivante
     assert issue.success is True and issue.details["passe"] == 2 and issue.details["incrementale"] is True
     assert not any("/AN-" in c for c in chemins(pilote))
     liste1, liste2 = "/lab/vitrine/annonces", "/lab/vitrine/annonces?page=2"

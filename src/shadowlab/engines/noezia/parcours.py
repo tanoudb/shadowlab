@@ -624,7 +624,9 @@ class Parcours:
         self._rafale: tuple[str, int] | None = None
         self._plan = PlanDeLecture(self.options.lecture, self._alea) if self.options.lecture is not None else None
         self._liste, self._feuilles, self._relectures, self._pause_totale = None, [], [], 0.0
-        if self._plan is not None and reprise:  # une visite qui reprend la passe revient à la dernière liste lue
+        # Une visite qui reprend la passe entre par la dernière liste lue (D-103), puis y revient.
+        self._entree_par_la_liste = self._plan is not None and reprise
+        if self._entree_par_la_liste:
             self._liste = self._derniere_liste(etat, passe)
         if self._repasser:
             self._relire_les_passages(etat, passe)
@@ -684,8 +686,15 @@ class Parcours:
             if page is None:
                 return "terminee", None
             self._courante = page
+            if self._entree_due(page, limite, lues):
+                alerte, ajout = self._entrer_par_la_liste()
+                lues += ajout
+                if alerte is not None:
+                    etat.rendre(page)  # rien n'a été demandé pour elle : elle reste à faire
+                    self._courante = None
+                    self._noter_alerte_identite(alerte)
+                    return "arretee", self._arret(alerte)
             debut = self._horloge()
-            self._regler_lecture()
             alerte, lue = self._traiter(page)
             self._courante = None
             lues += lue
@@ -838,10 +847,11 @@ class Parcours:
         except Exception as erreur:  # noqa: BLE001 — panne réseau qui dure : échec noté, la passe continue
             self._evenement(self._etat, self._passe, "echec", {"adresse": cible.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(cible.type, "echec", cible.adresse), debut, True
-        if self._repasser:  # une relecture n'est jamais la première page : seule la porte en cours de passe s'applique
-            reponse, alerte = self._porte_en_cours(cible, reponse, relecture=True)
-            if alerte is not None:
-                return alerte, debut, True
+        # Une relecture n'est la première page que pour l'entrée par la liste d'une visite qui reprend la passe (porte
+        # d'entrée) ; sinon seule la porte en cours de passe s'applique.
+        reponse, alerte = self._garder_la_porte(cible, reponse, relecture=True)
+        if alerte is not None:
+            return alerte, debut, True
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:
@@ -860,6 +870,55 @@ class Parcours:
             return alerte, debut, True
         self._relectures.append({"adresse": cible.adresse, "type": cible.type, "statut": reponse.statut})
         return self._sentinelle.noter(cible.type, "ok" if reussie else "echec", cible.adresse), debut, True
+
+    def _entree_due(self, page: Page, limite: int | None, lues: int) -> bool:
+        """Faut-il entrer par la liste avant `page` ? Seulement au début d'une visite qui reprend la passe avec la
+        lecture humaine, quand la première page de la file n'est pas une liste, qu'elle sera vraiment demandée (pas
+        évitée par une passe incrémentale) et que le budget laisse la liste ET elle."""
+        if not self._entree_par_la_liste:
+            return False
+        self._entree_par_la_liste = False  # une fois par visite, au plus
+        return (
+            self._liste is not None
+            and page.type != self.recette.depart[0].type
+            and (limite is None or limite - lues >= 2)
+            and (not self._incrementale or self._a_revisiter(page))
+        )
+
+    def _entrer_par_la_liste(self) -> tuple[Alerte | None, int]:
+        """Une visite qui reprend la passe commence par la dernière liste lue, comme un visiteur qui revient sur la
+        liste qu'il parcourait, puis lit la fiche suivante de la file (D-103). Sans cela, elle commençait sur cette
+        fiche, et la liste revue juste après (D-94) était un chemin neuf pour la session : dès la deuxième fiche, quatre
+        pages distinctes (`navigation_lineaire`). La liste est une relecture (rien n'est écrit dans l'état de la
+        passe), prise sur le budget ; c'est la première page de la visite : la porte d'entrée s'y applique, et un refus
+        y vaut bannissement, comme à la première page d'une passe. Rend (alerte éventuelle, pages demandées : 0 ou
+        1)."""
+        assert self._liste is not None
+        alerte, debut, demandee = self._relire(self._liste)
+        if not demandee:
+            return None, 0
+        if alerte is None:
+            self._attendre_la_lecture(debut)
+            alerte = self._controler_ressources()  # un refus reçu pendant la liste, avant la page suivante
+        return alerte, 1
+
+    def _garder_la_porte(
+        self, page: Page, reponse: Reponse, *, relecture: bool = False
+    ) -> tuple[Reponse, Alerte | None]:
+        """La porte, pour toute page demandée (lue ou relue) : à la première page de la passe ou du lancement, la porte
+        d'entrée (un refus y vaut bannissement : `_alerte_en_premiere`) ; ensuite, si la recette le permet, la porte en
+        cours de passe."""
+        self._alerte_en_premiere = self._premiere_page
+        if self._premiere_page:
+            self._premiere_page = False
+            reponse, alerte = self._porte_d_entree(page, reponse)
+            if alerte is None and self._repasser and self._porte is not None and self._porte["franchie"]:
+                self._dernier_passage = self._horodatage()  # l'entrée compte comme un passage de la porte
+                self._rafale = (self._dernier_passage, 1)
+            return reponse, alerte
+        if self._repasser:
+            return self._porte_en_cours(page, reponse, relecture=relecture)
+        return reponse, None
 
     def _noter_alerte_identite(self, alerte: Alerte) -> None:
         """Moteur en mode identité : l'alerte (ou le bannissement) est écrit dans l'état de l'identité. Rien d'autre :
@@ -902,6 +961,9 @@ class Parcours:
             crawl_delay = robots.crawl_delay
         else:
             crawl_delay = None
+        # La durée de lecture se tire ici, pour une page vraiment demandée : une fiche évitée (passe incrémentale) ne
+        # prend rien au plan, sinon les blocs de trois de D-94 ne valent plus pour les pages lues (D-103).
+        self._regler_lecture()
         self._cadence.attendre(crawl_delay)
         debut = self._horloge()
         try:
@@ -920,21 +982,10 @@ class Parcours:
             self._evenement(etat, self._passe, "echec", {"adresse": page.adresse, "erreur": str(erreur)})
             return self._sentinelle.noter(page.type, "echec", page.adresse), 1
 
-        self._alerte_en_premiere = self._premiere_page
-        if self._premiere_page:
-            self._premiere_page = False
-            reponse, alerte = self._porte_d_entree(page, reponse)
-            if alerte is not None:
-                etat.rendre(page)
-                return alerte, 0
-            if self._repasser and self._porte is not None and self._porte["franchie"]:
-                self._dernier_passage = self._horodatage()  # l'entrée compte comme un passage de la porte
-                self._rafale = (self._dernier_passage, 1)
-        elif self._repasser:
-            reponse, alerte = self._porte_en_cours(page, reponse)
-            if alerte is not None:
-                etat.rendre(page)
-                return alerte, 0
+        reponse, alerte = self._garder_la_porte(page, reponse)
+        if alerte is not None:
+            etat.rendre(page)
+            return alerte, 0
         reussie = reponse.statut is not None and 200 <= reponse.statut < 300
         dans_le_motif = True
         if reussie:

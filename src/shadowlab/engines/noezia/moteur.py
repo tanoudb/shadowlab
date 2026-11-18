@@ -113,6 +113,13 @@ ARGUMENT_STOCKAGE_TIERS_PARTITIONNE = "--disable-features=" + ",".join(FONCTIONS
 # déjà (`webgl_logiciel`) et c'est le plus connu des rendus logiciels.
 ARGUMENTS_WEBGL_SANS_GPU = ("--ignore-gpu-blocklist", "--disable-accelerated-2d-canvas")
 
+# La page peut-elle défiler ? Même calcul que `pageDefilable()` d'`observateur.js` (D-103) : sur une page plus courte
+# que la fenêtre, la molette ne donne aucun événement `scroll`, pour un humain comme pour le moteur.
+JS_PAGE_DEFILABLE = (
+    "(() => { const r = document.scrollingElement || document.documentElement;"
+    " return r.scrollHeight > r.clientHeight; })()"
+)
+
 
 def sans_carte_graphique(hote_os: str | None = None) -> bool:
     """Linux sans carte graphique : aucun nœud DRM (`/dev/dri`, même virtuel) ni pilote NVIDIA (`/dev/nvidia*`).
@@ -186,6 +193,9 @@ class DriverNoezia(Driver):
         # Lecture rapide de la prochaine page (réglée par le parcours, `lecture.py`) : l'interaction légère au lieu de
         # l'interaction complète. Faux par défaut : aucun autre appelant ne change.
         self.lecture_legere = False
+        # Une page défilable a-t-elle déjà été défilée pendant cette visite (`_nouvelle_visite`) ? Tant que non, la page
+        # défilable suivante l'est, même parcourue vite (D-103, `pas_de_scroll`).
+        self._defile_dans_la_visite = False
         # Réponses 403 reçues pour des ressources de la page (photo, appel de données) du même hôte, gardées jusqu'à
         # `refus_ressources`, qui lit leur corps.
         self._refus_ressources: list[Any] = []
@@ -437,7 +447,12 @@ class DriverNoezia(Driver):
         self._identite.debut_visite({"chrome": self._version_chrome})
         return contexte
 
+    def _nouvelle_visite(self) -> None:
+        """Une session est une visite (un Chrome relancé pour une identité) : rien n'y a encore été défilé."""
+        self._defile_dans_la_visite = False
+
     def start_session(self) -> None:
+        self._nouvelle_visite()
         self.mesures = MesuresSession()
         self.mesures.details["requetes_bloquees"] = 0
         self.mesures.details["ressources_bloquees"] = 0
@@ -718,7 +733,9 @@ class DriverNoezia(Driver):
                 self._souris.mouvement_aleatoire()
                 tempo.pause_avant_clic()
             if self._config.defilement.actif and self._defilement:
+                premiere = self._premiere_page_defilable()
                 self._defilement.defiler_bas()
+                self._defile_dans_la_visite |= premiere
                 time.sleep(humain.pause_reflexion_ms() / 1000.0)
             # Comportement oisif : 2-4 micro-interactions (lecture + exploration)
             if self._config.souris.actif and self._souris:
@@ -748,11 +765,31 @@ class DriverNoezia(Driver):
                 for _ in range(n_scan):
                     tempo.pause_reflexion()
                     self._souris.mouvement_aleatoire()
-                if self._config.defilement.actif and self._defilement and random.random() < 0.4:
-                    self._defilement.defiler_bas()
+                if self._config.defilement.actif and self._defilement:
+                    # D-103 : la première page défilable de la visite est défilée ; ensuite, une page sur 2,5 environ.
+                    premiere = self._premiere_page_defilable()
+                    if premiere or random.random() < 0.4:
+                        self._defilement.defiler_bas()
+                        self._defile_dans_la_visite |= premiere
                 tempo.hesitation(proba=0.20)
         except Exception:
             pass
+
+    def _premiere_page_defilable(self) -> bool:
+        """Vrai si aucune page défilable de la visite n'a encore été défilée et que celle-ci peut défiler.
+
+        L'Arena (`pas_de_scroll`, D-103) relève une visite dont TOUTES les pages défilables ont été quittées sans un
+        seul `scroll` dès qu'elle en compte deux : avec deux pages parcourues vite au début d'une visite (une sur cinq)
+        et un défilement sur 2,5 pages légères, une visite sur treize la levait. Un lecteur qui arrive sur une page
+        plus haute que la fenêtre la fait défiler au moins une fois. La page n'est lue qu'au début de la visite : une
+        fois une page défilée, plus rien n'est demandé au navigateur. Une page plus courte que la fenêtre ne compte
+        pas (la molette n'y donne aucun `scroll`)."""
+        if self._defile_dans_la_visite:
+            return False
+        try:
+            return bool(self._page.evaluate(JS_PAGE_DEFILABLE))
+        except Exception:  # noqa: BLE001 — page fermée ou en navigation : on ne sait pas, la loi habituelle s'applique
+            return False
 
     # ── Résolution des défis Arena ─────────────────────────────────────
 
