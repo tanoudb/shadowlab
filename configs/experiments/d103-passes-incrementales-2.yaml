@@ -1,0 +1,44 @@
+# D-103, mesure 2 au rythme corrigé (18/11) : le fichier d'origine (visites espacées d'une minute) dépasserait la règle de
+# débit de l'Arena (240 pages comptées par heure), comme la campagne 135. Ici : environ 195 pages comptées par heure.
+# D-103, mesure 2 : des visites en passe INCRÉMENTALE, devant la vraie Arena (docs/recherche/course-i9-visite-6-2026-11-18.md,
+# § 5 et « Comment mesurer »).
+#
+# But : la cause 4 de D-103 (en passe incrémentale, chaque fiche déjà lue, évitée sans requête, prenait une durée de lecture ;
+# `duree_pages_reguliere` avec `pas_de_scroll` arrêtait environ 1 visite sur 115 au banc). Un seul bras, le sujet de la
+# course, profil `endurance`, vitrine de 30 annonces comme la répétition 3 (32 pages par passe complète : 2 de liste, 30
+# fiches). 30 visites de 15 pages au plus, écart fixe d'1 min : la 1re passe finit vers la 3e visite ; chaque visite
+# suivante fait une passe incrémentale (les listes relues, les fiches déjà lues jamais), donc 27 visites incrémentales
+# environ.
+#
+# Critère : 30 visites réussies sur 30 ; aucun blocage ; aucun bannissement ; `duree_pages_reguliere` et `pas_de_scroll` à 0
+# à chaque visite ; à partir de la 4e environ, `incr` vaut 1 et aucune fiche n'est demandée (début `L > L > …`).
+#
+# Préalables :
+#   1. Arena lancée, puis, SANS SHADOWLAB_PROFILS_EXTRA : uv run shadowlab arena appliquer
+#   2. Identité à usage unique : pour recommencer, changer le suffixe (`d103-incrementale-2`…).
+#   3. Rien de lourd à côté (durées).
+# Commande :
+#   SHADOWLAB_VITRINE_TAILLE=30 caffeinate -i uv run shadowlab campagne configs/experiments/d103-passes-incrementales.yaml
+# Durée estimée : environ 50 min (3 visites d'environ 2 min, 27 visites incrémentales de 3 à 5 pages, 29 écarts d'1 min).
+# Verdict (lecture seule) :
+#   sqlite3 -readonly -header -column -cmd ".parameter set @n <n°>" outputs/shadowlab.sqlite3 < scripts/mesures-d103.sql
+experiment:
+  name: d103_passes_incrementales_2
+  description: >-
+    D-103, mesure 2 : le sujet de la course, identité neuve, récolte qui dure, 30 visites de 8 pages espacées de 3 min,
+    profil endurance, vitrine de 30 annonces ; après la 1re passe, des passes incrémentales.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      recolte_incrementale: true
+      options: {headless: false, channel: chrome, identite_native: true, identite: d103-incrementale-2}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 30
+  pages_par_visite: 8
+  espacement: {mode: fixe, minutes: 3}
+  concurrency: 1
+  monde: serie
+  seed: 20261119
+  output: [json, html]

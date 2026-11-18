@@ -3938,3 +3938,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Mesure 1 refaite** : `configs/experiments/d103-visites-reprises-2.yaml`, 24 visites de 8 pages espacées de 3 min (environ 195
   pages comptées par heure). Campagne 136 : ce fichier arrêté après une visite (libellé faux, corrigé) ; relancée à 3 h 47 avec
   l'identité `d103-reprise-3`.
+
+## 2026-11-18 (5h30) — Claude (Fable 5.2, coordination) — D-103, mesure 1 refaite : campagne 137, 24 visites sur 24
+
+- **Campagne 137** (`d103-visites-reprises-2.yaml`, 24 visites de 8 pages espacées de 3 min, profil `endurance`, vitrine de 300,
+  3 h 47 à 5 h 24, identité `d103-reprise-3`) : 24 visites réussies sur 24 ; les 23 visites reprises entrent toutes par la liste
+  (`L > L/AN-0000xx`) ; 0 blocage, 0 `pas_de_scroll`, 0 `navigation_lineaire`, 0 `duree_pages_reguliere`, aucun bannissement,
+  identité `ok`, 123 annonces, défi de la porte émis à la 1ʳᵉ visite seulement.
+- **Avec la 135** : 31 visites reprises sans aucun signal de comportement. Avec le défaut d'avant (12 % par visite reprise d'après le
+  banc), la chance d'en voir 31 passer était d'environ 2 % : c'est un bon indice, pas une preuve.
+- **Réserves** : visites de 8 pages (la course en fait de 5 à 40) ; écart fixe de 3 min et non l'ordonnanceur ; une seule machine,
+  un Chrome sur macOS ; aucune nuit, aucune porte de 24 h.
+- **Lancé à 5 h 27, à la suite** : mesure 4 (`d103-entree-par-la-liste.yaml`), mesure 3 (campagne de contrôle), mesure 2 au rythme
+  corrigé (`d103-passes-incrementales-2.yaml`, 30 visites de 8 pages espacées de 3 min). Reste la mesure 5 (bannissement pendant
+  une visite, geste à la main).
