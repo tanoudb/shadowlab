@@ -3908,3 +3908,15 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Tests** : Suite rapide (`-m "not integration"`) : 2 732 verts, 2 ignorés ; avec un vrai navigateur : les 4 cas du petit serveur et la visite de bout en bout verts (avant correction : 5 sur 5 bloqués, arrêtés par le garde-fou dans `Response.text`), 13 tests voisins verts (identité, récolte par le navigateur, périmètre, témoin) ; lint propre.
 - **Reste** : rien mesuré devant la vraie Arena (liste au § 5 de la note) ; `AGENTS.md` et `docs/PLAN.md` laissés à la coordination ; numéro D-103
   vérifié libre sur les 59 branches locales et distantes au 18/11 vers 1 h 30 (une autre session pourrait le prendre avant la fusion).
+
+## 2026-11-18 (suite) — Claude (Opus 5.5, session du défaut de la course I9) — Campagnes de mesure de D-103
+
+- **Fait**, à la demande de la coordination, sans rien lancer : quatre fichiers de campagne pour les mesures du § 5 de
+  `docs/recherche/course-i9-visite-6-2026-11-18.md` (`configs/experiments/d103-visites-reprises.yaml`, `d103-passes-incrementales.yaml`,
+  `d103-entree-par-la-liste.yaml`, `d103-bannissement-en-visite.yaml`), la requête du verdict `scripts/mesures-d103.sql` (six tableaux : visites,
+  début de visite, défis de la porte, bannissements, bilan, ce qui suit un refus `bannissement`), le paragraphe « Comment mesurer » de la note,
+  et `tests/test_mesures_d103.py` (forme des campagnes, arithmétique des passes, identités neuves, requête exécutée sur le schéma).
+- **Décisions** : mesure 4 en un seul fichier (porte de 150 s, écart de 3 min ; bras `banni` par `bannir_avant_visite: 3`) ; mesure 5 demande
+  un geste à la main (`shadowlab arena bannir`), deux issues justes (`banni` si une photo est refusée la première, sinon `alerte` puis `banni`).
+- **Non vérifié** : aucune de ces campagnes n'a tourné ; les durées sont estimées (soirée 131 : environ 2 min par visite de 15 pages) ;
+  la requête n'a été essayée que sur la base de la course (lecture seule) et sur une base de test.

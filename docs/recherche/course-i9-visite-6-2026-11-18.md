@@ -163,5 +163,104 @@ le voyait pas : son serveur ne renvoyait pas l'en-tête `Cache-Control` du gardi
    `enduranceporte150`, porte de 150 s, comme l'essai du 17/11) passe le défi sur la liste d'entrée sans alerte ; une
    visite reprise d'un visiteur banni (`shadowlab arena bannir` entre deux visites) s'arrête sur la liste d'entrée,
    identité `banni`, 0 page après.
-5. Un bannissement en cours de visite devant la vraie Arena (`shadowlab arena bannir` pendant une visite, ou témoin
-   sentinelle) : la visite finit, identité `banni`, 0 page après.
+5. Un bannissement en cours de visite devant la vraie Arena (`shadowlab arena bannir` pendant une visite) : la visite
+   finit, 0 page après ; identité `banni` si une photo est refusée la première, `alerte` (D-91) si c'est la page suivante,
+   puis `banni` à la visite d'après.
+
+### Comment mesurer
+
+Tout se lance depuis le dossier principal, Arena démarrée (`uv run shadowlab arena demarrer`), rien de lourd à côté. Les
+fichiers de campagne portent la même marche dans leur en-tête ; `tests/test_mesures_d103.py` vérifie leur forme. Chaque
+identité ne sert qu'une fois (une identité bannie ou en alerte ne repart pas) : pour recommencer une mesure, changer le
+suffixe (`-2`, `-3`…), jamais recopier un dossier de `outputs/identites/`.
+
+**Verdict, pour toutes les mesures** (lecture seule ; `<n°>` est le numéro que la campagne affiche au départ) :
+
+```bash
+sqlite3 -readonly -header -column -cmd ".parameter set @n <n°>" outputs/shadowlab.sqlite3 < scripts/mesures-d103.sql
+```
+
+Six tableaux, par bras : (1) chaque visite : statut, réussie, passe, incrémentale, pages, annonces retrouvées (cumul de
+la récolte), état de l'identité, nombre de blocages du gardien (`bloque` ou `detecte`, défis non compris), et les comptes
+de `pas_de_scroll`, `navigation_lineaire` et `duree_pages_reguliere` du détecteur `comportement` (relu sur toute la
+session à la fin du passage, table `detections`), puis la cause d'arrêt ; (2) le début de chaque visite, pages de la
+vitrine dans l'ordre (`L` = une page de liste, le paramètre `?page=` n'est pas gardé) et le nombre de documents ; (3) les
+défis de la porte (`defi-js`) : sur quelle page, `emis` puis `valide` ; (4) les bannissements des mondes de la campagne ;
+(5) le bilan par bras : visites, réussies, bloquées, et la somme de chaque signal ; (6) tout ce qui a été demandé à
+partir du premier refus `bannissement` d'une visite (attendu : la page refusée et ses ressources, `/lab/collecte`, aucun
+autre document).
+
+**Mesure 1 — visites reprises** (`configs/experiments/d103-visites-reprises.yaml`, identité `d103-reprise-1`) :
+
+```bash
+uv run shadowlab arena appliquer        # SANS SHADOWLAB_PROFILS_EXTRA (profil endurance)
+SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab campagne configs/experiments/d103-visites-reprises.yaml
+```
+
+Environ 1 h 05 (21 visites d'environ 2 min, comme la soirée 131 à 15 pages, et 20 écarts d'1 min). Tenu si : 21
+réussies sur 21, 0 bloquée, 0 bannissement, les trois signaux à 0 à chaque visite. **Vérifier que chaque visite reprend
+vraiment la passe** : au tableau (1), `passe` vaut 1 à toutes les visites et `annonces` monte à chaque visite (elle ne
+repart jamais de zéro) ; au tableau (2), chaque visite après la 1ʳᵉ commence par `L > L/AN-0000xx`, où xx est le nombre
+d'annonces de la visite d'avant plus un (ex. 8 puis `L/AN-000009`). Avant D-103, la course commençait sur la fiche
+(`L/AN-000009 > L > …`, base de la course) ; la visite 1 commence par `L > L > …` (le défi de la porte, puis la liste).
+
+**Mesure 2 — passes incrémentales** (`configs/experiments/d103-passes-incrementales.yaml`, identité
+`d103-incrementale-1`) :
+
+```bash
+uv run shadowlab arena appliquer        # SANS SHADOWLAB_PROFILS_EXTRA
+SHADOWLAB_VITRINE_TAILLE=30 caffeinate -i uv run shadowlab campagne configs/experiments/d103-passes-incrementales.yaml
+```
+
+Environ 50 min (3 visites d'environ 2 min pour la 1ʳᵉ passe, puis 27 visites incrémentales de 3 à 5 pages, 29 écarts
+d'1 min). Tenu si : 30 réussies sur 30, 0 bloquée, 0 bannissement, `duree_pages_reguliere` et `pas_de_scroll` à 0 à
+chaque visite. Au tableau (1), `incr` passe à 1 vers la 4ᵉ visite ; au tableau (2), ces visites ne demandent aucune fiche
+(`L > L > …`).
+
+**Mesure 3 — contrôle** (le fichier des campagnes 115, 125 et 132) :
+
+```bash
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab arena appliquer
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-sans-correlation.yaml uv run shadowlab campagne configs/experiments/controle-vrai-chrome.yaml
+uv run shadowlab arena appliquer        # après, SANS la variable
+```
+
+Mêmes taux que la 132 à chaque cellule (`uv run shadowlab rapport <n°>`) ; pas d'identité.
+
+**Mesure 4 — la liste d'entrée** (`configs/experiments/d103-entree-par-la-liste.yaml`, identités `d103-porte-1` et
+`d103-banni-1`). **Un fichier de campagne suffit** pour les deux cas : la porte de 150 s expire pendant l'écart de 3 min,
+et le visiteur du bras `banni` est banni par la campagne avant sa 3ᵉ visite (`bannir_avant_visite`, même code que
+`shadowlab arena bannir`).
+
+```bash
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml uv run shadowlab arena appliquer
+SHADOWLAB_PROFILS_EXTRA=configs/arena/profils-endurance-essai-porte.yaml SHADOWLAB_VITRINE_TAILLE=60 caffeinate -i \
+  uv run shadowlab campagne configs/experiments/d103-entree-par-la-liste.yaml
+uv run shadowlab arena appliquer        # après, SANS la variable
+```
+
+Environ 25 min (les deux bras en parallèle). Tenu si : bras `sujet`, 5 réussies sur 5, identité `ok`, aucun bannissement
+dans son monde, et au tableau (3) chaque visite 2 à 5 a pour première décision `defi-js emis` sur `/lab/vitrine/annonces`,
+puis `valide` (d'autres défis en cours de visite sont normaux : la porte de 150 s expire aussi pendant une visite) ; bras
+`banni`, visites 1 et 2 réussies, visite 3 en échec sur « statut 403 », identité `banni`, **1 seul document** au tableau
+(2) (la liste d'entrée) et rien d'autre qu'elle au tableau (6), une ligne au tableau (4) pour son monde, et pas de visite 4 (note `bannie` dans
+`outputs/campagnes/<n°>/cadence.jsonl`).
+
+**Mesure 5 — bannissement pendant une visite** (`configs/experiments/d103-bannissement-en-visite.yaml`, identité
+`d103-ban-en-visite-1`). **Il faut un geste à la main** : aucune option de campagne ne bannit en pleine visite.
+
+```bash
+uv run shadowlab arena appliquer        # SANS SHADOWLAB_PROFILS_EXTRA
+SHADOWLAB_VITRINE_TAILLE=300 caffeinate -i uv run shadowlab campagne configs/experiments/d103-bannissement-en-visite.yaml
+# dans un autre terminal, environ 1 min après le début de la visite 2 (visites de 40 pages, environ 5 min) :
+sqlite3 -readonly outputs/shadowlab.sqlite3 "SELECT m.nom, v.visiteur FROM runs r JOIN visites v ON v.session_token = r.session_token JOIN mondes m ON m.id = v.monde_id WHERE r.status = 'en_cours'"
+uv run shadowlab arena bannir --visiteur <visiteur> --monde <nom>
+```
+
+Tenu si : la visite 2 s'arrête dans les secondes qui suivent, en échec sur « statut 403 », sans autre document demandé
+après le premier refus (tableau 6 : la page refusée, ses ressources, `/lab/collecte`), et l'identité n'est jamais `ok`. Deux issues sont justes, selon ce que l'Arena refuse en premier :
+une photo chargée au défilement (corps au motif `bannissement` lu, D-103) donne `banni` tout de suite ; le document
+suivant (page de refus, sans motif lisible) donne `alerte` (D-91), la campagne attend la fin de l'alerte (1 h) et la
+visite 3 est refusée dès sa liste d'entrée : `banni`. La colonne `arret` du tableau (1) dit laquelle : « statut 403 sur une
+ressource de la page (motif bannissement) » ou « statut 403 ». Environ 15 min dans le premier cas, environ 1 h 15 dans le second ; on peut arrêter après la visite 2
+(`uv run shadowlab arreter`).
