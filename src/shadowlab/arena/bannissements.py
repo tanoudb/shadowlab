@@ -14,6 +14,10 @@ Ce module décide une chose : « cette requête vient-elle d'un visiteur banni d
   Les compteurs se **lisent** dans `observations_http` jointe à `visites` ; ils ne s'écrivent jamais.
 - Les mondes `manuel` et `hors-passage` ne sont jamais remis à zéro : aucun bannissement **automatique** n'y est écrit
   (détection ni débit). Un bannissement manuel (`shadowlab arena bannir`) vaut dans tous les mondes.
+- **Par compte** (I10, D-104) : une ligne peut viser un compte (colonne `compte`) ; elle ne touche que la connexion et
+  l'espace privé (`arena/comptes.py`), jamais les autres pages du visiteur. Un visiteur banni alors qu'il est connecté
+  à un compte (connexion encore valable, `appareils.connecte_jusqu_au`) fait bannir ce compte, dans le même monde
+  (motif `visiteur_banni:<motif>`) ; rien de tel dans les mondes partagés ci-dessus.
 
 Coût : une lecture indexée par requête pour une session connue (le bannissement, et les compteurs si c'est une
 page, dans la même instruction) ; la fiche de la session (monde, visiteur, neuve ou non, E) est tenue en mémoire
@@ -36,6 +40,7 @@ HEURE = timedelta(hours=1)
 JOUR = timedelta(hours=24)
 MONDES_SANS_BANNISSEMENT_AUTO = frozenset({visiteurs.MONDE_MANUEL, visiteurs.MONDE_HORS_PASSAGE})
 MOTIF_MANUEL = "manuel"
+MOTIF_VISITEUR_BANNI = "visiteur_banni"  # préfixe du motif d'un compte banni parce que son visiteur connecté l'a été
 
 
 @dataclass(frozen=True)
@@ -43,7 +48,8 @@ class Verdict:
     monde: str
     visiteur: str | None
     motif: str  # `manuel`, `detecte:<détecteurs>`, `debit:pages_par_heure`, `debit:pages_par_jour`…
-    par: str  # `visiteur`, `empreinte` ou `debit`
+    par: str  # `visiteur`, `empreinte`, `debit` ou `compte`
+    compte: str | None = None  # le compte refusé (`par` = `compte`)
 
 
 def _stamp(instant: datetime) -> str:
@@ -121,32 +127,55 @@ def bannir(
     *,
     visiteur: str | None = None,
     empreinte: str | None = None,
+    compte: str | None = None,
     motif: str,
     maintenant: datetime | None = None,
     expire_le: datetime | None = None,
 ) -> bool:
-    """Écrit un bannissement (visiteur, empreinte ou les deux) dans `monde`. Faux si le même est déjà en vigueur."""
-    if visiteur is None and empreinte is None:
-        raise ValueError("un bannissement vise un visiteur ou une empreinte")
+    """Écrit un bannissement (visiteur, empreinte, compte) dans `monde`. Faux si le même est déjà en vigueur.
+
+    Un visiteur banni fait bannir les comptes auxquels il est encore connecté dans ce monde (I10), sauf dans les mondes
+    partagés (aucun bannissement automatique n'y est écrit)."""
+    if visiteur is None and empreinte is None and compte is None:
+        raise ValueError("un bannissement vise un visiteur, une empreinte ou un compte")
     maintenant = maintenant or datetime.now(UTC)
     cree = cx.execute(
-        "INSERT INTO bannissements (monde_id, visiteur, empreinte, motif, cree_le, expire_le)"
-        " SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM bannissements"
-        " WHERE monde_id = ? AND visiteur IS ? AND empreinte IS ? AND (expire_le IS NULL OR expire_le > ?))",
+        "INSERT INTO bannissements (monde_id, visiteur, empreinte, compte, motif, cree_le, expire_le)"
+        " SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM bannissements WHERE monde_id = ?"
+        " AND visiteur IS ? AND empreinte IS ? AND compte IS ? AND (expire_le IS NULL OR expire_le > ?))",
         (
             monde_id := visiteurs.identifiant_monde(cx, monde),
             visiteur,
             empreinte,
+            compte,
             motif,
             _stamp(maintenant),
             _stamp(expire_le) if expire_le else None,
             monde_id,
             visiteur,
             empreinte,
+            compte,
             _stamp(maintenant),
         ),
     )
+    if visiteur is not None and monde not in MONDES_SANS_BANNISSEMENT_AUTO:
+        for (connecte,) in cx.execute(
+            "SELECT c.identifiant FROM appareils a JOIN comptes c ON c.id = a.compte_id"
+            " WHERE c.monde_id = ? AND a.visiteur = ? AND a.connecte_jusqu_au > ? ORDER BY c.id",
+            (monde_id, visiteur, _stamp(maintenant)),
+        ).fetchall():
+            bannir(cx, monde, compte=connecte, motif=f"{MOTIF_VISITEUR_BANNI}:{motif}", maintenant=maintenant)
     return cree.rowcount > 0
+
+
+def compte_banni(cx: sqlite3.Connection, monde: str, compte: str, maintenant: datetime | None = None) -> str | None:
+    """Le motif du bannissement en vigueur du compte dans `monde`, ou None. Lecture seule."""
+    ligne = cx.execute(
+        "SELECT b.motif FROM bannissements b JOIN mondes m ON m.id = b.monde_id WHERE m.nom = ? AND b.compte = ?"
+        " AND (b.expire_le IS NULL OR b.expire_le > ?) ORDER BY b.id LIMIT 1",
+        (monde, compte, _stamp(maintenant or datetime.now(UTC))),
+    ).fetchone()
+    return ligne["motif"] if ligne else None
 
 
 class BannissementRefuse(ValueError):

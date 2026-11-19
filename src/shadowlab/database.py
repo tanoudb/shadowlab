@@ -230,6 +230,31 @@ MIGRATIONS: list[str] = [
     CREATE INDEX bannissements_visiteur ON bannissements(monde_id, visiteur);
     CREATE INDEX bannissements_empreinte ON bannissements(monde_id, empreinte)
     """,
+    # 12 — comptes (palier 2, I10, D-104) : ce que l'Arena retient d'un compte de test dans un monde (les appareils,
+    # c'est-à-dire les visiteurs, qui s'y sont connectés, et jusqu'à quand leur connexion vaut) ; un bannissement peut
+    # viser un compte (colonne `compte`, l'identifiant de la fixture). Les comptes eux-mêmes restent des fixtures.
+    """
+    CREATE TABLE comptes (
+        id INTEGER PRIMARY KEY,
+        monde_id INTEGER NOT NULL REFERENCES mondes(id),
+        identifiant TEXT NOT NULL,
+        cree_le TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX comptes_monde ON comptes(monde_id, identifiant);
+    CREATE TABLE appareils (
+        id INTEGER PRIMARY KEY,
+        compte_id INTEGER NOT NULL REFERENCES comptes(id),
+        visiteur TEXT NOT NULL,
+        nouvel_appareil INTEGER NOT NULL,
+        premiere_connexion_le TEXT NOT NULL,
+        derniere_connexion_le TEXT NOT NULL,
+        connecte_jusqu_au TEXT
+    );
+    CREATE UNIQUE INDEX appareils_compte ON appareils(compte_id, visiteur);
+    CREATE INDEX appareils_visiteur ON appareils(visiteur);
+    ALTER TABLE bannissements ADD COLUMN compte TEXT;
+    CREATE INDEX bannissements_compte ON bannissements(monde_id, compte)
+    """,
 ]
 
 

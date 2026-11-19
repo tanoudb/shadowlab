@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--visiteur", help="bannir : identifiant du visiteur (la partie avant le point du cookie sl_visiteur)"
     )
-    p.add_argument("--monde", help="bannir : nom du monde du visiteur (obligatoire ; ex. c119, manuel)")
+    p.add_argument("--compte", help="bannir : identifiant d'un compte de test déjà connecté dans ce monde (I10)")
+    p.add_argument("--monde", help="bannir : nom du monde du visiteur ou du compte (obligatoire ; ex. c119, manuel)")
     p = sous.add_parser("moteurs", help="installer les moteurs isolés et voir ce qui manque")
     p.add_argument("action", choices=["etat", "installer"])
     p.add_argument("noms", nargs="*", help="environnements à installer (tous par défaut)")
@@ -592,26 +593,33 @@ def _course_etat(args: argparse.Namespace, reglages) -> int:
 
 
 def _bannir(args: argparse.Namespace, reglages) -> int:
-    """`shadowlab arena bannir --visiteur <id> --monde <nom>` : une ligne `bannissements`, motif « manuel ».
+    """`shadowlab arena bannir --visiteur <id> --monde <nom>` ou `--compte <identifiant> --monde <nom>` : une ligne
+    `bannissements`, motif « manuel ». Un visiteur banni alors qu'il est connecté à un compte fait bannir ce compte.
 
-    Le monde est obligatoire : un visiteur n'existe que dans un monde. Un monde ou un visiteur inconnu est refusé
-    (code 2), jamais créé : une faute de frappe n'écrit pas un bannissement qui ne vise personne. Rien n'est démarré.
+    Le monde est obligatoire : un visiteur, comme l'état d'un compte, n'existe que dans un monde. Un monde inconnu, un
+    visiteur jamais vu ou un compte jamais connecté dans ce monde est refusé (code 2), jamais créé : une faute de frappe
+    n'écrit pas un bannissement qui ne vise personne. Rien n'est démarré.
     """
     from . import database as db
     from .arena import bannissements
+    from .arena import comptes as comptes_arena
 
-    if not args.visiteur or not args.monde:
-        print("Refus : `arena bannir` exige --visiteur et --monde.", file=sys.stderr)
+    if not args.monde or bool(args.visiteur) == bool(args.compte):
+        print("Refus : `arena bannir` exige --monde et un seul de --visiteur ou --compte.", file=sys.stderr)
         raise SystemExit(2)
     cx = db.ouvrir(reglages.base_donnees)
     try:
-        cree = bannissements.bannir_visiteur_connu(cx, args.monde, args.visiteur)
+        if args.compte:
+            cree = comptes_arena.bannir_compte_connu(cx, args.monde, args.compte)
+        else:
+            cree = bannissements.bannir_visiteur_connu(cx, args.monde, args.visiteur)
     except bannissements.BannissementRefuse as refus:
         print(f"Refus : {refus}", file=sys.stderr)
         return 2
     finally:
         cx.close()
-    print(f"Visiteur {args.visiteur} {'banni' if cree else 'déjà banni'} dans le monde {args.monde}.")
+    vise = f"Compte {args.compte}" if args.compte else f"Visiteur {args.visiteur}"
+    print(f"{vise} {'banni' if cree else 'déjà banni'} dans le monde {args.monde}.")
     return 0
 
 
