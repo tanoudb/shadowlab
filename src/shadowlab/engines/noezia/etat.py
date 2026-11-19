@@ -4,6 +4,14 @@ C'est la vérité de la récolte : passes, file de pages, enregistrements, évé
 transaction (page faite, enregistrements et liens neufs écrits ensemble, ou rien). La file est la table `pages` :
 profondeur d'abord (la dernière page empilée sort la première ; les enfants d'une page sont empilés dans l'ordre
 inverse pour que le premier sorte en premier). Base à part : aucune migration de la base du labo.
+
+Plusieurs identités (étape 4.2, `gestionnaire.py`) : la file est partagée. `prochaine(passe, identite=…)` prend la page
+et note son porteur (colonne `pages.identite`) dans la même transaction : une adresse n'est prise que par une identité
+à la fois, même entre processus (`BEGIN IMMEDIATE`, délai d'attente explicite). Une identité qui tombe rend ses seules
+pages (`rendre_de`) ; une identité morte (processus tué) laisse les siennes en cours, rendues dès que son verrou de
+travail est libre (`liberer_orphelines`). Une page faite garde le nom de l'identité qui l'a lue. Une passe partagée
+n'est finie que sans page à faire ni en cours (`terminer_si_finie`). Tables `identites` et `visites_identites` : les
+identités de la récolte et leurs visites.
 """
 
 from __future__ import annotations
@@ -12,7 +20,7 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,7 +107,18 @@ CREATE TABLE IF NOT EXISTS alertes_lecture (
     nb INTEGER NOT NULL, exemple_adresse TEXT NOT NULL, exemple_message TEXT NOT NULL,
     PRIMARY KEY (passe, type_page, champ, gabarit)
 );
+CREATE TABLE IF NOT EXISTS identites (
+    passe INTEGER NOT NULL, nom TEXT NOT NULL, ajoutee_le TEXT NOT NULL, proxy TEXT,
+    PRIMARY KEY (passe, nom)
+);
+CREATE TABLE IF NOT EXISTS visites_identites (
+    id INTEGER PRIMARY KEY, passe INTEGER NOT NULL, identite TEXT NOT NULL,
+    debut TEXT NOT NULL, fin TEXT NOT NULL, pages INTEGER NOT NULL, statut TEXT NOT NULL, arret TEXT
+);
 """
+# Délai d'attente d'un verrou de la base (ms) : plusieurs identités, donc plusieurs processus, écrivent la même base ;
+# chacun attend son tour (les transactions durent quelques millisecondes) au lieu d'échouer après 5 s.
+DELAI_VERROU_MS = 30_000
 
 _JSON = ("moteur", "options", "arret", "robots")
 
@@ -121,9 +140,11 @@ class Etat:
     def __init__(self, chemin: Path) -> None:
         chemin.parent.mkdir(parents=True, exist_ok=True)
         self.chemin = chemin
-        self._cx = sqlite3.connect(chemin, isolation_level=None)  # transactions écrites à la main
+        # transactions écrites à la main ; délai d'attente explicite (plusieurs processus, étape 4.2)
+        self._cx = sqlite3.connect(chemin, isolation_level=None, timeout=DELAI_VERROU_MS / 1000)
         self._cx.row_factory = sqlite3.Row
         self._profondeur = 0
+        self._cx.execute(f"PRAGMA busy_timeout = {DELAI_VERROU_MS}")
         tables = {r[0] for r in self._cx.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if tables and "passes" not in tables:
             self._cx.close()
@@ -131,6 +152,16 @@ class Etat:
         self._cx.execute("PRAGMA journal_mode = WAL")
         self._cx.execute("PRAGMA synchronous = NORMAL")
         self._cx.executescript(_SCHEMA)
+        self._migrer()
+
+    def _migrer(self) -> None:
+        """Une base écrite avant l'étape 4.2 n'a pas la colonne du porteur d'une page : elle la reçoit (vide)."""
+        colonnes = {r["name"] for r in self._cx.execute("PRAGMA table_info(pages)")}
+        if "identite" not in colonnes:
+            with self.transaction():
+                colonnes = {r["name"] for r in self._cx.execute("PRAGMA table_info(pages)")}  # un autre a pu le faire
+                if "identite" not in colonnes:
+                    self._cx.execute("ALTER TABLE pages ADD COLUMN identite TEXT")
 
     def fermer(self) -> None:
         self._cx.close()
@@ -273,21 +304,176 @@ class Etat:
     def _page(ligne: sqlite3.Row) -> Page:
         return Page(ligne["id"], ligne["passe"], ligne["adresse"], ligne["type"], ligne["canon"])
 
-    def prochaine(self, passe: int) -> Page | None:
-        """Dépile la page suivante (profondeur d'abord) et la marque « en cours »."""
+    def prochaine(self, passe: int, identite: str | None = None) -> Page | None:
+        """Dépile la page suivante (profondeur d'abord) et la marque « en cours ». `identite` : le porteur, noté dans la
+        même transaction (file partagée, étape 4.2) ; aucune autre identité ne peut prendre cette page."""
         with self.transaction():
             ligne = self._cx.execute(
                 "SELECT * FROM pages WHERE passe = ? AND etat = 'a_faire' ORDER BY seq DESC LIMIT 1", (passe,)
             ).fetchone()
             if ligne is None:
                 return None
-            self._cx.execute("UPDATE pages SET etat = 'en_cours' WHERE id = ?", (ligne["id"],))
+            self._cx.execute("UPDATE pages SET etat = 'en_cours', identite = ? WHERE id = ?", (identite, ligne["id"]))
         return self._page(ligne)
 
     def rendre(self, page: Page) -> None:
-        """Remet une page « en cours » en file, à sa place."""
+        """Remet une page « en cours » en file, à sa place, sans porteur."""
         with self.transaction():
-            self._cx.execute("UPDATE pages SET etat = 'a_faire' WHERE id = ? AND etat = 'en_cours'", (page.id,))
+            self._cx.execute(
+                "UPDATE pages SET etat = 'a_faire', identite = NULL WHERE id = ? AND etat = 'en_cours'", (page.id,)
+            )
+
+    def rendre_de(self, passe: int, identite: str) -> int:
+        """Remet en file les pages « en cours » que tient `identite` (elle tombe, ou reprend après une coupure), et
+        seulement elles. Rend leur nombre."""
+        with self.transaction():
+            return self._cx.execute(
+                "UPDATE pages SET etat = 'a_faire', identite = NULL"
+                " WHERE passe = ? AND etat = 'en_cours' AND identite = ?",
+                (passe, identite),
+            ).rowcount
+
+    def en_cours_par_identite(self, passe: int) -> dict[str, int]:
+        """Pages « en cours » par porteur (les pages prises sans identité n'y sont pas)."""
+        lignes = self._cx.execute(
+            "SELECT identite, COUNT(*) FROM pages WHERE passe = ? AND etat = 'en_cours' AND identite IS NOT NULL"
+            " GROUP BY identite ORDER BY identite",
+            (passe,),
+        )
+        return dict(lignes)
+
+    def liberer_orphelines(self, passe: int, vivante: Callable[[str], bool]) -> dict[str, int]:
+        """Rend les pages « en cours » des identités qui ne travaillent plus (`vivante(nom)` faux : processus mort, son
+        verrou de travail est libre). Les pages d'une identité vivante ne sont jamais touchées. Rend {nom: pages}."""
+        rendues: dict[str, int] = {}
+        for nom in self.en_cours_par_identite(passe):
+            if not vivante(nom):
+                n = self.rendre_de(passe, nom)
+                if n:
+                    rendues[nom] = n
+        return rendues
+
+    def pages_restantes(self, passe: int) -> tuple[int, int]:
+        """(pages à faire, pages en cours) de la passe."""
+        ligne = self._cx.execute(
+            "SELECT COALESCE(SUM(etat = 'a_faire'), 0), COALESCE(SUM(etat = 'en_cours'), 0) FROM pages WHERE passe = ?",
+            (passe,),
+        ).fetchone()
+        return int(ligne[0]), int(ligne[1])
+
+    def terminer_si_finie(self, passe: int, quand: str) -> bool:
+        """Passe partagée : la marque « terminee » si plus aucune page n'est à faire ni en cours (une page en cours peut
+        encore échouer, revenir en file, ou mettre des liens neufs en file). Vrai pour la seule identité qui la
+        termine ; faux si elle ne l'est pas, ou l'était déjà."""
+        with self.transaction():
+            if self.pages_restantes(passe) != (0, 0):
+                return False
+            return (
+                self._cx.execute(
+                    "UPDATE passes SET statut = 'terminee', arret = NULL, fin = ?"
+                    " WHERE numero = ? AND statut != 'terminee'",
+                    (quand, passe),
+                ).rowcount
+                == 1
+            )
+
+    def passe_partagee(
+        self,
+        *,
+        recette: str,
+        empreinte: str,
+        texte_recette: str,
+        chemin_recette: str,
+        moteur: Mapping[str, Any],
+        options: Mapping[str, Any],
+        quand: str,
+        departs: Sequence[tuple[str, str]],
+        ignores: Iterable[str] = (),
+        plafonds: Mapping[str, int] | None = None,
+    ) -> tuple[int, str]:
+        """La passe d'une récolte partagée par plusieurs identités, en une transaction : aucune passe → elle est ouverte
+        et ses départs empilés (« ouverte ») ; la dernière n'est pas finie → elle est rejointe (« rejointe ») ; la
+        dernière est terminée → « finie » : le travail est fait, aucune identité n'en rouvre une (une nouvelle passe,
+        incrémentale, se lance explicitement). Deux identités qui démarrent ensemble n'ouvrent jamais deux passes."""
+        with self.transaction():
+            derniere = self.derniere_passe()
+            if derniere is not None:
+                return derniere["numero"], "finie" if derniere["statut"] == "terminee" else "rejointe"
+            numero = self.ouvrir_passe(recette, empreinte, texte_recette, chemin_recette, moteur, options, quand)
+            self.empiler(numero, departs, ignores, plafonds)
+        return numero, "ouverte"
+
+    def pages_par_identite(self, passe: int) -> dict[str, dict[str, int]]:
+        """Pages lues (faites ou en échec) par chaque identité dans la passe, et leurs échecs."""
+        lignes = self._cx.execute(
+            "SELECT identite, COUNT(*) AS lues, COALESCE(SUM(etat = 'echec'), 0) AS echecs FROM pages"
+            " WHERE passe = ? AND etat IN ('faite', 'echec') AND identite IS NOT NULL"
+            " GROUP BY identite ORDER BY identite",
+            (passe,),
+        )
+        return {r["identite"]: {"lues": r["lues"], "echecs": r["echecs"]} for r in lignes}
+
+    # ── Identités de la récolte (étape 4.2) ─────────────────────────────
+    def enregistrer_identites(self, passe: int, identites: Mapping[str, str | None], quand: str) -> None:
+        """Note les identités qui travaillent sur la passe, avec leur proxy MASQUÉ (`ProxyIdentite.masque`) ou None.
+        Une identité déjà notée garde sa date d'arrivée."""
+        with self.transaction():
+            for nom, proxy in identites.items():
+                self._cx.execute(
+                    "INSERT INTO identites (passe, nom, ajoutee_le, proxy) VALUES (?, ?, ?, ?)"
+                    " ON CONFLICT (passe, nom) DO UPDATE SET proxy = excluded.proxy",
+                    (passe, nom, quand, proxy),
+                )
+
+    def noter_visite(
+        self,
+        passe: int,
+        identite: str,
+        *,
+        debut: str,
+        fin: str,
+        pages: int,
+        statut: str,
+        arret: Mapping[str, Any] | None,
+    ) -> None:
+        """Une visite d'une identité sur la passe partagée : début, fin, pages lues, statut, arrêt éventuel."""
+        with self.transaction():
+            self._cx.execute(
+                "INSERT INTO visites_identites (passe, identite, debut, fin, pages, statut, arret)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (passe, identite, debut, fin, pages, statut, None if arret is None else _json(arret)),
+            )
+
+    def identites(self, passe: int) -> list[dict[str, Any]]:
+        """Les identités de la passe (ordre d'arrivée) : nom, arrivée, proxy masqué, visites, dernière visite."""
+        rendues = []
+        for ligne in self._cx.execute("SELECT * FROM identites WHERE passe = ? ORDER BY ajoutee_le, nom", (passe,)):
+            visites = self.visites_identite(passe, ligne["nom"])
+            rendues.append(
+                {
+                    "nom": ligne["nom"],
+                    "ajoutee_le": ligne["ajoutee_le"],
+                    "proxy": ligne["proxy"],
+                    "visites": len(visites),
+                    "derniere_visite": visites[-1] if visites else None,
+                }
+            )
+        return rendues
+
+    def visites_identite(self, passe: int, identite: str) -> list[dict[str, Any]]:
+        lignes = self._cx.execute(
+            "SELECT * FROM visites_identites WHERE passe = ? AND identite = ? ORDER BY id", (passe, identite)
+        )
+        return [
+            {
+                "debut": r["debut"],
+                "fin": r["fin"],
+                "pages": r["pages"],
+                "statut": r["statut"],
+                "arret": None if r["arret"] is None else json.loads(r["arret"]),
+            }
+            for r in lignes
+        ]
 
     def terminer_page(
         self,
@@ -382,11 +568,14 @@ class Etat:
         )
         return [dict(ligne) for ligne in lignes]
 
-    def dernieres_lues(self, passe: int, n: int) -> list[dict[str, Any]]:
+    def dernieres_lues(self, passe: int, n: int, identite: str | None = None) -> list[dict[str, Any]]:
+        """Les `n` dernières pages lues de la passe ; avec `identite`, celles de cette identité seulement (la sentinelle
+        d'une identité ne compte pas les échecs des autres)."""
+        filtre = " AND identite = ?" if identite is not None else ""
         lignes = self._cx.execute(
             "SELECT type, decision, statut, adresse FROM pages WHERE passe = ? AND rang_lecture IS NOT NULL"
-            " ORDER BY rang_lecture DESC LIMIT ?",
-            (passe, n),
+            f"{filtre} ORDER BY rang_lecture DESC LIMIT ?",
+            (passe, identite, n) if identite is not None else (passe, n),
         ).fetchall()
         return [dict(ligne) for ligne in reversed(lignes)]
 

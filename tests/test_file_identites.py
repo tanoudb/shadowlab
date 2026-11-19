@@ -123,8 +123,8 @@ def test_terminer_si_finie_seulement_sans_page_a_faire_ni_en_cours(etat):
 
 
 def test_passe_partagee_ouverte_une_fois_puis_rejointe(etat):
-    """Plusieurs identités démarrent : la première ouvre la passe (départs empilés), les autres la rejoignent ; une passe
-    finie n'est jamais rouverte par une identité (le travail est fait)."""
+    """Plusieurs identités démarrent : la première ouvre la passe (départs empilés), les autres la rejoignent ; une
+    passe finie n'est jamais rouverte par une identité (le travail est fait)."""
     commun = dict(
         recette="essai", empreinte="sha256:abc", texte_recette="recette: 1\n", chemin_recette="r.yaml",
         moteur={"nom": "navigateur"}, options={}, departs=[("http://127.0.0.1/liste", "liste")],
