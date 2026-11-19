@@ -10,7 +10,8 @@ périmètre est refusé avant que le proxy soit contacté.
 Règles tenues partout dans ce module :
 - le mot de passe, l'utilisateur et leur forme encodée n'entrent dans aucun message d'erreur, aucune `Demande`, aucun
   journal (un message d'erreur d'`open()` finit dans les journaux et dans la base d'une campagne) ;
-- aucun repli sur une connexion directe : si le proxy ne répond pas, la demande échoue ;
+- aucun repli sur une connexion directe : si le proxy ne répond pas, la demande échoue. Une seule exception, voulue
+  (D-105, révise D-99) : l'amont `arena`, qui joint 127.0.0.1 sur le port exact du frontal de l'Arena et rien d'autre ;
 - aucun nom d'hôte n'est résolu ici (le nom part au proxy, qui résout et sort) ; seul le nom du proxy lui-même l'est.
 """
 

@@ -2,8 +2,8 @@
 
     SHADOWLAB_PORT=… SHADOWLAB_PORT_ARENA=… SHADOWLAB_ARENA_PROXY_PROTOCOLE=1 uv run python <ce fichier>
 
-Le frontal et le site de ce dossier de travail doivent tourner (par exemple pendant ou après la campagne, sous le même
-jeu de ports). Trois clients TLS directs, chacun avec une nouvelle session :
+Le frontal et le site de ce dossier de travail doivent tourner pendant le contrôle (par exemple pendant la campagne, sous
+le même jeu de ports : le frontal s'arrête avec elle). Trois clients TLS directs, chacun avec une nouvelle session :
 - « forge » : envoie X-Forwarded-For, X-Real-IP, Forwarded et X-ShadowLab-Adresse forgés, sans en-tête PROXY ;
 - « proxy » : envoie en plus un en-tête PROXY v1 déclarant 192.0.2.44 ;
 - « simple » : rien de forgé, rien de simulé.

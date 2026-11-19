@@ -18,10 +18,12 @@ Ce module décide une chose : « cette requête vient-elle d'un visiteur banni d
   Une ligne qui ne porte que `adresse`. Elle est lue **avant** tout le reste, même pour un navigateur neuf dont on ne
   sait encore rien (première requête, ni cookie ni empreinte). À la main (`arena bannir --ip`, motif `manuel`) elle
   refuse tout le monde derrière cette adresse dans ce monde. Automatique (règle ci-dessous, motif `visiteurs_bannis_…`,
-  24 h) elle ne refuse que les sessions **neuves** : un visiteur qui revient avec son cookie derrière une adresse
-  partagée n'est pas refusé parce que d'autres visiteurs de cette adresse l'ont été (même raison que la règle de
-  l'empreinte E). Aucune cascade : une adresse bannie ne bannit ni visiteur ni empreinte ; l'adresse du pair
-  non simulé (127.0.0.1, `::1`) ne déclenche jamais la règle automatique, tous les clients d'un poste la portent.
+  24 h) elle épargne le visiteur dont une visite DANS CE MONDE est plus ancienne que le bannissement : un humain qui
+  revient avec son cookie derrière une adresse partagée n'est pas refusé parce que d'autres visiteurs de cette adresse
+  l'ont été (même raison que la règle de l'empreinte E). Un navigateur refusé ne devient pas un habitué : la visite
+  écrite à son refus est postérieure au bannissement, il reste refusé avec le cookie reçu. Aucune cascade : une adresse
+  bannie ne bannit ni visiteur ni empreinte ; l'adresse du pair non simulé (127.0.0.1, `::1`) ne déclenche jamais la
+  règle automatique, tous les clients d'un poste la portent.
 - **Par compte** (I10, D-104) : une ligne peut viser un compte (colonne `compte`) ; elle ne touche que la connexion et
   l'espace privé (`arena/comptes.py`), jamais les autres pages du visiteur. Un visiteur banni alors qu'il est connecté
   à un compte (connexion encore valable, `appareils.connecte_jusqu_au`) fait bannir ce compte, dans le même monde
@@ -105,7 +107,8 @@ _COMPTE = (
 _JOINTURE_BAN = (
     f" LEFT JOIN bannissements b ON b.monde_id = {_MONDE} AND (b.expire_le IS NULL OR b.expire_le > :maintenant)"
     " AND (b.visiteur = :visiteur OR (:empreinte IS NOT NULL AND b.empreinte = :empreinte)"
-    f" OR (:adresse IS NOT NULL AND b.adresse = :adresse AND (b.motif = '{MOTIF_MANUEL}' OR :neuve)))"
+    f" OR (:adresse IS NOT NULL AND b.adresse = :adresse AND (b.motif = '{MOTIF_MANUEL}' OR NOT EXISTS ("
+    " SELECT 1 FROM visites vv WHERE vv.monde_id = b.monde_id AND vv.visiteur = :visiteur AND vv.vue_le < b.cree_le))))"
     " ORDER BY b.id LIMIT 1"
 )  # sans bannissement, la jointure rend quand même une ligne, vide : les compteurs sortent toujours
 _LIRE_BAN = (
@@ -124,14 +127,12 @@ def _parametres(
     empreinte: str | None,
     maintenant: datetime,
     adresse: str | None = None,
-    neuve: bool = False,
 ) -> dict:
     return {
         "monde": monde,
         "visiteur": visiteur,
         "empreinte": empreinte,
         "adresse": adresse,
-        "neuve": int(neuve),
         "maintenant": _stamp(maintenant),
         "heure": _stamp(maintenant - HEURE),
         "jour": _stamp(maintenant - JOUR),
@@ -382,7 +383,7 @@ class Surveillance:
         compter = page and fiche.visiteur is not None and fiche.monde not in MONDES_SANS_BANNISSEMENT_AUTO
         ligne = cx.execute(
             _LIRE_BAN_ET_COMPTES if compter else _LIRE_BAN,
-            _parametres(fiche.monde, fiche.visiteur, empreinte, maintenant, adresse, fiche.neuve),
+            _parametres(fiche.monde, fiche.visiteur, empreinte, maintenant, adresse),
         ).fetchone()
         if ligne["motif"] is not None:
             direct = fiche.visiteur is not None and ligne["vise"] == fiche.visiteur

@@ -745,14 +745,30 @@ def test_une_adresse_bannie_automatiquement_ne_refuse_que_les_visiteurs_neufs(
     """Un humain qui revient (cookie de visiteur valable) derrière une adresse partagée n'est pas refusé parce que trois
     autres visiteurs de cette adresse ont été bannis ; un navigateur neuf l'est."""
     humain = NavigateurIp(client, reglages, A1)
-    humain.franchir_la_porte(nouvelle_session())
+    humain.franchir_la_porte(nouvelle_session())  # une visite de ce monde, plus ancienne que le bannissement
     for v in ("v1", "v2", "v3"):
-        _bannir_visiteur_de(cx, MONDE, v, A1)
+        _bannir_visiteur_de(cx, MONDE, v, A1, datetime.now(UTC))  # l'horloge réelle : les visites du site la suivent
     assert [b["adresse"] for b in _bans_adresse(cx)] == [A1]
     assert humain.aller(nouvelle_session()).status_code == 200  # il revient : il passe
     neuf = NavigateurIp(client, reglages, A1).aller(nouvelle_session())
     assert neuf.status_code == 403 and neuf.json()["bloque_par"] == "bannissement"
     assert neuf.headers["x-arena-refus"] == "bannissement"
+
+
+def test_un_navigateur_refuse_par_l_adresse_ne_devient_pas_un_habitue_en_recevant_un_cookie(
+    client, reglages, cx, nouvelle_session, sans_suspicion
+):
+    """Le refus pose un cookie de visiteur et note une visite : elle est postérieure au bannissement, donc le même
+    navigateur, revenu avec un nouveau jeton et ce cookie, reste refusé."""
+    for v in ("v1", "v2", "v3"):
+        _bannir_visiteur_de(cx, MONDE, v, A1, datetime.now(UTC))
+    nav = NavigateurIp(client, reglages, A1)
+    premiere = nav.aller(nouvelle_session())
+    assert premiere.status_code == 403
+    assert visiteurs.COOKIE in nav.cookies  # le refus lui a donné un cookie de visiteur
+    seconde = nav.aller(nouvelle_session())
+    assert seconde.status_code == 403 and seconde.headers["x-arena-refus"] == "bannissement"
+    assert nav.aller(nouvelle_session()).status_code == 403
 
 
 def test_un_humain_n_est_pas_banni_parce_qu_un_autre_visiteur_de_son_adresse_l_a_ete_une_fois(
