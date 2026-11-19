@@ -710,6 +710,7 @@ def _lancer_parcours(
     duree_porte_s: float | None = None,
     noter: Callable[[Any, Any], Any] | None = None,
     dossier_durable: Any = None,
+    identite_partagee: str | None = None,
 ) -> tuple[Any, Any]:
     """Lance le parcours de `shadowlab recolte` avec la recette `recette_nom` dans le passage (le pilote du passage est
     le moteur de récolte : porte d'entrée, sentinelle, identité persistante). Rend le bilan et ce que `noter(dossier,
@@ -718,7 +719,8 @@ def _lancer_parcours(
     Sans `dossier_durable`, l'état vit dans un dossier temporaire : chaque passage repart de zéro (passe neuve). Avec,
     l'état y reste d'un passage à l'autre et le passage est une visite (`Parcours.visiter`) : il reprend la passe en
     cours, dans la limite de `options.pages_max`, ou en commence une nouvelle (incrémentale) quand la précédente est
-    finie."""
+    finie. Avec `identite_partagee` en plus (récolte partagée, étape 4.2), la visite est celle de cette identité sur la
+    file commune du dossier (`Parcours.visiter_partage`)."""
     import tempfile
     from contextlib import nullcontext
     from pathlib import Path
@@ -738,7 +740,11 @@ def _lancer_parcours(
             parcours = Parcours(
                 recette, texte, recette_nom, moteur, Path(dossier), options, ecran=lambda _: None, alea=rng
             )
-            if dossier_durable is not None:
+            if dossier_durable is not None and identite_partagee is not None:
+                bilan = parcours.visiter_partage(
+                    identite_partagee, (options or Options()).pages_max or PAGES_PAR_VISITE
+                )
+            elif dossier_durable is not None:
                 bilan = parcours.visiter((options or Options()).pages_max or PAGES_PAR_VISITE)
             else:
                 bilan = parcours.lancer()
@@ -941,6 +947,7 @@ def visite(
     duree_porte_s: float | None = DUREE_PORTE_VISITE_S,
     dossier_recolte: Any = None,
     compte: str | None = None,
+    identite_partagee: str | None = None,
 ) -> Issue:
     """Une visite de la vitrine par un visiteur qui peut revenir : la liste, puis des fiches, `pages` pages au plus.
 
@@ -959,6 +966,10 @@ def visite(
     est notée à chaque visite (`recolte`, contre `vitrine.verite()`). `compte` (I10, D-104) : après une lecture réussie,
     l'étape du compte (`_etape_compte` : connexion à la première visite de l'identité, l'espace privé ensuite) ; la
     visite ne réussit que si les deux réussissent. Une lecture arrêtée ne tente pas la connexion.
+    `identite_partagee` (récolte partagée entre identités, étape 4.2) : `dossier_recolte` est celui de la récolte
+    commune ; la visite lit la file commune au nom de cette identité (`Parcours.visiter_partage`) : chaque page n'est
+    lue que par une identité, une identité qui tombe rend sa page aux autres. `travail_fini` : plus rien à faire pour
+    personne, le bras s'arrête.
 
     Pourquoi ce scénario et pas `shadowlab recolte lancer --identite` : `recolte lancer` vise le site en direct, sans
     jeton de passage, donc sans profil de l'Arena (une requête sans jeton reçoit le profil sans session) ; la course
@@ -975,6 +986,8 @@ def visite(
         "duree_porte_s": duree_porte_s,
         "recolte_durable": dossier_recolte is not None,
     }
+    if identite_partagee is not None:
+        details["identite_partagee"] = identite_partagee
     succes = False
     try:
         options = Options(
@@ -993,6 +1006,7 @@ def visite(
             duree_porte_s=duree_porte_s,
             noter=(lambda dossier, _bilan: noter_recolte_durable(dossier)) if dossier_recolte is not None else None,
             dossier_durable=dossier_recolte,
+            identite_partagee=identite_partagee,
         )
         lancement = bilan.resume["lancement"]
         lues, echecs, relectures = lancement["pages"], lancement["echecs"], lancement["relectures"]
@@ -1004,6 +1018,11 @@ def visite(
         )  # fmt: skip
         if note is not None:
             details["recolte"] = note
+        if identite_partagee is not None:
+            details.update(
+                travail_fini=bool(bilan.resume.get("travail_fini")), file=bilan.resume.get("file"),
+                passe_statut=bilan.resume.get("passe_statut"),
+            )  # fmt: skip
         if bilan.arret:
             details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
         succes = bilan.statut in ("limitee", "terminee") and lues - echecs >= 1 and echecs == 0
@@ -1025,14 +1044,17 @@ def avec_pages(
     duree_porte_s: float | None = DUREE_PORTE_VISITE_S,
     dossier_recolte: Any = None,
     compte: str | None = None,
+    identite_partagee: str | None = None,
 ) -> Scenario:
     """Le scénario `visite` pour `pages` pages au plus (même nom et même description que celui du registre : c'est
     la même ligne `scenarios` dans la base), avec la durée de porte du profil et, pour la course, le dossier durable
-    de la récolte du bras ; `compte` : le compte de test du bras (I10)."""
+    de la récolte du bras ; `compte` : le compte de test du bras (I10) ; `identite_partagee` : l'identité du bras d'une
+    récolte partagée (étape 4.2)."""
     modele = SCENARIOS["visite"]
     executer = functools.partial(
-        visite, pages=pages, duree_porte_s=duree_porte_s, dossier_recolte=dossier_recolte, compte=compte
-    )
+        visite, pages=pages, duree_porte_s=duree_porte_s, dossier_recolte=dossier_recolte, compte=compte,
+        identite_partagee=identite_partagee,
+    )  # fmt: skip
     return Scenario(modele.name, modele.description, modele.attend_js, executer)
 
 

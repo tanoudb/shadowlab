@@ -80,6 +80,12 @@ def racine(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def sans_arena(monkeypatch):
+    """Ni Arena ni site lancés : la vérification d'avant visite d'un bras espacé répond « rien en panne »."""
+    monkeypatch.setattr(campaigns, "_panne_infrastructure", lambda reglages, protection: None)
+
+
+@pytest.fixture(autouse=True)
 def lecture_instantanee(monkeypatch):
     from shadowlab.engines.noezia.lecture import LectureHumaine
 
