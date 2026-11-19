@@ -645,6 +645,25 @@ def test_a_la_reprise_apres_le_bannissement_le_pilote_s_ouvre_sur_l_autre_identi
     assert cx.execute("SELECT COUNT(*) FROM bannissements").fetchone()[0] == 1  # aucun second bannissement
 
 
+def test_sans_espacement_la_reprise_apres_le_bannissement_prend_aussi_l_autre_identite(
+    tmp_path, reglages, monkeypatch, racine, infrastructure_saine
+):
+    experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra="", engines=BRAS_COMPTES)
+    pilote = _pilote_qui_note_ses_options()
+    monkeypatch.setattr(campaigns, "registre", lambda: {"noezia": pilote})
+    rang = rang_de(experience, "temoin-compte")
+    passages = Passages(reglages, ecrire_visite=_connecter_le_compte("analyste"))
+    monkeypatch.setattr(campaigns, "_passage", passages)
+    assert campaigns.executer_unite(reglages, experiment_id, rang) == "termine"
+    assert [o["identite"] for o in pilote.ouverts] == ["comptes-temoin-a", "comptes-temoin-b"]
+    cx.execute("DELETE FROM runs WHERE repetition = 4")  # la visite 4 n'a pas eu lieu (arrêt de la campagne)
+    pilote.ouverts.clear()
+    passages.appels.clear()
+    assert campaigns.executer_unite(reglages, experiment_id, rang) == "termine"
+    assert [a["repetition"] for a in passages.appels] == [4]
+    assert [o["identite"] for o in pilote.ouverts] == ["comptes-temoin-b"]  # pas l'identité d'avant le bannissement
+
+
 # ── Le fichier de l'essai ──────────────────────────────────────────────────────────────────────
 
 
