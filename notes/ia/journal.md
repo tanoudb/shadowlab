@@ -4142,3 +4142,12 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   qui est à Ethan). Connexion au compte non faite : il faut un compte Cloudflare (à créer par Ethan) puis `/reload-plugins` ou une
   nouvelle session.
 - Pour l'étape 3.4 il faut toujours un compte Cloudflare **et** un domaine à Ethan dessus.
+
+## 2026-11-19 (10h25) — Claude (Opus 5.5, coordination) — `noezia.fr` servira de cible cachée (D-107)
+
+- Ethan a le domaine `noezia.fr` (DNS publics : serveurs `ns111.ovh.net` et `dns111.ovh.net`, page d'attente d'OVH en `A`, courrier
+  OVH en `MX`, SPF d'OVH). Objection faite (D-81, journaux de certificats, nom de son produit) ; il répond : « faut juste que personne y
+  ait accès et soit caché ». Décision D-107 : cible cachée pour 1.8 puis 3.4 (sous-domaine au hasard, tunnel nommé vers la vitrine
+  seule, règle WAF à cookie secret, `noindex`), jamais pour le site public.
+- Reste à Ethan (noté dans `notes/ia/questions-ouvertes.md`) : compte Cloudflare, ajout du domaine, bascule des DNS chez OVH après
+  vérification du courrier, `/mcp` pour l'extension Cloudflare, `cloudflared tunnel login`.
