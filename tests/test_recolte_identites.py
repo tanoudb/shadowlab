@@ -291,3 +291,18 @@ def test_reprendre_avec_les_identites_de_la_passe_sans_les_bannies(pilotes, regl
         assert [i["nom"] for i in etat.identites(1)] == ["ident-a", "ident-b", "ident-c"]
     finally:
         etat.fermer()
+
+
+def test_reprendre_refuse_si_une_identite_de_la_passe_est_encore_en_visite(pilotes, reglages, racine, capsys):
+    bannir, _ = pilotes
+    bannir["ident-a"] = 1
+    bannir["ident-b"] = 1
+    assert lancer("--identites", "ident-a,ident-b", *RAPIDE) == 3
+    capsys.readouterr()
+    dossier = reglages.sorties / "recoltes" / "vitrine-annonces"
+    verrou = gestionnaire.verrou_travailleur(dossier, "ident-a")  # un processus resté en vie après une coupure
+    try:
+        assert main(["recolte", "reprendre", "vitrine-annonces", "--identites", "ident-c", *RAPIDE]) == 2
+        assert "travaille encore" in capsys.readouterr().err
+    finally:
+        verrou.close()
