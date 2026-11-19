@@ -249,17 +249,29 @@ def ouvrir(nom: str, *, horloge: Callable[[], datetime] | None = None, maintenan
     return Identite(nom, dossier, verrou, horloge)
 
 
-def declarer_proxy(nom: str, serveur: str, utilisateur: str | None = None, mot_de_passe: str | None = None) -> Path:
+def declarer_proxy(
+    nom: str,
+    serveur: str,
+    utilisateur: str | None = None,
+    mot_de_passe: str | None = None,
+    *,
+    adresse_simulee: str | None = None,
+) -> Path:
     """Écrit le proxy de l'identité (`proxy.json`, droits 0600, dossier 0700) ; rien n'est écrit s'il est invalide. Le
     fichier est remplacé d'un coup : un ancien fichier plus ouvert ne laisse pas ses droits au nouveau. Un lien
     symbolique n'est jamais suivi : un `proxy.tmp` déjà là (reste d'un plantage, ou lien posé dans le dossier) est
     retiré avant l'écriture, et `proxy.json`, même si c'était un lien, est remplacé par un fichier ordinaire."""
     verifier_nom(nom)
-    analyser(serveur, utilisateur, mot_de_passe)
+    amont = analyser(serveur, utilisateur, mot_de_passe, adresse_simulee)
     dossier = racine_identites() / nom
     dossier.mkdir(parents=True, exist_ok=True, mode=0o700)
     dossier.chmod(0o700)
-    champs = {"serveur": serveur, "utilisateur": utilisateur, "mot_de_passe": mot_de_passe}
+    champs = {
+        "serveur": serveur,
+        "utilisateur": utilisateur,
+        "mot_de_passe": mot_de_passe,
+        "adresse_simulee": amont.adresse_simulee,  # D-105 : sous sa forme normale, schéma `arena` seulement
+    }
     fichier = dossier / FICHIER_PROXY
     temporaire = fichier.with_suffix(".tmp")
     try:
@@ -301,6 +313,11 @@ def lire_proxy(nom: str) -> ProxyIdentite | None:
     if not isinstance(donnees, dict):
         raise ProxyInvalide(f"proxy de l'identité {nom!r} : un objet JSON est attendu")
     try:
-        return analyser(donnees.get("serveur"), donnees.get("utilisateur"), donnees.get("mot_de_passe"))
+        return analyser(
+            donnees.get("serveur"),
+            donnees.get("utilisateur"),
+            donnees.get("mot_de_passe"),
+            donnees.get("adresse_simulee"),
+        )
     except ProxyInvalide as erreur:
         raise ProxyInvalide(f"proxy de l'identité {nom!r} : {erreur}") from None

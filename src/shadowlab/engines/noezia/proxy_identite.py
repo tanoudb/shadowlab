@@ -27,9 +27,14 @@ import time
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+from ...arena import adresses
 from ...perimetre import ILLIMITE
 
-SCHEMAS = ("http", "socks5")
+SCHEMAS = ("http", "socks5", "arena")
+# Amont « arena » (D-105) : pas de proxy, la connexion va droit au frontal de l'Arena sur la boucle locale, précédée de
+# l'en-tête PROXY qui porte l'adresse simulée de l'identité. Jamais un autre hôte : l'hôte est cette adresse littérale.
+HOTE_ARENA = "127.0.0.1"
+HOTES_DE_L_ARENA = frozenset({"localhost", HOTE_ARENA})  # les noms qu'un navigateur peut demander pour la joindre
 TAILLE_MAX_ENTETE = 64 * 1024  # un en-tête plus gros n'est pas une requête de navigateur : refusé
 _HOTE_SUR = re.compile(r"[A-Za-z0-9_.:-]{1,253}")  # nom ou adresse ; rien qui puisse casser une ligne de requête
 _CIBLE_SURE = re.compile(r"[\x21-\x7e]+")  # ni espace ni caractère de contrôle dans la cible d'une requête
@@ -50,6 +55,7 @@ class ProxyIdentite:
     port: int
     utilisateur: str | None = None
     mot_de_passe: str | None = dataclasses.field(default=None, repr=False)
+    adresse_simulee: str | None = None  # schéma `arena` seulement : l'adresse que l'identité déclare à l'Arena
 
     def masque(self) -> str:
         """L'adresse sans les identifiants (`***:***@` à leur place s'il y en a) : la seule forme à écrire ailleurs."""
@@ -66,8 +72,15 @@ def _autorite(hote: str, port: int) -> str:
     return f"[{hote}]:{port}" if ":" in hote else f"{hote}:{port}"
 
 
-def analyser(serveur: str, utilisateur: str | None = None, mot_de_passe: str | None = None) -> ProxyIdentite:
-    """Valide l'adresse (`http://hote:port` ou `socks5://hote:port`) et les identifiants, donnés à part.
+def analyser(
+    serveur: str,
+    utilisateur: str | None = None,
+    mot_de_passe: str | None = None,
+    adresse_simulee: str | None = None,
+) -> ProxyIdentite:
+    """Valide l'adresse (`http://hote:port`, `socks5://hote:port` ou `arena://127.0.0.1:port`) et les identifiants,
+    donnés à part. `adresse_simulee` (D-105) va avec le seul schéma `arena`, qui l'exige ; elle ne part jamais vers un
+    proxy réel.
 
     Aucun message ne répète un morceau de l'adresse : sans schéma, `utilisateur:mdp@hote:1` serait lu avec l'utilisateur
     pour schéma."""
@@ -95,7 +108,18 @@ def analyser(serveur: str, utilisateur: str | None = None, mot_de_passe: str | N
         raise ProxyInvalide("l'adresse du proxy ne porte que schéma, hôte et port")
     if morceaux.scheme == "socks5" and any(len(v.encode()) > 255 for v in (utilisateur or "", mot_de_passe or "")):
         raise ProxyInvalide("identifiants SOCKS5 : 255 octets au plus chacun")
-    return ProxyIdentite(morceaux.scheme, morceaux.hostname, port, utilisateur, mot_de_passe)
+    if morceaux.scheme != "arena":
+        if adresse_simulee is not None:
+            raise ProxyInvalide("l'adresse simulée ne va qu'avec un amont arena (jamais vers un proxy réel)")
+        return ProxyIdentite(morceaux.scheme, morceaux.hostname, port, utilisateur, mot_de_passe)
+    if morceaux.hostname != HOTE_ARENA:
+        raise ProxyInvalide(f"un amont arena est l'adresse littérale {HOTE_ARENA} : jamais un autre hôte")
+    if utilisateur is not None or mot_de_passe is not None:
+        raise ProxyInvalide("un amont arena n'a pas d'identifiants")
+    normale = adresses.normaliser(adresse_simulee) if isinstance(adresse_simulee, str) else None
+    if normale is None:
+        raise ProxyInvalide("amont arena : une adresse simulée (IP v4 ou v6 d'un visiteur) est exigée")
+    return ProxyIdentite("arena", HOTE_ARENA, port, adresse_simulee=normale)
 
 
 class Demande(NamedTuple):
@@ -454,6 +478,18 @@ class RelaisProxy:
     def _autorise(self, hote: str) -> bool:
         return self._illimite or hote.lower() in self._hotes
 
+    def _vers_l_arena_si_arena(self, requete: _Requete) -> bool:
+        """Un amont `arena` ne joint qu'un tunnel (`CONNECT`) vers le frontal local lui-même, sur son port exact : tout
+        autre hôte, tout autre port, toute requête simple est refusé AVANT qu'une connexion ne soit ouverte (donc sans
+        qu'un seul octet PROXY ne parte ailleurs). Les autres schémas ne sont pas touchés."""
+        if self._amont.schema != "arena":
+            return True
+        return (
+            requete.methode == "CONNECT"
+            and requete.hote.lower() in HOTES_DE_L_ARENA
+            and requete.port == self._amont.port
+        )
+
     def _client(self, client: socket.socket) -> None:
         try:
             self._servir(client)
@@ -472,7 +508,7 @@ class RelaisProxy:
         except _RequeteInvalide as erreur:
             _refuser(client, erreur.statut, erreur.explication)
             return
-        if not self._autorise(requete.hote):
+        if not self._autorise(requete.hote) or not self._vers_l_arena_si_arena(requete):
             self._noter(requete, "refusee_perimetre")
             _refuser(client, 403, "Hôte hors périmètre pour cette identité.")
             return
@@ -520,6 +556,8 @@ class RelaisProxy:
             en_trop = b""
             if self._amont.schema == "http":
                 en_trop = self._connect_http(amont, requete, fin)
+            elif self._amont.schema == "arena":
+                amont.sendall(self._entete_proxy())  # les premiers octets du tunnel : le frontal les lit avant le TLS
             else:
                 self._connect_socks5(amont, requete, fin)
             aller = self._aller(self._recopier, client, amont, deja_lu)
@@ -557,6 +595,12 @@ class RelaisProxy:
             return []
         brut = f"{self._amont.utilisateur or ''}:{self._amont.mot_de_passe or ''}".encode()
         return [f"Proxy-Authorization: Basic {base64.b64encode(brut).decode('ascii')}"]
+
+    def _entete_proxy(self) -> bytes:
+        """L'en-tête PROXY v1 de l'adresse simulée, pour le frontal local (port source 0 : rien à simuler)."""
+        adresse = ipaddress.ip_address(self._amont.adresse_simulee)
+        famille, destination = ("TCP4", "127.0.0.1") if adresse.version == 4 else ("TCP6", "::1")
+        return f"PROXY {famille} {adresse} {destination} 0 {self._amont.port}\r\n".encode("ascii")
 
     def _connect_http(self, amont: socket.socket, requete: _Requete, fin: float) -> bytes:
         """`CONNECT` auprès d'un proxy HTTP. Rend les octets reçus après sa réponse (ils sont déjà ceux du tunnel)."""

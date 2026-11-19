@@ -79,12 +79,18 @@ def monde_de_session(cx: sqlite3.Connection, jeton: str) -> str:
 
 
 def reconnaitre(
-    cx: sqlite3.Connection, secret: bytes, valeur_cookie: str | None, jeton: str, connus: Connus | None = None
+    cx: sqlite3.Connection,
+    secret: bytes,
+    valeur_cookie: str | None,
+    jeton: str,
+    connus: Connus | None = None,
+    adresse: str | None = None,
 ) -> Visite:
     """Reconnaît le visiteur d'une requête et enregistre sa visite (une ligne par session, pas par requête).
 
     Lecture d'abord : une session déjà enregistrée, ou une requête sans jeton portant un cookie valable, n'écrit rien.
-    Le monde d'une session connue est celui de sa visite (fixé à sa première requête).
+    Le monde d'une session connue est celui de sa visite (fixé à sa première requête). `adresse` : l'adresse signée par
+    le frontal (D-105), notée sur la visite à sa création et jamais changée ensuite ; None derrière rien de signé.
     """
     if jeton:
         connue = cx.execute(
@@ -107,8 +113,9 @@ def reconnaitre(
     neuve = porte is None
     visiteur = porte or secrets.token_hex(16)
     cx.execute(
-        "INSERT OR IGNORE INTO visites (monde_id, visiteur, session_token, neuve, vue_le) VALUES (?, ?, ?, ?, ?)",
-        (identifiant_monde(cx, monde), visiteur, jeton or None, int(neuve), db.maintenant()),
+        "INSERT OR IGNORE INTO visites (monde_id, visiteur, session_token, neuve, vue_le, adresse)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (identifiant_monde(cx, monde), visiteur, jeton or None, int(neuve), db.maintenant(), adresse),
     )
     visite = Visite(monde, visiteur, neuve, creer_cookie(secret, monde, visiteur) if neuve else None)
     if jeton and connus is not None:

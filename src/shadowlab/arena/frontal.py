@@ -30,8 +30,8 @@ import h11
 
 from .. import database as db
 from ..config import Reglages
+from . import adresses, tls
 from . import secret as secrets_arena
-from . import tls
 from .profils import NIVEAUX
 
 journal = logging.getLogger("shadowlab.frontal")
@@ -39,6 +39,8 @@ journal = logging.getLogger("shadowlab.frontal")
 COOKIE_SESSION = "sl_session"
 TAILLE_CORPS_MAX = 2 * 1024 * 1024
 PROFIL_SANS_SESSION = "faible"
+# En-têtes d'adresse d'un client : jamais crus, jamais transmis (le frontal pose lui-même `X-Forwarded-For`, D-105).
+ENTETES_D_ADRESSE = ("x-forwarded-for", "x-real-ip", "forwarded")
 ENTETES_DE_SAUT = {"connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade"}
 
 
@@ -234,13 +236,16 @@ class _Connexion:
             ("X-ShadowLab-Liaison", liaison),
             ("X-ShadowLab-Amont", str(reglages.port)),
             ("X-ShadowLab-Sceau", secrets_arena.signer(self.serveur.secret, obs, profil, jeton, ja4, liaison)),
+            # L'adresse du visiteur (celle du pair, ou celle de l'en-tête PROXY d'un pair local), signée (D-105).
+            (adresses.ENTETE, self.adresse),
+            (adresses.ENTETE_SCEAU, adresses.signer(self.serveur.secret, obs, jeton, self.adresse)),
             ("X-Forwarded-For", self.adresse),
             ("X-Forwarded-Proto", "https"),
         ]
         conservees = [
             (n, v)
             for n, v in entetes
-            if not n.lower().startswith("x-shadowlab-") and n.lower() not in (*ENTETES_DE_SAUT, "x-forwarded-for")
+            if not n.lower().startswith("x-shadowlab-") and n.lower() not in (*ENTETES_DE_SAUT, *ENTETES_D_ADRESSE)
         ]
         if corps and not any(n.lower() == "content-length" for n, _ in conservees):
             conservees.append(("Content-Length", str(len(corps))))
@@ -406,6 +411,13 @@ class _Gestion(socketserver.BaseRequestHandler):
         serveur: Frontal = self.server.frontal
         prise: socket.socket = self.request
         prise.settimeout(30)
+        pair = self.client_address[0]
+        try:
+            declaree = adresses.lire_entete_proxy(prise, pair, actif=serveur.reglages.proxy_protocole)
+        except adresses.ProxyRefuse as erreur:
+            journal.debug("en-tête PROXY refusé : %s", erreur)
+            return
+        adresse = declaree or pair
         try:
             hello = tls.analyser(tls.lire_client_hello(prise))
         except (tls.TlsIllisible, OSError) as erreur:
@@ -418,9 +430,9 @@ class _Gestion(socketserver.BaseRequestHandler):
             return
         empr = tls.empreinte(hello)
         if flux.selected_alpn_protocol() == "h2":
-            _ConnexionH2(serveur, flux, empr, self.client_address[0]).boucle()
+            _ConnexionH2(serveur, flux, empr, adresse).boucle()
         else:
-            _Connexion(serveur, flux, empr, self.client_address[0]).boucle()
+            _Connexion(serveur, flux, empr, adresse).boucle()
 
 
 class _Serveur(socketserver.ThreadingTCPServer):

@@ -298,6 +298,9 @@ class DriverNoezia(Driver):
                     conf["identite_proxy"] = proxy.masque()  # le masque seul : jamais d'identifiant dans les résultats
                     # Réglage imposé par le proxy : déclaré et enregistré avec les résultats.
                     conf["identite_proxy_arguments"] = list(ARGUMENTS_PROXY_IDENTITE)
+                    if proxy.adresse_simulee is not None:
+                        # D-105 : l'adresse que l'identité déclare à notre Arena locale (en-tête PROXY), jamais ailleurs
+                        conf["identite_adresse_simulee"] = proxy.adresse_simulee
         if self._profil:
             conf["profil"] = self._profil.nom
             conf["profil_os"] = self._profil.os

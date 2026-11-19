@@ -41,7 +41,7 @@ def racine(tmp_path, monkeypatch):
 
 
 class FauxFrontal:
-    """Une « Arena » qui note tout ce qu'elle reçoit, connexion par connexion (rien d'autre qu'un compteur et des octets)."""
+    """Une « Arena » qui note tout ce qu'elle reçoit, connexion par connexion (des octets et un compteur)."""
 
     def __init__(self) -> None:
         self.ecoute = socket.socket()
@@ -212,9 +212,7 @@ def test_chaque_tunnel_porte_l_adresse_de_son_identite(px, faux_frontal):
     ("hote", "decalage_port"),
     [("example.com", 0), ("192.0.2.1", 0), ("127.0.0.2", 0), ("127.0.0.1", 1), ("localhost", -1), ("[::1]", 0)],
 )
-def test_un_autre_hote_ou_un_autre_port_est_refuse_sans_connexion_ni_octet_proxy(
-    px, faux_frontal, hote, decalage_port
-):
+def test_un_autre_hote_ou_un_autre_port_est_refuse_sans_connexion_ni_octet_proxy(px, faux_frontal, hote, decalage_port):
     with relais_arena(px, faux_frontal.port) as relais:
         statut, _, sock = ouvrir_tunnel(_port(relais), hote.strip("[]"), faux_frontal.port + decalage_port)
         assert statut == 403
@@ -227,7 +225,9 @@ def test_une_requete_simple_est_refusee_aussi(px, faux_frontal):
     from outils_proxy import echanger
 
     with relais_arena(px, faux_frontal.port) as relais:
-        reponse = echanger(_port(relais), f"GET http://127.0.0.1:{faux_frontal.port}/lab/ HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+        reponse = echanger(
+            _port(relais), f"GET http://127.0.0.1:{faux_frontal.port}/lab/ HTTP/1.1\r\nHost: x\r\n\r\n".encode()
+        )
         assert statut_de(reponse) == 403
     assert faux_frontal.connexions == []
 
@@ -298,9 +298,7 @@ def bras_adresse(**champs) -> str:
 
 
 def test_une_campagne_qui_bannit_une_adresse_se_valide(tmp_path, reglages):
-    e = campagne(
-        tmp_path, reglages, engines=bras_adresse(identite_apres_bannissement="y"), extra=ESPACEMENT
-    )
+    e = campagne(tmp_path, reglages, engines=bras_adresse(identite_apres_bannissement="y"), extra=ESPACEMENT)
     (bras,) = e.engines
     assert bras.bannir_adresse is True and bras.identite_apres_bannissement == "y"
 

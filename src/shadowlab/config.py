@@ -26,6 +26,9 @@ class Reglages:
     rallye_graine: int  # graine du site de résultats de rallye (contenu connu)
     rallye_taille: int  # nombre de rallyes du site de résultats de rallye
     projet_arena: str = "shadowlab-arena"  # projet Docker Compose de l'Arena (un par dossier, ex. la course)
+    # Le frontal accepte l'en-tête du protocole PROXY d'un pair en boucle locale (adresses simulées, D-105) : éteint
+    # par défaut, `SHADOWLAB_ARENA_PROXY_PROTOCOLE=1` l'allume.
+    proxy_protocole: bool = False
 
     @property
     def url_site(self) -> str:
@@ -111,6 +114,8 @@ def charger() -> Reglages:
         port_arena=int(os.environ.get("SHADOWLAB_PORT_ARENA", "8743")),
         port_aval=int(os.environ.get("SHADOWLAB_PORT_AVAL", "8781")),
         projet_arena=os.environ.get("SHADOWLAB_ARENA_PROJET") or "shadowlab-arena",
+        proxy_protocole=os.environ.get("SHADOWLAB_ARENA_PROXY_PROTOCOLE", "").strip().lower()
+        in ("1", "oui", "true", "yes", "on"),
         vitrine_graine=int(os.environ.get("SHADOWLAB_VITRINE_GRAINE", "20261111")),
         vitrine_taille=max(1, int(os.environ.get("SHADOWLAB_VITRINE_TAILLE", "500"))),
         rallye_graine=int(os.environ.get("SHADOWLAB_RALLYE_GRAINE", "20261112")),

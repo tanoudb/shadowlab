@@ -97,6 +97,10 @@ class MoteurConfig(BaseModel):
     # Témoin des comptes (I10) : à partir de la visite `bannir_avant_visite`, les visites sont faites par cette autre
     # identité (un autre navigateur : autre profil Chrome, donc autre visiteur), avec le même compte.
     identite_apres_bannissement: str | None = None
+    # Témoin des adresses (4.1, D-105) : à la visite `bannir_avant_visite`, la dernière ADRESSE vue dans le monde du
+    # bras qui est bannie (le code de `shadowlab arena bannir --ip`), ni son visiteur ni un compte. Avec
+    # `identite_apres_bannissement`, la visite suivante vient d'un autre navigateur déclaré avec la même adresse.
+    bannir_adresse: bool = False
 
     @field_validator("compte")
     @classmethod
@@ -228,12 +232,18 @@ class Experience(BaseModel):
         if any(m.compte for m in self.engines) and self.scenarios != ["visite"]:
             raise ValueError("compte : c'est le scénario `visite` qui se connecte, `scenarios` doit être [visite]")
         for moteur in self.engines:
+            if moteur.bannir_adresse:
+                champ = f"bannir_adresse ({moteur.nom_affiche})"
+                if moteur.bannir_avant_visite is None:
+                    raise ValueError(f"{champ} : il faut `bannir_avant_visite` (la visite avant laquelle bannir)")
+                if moteur.compte is not None:
+                    raise ValueError(f"{champ} : une seule cible à bannir, l'adresse ou le compte, pas les deux")
             if moteur.identite_apres_bannissement is not None:
                 champ = f"identite_apres_bannissement ({moteur.nom_affiche})"
-                if moteur.bannir_avant_visite is None or moteur.compte is None:
+                if moteur.bannir_avant_visite is None or (moteur.compte is None and not moteur.bannir_adresse):
                     raise ValueError(
-                        f"{champ} : il faut `compte` et `bannir_avant_visite` (le compte banni, puis la visite "
-                        "suivante par une autre identité avec le même compte)"
+                        f"{champ} : il faut `compte` (ou `bannir_adresse`) et `bannir_avant_visite` (la cible bannie, "
+                        "puis la visite suivante par une autre identité)"
                     )
                 if moteur.identite_apres_bannissement == moteur.options.get("identite"):
                     raise ValueError(f"{champ} : il faut une autre identité que `identite`")
@@ -695,14 +705,32 @@ def _moteur_indisponible(cx, experiment_id, experience, moteur_cfg, protection, 
             )  # fmt: skip
 
 
-def _bannir_avant_visite(cx, monde: str, label: str, visite: int, compte: str | None = None) -> bool:
+def _bannir_avant_visite(
+    cx, monde: str, label: str, visite: int, compte: str | None = None, adresse: bool = False
+) -> bool:
     """Bannit le visiteur du bras dans son monde, avant sa visite `visite` (témoin de la sentinelle d'identité) ; ou,
-    pour un bras qui a un `compte` (témoin des comptes, I10), le compte dans ce monde.
+    pour un bras qui a un `compte` (témoin des comptes, I10), le compte dans ce monde ; ou, avec `adresse` (témoin des
+    adresses, D-105), la dernière adresse vue dans ce monde.
 
-    Même code que `shadowlab arena bannir` (`--visiteur` ou `--compte`). Faux (et rien d'écrit) si aucun visiteur
-    n'est connu dans le monde, ou si le compte ne s'y est jamais connecté : la campagne s'arrête alors sur ce bras
-    plutôt que de continuer sans le témoin. Un compte déjà banni (reprise) n'arrête rien.
+    Même code que `shadowlab arena bannir` (`--visiteur`, `--compte` ou `--ip`). Faux (et rien d'écrit) si aucun
+    visiteur ni aucune adresse n'est connu dans le monde, ou si le compte ne s'y est jamais connecté : la campagne
+    s'arrête alors sur ce bras plutôt que de continuer sans le témoin. Un compte ou une adresse déjà banni (reprise)
+    n'arrête rien.
     """
+    if adresse:
+        vue = bannissements.derniere_adresse(cx, monde)
+        if vue is None:
+            journal.error(
+                "%s : aucune adresse connue dans le monde %s, impossible de la bannir avant la visite %d",
+                label,
+                monde,
+                visite,
+            )
+            return False
+        ecrit = bannissements.bannir_adresse_connue(cx, monde, vue)
+        etat = "bannie" if ecrit else "déjà bannie"
+        journal.info("%s : adresse %s %s dans le monde %s avant la visite %d", label, vue, etat, monde, visite)
+        return True
     if compte is not None:
         try:
             ecrit = comptes_arena.bannir_compte_connu(cx, monde, compte)
@@ -946,7 +974,9 @@ def executer_unite(
                         experience.monde, experiment_id, moteur_cfg.nom_affiche, protection, nom_scenario, repetition
                     )
                     if moteur_cfg.bannir_avant_visite == repetition:
-                        if not _bannir_avant_visite(cx, monde, label, repetition, moteur_cfg.compte):
+                        if not _bannir_avant_visite(
+                            cx, monde, label, repetition, moteur_cfg.compte, moteur_cfg.bannir_adresse
+                        ):
                             return "interrompu"
                         options = _options_de_la_visite(moteur_cfg, repetition)
                         if options != options_pilote:  # témoin des comptes : la suite par l'autre identité (I10)

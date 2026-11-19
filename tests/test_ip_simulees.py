@@ -1,6 +1,6 @@
 """Palier 4, étape 4.1 (D-105) : adresses IP simulées dans l'Arena et bannissement par adresse.
 
-Le frontal accepte l'en-tête du protocole PROXY (v1 et v2) seulement d'un pair en boucle locale et seulement si le réglage
+Le frontal accepte l'en-tête du protocole PROXY (v1 et v2) seulement d'un pair en boucle locale et si le réglage
 `proxy_protocole` est vrai ; l'adresse déclarée descend vers le site dans `X-ShadowLab-Adresse`, signée par
 `X-ShadowLab-Adresse-Sceau` (liée à l'observation et au jeton). Le site ne croit que cette adresse : `X-Forwarded-For`,
 `X-Real-IP`, `Forwarded` ou une adresse non signée envoyés par un client ne servent à rien. La migration 13 note
@@ -134,7 +134,12 @@ def _paire(octets: bytes) -> socket.socket:
 
 
 def v2(famille: int, adresses: bytes, commande: int = 1, protocole: int = 1) -> bytes:
-    return V1_SIGNATURE_V2 + bytes([0x20 | commande, (famille << 4) | protocole]) + len(adresses).to_bytes(2, "big") + adresses
+    return (
+        V1_SIGNATURE_V2
+        + bytes([0x20 | commande, (famille << 4) | protocole])
+        + len(adresses).to_bytes(2, "big")
+        + adresses
+    )
 
 
 def v2_tcp4(source: str, destination: str = "127.0.0.1", ports=(40000, 8749)) -> bytes:
@@ -239,8 +244,7 @@ def test_l_en_tete_proxy_est_lu_exactement_sans_toucher_au_client_hello_qui_suit
 def test_un_pair_muet_ne_bloque_pas_au_dela_du_delai_de_la_prise():
     serveur, _client = socket.socketpair()
     serveur.settimeout(0.2)
-    with pytest.raises((adresses.ProxyRefuse, TimeoutError)):
-        adresses.lire_entete_proxy(serveur, "127.0.0.1", actif=True)
+    assert adresses.lire_entete_proxy(serveur, "127.0.0.1", actif=True) is None  # la lecture du ClientHello échouera
 
 
 @pytest.mark.parametrize("texte", ["198.51.100.11", "2001:db8::7", "::ffff:198.51.100.11"])
@@ -504,7 +508,9 @@ def test_une_adresse_forgee_par_le_client_n_est_jamais_notee(client, reglages, c
     assert _adresses_de_visites(cx) == [None, A1]
 
 
-def test_l_adresse_est_notee_a_la_premiere_requete_de_la_session(client, reglages, cx, nouvelle_session, sans_suspicion):
+def test_l_adresse_est_notee_a_la_premiere_requete_de_la_session(
+    client, reglages, cx, nouvelle_session, sans_suspicion
+):
     jeton = nouvelle_session()
     nav = NavigateurIp(client, reglages, A1)
     nav.aller(jeton)
@@ -519,7 +525,13 @@ def test_l_adresse_est_notee_a_la_premiere_requete_de_la_session(client, reglage
 def test_bannir_ecrit_une_ligne_qui_ne_vise_que_l_adresse(cx):
     assert bannissements.bannir(cx, MONDE, adresse=A1, motif="manuel", maintenant=MAINTENANT)
     (ban,) = _bans(cx)
-    assert (ban["adresse"], ban["visiteur"], ban["empreinte"], ban["compte"], ban["motif"]) == (A1, None, None, None, "manuel")
+    assert (ban["adresse"], ban["visiteur"], ban["empreinte"], ban["compte"], ban["motif"]) == (
+        A1,
+        None,
+        None,
+        None,
+        "manuel",
+    )
     assert not bannissements.bannir(cx, MONDE, adresse=A1, motif="manuel", maintenant=MAINTENANT)  # pas de doublon
     assert bannissements.bannir(cx, MONDE, adresse=A2, motif="manuel", maintenant=MAINTENANT)
     assert bannissements.bannir(cx, AUTRE_MONDE, adresse=A1, motif="manuel", maintenant=MAINTENANT)
@@ -621,8 +633,13 @@ def test_aux_niveaux_01_a_07_l_adresse_n_est_jamais_lue_et_aucune_decision_ne_ch
         jeton = nouveau_passage(reglages, nouvelle_experience(reglages, niveau), repetition=1, monde=monde)
         nav = NavigateurIp(client, reglages, adresse, profil=niveau)
         premiere = nav.aller(jeton)
-        resultats.append((premiere.status_code, premiere.headers.get("x-arena-refus"), sorted(premiere.json().items())
-                          if premiere.status_code == 403 else None))
+        resultats.append(
+            (
+                premiere.status_code,
+                premiere.headers.get("x-arena-refus"),
+                sorted(premiere.json().items()) if premiere.status_code == 403 else None,
+            )
+        )
         decisions = [(d["couche"], d["decision"]) for d in db.decisions_session(cx, jeton)]
         resultats.append(decisions)
     bannissements.bannir(cx, monde, adresse=A1, motif="manuel")
