@@ -37,7 +37,7 @@ pages:
   liste:
     url: '^/lab/vitrine/annonces$'
 """
-RECETTE_TIERCE = RECETTE_LOCALE.replace("127.0.0.1", "exemple.test").replace(
+RECETTE_TIERCE = RECETTE_LOCALE.replace("127.0.0.1", "annonces.exemple.org").replace(  # `.test` compte comme local
     "nom: essai-identites", "nom: essai-identites\nautorisation: périmètre de test autorisé"
 )
 
