@@ -55,7 +55,10 @@ SOCIAL_CSS = RACINE / "src" / "shadowlab" / "public" / "static" / "social.css"
 # Mise à jour le 16/11/2026 (palier 2, I3) : bannissement et porte par visiteur au profil `endurance` seulement
 # (`bannissements.Surveillance` passée au gardien, bannissement lu avant le défi et à la collecte de l'empreinte, cookie
 # de défi lié au visiteur et posé avec une durée) ; aucune page ne change, aucun niveau 01 à 07 ne change de décision.
-EMPREINTE_SITE_APP = "77ab42bbdd5d96d3dd7f41598aef1ad5fe6a828c3f9a2445b8d6c89fd2d2b53e"
+# Mise à jour le 19/11/2026 (palier 2, I10, D-104) : comptes au profil `endurance` seulement (connexion gardée 30 jours
+# et liée au visiteur, compte banni refusé à la connexion et sur l'espace, déconnexion notée) ; aux niveaux 01 à 07 la
+# connexion reste celle d'avant (cookie lié au jeton, sans durée) ; aucune page ne change.
+EMPREINTE_SITE_APP = "b6bc9eb1fff753cd22f223076302bf7db449aad8de0ca6099a6bcec6ac3ee131"
 # Copie littérale de la politique de sécurité du 13/11/2026 : le réseau social n'y change rien.
 CSP_ATTENDUE = (
     "default-src 'self'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; "
