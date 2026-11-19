@@ -7,7 +7,8 @@ Ce qu'il lit : la base du labo (`runs`, `visites`, `bannissements`, `observation
 récolte partagée (`<sorties>/campagnes/<n°>/recolte/<récolte>-<protection>/etat.sqlite3`). Ce qu'il dit, par critère :
 pages de la vitrine toutes lues, champs exacts, pages par identité, ce qu'une identité bannie a demandé après le
 bannissement (documents et ressources, puis après son premier refus), rythme par visiteur (pages comptées par heure,
-D-78) et sessions par heure de l'empreinte E. Code de sortie : 0 tout tenu, 1 sinon, 2 campagne ou récolte introuvable.
+D-78), sessions par heure de l'empreinte E, et rien de partagé vu par l'Arena (un visiteur par identité, d'une visite à
+l'autre, jamais le même pour deux identités). Code de sortie : 0 tout tenu, 1 sinon, 2 campagne ou récolte introuvable.
 """
 
 from __future__ import annotations
@@ -159,6 +160,16 @@ def _rythme(cx: sqlite3.Connection, n: int, monde: str) -> dict:
     return {"pages_comptees_pire_heure": par_visiteur, "sessions_pire_heure": sessions}
 
 
+def _visiteurs_par_bras(visites: list[dict]) -> dict[str, list[str]]:
+    """Les visiteurs de l'Arena vus pour chaque bras (une identité), dans l'ordre d'arrivée ; une visite qui n'a rien
+    demandé (aucune ligne `visites`) n'en a pas."""
+    vus: dict[str, list[str]] = {}
+    for v in visites:
+        if v["visiteur"] and v["visiteur"] not in vus.setdefault(v["bras"], []):
+            vus[v["bras"]].append(v["visiteur"])
+    return {bras: liste for bras, liste in vus.items() if liste}
+
+
 def _recolte(dossier: Path, graine: int, taille: int) -> dict:
     etat = Etat(dossier / "etat.sqlite3")
     try:
@@ -173,6 +184,11 @@ def _recolte(dossier: Path, graine: int, taille: int) -> dict:
             "statut": passe["statut"],
             "compteurs": etat.compteurs(n),
             "pages_par_identite": etat.pages_par_identite(n),
+            # une adresse gardée avec un jeton `sl` serait demandée par une autre identité avec ce jeton s'il n'était
+            # pas remplacé (`_MoteurDuPassage.lire` le remplace) : compté pour le dire
+            "adresses_avec_jeton": etat._cx.execute(
+                "SELECT COUNT(*) FROM pages WHERE passe = ? AND adresse LIKE '%sl=%'", (n,)
+            ).fetchone()[0],
             "identites": etat.identites(n),
             "rendues": [e["detail"] | {"quand": e["quand"]} for e in evenements if e["genre"] == "rendue"],
             "orphelines": [e["detail"] | {"quand": e["quand"]} for e in evenements if e["genre"] == "orphelines"],
@@ -208,8 +224,10 @@ def main() -> int:
         "rythme": _rythme(cx, args.campagne, monde),
         "recolte": _recolte(dossier, reglages.vitrine_graine, reglages.vitrine_taille),
     }
+    bilan["visiteurs_par_bras"] = vus = _visiteurs_par_bras(bilan["visites"])
     r = bilan["recolte"]
     bannis = [b for b in bilan["bannissements"] if b.get("visiteur")]
+    tous = [visiteur for liste in vus.values() for visiteur in liste]
     criteres = {
         "toutes_les_pages": r.get("pages", {}).get("completude_pages") == 1.0,
         "champs_exacts": r.get("notation", {}).get("completude") == 1.0
@@ -221,6 +239,8 @@ def main() -> int:
             v <= PAGES_PAR_HEURE_MAX for v in bilan["rythme"]["pages_comptees_pire_heure"].values()
         ),
         "sous_30_sessions_par_heure": bilan["rythme"]["sessions_pire_heure"] < SESSIONS_PAR_HEURE_E,
+        "un_visiteur_par_identite": bool(vus) and all(len(liste) == 1 for liste in vus.values()),
+        "visiteurs_tous_differents": len(set(tous)) == len(tous),
     }
     bilan["criteres"] = criteres
     if args.json:
@@ -240,8 +260,10 @@ def main() -> int:
         for b in bilan["bannissements"]:
             print(f"  {json.dumps(b, ensure_ascii=False)}")
         print(f"== Rythme : {bilan['rythme']}")
+        print(f"== Visiteurs de l'Arena par identité : {vus}")
         print(f"== Récolte : passe {r.get('passe')} {r.get('statut')}, compteurs {r.get('compteurs')}")
         print(f"   pages par identité : {r.get('pages_par_identite')}")
+        print(f"   adresses gardées avec un jeton sl : {r.get('adresses_avec_jeton')}")
         print(f"   pages rendues : {r.get('rendues')}")
         print(f"   orphelines : {r.get('orphelines')}")
         pages, note = r.get("pages", {}), r.get("notation", {})

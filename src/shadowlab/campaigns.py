@@ -1126,7 +1126,10 @@ def executer_unite(
                         engine_version=db.j(versions),
                         monde=monde,
                     )
-                    if cadence is not None and creneau is not None:
+                    # Récolte partagée : une visite qui n'a rien pu prendre (aucune requête) ne compte pas l'écart
+                    # suivant ; le bras relit la file (attente ci-dessus) et visite dès qu'une page est à prendre.
+                    vide = moteur_cfg.recolte_partagee and (details or {}).get("rien_a_faire")
+                    if cadence is not None and creneau is not None and not vide:
                         cadence.terminer(creneau, _pages_de_la_visite(details or {}))
                     if moteur_cfg.recolte_partagee and (details or {}).get("travail_fini"):
                         journal.info("%s : récolte partagée finie à la visite %d, le bras s'arrête", label, repetition)

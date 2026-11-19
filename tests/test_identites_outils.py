@@ -116,12 +116,31 @@ def test_le_guetteur_bannit_le_visiteur_de_la_visite_voulue_du_bras_voulu(reglag
     assert [tuple(r) for r in lignes] == [("visiteur-b", "manuel")]
 
 
-def test_le_guetteur_n_ecrit_rien_si_la_visite_a_fini_avant(reglages):
+def test_le_guetteur_n_ecrit_rien_si_la_campagne_finit_avant(reglages):
     cx, n = _campagne(reglages)
     _passage(cx, n, "ident-b", 2, "visiteur-b", statut="reussi", depuis_s=10)
+    cx.execute("UPDATE experiments SET status = 'termine' WHERE id = ?", (n,))
     resultat = _guetter(reglages, n, "ident-b", 2, 60)
     assert resultat.returncode == 1
     assert cx.execute("SELECT COUNT(*) FROM bannissements").fetchone()[0] == 0
+
+
+def test_le_guetteur_passe_une_visite_trop_courte_et_bannit_la_suivante(reglages):
+    """Une visite qui finit avant le délai (visite vide du départ : rien à prendre) n'arrête pas le guetteur : il bannit
+    pendant la première visite du bras, à partir de la n-ième, qui dure assez."""
+    cx, n = _campagne(reglages)
+    cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (n,))
+    _passage(cx, n, "ident-b", 1, "visiteur-b", statut="echoue", depuis_s=300)  # vide, finie en quelques secondes
+    _passage(cx, n, "ident-b", 2, "visiteur-b", depuis_s=90)
+    resultat = _guetter(reglages, n, "ident-b", 1, 60)
+    assert resultat.returncode == 0, resultat.stderr
+    assert [tuple(r) for r in cx.execute("SELECT visiteur, motif FROM bannissements")] == [("visiteur-b", "manuel")]
+    assert "visite 2" in resultat.stdout
+
+
+def test_le_guetteur_refuse_une_campagne_inconnue(reglages):
+    db.ouvrir(reglages.base_donnees)
+    assert _guetter(reglages, 999, "ident-b", 1, 60).returncode == 2
 
 
 def test_le_guetteur_refuse_des_arguments_douteux(reglages):
@@ -206,6 +225,26 @@ def test_le_bilan_dit_ce_qui_est_tenu(reglages, monkeypatch):
     )
     code, bilan, _ = _bilan(reglages, n)
     assert code == 1 and bilan["criteres"]["rien_apres_le_premier_refus"] is False
+
+
+def test_le_bilan_dit_si_les_identites_ont_partage_un_visiteur(reglages, monkeypatch):
+    """Rien de partagé, lu dans la base du labo : chaque identité (bras) garde UN visiteur de l'Arena d'une visite à
+    l'autre (son profil Chrome, son cookie), et deux identités n'ont jamais le même."""
+    cx, n = _campagne(reglages)
+    _recolte_partagee(reglages, monkeypatch, n, bannir_b=False)
+    _passage(cx, n, "ident-a", 1, "visiteur-a", statut="reussi")
+    _passage(cx, n, "ident-a", 2, "visiteur-a", statut="reussi")
+    _passage(cx, n, "ident-b", 1, "visiteur-b", statut="reussi")
+    _, bilan, erreur = _bilan(reglages, n)
+    assert bilan is not None, erreur
+    assert bilan["criteres"]["un_visiteur_par_identite"] and bilan["criteres"]["visiteurs_tous_differents"]
+    assert bilan["visiteurs_par_bras"] == {"ident-a": ["visiteur-a"], "ident-b": ["visiteur-b"]}
+    _passage(cx, n, "ident-c", 1, "visiteur-a", statut="reussi")  # le cookie de ident-a chez ident-c
+    _passage(cx, n, "ident-b", 2, "visiteur-b2", statut="reussi")  # ident-b a perdu son visiteur
+    code, bilan, _ = _bilan(reglages, n)
+    assert code == 1
+    assert bilan["criteres"]["un_visiteur_par_identite"] is False
+    assert bilan["criteres"]["visiteurs_tous_differents"] is False
 
 
 def test_le_bilan_sans_recolte_rend_2(reglages):

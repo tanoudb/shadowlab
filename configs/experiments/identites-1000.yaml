@@ -4,8 +4,8 @@
 # Critère du plan : « 1 000 pages avec une identité bannie exprès : 100 % récupérées, aucune graine, aucun proxy ni
 # cookie partagé ». Vitrine de 952 annonces = 48 pages de liste + 952 fiches = 1 000 pages. Trois identités persistantes
 # neuves se partagent la récolte (une file, chaque page lue par une seule identité), dans un seul monde de l'Arena, au
-# profil `endurance` ; `ident-b` est bannie exprès pendant sa 3e visite (guetteur ci-dessous) : sa page revient en file,
-# les deux autres finissent.
+# profil `endurance` ; `ident-b` est bannie exprès pendant sa 3e visite ou une suivante (guetteur ci-dessous) : sa page
+# revient en file, les deux autres finissent.
 #
 # Rythme (le même que l'essai court) : 15 pages lues au plus par visite (environ 25 comptées par l'Arena), 8 minutes
 # entre deux visites d'une identité : environ 6 visites et 150 pages comptées par heure et par visiteur (bannissement
@@ -27,7 +27,7 @@ experiment:
   name: identites_1000
   description: >-
     Étape 4.2, preuve : trois identités persistantes se partagent 1 000 pages de la vitrine (952 annonces), profil
-    endurance, un seul monde ; ident-b est bannie exprès pendant sa 3e visite.
+    endurance, un seul monde ; ident-b est bannie exprès pendant sa 3e visite (ou une suivante).
   environment: local
   engines:
     - name: noezia

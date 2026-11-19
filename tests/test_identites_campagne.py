@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import random
 import shutil
+from datetime import timedelta
 
 import pytest
 from outils_identites import PiloteIdentite
@@ -321,6 +322,28 @@ def test_le_bras_attend_sans_passage_tant_que_rien_n_est_a_prendre(tmp_path, reg
     assert len(passages.appels) == 1 and len(pauses_avant) >= 3
     assert all(p == campaigns.ATTENTE_FILE_PARTAGEE_S for p in pauses_avant[:3])
     verrou.close()
+
+
+def test_une_visite_vide_ne_compte_pas_l_ecart_suivant(tmp_path, reglages, monkeypatch, racine):
+    """Au départ, les trois bras voient la page de départ et lancent chacun une visite ; un seul la prend, les deux autres
+    n'ont rien pu prendre (`rien_a_faire`, aucune requête). Une telle visite ne compte pas l'écart de l'espacement (10
+    min) : le bras relit la file à son rythme et visite dès qu'une page est à prendre, comme dans la commande."""
+    experience, _, experiment_id = _preparer(tmp_path, reglages, monkeypatch)
+    horloge = Horloge()
+
+    class Vide(Passages):
+        def __call__(self, *args, **kwargs):
+            details = super().__call__(*args, **kwargs)
+            return {**details, "rien_a_faire": len(self.appels) == 1, "travail_fini": len(self.appels) == 2}
+
+    passages = Vide(reglages, horloge)
+    monkeypatch.setattr(campaigns, "_passage", passages)
+    rang = rang_de(experience, "ident-b")
+    assert (
+        campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
+    )
+    assert len(passages.appels) == 2
+    assert passages.appels[1]["quand"] - passages.appels[0]["quand"] < timedelta(minutes=1)
 
 
 # ── 4. Rien de partagé, contrôlé au lancement ────────────────────────────────────────────────────

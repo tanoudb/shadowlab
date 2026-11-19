@@ -3,7 +3,7 @@
 # Trois identités persistantes se partagent UNE récolte de la vitrine (champ `recolte_partagee` : une file d'adresses,
 # chaque page lue par une seule identité). Toutes dans le même monde de l'Arena (`monde: campagne`), au profil
 # `endurance` (porte JavaScript par visiteur valable 24 h, bannissement, aucun CAPTCHA). L'identité `ident-b` est bannie
-# exprès pendant sa 2e visite, à la main ou par le guetteur ci-dessous (`uv run shadowlab arena bannir --visiteur <id>
+# exprès pendant une visite, à la main ou par le guetteur ci-dessous (`uv run shadowlab arena bannir --visiteur <id>
 # --monde <nom>`) : elle doit s'arrêter sans rien demander après le refus, sa page revient en file, les deux autres
 # finissent la récolte.
 #
@@ -21,9 +21,10 @@
 #
 # Commande (trois fenêtres de Chrome) :
 #   SHADOWLAB_VITRINE_TAILLE=60 caffeinate -i uv run shadowlab campagne configs/experiments/identites-essai.yaml
-# Guetteur du bannissement (autre terminal, même dossier, mêmes variables) : il attend que la 2e visite de `ident-b`
-# tourne depuis 60 s, lit son visiteur et son monde, puis lance `shadowlab arena bannir` une fois :
-#   scripts/identites-bannir-en-visite.sh <n° de campagne> ident-b 2 60
+# Guetteur du bannissement (autre terminal, même dossier, mêmes variables) : il attend qu'une visite de `ident-b` (la
+# première ou une suivante) tourne depuis 60 s, au milieu de ses 15 pages, lit son visiteur et son monde, puis lance
+# `shadowlab arena bannir` une fois (une visite plus courte, comme la visite vide du départ, est passée) :
+#   scripts/identites-bannir-en-visite.sh <n° de campagne> ident-b 1 60
 # Durée estimée : 30 à 45 minutes (63 pages, deux ou trois tours de visites).
 # Bilan (lecture seule ; code 0 si tout est tenu) :
 #   SHADOWLAB_VITRINE_TAILLE=60 uv run python scripts/identites-bilan.py <n° de campagne>
@@ -31,7 +32,7 @@ experiment:
   name: identites_essai
   description: >-
     Étape 4.2 : trois identités persistantes se partagent une récolte de la vitrine (60 annonces), profil endurance, un
-    seul monde ; ident-b est bannie exprès pendant sa 2e visite.
+    seul monde ; ident-b est bannie exprès pendant une visite (la première qui dure 60 s).
   environment: local
   engines:
     - name: noezia
