@@ -4078,3 +4078,29 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   développer pendant une longue exécution. Confiée à un sous-agent (Opus, worktree à part), tests d'abord, essai court à la fin ;
   décision D-104 réservée. Rien n'est fusionné tant que je n'ai pas relu le diff et refait la campagne de contrôle.
 - L'entrée précédente porte « 21h45 » : elle a été écrite vers 21 h 30.
+
+## 2026-11-19 (9h25) — Claude (Fable 5.2, coordination) — I10 (comptes, D-104) relu, fusionné, contrôlé
+
+- **Fait par le sous-agent** (Opus, worktree à part, 10 commits) : au seul profil `endurance`, l'Arena se souvient des comptes de test
+  (migration 12 : tables `comptes` et `appareils`, colonne `bannissements.compte`) ; connexion gardée 30 jours et liée au visiteur ;
+  compte banni à la main (`arena bannir --compte`), quand un visiteur connecté est banni, ou au 5ᵉ appareil distinct en 24 h ; refus de
+  D-92 avec l'en-tête `X-Arena-Refus: bannissement`, que la sentinelle lit (révise D-91 et D-103). Moteur : `visite(compte=…)` se
+  connecte à la première visite, lit l'espace ensuite, ne se reconnecte jamais seul. Essai `comptes-essai.yaml`.
+- **Contrôle par la coordination** : diff relu (gardien, site, bannissements, comptes, sentinelle, scénario) ; chiffres de l'essai relus
+  en base (sujet 4 visites sur 4, une seule connexion, un visiteur ; témoin refusé depuis un autre visiteur, 4ᵉ visite non lancée) ;
+  bases sauvegardées avant la migration 12 (`outputs/shadowlab-avant-migration12-2026-11-19.sqlite3.gz`,
+  `outputs/public/public-avant-migration12-2026-11-19.sqlite3`) ; fusion `f2a76a3` ; `uv run pytest` complet : **2 899 verts** en
+  12 min 46 s, lint propre ; **campagne 148** (contrôle, 135 passages, 8 h 34 à 9 h 16) : mêmes taux que la 132, la 134 et la 139 dans
+  les 9 cellules (`noezia` natif 15, 15 et 15 sur 15 ; Chrome sans comportement 10, 15 et 0 ; `patchright` 0 sur 45). La course
+  tournait en même temps : durées non comparables.
+- **Fichiers** : `src/shadowlab/arena/comptes.py` (nouveau), `arena/bannissements.py`, `arena/profils.py`, `site/app.py`,
+  `site/gardien.py`, `database.py`, `cli.py`, `campaigns.py`, `scenarios.py`, `engines/noezia/sentinelle.py`, `identite.py`,
+  `configs/arena/profils.yaml`, `configs/experiments/comptes-essai.yaml`, trois fichiers de tests ; documents : D-104, `AGENTS.md`,
+  `docs/PLAN.md`, deux questions ajoutées dans `notes/ia/questions-ouvertes.md`. Base de l'essai copiée :
+  `outputs/comptes-essai-2026-11-19.sqlite3`.
+- **Course I9** : non touchée (sa base n'est ouverte que par sa copie figée, schéma 11). Le site public garde l'ancien code et le
+  schéma 11 jusqu'à son prochain redémarrage.
+- **Non vérifié** : la règle « nouvel appareil » devant la vraie Arena (tests seulement) ; une autre empreinte dans un vrai
+  navigateur (même machine) ; aucune durée de plusieurs jours avec compte ; aucun humain connecté.
+- **Reste** : course I9 jusqu'au 25/11 ; I8 attend Ethan ; palier 3 attend un serveur, un domaine et un compte Cloudflare ; suites
+  Linux bloquées par le disque (13 Gio libres à 9 h 16).

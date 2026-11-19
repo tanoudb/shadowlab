@@ -8,6 +8,13 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-19 — Comptes (D-104) : garder « le 5ᵉ appareil différent en 24 h bannit le compte » ?** Le seuil de 4 appareils est un choix,
+  pas une mesure (aucun humain connu sur deux appareils en base). Limite : une fenêtre privée compte comme un nouvel appareil à chaque
+  fois. Recommandation : garder 4 tant qu'aucun humain n'est mesuré ; ne bloque rien.
+- **2026-11-19 — Comptes (D-104) : la connexion notée dans une identité du moteur doit-elle expirer ?** Aujourd'hui elle n'a ni durée ni
+  monde : après 30 jours, ou dans le monde d'une autre campagne, l'identité est renvoyée vers la connexion et se met en alerte au lieu de
+  se reconnecter. Il faut donc une identité neuve par essai. Recommandation : lui donner la durée de la connexion du site (30 jours) avant
+  toute course avec compte ; ne bloque rien d'ici là.
 - **2026-11-17 — Un domaine à toi et un compte Cloudflare pour la vitrine (étape 3.4) : pas encore.** Sans eux, pas de mesure contre une protection du commerce : un tunnel rapide n'est pas dans une zone à toi (à ma connaissance on n'y règle ni Bot Fight Mode ni règles WAF ; non vérifié). Le détail des offres (Cloudflare gratuit puis Pro, AWS WAF Bot Control, DataDome sur essai écrit) est dans `docs/recherche/anti-bot-essais-pour-3-4-2026-11-17.md`. **Ce qu'il faut de toi** : acheter ou choisir un domaine, créer le compte Cloudflare gratuit et y ajouter le domaine (créer le compte, payer et acheter sont à toi, pas à l'assistant). Recommandation : un domaine bon marché dédié au labo, sans lien avec un client, pour garder le cloisonnement ; le plan gratuit d'abord. Entre-temps on peut avancer sans domaine : les pages publiques de test de détecteurs (CreepJS, Sannysoft, `rebrowser-bot-detector`, BrowserScan).
 - **2026-11-16 — La session Windows `23a7b8a2` (14/11, Chrome sur Windows) est-elle un humain connu ?** D-95 a corrigé quatre règles
   avec `c7c5142c` seule ; `23a7b8a2` passe maintenant aussi de 05 à 07. Si tu la connais, `navigation_lineaire` et le seuil de
