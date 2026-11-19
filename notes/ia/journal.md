@@ -4129,3 +4129,16 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   je la lance après chaque fusion.
 - Worktree du sous-agent d'I10 retiré (fusionné, propre, base de l'essai copiée). Disque : 9,1 Gio libres à 9 h 45 ; il baissait
   d'environ 4 Go en 25 minutes vers 9 h 30, par d'autres projets (caches Hugging Face et `uv`, conversations Claude, `omni-trad`).
+
+## 2026-11-19 (10h05) — Claude (Opus 5.5, coordination) — Extension Cloudflare installée pour ce projet seulement
+
+- Ethan : « set me up for Cloudflare » à partir de `https://developers.cloudflare.com/agent-setup/prompt.md`, puis « tu voulais
+  cloudflare non ? ». Lu avant d'installer (règle d'Ethan) : dépôt officiel `cloudflare/skills` (Apache-2.0), 22 guides, un serveur MCP
+  distant (`https://mcp.cloudflare.com/mcp`, connexion par le navigateur à la première utilisation), aucun crochet.
+- Installé en portée **locale** (ce projet seulement, `.claude/settings.local.json`, ignoré par git) : `claude plugin marketplace add
+  cloudflare/skills --scope local` puis `claude plugin install cloudflare@cloudflare --scope local` (version 1.0.4). Les autres projets
+  ne le voient pas (cloisonnement).
+- **Non fait** : l'outil `cf` (version d'essai, installation globale par `npm`, et la page demande d'écrire dans `~/.claude/CLAUDE.md`,
+  qui est à Ethan). Connexion au compte non faite : il faut un compte Cloudflare (à créer par Ethan) puis `/reload-plugins` ou une
+  nouvelle session.
+- Pour l'étape 3.4 il faut toujours un compte Cloudflare **et** un domaine à Ethan dessus.
