@@ -4151,3 +4151,11 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   seule, règle WAF à cookie secret, `noindex`), jamais pour le site public.
 - Reste à Ethan (noté dans `notes/ia/questions-ouvertes.md`) : compte Cloudflare, ajout du domaine, bascule des DNS chez OVH après
   vérification du courrier, `/mcp` pour l'extension Cloudflare, `cloudflared tunnel login`.
+
+## 2026-11-19 14h20 — Soirée des comptes (campagne 150) : tenue
+- `comptes-soiree.yaml`, 9 h 28 à 14 h 10, profil `endurance`, pendant la course I9 : `soiree bilan 150` donne TENU (code 0).
+- Sujet connecté au compte `demo` : 24 visites sur 24, une seule connexion (visite 1), `/lab/espace` en 200 à chacune des
+  24 visites, 1 visiteur, 1 empreinte E, 1 appareil, 0 bannissement. Témoins tenus comme à la 131.
+- Écrit dans D-104, `docs/PLAN.md` (§ 4 et § 8) et `AGENTS.md`. Les sous-agents 4.1 et 4.2 peuvent maintenant passer leurs
+  essais dans Chrome (porte `comptes-soiree.fin`), l'un après l'autre (`arena-verrou`).
+- Reste : relire et fusionner 4.1 puis 4.2 ; contrôle quotidien de la course ; Cloudflare plus tard (Ethan).
