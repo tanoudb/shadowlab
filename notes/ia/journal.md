@@ -4159,3 +4159,26 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - Écrit dans D-104, `docs/PLAN.md` (§ 4 et § 8) et `AGENTS.md`. Les sous-agents 4.1 et 4.2 peuvent maintenant passer leurs
   essais dans Chrome (porte `comptes-soiree.fin`), l'un après l'autre (`arena-verrou`).
 - Reste : relire et fusionner 4.1 puis 4.2 ; contrôle quotidien de la course ; Cloudflare plus tard (Ethan).
+
+## 2026-11-19 15h50 — 4.1 fusionné ; mesure ScrapingCourse acceptée ; redémarrage du Mac prévu vers 16 h 40
+- 4.1 (D-105) fusionné (`2b36b8f`, conflit de `docs/DECISIONS.md` résolu en gardant les deux côtés, D-105 avant D-107) ;
+  base du labo sauvegardée avant la migration 13 (`outputs/shadowlab-avant-migration13-2026-11-19.sqlite3.gz`), base de
+  l'essai copiée (`outputs/ip-simulees-essai-2026-11-19.sqlite3`, chiffres relus : 3 adresses, adresse bannie qui refuse un
+  autre visiteur). Suite complète après fusion : 3 067 tests verts (14 min 37). Campagne de contrôle en cours à 15 h 50.
+  Écart : fusion poussée avant le résultat de la suite (branche de travail seulement).
+- Ethan a donné une liste de sites de test (ScrapingCourse, NowSecure, ZeroCaptcha, défi interactif Cloudflare, clés de
+  test Turnstile ; liens non reçus). Tri : ScrapingCourse `/cloudflare-challenge` mesurable sans toucher au défi ; NowSecure
+  écarté pour l'instant (accord lu de seconde main) ; pages Turnstile réel, connexion et défi interactif exclues (aucun
+  solveur, aucun clic) ; clés de test déjà couvertes par l'Arena. Ethan : « Oui, vas-y » pour ScrapingCourse seul
+  (30 visites `noezia` puis 30 `playwright`, une par minute). Mesure préparée par un sous-agent (pas encore relue), lancée
+  par la coordination après le redémarrage. D-108 à écrire au lancement.
+- Incident : le sous-agent de préparation a appelé une fois `scripts/cloudflare-publics.py ... --lancer --visites-nowsecure 9`
+  pour essayer la borne ; refus à la lecture des options, aucune visite. Signalé par l'outil de sécurité ; option interdite
+  au sous-agent depuis.
+- **Redémarrage du Mac par Ethan vers 16 h 40** (libérer mémoire et cache). Prochaine visite du sujet de la course :
+  16 h 24 (finie vers 16 h 30) ; la suivante pas avant 17 h 09 (écart de 45 min au moins). Après le redémarrage, dans
+  l'ordre : ouvrir OrbStack ; `scripts/course.sh reprendre 1` (relance la pile Docker de la course puis la campagne) ;
+  `scripts/course.sh etat; echo $?` ; `df -h /`. Le site public (tunnel rapide) s'arrête : son adresse changera à la relance
+  (`scripts/site-public-tunnel.sh`, sur le mot d'Ethan) ; la base publique prendra les migrations 12 et 13 (sauvegarde au
+  schéma 11 : `outputs/public/public-avant-migration12-2026-11-19.sqlite3`). Le dossier temporaire de l'assistant est vidé
+  au redémarrage (scripts, journaux, verrou `arena-verrou`).
