@@ -7,10 +7,10 @@
 # profil `endurance` ; `ident-b` est bannie exprès pendant sa 3e visite ou une suivante (guetteur ci-dessous) : sa page
 # revient en file, les deux autres finissent.
 #
-# Rythme (le même que l'essai court) : 15 pages lues au plus par visite (environ 25 comptées par l'Arena), 8 minutes
-# entre deux visites d'une identité : environ 6 visites et 150 pages comptées par heure et par visiteur (bannissement
-# au-delà de 240 par heure ou de 2 000 par 24 h : environ 1 050 en 7 h), moins de 18 sessions par heure de l'empreinte E
-# (règle à 30). Sans proxy : sur l'Arena locale, les trois identités sortent par l'adresse du poste (dit au bilan).
+# Rythme (le même que l'essai court) : 15 pages lues au plus par visite (environ 27 comptées par l'Arena à l'essai),
+# 8 minutes entre deux visites d'une identité : environ 6 visites et 160 pages comptées par heure et par visiteur
+# (bannissement au-delà de 240 par heure ou de 2 000 par 24 h : environ 1 250 en 7 h 30), moins de 18 sessions par heure
+# de l'empreinte E (règle à 30). Sans proxy : sur l'Arena locale, les trois identités sortent par l'adresse du poste (dit au bilan).
 #
 # Préalables : ceux de `identites-essai.yaml` ; au moins 6 Gio libres ; le Mac éveillé 8 heures ; identités à usage
 # unique (changer les suffixes pour recommencer).
@@ -19,8 +19,9 @@
 #   SHADOWLAB_VITRINE_TAILLE=952 caffeinate -i uv run shadowlab campagne configs/experiments/identites-1000.yaml
 # Guetteur du bannissement (autre terminal, même dossier, mêmes variables) :
 #   scripts/identites-bannir-en-visite.sh <n° de campagne> ident-b 3 60
-# Durée estimée : environ 7 heures (environ 12 pages neuves par visite, lecture humaine comprise ; 18 visites par heure
-# à trois identités pendant 30 minutes, puis 12 à deux identités).
+# Durée estimée : environ 7 h 30, recalculée sur l'essai du 19/11 (campagne 1 du dossier de l'étape) : 10,8 pages
+# neuves par visite de 15 (le reste : relectures), un cycle de 10 minutes par identité ; trois identités pendant environ
+# 25 minutes, puis deux (environ 130 pages neuves par heure).
 # Bilan (lecture seule ; code 0 si tout est tenu) :
 #   SHADOWLAB_VITRINE_TAILLE=952 uv run python scripts/identites-bilan.py <n° de campagne>
 experiment:
