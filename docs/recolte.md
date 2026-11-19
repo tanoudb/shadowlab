@@ -776,6 +776,79 @@ Limites, sans les adoucir :
 - un enregistrement n'est vu « modifié » que si sa page est relue dans la passe ;
 - seul le moteur `http` a été rejoué.
 
+### Plusieurs identités sur une même récolte (`--identites`, D-106)
+
+```text
+uv run shadowlab recolte lancer configs/recettes/vitrine.yaml --moteur navigateur --identites ident-a,ident-b,ident-c
+uv run shadowlab recolte etat vitrine-annonces
+uv run shadowlab recolte reprendre vitrine-annonces [--identites ident-d]
+```
+
+Plusieurs identités persistantes (un profil Chrome chacune, `outputs/identites/<nom>/`) se partagent **une seule file
+d'adresses**, gardée dans `etat.sqlite3` :
+
+- **une page à une seule identité à la fois** : une identité qui prend une page en devient le porteur (colonne
+  `pages.identite`) ; aucune autre ne peut la prendre tant qu'elle la tient ;
+- **chaque identité dans son propre processus** (neuf, `spawn`), à **son** rythme : l'ordonnanceur de D-90 (visites de
+  8 h à 23 h, 45 à 180 minutes entre deux visites, 5 à 40 pages par visite, au plus 120 pages par heure et 200 par
+  jour), tiré de **sa** graine ; chaque visite relance son Chrome, passe la porte d'entrée et lit `robots.txt` ;
+- **au premier signe de la sentinelle** (`alerte` ou `banni`), l'identité s'arrête tout de suite : aucun nouvel essai,
+  aucun défi résolu, aucune page de plus ; la page qu'elle tenait revient en file (événement `rendue`), les autres
+  continuent. Une identité **bannie ne resservira jamais** ; une identité **en alerte attend une heure** (D-91), puis
+  reprend ses visites ;
+- une coupure franche (processus tué, Mac éteint) ne perd rien et ne double rien : les pages tenues par une identité
+  morte (son verrou de travail, `travailleurs/<nom>.verrou`, est libre) reviennent en file à la visite suivante d'une
+  autre, ou à `reprendre` ;
+- la récolte finit quand la file est vide et qu'aucune page n'est tenue : la passe est `terminee`, les exports et
+  `resume.json` sont écrits comme pour une passe seule (avec un bloc `identites` : état, pages lues, échecs, visites,
+  proxy masqué de chacune). Si toutes les identités tombent avant la fin, la passe est `arretee` (code 3) et l'état est
+  gardé : `reprendre --identites <nouvelles>`.
+
+**Refus avant toute requête** (code 2) : moteur `http` ; `--identite` avec `--identites` ; `--pages-max` (une visite
+se borne par `--pages-visite`, toute la récolte par `bornes.pages_max` de la recette) ; une identité nommée deux fois
+ou bannie (une identité en alerte n'est pas refusée : elle attend la fin de son alerte avant sa première visite) ; et
+surtout **rien de partagé** :
+
+- **même profil Chrome** (même dossier, même inode, ou profil copié depuis une autre identité : le profil porte le nom
+  de son identité) ;
+- **même graine** (tirée une fois du hasard du système et écrite dans `identite.json` ; deux graines égales = une
+  identité recopiée) ;
+- **même proxy** (même serveur et même utilisateur, `proxy.json` de D-99) ; vers un site qui n'est pas local, deux
+  identités ou plus **sans** proxy sont aussi refusées (elles sortiraient toutes par l'adresse du poste) : une au plus
+  sans proxy. Sur nos sites locaux, des identités sans proxy sont permises (aucun proxy réel n'a été essayé).
+
+Pour un essai, `--pages-visite N`, `--ecart MIN` (minutes de la fin d'une visite au début de la suivante) et
+`--plage A-B` (heures ; `0-24` : à toute heure) remplacent les tirages de l'ordonnanceur ; les plafonds par heure et
+par jour restent.
+
+`recolte etat` montre, en plus, chaque identité (état, pages lues, échecs, pages tenues, visites, dernière visite,
+proxy masqué, « en visite en ce moment ») et la file :
+
+```text
+  identités : 3
+    ident-a · ok · 30 lue(s), 0 échec(s), 0 en cours · 5 visite(s), dernière le … (terminee, 4 page(s))
+    ident-b · banni · 2 lue(s), 0 échec(s), 0 en cours · 1 visite(s), dernière le … (arretee, 2 page(s))
+    ident-c · ok · 16 lue(s), 0 échec(s), 0 en cours · 3 visite(s), dernière le … (limitee, 8 page(s))
+  file : 0 à faire, 0 en cours
+```
+
+`reprendre` d'une passe partagée reprend avec les identités de la passe, **sans les bannies** (écartées et nommées à
+l'écran), ou avec celles de `--identites` ; refus si toutes sont bannies, ou si une identité de la passe est encore en
+visite (son processus a survécu à la coupure). Une passe partagée ne se reprend jamais seule (sans identités), et une
+passe seule ne se rejoint pas par des identités.
+
+`robots.txt`, le périmètre, la sentinelle et `recolte noter` sont ceux d'une passe seule (D-70). La commande vise le
+site **en direct** : elle n'est pas jugée par l'Arena. Devant l'Arena, la même récolte partagée passe par une campagne
+(champ `recolte_partagee` d'un bras, scénario `visite`, `monde: campagne`, `espacement` obligatoire : voir
+`configs/experiments/identites-essai.yaml`), où chaque identité est un bras.
+
+Mesuré le 19/11 (D-106) : devant l'Arena (profil `endurance`, campagne de l'essai, vitrine de 60 annonces, trois
+identités, l'une bannie exprès en pleine visite par `scripts/identites-bannir-en-visite.sh`), 63 pages sur 63 et 840
+champs sur 840, rien demandé par l'identité bannie après son refus, les deux autres ont fini ; bilan par
+`scripts/identites-bilan.py <n°>`. La commande elle-même, hors Arena, avec deux identités et deux vrais Chrome : 11
+pages sur 11. Non mesuré : 1 000 pages (`configs/experiments/identites-1000.yaml`, environ 7 h), un vrai proxy, une
+coupure franche dans un vrai Chrome.
+
 ## 7. Les deux moteurs
 
 | | `http` | `navigateur` |

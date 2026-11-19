@@ -48,17 +48,20 @@ from .config import Reglages
 from .detection import registre as registre_detecteurs
 from .engines import registre
 from .engines.base import FonctionIndisponible, RefusProtection
+from .engines.noezia import gestionnaire
 from .engines.noezia import identite as module_identite
+from .engines.noezia.etat import Etat
 from .engines.noezia.identite import IdentiteRefusee
 from .issues import CAUSE_PANNE_ARENA
 from .mesures import PIDS_EXCLUS, Echantillonneur
 from .perimetre import verifier_url
-from .scenarios import PAGES_PAR_VISITE, SCENARIOS, avec_pages
+from .scenarios import PAGES_PAR_VISITE, SCENARIOS, avec_pages, recette_du_passage
 from .site.comptes import COMPTES
 
 journal = logging.getLogger("shadowlab.campagne")
 
 CODE_INTERROMPU = 3
+ATTENTE_FILE_PARTAGEE_S = 30.0  # récolte partagée, rien à prendre : le bras relit la file à ce rythme, sans passage
 PANNES_ARENA_MAX = 3  # pannes d'Arena de suite avant d'arrêter la campagne
 
 METRIQUES = {
@@ -101,6 +104,11 @@ class MoteurConfig(BaseModel):
     # bras qui est bannie (le code de `shadowlab arena bannir --ip`), ni son visiteur ni un compte. Avec
     # `identite_apres_bannissement`, la visite suivante vient d'un autre navigateur déclaré avec la même adresse.
     bannir_adresse: bool = False
+    # Récolte partagée entre identités (étape 4.2, D-106) : les bras qui portent le même nom se partagent une seule
+    # récolte (`<sorties>/campagnes/<n°>/recolte/<nom>-<protection>/`, une file d'adresses, chaque page lue par une
+    # seule identité). Chaque bras est une identité persistante (`identite`) : elle s'arrête au premier signe de la
+    # sentinelle, sa page revient en file, les autres continuent. Le bras s'arrête quand la récolte est finie.
+    recolte_partagee: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,39}$")
 
     @field_validator("compte")
     @classmethod
@@ -259,7 +267,45 @@ class Experience(BaseModel):
                 raise ValueError(
                     f"bannir_avant_visite ({moteur.nom_affiche}) : visite {moteur.bannir_avant_visite} non prévue"
                 )
+        self._controler_recoltes_partagees()
         return self
+
+    def _controler_recoltes_partagees(self) -> None:
+        """Une récolte partagée (étape 4.2) : le scénario `visite`, un seul monde pour toute la campagne (l'Arena peut
+        relier les identités entre elles : c'est la mesure honnête), et chaque bras noezia en identité native avec sa
+        propre identité persistante ; jamais deux bras sur la même identité."""
+        groupes: dict[str, list[MoteurConfig]] = {}
+        for moteur in self.engines:
+            if moteur.recolte_partagee:
+                groupes.setdefault(moteur.recolte_partagee, []).append(moteur)
+        for nom, bras in groupes.items():
+            champ = f"recolte_partagee ({nom})"
+            if self.scenarios != ["visite"]:
+                raise ValueError(f"{champ} : c'est le scénario `visite` qui récolte, `scenarios` doit être [visite]")
+            if self.monde != "campagne":
+                raise ValueError(
+                    f"{champ} : le monde doit être `campagne` (toutes les identités dans un seul monde de l'Arena, "
+                    "qui peut les relier entre elles)"
+                )
+            if self.espacement is None and any(m.espacement is None for m in bras):
+                raise ValueError(
+                    f"{champ} : il faut un `espacement` (l'état de chaque identité, bannie ou en alerte, est relu "
+                    "avant chacune de ses visites)"
+                )
+            for moteur in bras:
+                if moteur.name != "noezia" or moteur.options.get("identite_native") is not True:
+                    raise ValueError(f"{champ} : {moteur.nom_affiche} doit être noezia en identité native")
+                if not moteur.options.get("identite"):
+                    raise ValueError(f"{champ} : {moteur.nom_affiche} sans identite persistante (option `identite`)")
+                if moteur.recolte_incrementale or moteur.bannir_avant_visite or moteur.compte:
+                    raise ValueError(
+                        f"{champ} : {moteur.nom_affiche} ne peut pas porter aussi recolte_incrementale, "
+                        "bannir_avant_visite ni compte"
+                    )
+            identites = [m.options["identite"] for m in bras]
+            doubles = sorted({i for i in identites if identites.count(i) > 1})
+            if doubles:
+                raise ValueError(f"{champ} : deux bras ont la même identité ({', '.join(doubles)})")
 
     def visites_de(self, moteur: MoteurConfig) -> int:
         return moteur.visites or self.repetitions
@@ -614,6 +660,15 @@ def executer(reglages: Reglages, experiment_id: int) -> str:
     if experience.protections != [BASELINE]:
         verifier_url(reglages.url_arena, reglages.hotes_autorises)
     preparer_reprise(cx, reglages, experiment_id)
+    try:
+        for nom, ecartees in controler_recoltes_partagees(cx, experience, reglages, experiment_id).items():
+            if ecartees:
+                journal.warning("récolte partagée %s : identité(s) bannie(s) écartée(s) : %s", nom, ", ".join(ecartees))
+    except gestionnaire.PartageRefuse as erreur:
+        journal.error("récolte partagée refusée avant toute visite : %s", erreur)
+        cx.execute("UPDATE experiments SET status = 'interrompu' WHERE id = ?", (experiment_id,))
+        cx.close()
+        return "interrompu"
     cx.execute("UPDATE experiments SET status = 'en_cours' WHERE id = ?", (experiment_id,))
     ordre = unites(experience)
     journal.info("Ordre d'exécution : %d unités, seed %s", len(ordre), experience.seed)
@@ -766,7 +821,86 @@ def _reglages_visite(
     if moteur_cfg.recolte_incrementale:
         nom = re.sub(r"[^a-z0-9_-]+", "-", f"{moteur_cfg.nom_affiche}-{protection}".lower()).strip("-")
         dossier = dossier_campagne(reglages, experiment_id) / "recolte" / nom
-    return {"duree_porte_s": duree, "dossier_recolte": dossier, "compte": moteur_cfg.compte}
+    reglages_visite: dict[str, Any] = {"duree_porte_s": duree, "dossier_recolte": dossier, "compte": moteur_cfg.compte}
+    if (
+        moteur_cfg.recolte_partagee
+    ):  # un dossier pour tous les bras de la récolte (par protection), une identité par bras
+        nom = re.sub(r"[^a-z0-9_-]+", "-", f"{moteur_cfg.recolte_partagee}-{protection}".lower()).strip("-")
+        reglages_visite["dossier_recolte"] = dossier_campagne(reglages, experiment_id) / "recolte" / nom
+        reglages_visite["identite_partagee"] = moteur_cfg.options["identite"]
+    return reglages_visite
+
+
+def _graine_du_bras(experience: Experience, moteur_cfg: MoteurConfig) -> str:
+    """La graine des hasards d'un bras (ordre des visites, lecture d'une page, cadence) : celle de la campagne ; pour un
+    bras d'une récolte partagée, celle de son identité (tirée du hasard du système une fois pour toutes, écrite dans son
+    `identite.json` : `gestionnaire.preparer_identite`), jamais une graine commune à plusieurs identités."""
+    if not moteur_cfg.recolte_partagee:
+        return str(experience.seed)
+    nom = moteur_cfg.options["identite"]
+    graine = (module_identite.lire_etat(nom) or {}).get("graine")
+    if not isinstance(graine, int) or isinstance(graine, bool):
+        graine = gestionnaire.preparer_identite(nom).graine
+    return str(graine)
+
+
+def _recolte_partagee_finie(dossier: Path) -> bool:
+    """La récolte partagée est-elle finie (passe terminée, ou arrêtée à la borne de la recette) ? Rien n'est lancé."""
+    if not (dossier / "etat.sqlite3").exists():
+        return False
+    etat = Etat(dossier / "etat.sqlite3")
+    try:
+        derniere = etat.derniere_passe()
+    finally:
+        etat.fermer()
+    return derniere is not None and derniere["statut"] in ("terminee", "limitee")
+
+
+def _rien_a_prendre(dossier: Path, label: str) -> bool:
+    """Récolte partagée en cours dont aucune page n'est à prendre maintenant : les autres identités tiennent les
+    dernières (elles peuvent revenir en file, ou en ajouter). Les pages des identités qui ne travaillent plus (verrou de
+    travail libre : processus mort) sont d'abord rendues à la file, et c'est tracé."""
+    if not (dossier / "etat.sqlite3").exists():
+        return False
+    etat = Etat(dossier / "etat.sqlite3")
+    try:
+        derniere = etat.derniere_passe()
+        if derniere is None or derniere["statut"] in ("terminee", "limitee"):
+            return False
+        passe = derniere["numero"]
+        rendues = etat.liberer_orphelines(passe, lambda nom: gestionnaire.travailleur_vivant(dossier, nom))
+        if rendues:
+            quand = datetime.now().astimezone().isoformat(timespec="seconds")
+            etat.evenement(passe, "orphelines", {"bras": label, "rendues": rendues}, quand)
+        a_faire, en_cours = etat.pages_restantes(passe)
+        return a_faire == 0 and en_cours > 0
+    finally:
+        etat.fermer()
+
+
+def _partagee_finie(moteur_cfg: MoteurConfig, reglages_visite: dict[str, Any], label: str) -> bool:
+    """Bras d'une récolte partagée dont la récolte est finie : plus aucune visite (aucun passage écrit)."""
+    if not moteur_cfg.recolte_partagee or not _recolte_partagee_finie(reglages_visite["dossier_recolte"]):
+        return False
+    journal.info("%s : récolte partagée déjà finie, aucune visite de plus", label)
+    return True
+
+
+def controler_recoltes_partagees(cx, experience: Experience, reglages: Reglages, experiment_id: int) -> dict[str, list]:
+    """Avant toute visite (étape 4.2) : rien de partagé entre les identités d'une même récolte partagée (profil Chrome,
+    proxy, graine : `gestionnaire.controler_identites`). Au lancement, une identité bannie est un refus ; à la reprise
+    (la campagne a déjà des passages), elle est écartée (son bras s'arrête sans visite). Lève `PartageRefuse` ; rend les
+    identités écartées par récolte."""
+    reprise = cx.execute("SELECT 1 FROM runs WHERE experiment_id = ? LIMIT 1", (experiment_id,)).fetchone() is not None
+    groupes: dict[str, list[str]] = {}
+    for moteur in experience.engines:
+        if moteur.recolte_partagee:
+            groupes.setdefault(moteur.recolte_partagee, []).append(moteur.options["identite"])
+    ecartees: dict[str, list] = {}
+    for nom, identites in groupes.items():
+        recette, _ = recette_du_passage("vitrine", reglages.url_arena)
+        _, ecartees[nom] = gestionnaire.controler_identites(identites, recette, ecarter_bannies=reprise)
+    return ecartees
 
 
 def _options_de_la_visite(moteur_cfg: MoteurConfig, repetition: int) -> dict[str, Any]:
@@ -880,6 +1014,11 @@ def executer_unite(
         arret = fichier_arret(reglages)
         label = moteur_cfg.nom_affiche
         reglages_visite = _reglages_visite(reglages, experiment_id, moteur_cfg, protection)
+        try:
+            graine_bras = _graine_du_bras(experience, moteur_cfg)
+        except gestionnaire.PartageRefuse as erreur:  # identité bannie ou prise ailleurs : le bras ne fera rien
+            journal.warning("%s : %s, aucune visite", label, erreur)
+            return "termine"
         reglage_espacement = moteur_cfg.espacement or experience.espacement
         cadence = noter = None
         if reglage_espacement is not None:
@@ -888,7 +1027,7 @@ def executer_unite(
                 reglage_espacement,
                 horloge=horloge,
                 dormir=dormir,
-                graine=f"{experience.seed}:{label}:{protection}",
+                graine=f"{graine_bras}:{label}:{protection}",
                 depart=datetime.fromisoformat(ligne["created_at"]),
                 faites=_visites_du_bras(cx, reglages, experiment_id, label, protection),
                 notes=[
@@ -941,6 +1080,8 @@ def executer_unite(
                         continue
                     if arret.exists():
                         return "interrompu"
+                    if _partagee_finie(moteur_cfg, reglages_visite, label):
+                        return "termine"
                     scenario = SCENARIOS[nom_scenario]
                     creneau = None
                     if cadence is not None and noter is not None:  # une visite = un passage ; scénario `visite` seul
@@ -968,8 +1109,14 @@ def executer_unite(
                         scenario = avec_pages(creneau.pages or experience.pages_par_visite, **reglages_visite)
                     elif nom_scenario == "visite":
                         scenario = avec_pages(experience.pages_par_visite, **reglages_visite)
+                    while moteur_cfg.recolte_partagee and _rien_a_prendre(reglages_visite["dossier_recolte"], label):
+                        if arret.exists():  # rien à prendre : on attend sans passage (ni Chrome, ni ligne en base)
+                            return "interrompu"
+                        (dormir or time.sleep)(ATTENTE_FILE_PARTAGEE_S)
+                    if _partagee_finie(moteur_cfg, reglages_visite, label):  # finie pendant l'attente du créneau
+                        return "termine"
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
-                    graine = f"{experience.seed}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
+                    graine = f"{graine_bras}:{moteur_cfg.nom_affiche}:{protection}:{nom_scenario}:{repetition}"
                     monde = visiteurs.nom_monde(
                         experience.monde, experiment_id, moteur_cfg.nom_affiche, protection, nom_scenario, repetition
                     )
@@ -1009,8 +1156,14 @@ def executer_unite(
                         engine_version=db.j(versions),
                         monde=monde,
                     )
-                    if cadence is not None and creneau is not None:
+                    # Récolte partagée : une visite qui n'a rien pu prendre (aucune requête) ne compte pas l'écart
+                    # suivant ; le bras relit la file (attente ci-dessus) et visite dès qu'une page est à prendre.
+                    vide = moteur_cfg.recolte_partagee and (details or {}).get("rien_a_faire")
+                    if cadence is not None and creneau is not None and not vide:
                         cadence.terminer(creneau, _pages_de_la_visite(details or {}))
+                    if moteur_cfg.recolte_partagee and (details or {}).get("travail_fini"):
+                        journal.info("%s : récolte partagée finie à la visite %d, le bras s'arrête", label, repetition)
+                        return "termine"
                     if protection != BASELINE and _arena_en_panne(cx, experiment_id):
                         journal.error(
                             "Arena injoignable sur %d passages de suite : campagne arrêtée. "

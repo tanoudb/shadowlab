@@ -54,5 +54,23 @@ def test_signatures_persistent(tmp_path):
     assert s2.charger("exemple.test", "absent") is None
 
 
+def test_signatures_ecrites_d_un_coup(tmp_path, monkeypatch):
+    """Plusieurs identités d'une récolte partagée écrivent le même fichier (étape 4.2) : une écriture coupée en route
+    laisse l'ancien fichier entier, jamais un fichier à moitié écrit, et aucun fichier temporaire."""
+    import os
+
+    chemin = tmp_path / "sig.json"
+    extraction.Signatures(chemin).enregistrer("exemple.test", "prix", _el("span", ["prix"]))
+    avant = chemin.read_text(encoding="utf-8")
+
+    def coupure(*_args, **_kwargs):
+        raise OSError("disque plein")
+
+    monkeypatch.setattr(os, "replace", coupure)
+    extraction.Signatures(chemin).enregistrer("exemple.test", "titre", _el("h1", ["titre"]))
+    assert chemin.read_text(encoding="utf-8") == avant
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["sig.json"]
+
+
 def test_domaine_de():
     assert extraction.domaine_de("https://www.example.com/a?b=1") == "www.example.com"

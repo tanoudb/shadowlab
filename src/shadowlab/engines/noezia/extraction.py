@@ -11,6 +11,8 @@ caractéristiques dans la page se fait en JavaScript (CARAC_UN / CARAC_TOUS).
 from __future__ import annotations
 
 import json
+import os
+import threading
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -109,8 +111,12 @@ class Signatures:
         self._data[self._cle(domaine, cle)] = signature
         if self._chemin is None:
             return
+        # Écrit d'un coup (fichier temporaire propre à ce processus et à ce fil, puis `os.replace`) : plusieurs
+        # identités d'une récolte partagée écrivent ce fichier ; aucune ne doit en lire un à moitié écrit (étape 4.2).
+        temporaire = self._chemin.with_name(f"{self._chemin.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         try:
             self._chemin.parent.mkdir(parents=True, exist_ok=True)
-            self._chemin.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+            temporaire.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporaire, self._chemin)
         except OSError:
-            pass
+            temporaire.unlink(missing_ok=True)

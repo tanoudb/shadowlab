@@ -1,0 +1,54 @@
+# Étape 4.2 : preuve de 1 000 pages du gestionnaire d'identités devant l'Arena (D-106). Préparée, à lancer par la
+# coordination.
+#
+# Critère du plan : « 1 000 pages avec une identité bannie exprès : 100 % récupérées, aucune graine, aucun proxy ni
+# cookie partagé ». Vitrine de 952 annonces = 48 pages de liste + 952 fiches = 1 000 pages. Trois identités persistantes
+# neuves se partagent la récolte (une file, chaque page lue par une seule identité), dans un seul monde de l'Arena, au
+# profil `endurance` ; `ident-b` est bannie exprès pendant sa 3e visite ou une suivante (guetteur ci-dessous) : sa page
+# revient en file, les deux autres finissent.
+#
+# Rythme (le même que l'essai court) : 15 pages lues au plus par visite (environ 27 comptées par l'Arena à l'essai),
+# 8 minutes entre deux visites d'une identité : environ 6 visites et 160 pages comptées par heure et par visiteur
+# (bannissement au-delà de 240 par heure ou de 2 000 par 24 h : environ 1 250 en 7 h 30), moins de 18 sessions par heure
+# de l'empreinte E (règle à 30). Sans proxy : sur l'Arena locale, les trois identités sortent par l'adresse du poste (dit au bilan).
+#
+# Préalables : ceux de `identites-essai.yaml` ; au moins 6 Gio libres ; le Mac éveillé 8 heures ; identités à usage
+# unique (changer les suffixes pour recommencer).
+#
+# Commande :
+#   SHADOWLAB_VITRINE_TAILLE=952 caffeinate -i uv run shadowlab campagne configs/experiments/identites-1000.yaml
+# Guetteur du bannissement (autre terminal, même dossier, mêmes variables) :
+#   scripts/identites-bannir-en-visite.sh <n° de campagne> ident-b 3 60
+# Durée estimée : environ 7 h 30, recalculée sur l'essai du 19/11 (campagne 1 du dossier de l'étape) : 10,8 pages
+# neuves par visite de 15 (le reste : relectures), un cycle de 10 minutes par identité ; trois identités pendant environ
+# 25 minutes, puis deux (environ 130 pages neuves par heure).
+# Bilan (lecture seule ; code 0 si tout est tenu) :
+#   SHADOWLAB_VITRINE_TAILLE=952 uv run python scripts/identites-bilan.py <n° de campagne>
+experiment:
+  name: identites_1000
+  description: >-
+    Étape 4.2, preuve : trois identités persistantes se partagent 1 000 pages de la vitrine (952 annonces), profil
+    endurance, un seul monde ; ident-b est bannie exprès pendant sa 3e visite (ou une suivante).
+  environment: local
+  engines:
+    - name: noezia
+      label: ident-a
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: preuve1000-a-1}
+    - name: noezia
+      label: ident-b
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: preuve1000-b-1}
+    - name: noezia
+      label: ident-c
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: preuve1000-c-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 90        # au plus : un bras s'arrête dès que la récolte est finie
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 8}
+  concurrency: 3
+  monde: campagne
+  seed: 20261120         # ordre des bras seulement : les hasards de chaque identité viennent de SA graine
+  output: [json, html]

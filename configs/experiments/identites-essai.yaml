@@ -1,0 +1,58 @@
+# Étape 4.2 : essai court du gestionnaire d'identités devant l'Arena (D-106).
+#
+# Trois identités persistantes se partagent UNE récolte de la vitrine (champ `recolte_partagee` : une file d'adresses,
+# chaque page lue par une seule identité). Toutes dans le même monde de l'Arena (`monde: campagne`), au profil
+# `endurance` (porte JavaScript par visiteur valable 24 h, bannissement, aucun CAPTCHA). L'identité `ident-b` est bannie
+# exprès pendant une visite, à la main ou par le guetteur ci-dessous (`uv run shadowlab arena bannir --visiteur <id>
+# --monde <nom>`) : elle doit s'arrêter sans rien demander après le refus, sa page revient en file, les deux autres
+# finissent la récolte.
+#
+# Rythme, pour rester sous les règles de l'Arena : 15 pages lues au plus par visite (environ 25 pages comptées par
+# l'Arena, D-78), 8 minutes entre la fin d'une visite et le début de la suivante, par identité, soit moins de 6 visites
+# et environ 150 pages comptées par heure et par visiteur (bannissement au-delà de 240) ; pour les trois identités,
+# moins de 18 sessions par heure de la même empreinte E (règle `debit_empreinte` à 30).
+#
+# Préalables :
+#   1. La pile de l'Arena tourne telle qu'elle est (aucun `arena demarrer` ni `arena appliquer` depuis un dossier de
+#      travail : D-104) ; le frontal et le site sont lancés par la campagne sur SHADOWLAB_PORT_ARENA et SHADOWLAB_PORT.
+#   2. Identités neuves, à usage unique (`ident-b` sera bannie) : pour recommencer, changer les suffixes (`-2`, `-3`…) ;
+#      ne jamais recopier un dossier de `outputs/identites/` (refusé au lancement : même profil, même graine).
+#   3. Disque : au moins 6 Gio libres (trois profils Chrome neufs).
+#
+# Commande (trois fenêtres de Chrome) :
+#   SHADOWLAB_VITRINE_TAILLE=60 caffeinate -i uv run shadowlab campagne configs/experiments/identites-essai.yaml
+# Guetteur du bannissement (autre terminal, même dossier, mêmes variables) : il attend qu'une visite de `ident-b` (la
+# première ou une suivante) tourne depuis 60 s, au milieu de ses 15 pages, lit son visiteur et son monde, puis lance
+# `shadowlab arena bannir` une fois (une visite plus courte, comme la visite vide du départ, est passée) :
+#   scripts/identites-bannir-en-visite.sh <n° de campagne> ident-b 1 60
+# Durée estimée : 30 à 45 minutes (63 pages, deux ou trois tours de visites).
+# Bilan (lecture seule ; code 0 si tout est tenu) :
+#   SHADOWLAB_VITRINE_TAILLE=60 uv run python scripts/identites-bilan.py <n° de campagne>
+experiment:
+  name: identites_essai
+  description: >-
+    Étape 4.2 : trois identités persistantes se partagent une récolte de la vitrine (60 annonces), profil endurance, un
+    seul monde ; ident-b est bannie exprès pendant une visite (la première qui dure 60 s).
+  environment: local
+  engines:
+    - name: noezia
+      label: ident-a
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: partage-a-1}
+    - name: noezia
+      label: ident-b
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: partage-b-1}
+    - name: noezia
+      label: ident-c
+      recolte_partagee: vitrine-partagee
+      options: {headless: false, channel: chrome, identite_native: true, identite: partage-c-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 12        # au plus : un bras s'arrête dès que la récolte est finie
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 8}
+  concurrency: 3
+  monde: campagne
+  seed: 20261119         # ordre des bras seulement : les hasards de chaque identité viennent de SA graine
+  output: [json, html]
