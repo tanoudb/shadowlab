@@ -876,10 +876,12 @@ def executer_unite(
         # premier créneau est pris avant l'ouverture) ; bannie, le bras est fini sans rien écrire dans `runs`.
         a_faire = (
             _premiere_a_faire(experience, moteur_cfg, protection, faits)
-            if cadence is not None and moteur_cfg.options.get("identite")
+            if (cadence is not None and moteur_cfg.options.get("identite")) or moteur_cfg.identite_apres_bannissement
             else None
         )
-        options_pilote = _options_de_la_visite(moteur_cfg, a_faire or 1)  # reprise après le bannissement : l'autre
+        # Reprise après le bannissement du témoin des comptes (I10) : le pilote s'ouvre sur l'autre identité, avec
+        # ou sans espacement.
+        options_pilote = _options_de_la_visite(moteur_cfg, a_faire or 1)
         nom_identite = options_pilote.get("identite") if cadence is not None else None
         premier = None
         if nom_identite and a_faire is not None:
