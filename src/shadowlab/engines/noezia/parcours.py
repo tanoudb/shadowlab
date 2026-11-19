@@ -505,6 +505,12 @@ class Parcours:
                 ignores=self.recette.parametres_ignores,
                 plafonds=self.recette.bornes.par_type,
             )
+            if not (etat.passe(passe)["options"] or {}).get("partagee"):
+                raise RefusParcours(
+                    f"la passe {passe} de ce dossier a été lancée sans identités (`recolte lancer`) : une récolte "
+                    "partagée ne la rejoint jamais (sa reprise remettrait en file les pages des identités) ; autre "
+                    "dossier, ou la finir d'abord"
+                )
             if etat.passe(passe)["empreinte"] != self.empreinte:
                 raise RefusParcours(
                     f"la recette a changé depuis le début de la passe partagée {passe} : une récolte partagée garde "
@@ -568,6 +574,11 @@ class Parcours:
             raise RefusParcours(f"aucune passe à reprendre pour « {self.recette.nom} »")
         if passe["statut"] not in PASSES_NON_FINIES:
             raise RefusParcours(f"la passe {passe['numero']} est {passe['statut']} : rien à reprendre")
+        if (passe["options"] or {}).get("partagee"):  # la reprendre seule remettrait en file les pages des identités
+            raise RefusParcours(
+                f"la passe {passe['numero']} est partagée entre identités : elle se reprend avec ses identités "
+                f"(`uv run shadowlab recolte reprendre {self.recette.nom}`), jamais seule"
+            )
         if passe["empreinte"] != self.empreinte and not recette_modifiee:
             raise RefusParcours(
                 f"la recette a changé depuis le début de la passe {passe['numero']} : "

@@ -1025,7 +1025,12 @@ def visite(
             )  # fmt: skip
         if bilan.arret:
             details["refus"] = f"{bilan.arret['detail']} ({bilan.arret['adresse']})"
-        succes = bilan.statut in ("limitee", "terminee") and lues - echecs >= 1 and echecs == 0
+        # Récolte partagée : une visite qui a lu sans échec puis trouve la file vide (les autres identités tiennent
+        # les dernières pages) a réussi ; une visite qui n'a rien pu prendre le dit (`rien_a_faire`), sans réussir.
+        reussis = ("limitee", "terminee", "attente") if identite_partagee is not None else ("limitee", "terminee")
+        succes = bilan.statut in reussis and lues - echecs >= 1 and echecs == 0
+        if identite_partagee is not None:
+            details["rien_a_faire"] = lues == 0 and bilan.statut in ("attente", "finie")
     except RefusParcours as exc:  # robots.txt inaccessible, par exemple : la visite n'a rien lu
         details.update(statut="refusee", arret=None, pages_faites=0, pages_en_echec=0, pages_visite=0, refus=str(exc))
     if compte is not None:

@@ -61,6 +61,7 @@ from .site.comptes import COMPTES
 journal = logging.getLogger("shadowlab.campagne")
 
 CODE_INTERROMPU = 3
+ATTENTE_FILE_PARTAGEE_S = 30.0  # récolte partagée, rien à prendre : le bras relit la file à ce rythme, sans passage
 PANNES_ARENA_MAX = 3  # pannes d'Arena de suite avant d'arrêter la campagne
 
 METRIQUES = {
@@ -275,6 +276,11 @@ class Experience(BaseModel):
                 raise ValueError(
                     f"{champ} : le monde doit être `campagne` (toutes les identités dans un seul monde de l'Arena, "
                     "qui peut les relier entre elles)"
+                )
+            if self.espacement is None and any(m.espacement is None for m in bras):
+                raise ValueError(
+                    f"{champ} : il faut un `espacement` (l'état de chaque identité, bannie ou en alerte, est relu "
+                    "avant chacune de ses visites)"
                 )
             for moteur in bras:
                 if moteur.name != "noezia" or moteur.options.get("identite_native") is not True:
@@ -822,6 +828,28 @@ def _recolte_partagee_finie(dossier: Path) -> bool:
     return derniere is not None and derniere["statut"] in ("terminee", "limitee")
 
 
+def _rien_a_prendre(dossier: Path, label: str) -> bool:
+    """Récolte partagée en cours dont aucune page n'est à prendre maintenant : les autres identités tiennent les
+    dernières (elles peuvent revenir en file, ou en ajouter). Les pages des identités qui ne travaillent plus (verrou de
+    travail libre : processus mort) sont d'abord rendues à la file, et c'est tracé."""
+    if not (dossier / "etat.sqlite3").exists():
+        return False
+    etat = Etat(dossier / "etat.sqlite3")
+    try:
+        derniere = etat.derniere_passe()
+        if derniere is None or derniere["statut"] in ("terminee", "limitee"):
+            return False
+        passe = derniere["numero"]
+        rendues = etat.liberer_orphelines(passe, lambda nom: gestionnaire.travailleur_vivant(dossier, nom))
+        if rendues:
+            quand = datetime.now().astimezone().isoformat(timespec="seconds")
+            etat.evenement(passe, "orphelines", {"bras": label, "rendues": rendues}, quand)
+        a_faire, en_cours = etat.pages_restantes(passe)
+        return a_faire == 0 and en_cours > 0
+    finally:
+        etat.fermer()
+
+
 def _partagee_finie(moteur_cfg: MoteurConfig, reglages_visite: dict[str, Any], label: str) -> bool:
     """Bras d'une récolte partagée dont la récolte est finie : plus aucune visite (aucun passage écrit)."""
     if not moteur_cfg.recolte_partagee or not _recolte_partagee_finie(reglages_visite["dossier_recolte"]):
@@ -1053,6 +1081,10 @@ def executer_unite(
                         scenario = avec_pages(creneau.pages or experience.pages_par_visite, **reglages_visite)
                     elif nom_scenario == "visite":
                         scenario = avec_pages(experience.pages_par_visite, **reglages_visite)
+                    while moteur_cfg.recolte_partagee and _rien_a_prendre(reglages_visite["dossier_recolte"], label):
+                        if arret.exists():  # rien à prendre : on attend sans passage (ni Chrome, ni ligne en base)
+                            return "interrompu"
+                        (dormir or time.sleep)(ATTENTE_FILE_PARTAGEE_S)
                     if _partagee_finie(moteur_cfg, reglages_visite, label):  # finie pendant l'attente du créneau
                         return "termine"
                     scenario_id = db.scenario_id(cx, scenario.name, scenario.description)
