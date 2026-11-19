@@ -4205,3 +4205,11 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   résoudre un CAPTCHA (interdit, D-30) ; pour les autres, l'assistant ne fait pas passer le moteur à travers la protection
   anti-robot d'un site qui n'est pas à Ethan. Voie proposée : la mesure contre Cloudflare sur `noezia.fr`, caché (D-107).
 - Le code préparé (branche `worktree-agent-ad463421957822aff`) reste non fusionné et non lancé.
+
+## 2026-11-19 16h05 — Suite complète après 4.2 verte ; contrôle 151 identique
+- Suite complète après la fusion de 4.2 : 3 153 tests verts (14 min, `outputs/suite-apres-4-2-2026-11-19.txt`).
+- Campagne de contrôle 151 (après 4.1) : mêmes taux que 132/134/139/148 dans les 9 cellules ; dernière unité démarrée avant
+  la fusion de 4.2. Un contrôle sur le code final (4.1 + 4.2) reste à faire après le redémarrage.
+- Décision maintenue sur les sites tiers protégés : non lancés ; raisons données à Ethan (solveur de CAPTCHA réel interdit ;
+  la détection de Cloudflare vaut pour tous ses sites, pas seulement la page de test). Voie retenue : noezia.fr caché (D-107),
+  à préparer après le redémarrage, sur l'accord d'Ethan (« Oui, après »).
