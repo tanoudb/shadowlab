@@ -4064,3 +4064,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   prévenu par notification. Sous ce niveau, la course peut s'arrêter (Chrome et SQLite ne peuvent plus écrire).
 - **Reste** : place à libérer par Ethan (ou sur son mot) ; contrôle de la course demain matin ; suites Linux et étape 3.3 toujours
   bloquées par le disque.
+
+## 2026-11-19 (6h55) — Claude (Fable 5.2, coordination) — Contrôle du matin de la course ; étape I10 (comptes) confiée à un sous-agent
+
+- **Course I9, contrôle de 6 h 42** : `scripts/course.sh etat` code 0 ; sujet **8 visites réussies sur 8**, identité `ok`, 1 visiteur,
+  1 empreinte E, aucune alerte, aucun bannissement ; prochaine visite à 8 h 02 (pause de nuit). Bilan provisoire : tout est tenu sauf
+  `recolte_99` (81 annonces sur 300, attendu à ce stade). Témoins finis comme prévu.
+- **Disque : 11 Gio libres** (6 hier à 21 h 26) : macOS a rendu une partie de la mémoire d'échange (16 → 11 Go). Toujours sous la
+  règle des 20 Gio ; la question du nettoyage du cache `uv` reste posée à Ethan, rien nettoyé.
+- **Suite choisie** : ce qui reste du plan et ne demande ni disque ni Ethan. Palier 3 bloqué (serveur, domaine, compte Cloudflare,
+  proxy) ; suites Linux bloquées par le disque ; I8 attend Ethan. Reste l'étape **I10, comptes** (plan 2.3 : table de comptes,
+  bannissement du compte, « nouvel appareil » ; côté moteur, rester connecté d'une visite à l'autre) : le plan (§ 4) permet de
+  développer pendant une longue exécution. Confiée à un sous-agent (Opus, worktree à part), tests d'abord, essai court à la fin ;
+  décision D-104 réservée. Rien n'est fusionné tant que je n'ai pas relu le diff et refait la campagne de contrôle.
+- L'entrée précédente porte « 21h45 » : elle a été écrite vers 21 h 30.
