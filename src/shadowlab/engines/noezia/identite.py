@@ -3,7 +3,8 @@
 Disposition (I4, `docs/recherche/identite-qui-dure-2026-11-12.md` § 5.2) :
 
     <racine>/<nom>/identite.json   nom, date de création, état (ok, alerte, banni), `alerte_le` / `banni_le` et
-                                   `raison` après un signe de la sentinelle, `porte_franchie_le` (§ 5.5)
+                                   `raison` après un signe de la sentinelle, `porte_franchie_le` (§ 5.5), `connexions`
+                                   (compte → date de la connexion, I10 ; jamais de mot de passe)
                    chrome/         dossier de profil de Chrome (cookies, stockage, cache)
                    visites.jsonl   une ligne par visite
                    verrou          un seul processus à la fois sur une identité
@@ -176,6 +177,21 @@ class Identite:
 
     def porte_franchie_le(self) -> datetime | None:
         valeur = self.etat().get("porte_franchie_le")
+        return _date(valeur) if valeur else None
+
+    def noter_connexion(self, compte: str, quand: datetime | None = None) -> None:
+        """L'identité s'est connectée à `compte` (I10, D-104) : l'identifiant et la date, jamais le mot de passe. Le
+        cookie de connexion vit dans le profil Chrome ; cette note dit au scénario de lire l'espace sans se reconnecter,
+        et qu'un renvoi vers la connexion est un signe d'alerte."""
+        donnees = self.etat()
+        connexions = donnees.get("connexions") if isinstance(donnees.get("connexions"), dict) else {}
+        connexions[compte] = _aware(quand or self._horloge()).isoformat(timespec="seconds")
+        self._ecrire({**donnees, "connexions": connexions})
+
+    def connectee_a(self, compte: str) -> datetime | None:
+        """Date de la connexion notée à `compte`, ou None (jamais connectée, ou date illisible)."""
+        connexions = self.etat().get("connexions")
+        valeur = connexions.get(compte) if isinstance(connexions, dict) else None
         return _date(valeur) if valeur else None
 
     def fin_visite(self, pages: int, statut: str | None = None) -> None:

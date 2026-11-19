@@ -91,6 +91,12 @@ class Bannissement(_Strict):
     actif: bool = False
     pages_par_heure: int = Field(default=240, ge=1)  # bannit au-delà, requête en cours comprise
     pages_par_jour: int = Field(default=2000, ge=1)
+    # Comptes (palier 2, I10, D-104), avec la même option : l'Arena se souvient des comptes (appareils, bannissement)
+    # là où elle se souvient des visiteurs. Au plus `appareils_par_jour` appareils distincts connectés à un compte en
+    # 24 h : le suivant bannit le compte. La connexion est liée au visiteur et gardée par le navigateur
+    # `duree_connexion_s` (sinon, comme aux niveaux 05 à 07 : liée au jeton de session, perdue à la fermeture).
+    appareils_par_jour: int = Field(default=4, ge=1)
+    duree_connexion_s: int = Field(default=30 * 86_400, ge=60, le=400 * 86_400)
 
 
 class Profil(_Strict):

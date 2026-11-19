@@ -858,6 +858,80 @@ def noter_recolte_durable(dossier: Any) -> dict[str, Any]:
     }
 
 
+def _etape_compte(d: Driver, base: str, jeton: str, compte: str) -> tuple[bool, dict[str, Any]]:
+    """L'étape du compte d'une visite (I10, D-104), après une lecture réussie de la vitrine.
+
+    Identité déjà connectée à `compte` (`Identite.connectee_a`) : une seule page, l'espace privé ; un renvoi vers la
+    connexion est un signe d'alerte (`hors_motif`), jamais suivi d'une reconnexion. Sinon : la page de connexion, le
+    formulaire (fixture de test de `site/comptes.py`), puis l'espace où mène le formulaire. Chaque page passe par la
+    sentinelle : un refus qui dit `bannissement` (le compte, le visiteur ou l'empreinte est banni) bannit l'identité,
+    tout autre signe la met en alerte ; dans les deux cas rien n'est demandé après, aucun nouvel essai. Rend (réussie,
+    détails) ; les détails ne portent que l'identifiant du compte, jamais son mot de passe."""
+    from .engines.noezia.sentinelle import Alerte, Sentinelle, verdict_identite
+    from .site.comptes import COMPTES
+
+    etat_page = getattr(d, "etat_page", None)
+    if etat_page is None:
+        raise FonctionIndisponible(f"compte : le moteur « {d.name} » ne rend pas l'état de sa page (`etat_page`)")
+    identite = getattr(d, "identite_courante", None)
+    deja = identite.connectee_a(compte) if identite is not None else None
+    hote = (urlsplit(base).hostname or "").lower()
+    sentinelle = Sentinelle([hote])
+    details: dict[str, Any] = {
+        "identifiant": compte,
+        "tentee": True,
+        "connexion": None,
+        "espace_atteint": False,
+        "refus": None,
+        "signe": None,
+    }
+
+    def examiner(type_page: str, adresse: str, chemin: str) -> Alerte | None:
+        statut, finale, entetes = etat_page()
+        dans_le_motif = urlsplit(finale).path == chemin
+        return sentinelle.examiner(
+            type_page=type_page, adresse=adresse, statut=statut, adresse_finale=finale, dans_le_motif=dans_le_motif,
+            html=d.dom(), entetes=entetes,
+        )  # fmt: skip
+
+    def arreter(alerte: Alerte) -> tuple[bool, dict[str, Any]]:
+        details.update(refus=alerte.message(), signe=alerte.signe)
+        if identite is not None:
+            verdict = verdict_identite(alerte, premiere_page=False)
+            identite.marquer(verdict, f"{alerte.signe} : {alerte.detail} (compte {compte})")
+        return False, details
+
+    avant = getattr(d, "hotes_navigation", None)
+    if d.runtime == "navigateur":  # garde du cadre principal, comme pendant le parcours : le seul hôte de la visite
+        d.hotes_navigation = (hote,)  # type: ignore[attr-defined]
+    try:
+        if deja is None:
+            cible = url(base, "/lab/connexion", jeton)
+            d.navigate(cible)
+            alerte = examiner("connexion", cible, "/lab/connexion")
+            if alerte is not None:
+                return arreter(alerte)
+            d.fill("#champ-identifiant", compte)  # jamais le champ piège sl_site (invisible)
+            d.fill("#champ-mot-de-passe", COMPTES[compte])
+            d.click("#bouton-connexion")  # POST, puis 303 vers /lab/espace si accepté
+        else:
+            cible = url(base, "/lab/espace", jeton)
+            d.navigate(cible)
+        alerte = examiner("espace", cible, "/lab/espace")
+        if alerte is not None:
+            return arreter(alerte)
+        textes = d.texts("#espace-prive")
+        if not textes or compte not in textes[0]:
+            return arreter(Alerte("page_non_conforme", "espace privé sans le compte attendu", cible))
+    finally:
+        if d.runtime == "navigateur":
+            d.hotes_navigation = avant  # type: ignore[attr-defined]
+    if deja is None and identite is not None:
+        identite.noter_connexion(compte)
+    details.update(connexion="gardee" if deja is not None else "nouvelle", espace_atteint=True)
+    return True, details
+
+
 def visite(
     d: Driver,
     base: str,
@@ -866,6 +940,7 @@ def visite(
     pages: int = PAGES_PAR_VISITE,
     duree_porte_s: float | None = DUREE_PORTE_VISITE_S,
     dossier_recolte: Any = None,
+    compte: str | None = None,
 ) -> Issue:
     """Une visite de la vitrine par un visiteur qui peut revenir : la liste, puis des fiches, `pages` pages au plus.
 
@@ -881,7 +956,9 @@ def visite(
     durable, propre au bras ; chaque visite reprend la passe là où la précédente s'est arrêtée (sa première page passe
     la porte d'entrée, un navigateur relancé), puis, la liste et toutes les fiches lues, commence une passe
     incrémentale (D-70). La lecture humaine (D-94) reste active et prend sur le budget de la visite. La récolte cumulée
-    est notée à chaque visite (`recolte`, contre `vitrine.verite()`).
+    est notée à chaque visite (`recolte`, contre `vitrine.verite()`). `compte` (I10, D-104) : après une lecture réussie,
+    l'étape du compte (`_etape_compte` : connexion à la première visite de l'identité, l'espace privé ensuite) ; la
+    visite ne réussit que si les deux réussissent. Une lecture arrêtée ne tente pas la connexion.
 
     Pourquoi ce scénario et pas `shadowlab recolte lancer --identite` : `recolte lancer` vise le site en direct, sans
     jeton de passage, donc sans profil de l'Arena (une requête sans jeton reçoit le profil sans session) ; la course
@@ -932,19 +1009,30 @@ def visite(
         succes = bilan.statut in ("limitee", "terminee") and lues - echecs >= 1 and echecs == 0
     except RefusParcours as exc:  # robots.txt inaccessible, par exemple : la visite n'a rien lu
         details.update(statut="refusee", arret=None, pages_faites=0, pages_en_echec=0, pages_visite=0, refus=str(exc))
+    if compte is not None:
+        if succes:
+            succes, details["compte"] = _etape_compte(d, base, jeton, compte)
+        else:  # la visite s'est arrêtée : rien de plus n'est demandé
+            details["compte"] = {"identifiant": compte, "tentee": False}
     details.update(_visiteur_vu(jeton))
     details["identite"] = _identite_du_pilote(d)
     return Issue(succes, details)
 
 
 def avec_pages(
-    pages: int, *, duree_porte_s: float | None = DUREE_PORTE_VISITE_S, dossier_recolte: Any = None
+    pages: int,
+    *,
+    duree_porte_s: float | None = DUREE_PORTE_VISITE_S,
+    dossier_recolte: Any = None,
+    compte: str | None = None,
 ) -> Scenario:
     """Le scénario `visite` pour `pages` pages au plus (même nom et même description que celui du registre : c'est
     la même ligne `scenarios` dans la base), avec la durée de porte du profil et, pour la course, le dossier durable
-    de la récolte du bras."""
+    de la récolte du bras ; `compte` : le compte de test du bras (I10)."""
     modele = SCENARIOS["visite"]
-    executer = functools.partial(visite, pages=pages, duree_porte_s=duree_porte_s, dossier_recolte=dossier_recolte)
+    executer = functools.partial(
+        visite, pages=pages, duree_porte_s=duree_porte_s, dossier_recolte=dossier_recolte, compte=compte
+    )
     return Scenario(modele.name, modele.description, modele.attend_js, executer)
 
 

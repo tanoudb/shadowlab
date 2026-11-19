@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import correlation, passages
 from .. import database as db
 from ..arena import bannissements, defis, visiteurs
+from ..arena import comptes as comptes_arena
 from ..arena import secret as secrets_arena
 from ..arena.profils import BASELINE
 from ..arena.profils import charger as charger_profils
@@ -374,6 +375,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         profil = charger_profils().de(sceau.profil) if sceau else None
         porte = bool(profil and profil.connexion.actif)
         hp_actif = gardien.honeypots_actifs(sceau)
+        # Mémoire des comptes (I10, D-104) : seulement là où l'Arena bannit (`endurance`) ; ailleurs, rien ne change.
+        memoire = bool(profil and profil.bannissement.actif and jeton)
+        cookie_visiteur = request.cookies.get(visiteurs.COOKIE)
 
         def journal(decision: str, motifs: list[dict]) -> None:
             if jeton:
@@ -383,6 +387,13 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         def refus(message: str, motifs: list[dict]) -> Response:
             journal("refuse", motifs)
             return HTMLResponse(pages.connexion(jeton, honeypot=hp_actif, erreur=message), status_code=403)
+
+        # 0) Un visiteur banni ne se connecte pas : le bannissement se lit en tête, comme pour une page (I10)
+        if memoire:
+            with base() as cx:
+                verdict = surveillance.juger(cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement)
+                if verdict:
+                    return gardien.refus_banni(request, cx, jeton, "/lab/connexion", verdict)
 
         # 1) Champ piège rempli → robot aveugle (même sans porte active, un humain ne le remplit pas)
         if piege:
@@ -418,10 +429,40 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
                 pages.connexion(jeton, honeypot=hp_actif, erreur="Identifiants incorrects."), status_code=401
             )
 
+        lie = gardien.empreinte_liee(sceau) if sceau else ""
+
+        # 4 bis) Mémoire des comptes (I10) : un compte banni est refusé (refus de D-92), puis la connexion est notée
+        # (appareil, règle « nouvel appareil ») et le cookie est lié au visiteur, posé avec une durée.
+        if memoire:
+            with base() as cx:
+                monde, visiteur = surveillance.visiteur_de(cx, secret, cookie_visiteur, jeton)
+                if visiteur is None:  # un navigateur qui n'a encore rien demandé d'autre que ce formulaire
+                    db.enregistrer_decision(
+                        cx, jeton, "connexion", "refuse", "/lab/connexion", [{"code": "visiteur_inconnu"}]
+                    )
+                    return HTMLResponse(pages.connexion(jeton, honeypot=hp_actif, erreur="Accès refusé."), 403)
+                motif = comptes_arena.motif_bannissement(cx, monde, identifiant)
+                if motif is None:
+                    motif = comptes_arena.connecter(cx, monde, visiteur, identifiant, profil.bannissement).banni
+                if motif:
+                    verdict = bannissements.Verdict(monde, visiteur, motif, "compte", identifiant)
+                    return gardien.refus_banni(request, cx, jeton, "/lab/connexion", verdict)
+            journal("valide", [{"compte": identifiant}])
+            reponse = RedirectResponse("/lab/espace", status_code=303)
+            duree = profil.bannissement.duree_connexion_s
+            reponse.set_cookie(
+                gardien.COOKIE_CONNEXION,
+                comptes_arena.creer_cookie(secret, monde, visiteur, identifiant, lie, duree_s=duree),
+                max_age=duree,
+                httponly=True,
+                samesite="lax",
+                path="/lab",
+            )
+            return reponse
+
         # 5) Succès : cookie de session authentifiée, lié à l'empreinte si le niveau l'exige
         journal("valide", [{"compte": identifiant}])
         reponse = RedirectResponse("/lab/espace", status_code=303)
-        lie = gardien.empreinte_liee(sceau) if sceau else ""
         reponse.set_cookie(
             gardien.COOKIE_CONNEXION,
             defis.creer_cookie(secret, "connexion", jeton, lie),
@@ -436,6 +477,18 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         sceau, jeton = request.state.sceau, jeton_de(request)
         lie = gardien.empreinte_liee(sceau) if sceau else ""
         cookie = request.cookies.get(gardien.COOKIE_CONNEXION)
+        profil = charger_profils().de(sceau.profil) if sceau else None
+        if profil and profil.bannissement.actif and jeton:  # mémoire des comptes (I10) : connexion liée au visiteur
+            with base() as cx:
+                monde, visiteur = surveillance.visiteur_de(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton)
+                compte = comptes_arena.lire_cookie(secret, monde, visiteur, cookie, lie) if visiteur else None
+                if compte is None:
+                    return RedirectResponse("/lab/connexion", status_code=303)
+                motif = comptes_arena.motif_bannissement(cx, monde, compte)
+                if motif:
+                    verdict = bannissements.Verdict(monde, visiteur, motif, "compte", compte)
+                    return gardien.refus_banni(request, cx, jeton, "/lab/espace", verdict)
+            return HTMLResponse(pages.espace(jeton, compte))
         if not defis.cookie_valide(secret, "connexion", cookie, jeton, lie):
             return RedirectResponse("/lab/connexion", status_code=303)
         identifiant = "?"
@@ -454,7 +507,16 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         return HTMLResponse(pages.espace(jeton, identifiant))
 
     @app.get("/lab/deconnexion", tags=["site"])
-    def deconnexion() -> Response:
+    def deconnexion(request: Request) -> Response:
+        sceau, jeton = request.state.sceau, jeton_de(request)
+        profil = charger_profils().de(sceau.profil) if sceau else None
+        if profil and profil.bannissement.actif and jeton:  # la connexion ne vaut plus (I10)
+            with base() as cx:
+                monde, visiteur = surveillance.visiteur_de(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton)
+                cookie, lie = request.cookies.get(gardien.COOKIE_CONNEXION), gardien.empreinte_liee(sceau)
+                compte = comptes_arena.lire_cookie(secret, monde, visiteur, cookie, lie) if visiteur else None
+                if compte:
+                    comptes_arena.deconnecter(cx, monde, visiteur, compte)
         reponse = RedirectResponse("/lab/connexion", status_code=303)
         reponse.delete_cookie(gardien.COOKIE_CONNEXION, path="/lab")
         return reponse

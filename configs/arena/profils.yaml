@@ -293,7 +293,7 @@
 # bannissement par visiteur et par empreinte, compteurs de pages par visiteur. À mesurer dans un monde `campagne`.
 endurance:
   nom: Endurance
-  description: "Niveau 06 pour un visiteur qui revient : une porte par visiteur (24 h), bannissement, aucun CAPTCHA"
+  description: "Niveau 06 pour un visiteur qui revient : une porte par visiteur (24 h), bannissement (visiteur, empreinte, compte), connexion gardée 30 jours, aucun CAPTCHA"
   limitation: {debit: 2, rafale: 4}
   waf: {mode: blocage, paranoia: 3, seuil: 3}
   defi_js: {actif: true, difficulte: 18, lier_tls: true, par_visiteur: true}
@@ -308,4 +308,4 @@ endurance:
   recaptcha: {actif: false}
   connexion: {actif: true, tentatives_max: 5}
   duree_cookie_s: 86400
-  bannissement: {actif: true, pages_par_heure: 240, pages_par_jour: 2000}
+  bannissement: {actif: true, pages_par_heure: 240, pages_par_jour: 2000, appareils_par_jour: 4, duree_connexion_s: 2592000}

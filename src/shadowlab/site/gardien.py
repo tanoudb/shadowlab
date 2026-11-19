@@ -26,6 +26,10 @@ COOKIE_CAPTCHA = "sl_captcha"
 COOKIE_TURNSTILE = "sl_turnstile"
 COOKIE_RECAPTCHA = "sl_recaptcha"
 COOKIE_CONNEXION = "sl_connexion"  # session authentifiée (niveau connexion)
+# Le refus d'un banni (visiteur, empreinte, compte) dit son motif dans cet en-tête, pour une navigation comme pour une
+# ressource : la page de refus, elle, ne change pas d'un octet. Pas de préfixe `X-ShadowLab-` : le frontal retire ces
+# en-têtes internes avant de répondre (D-104).
+ENTETE_REFUS = "X-Arena-Refus"
 # Échanges techniques du laboratoire et des protections : ils ne sont pas des pages à protéger.
 HORS_PROTECTION = (
     "/lab/static",
@@ -250,16 +254,15 @@ def portee_defi(profil: profils.Profil, jeton: str, monde: str, visiteur: str | 
 
 
 def refus_banni(request: Request, cx: sqlite3.Connection, jeton: str, chemin: str, verdict: bannissements.Verdict):
-    """403 d'un visiteur banni, avec sa décision (`bannissement`, `bloque`) pour que le passage en garde la cause."""
-    db.enregistrer_decision(
-        cx,
-        jeton,
-        "bannissement",
-        "bloque",
-        chemin,
-        [{"detecteur": "bannissement", "motif": verdict.motif, "par": verdict.par}],
-    )
-    return _refus(request, pages.page_blocage(), "bannissement")
+    """403 d'un banni (visiteur, empreinte ou compte), avec sa décision (`bannissement`, `bloque`) pour que le passage
+    en garde la cause, et l'en-tête `ENTETE_REFUS` qui dit le motif au navigateur (la page reste celle de toujours)."""
+    motif = {"detecteur": "bannissement", "motif": verdict.motif, "par": verdict.par}
+    if verdict.compte is not None:
+        motif["compte"] = verdict.compte
+    db.enregistrer_decision(cx, jeton, "bannissement", "bloque", chemin, [motif])
+    reponse = _refus(request, pages.page_blocage(), "bannissement")
+    reponse.headers[ENTETE_REFUS] = "bannissement"
+    return reponse
 
 
 def _est_une_page(chemin: str) -> bool:

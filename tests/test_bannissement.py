@@ -222,11 +222,12 @@ def test_les_niveaux_existants_se_chargent_comme_avant():
 
 
 def test_migration_11_ajoute_deux_index_et_laisse_la_10_telle_quelle(tmp_path):
-    assert len(db.MIGRATIONS) == 11
+    assert len(db.MIGRATIONS) >= 11  # 12 depuis I10 (comptes, D-104) : la 11 et la 10 ne changent pas
+    assert "CREATE INDEX bannissements_visiteur" in db.MIGRATIONS[10]
     assert "CREATE TABLE bannissements" in db.MIGRATIONS[9]
     assert "INDEX" not in db.MIGRATIONS[9].split("CREATE TABLE bannissements")[1]
     cx = db.ouvrir(tmp_path / "neuve.sqlite3")
-    assert cx.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert cx.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION >= 11
     index = {r["name"] for r in cx.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     assert {"bannissements_visiteur", "bannissements_empreinte"} <= index
 
@@ -242,7 +243,7 @@ def test_migration_11_sur_base_au_schema_10(tmp_path):
     brut.execute("INSERT INTO mondes (nom, cree_le) VALUES ('m', '2026-11-16T00:00:00.000+00:00')")
     brut.close()
     cx = db.ouvrir(chemin)
-    assert cx.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert cx.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION >= 11
     assert cx.execute("SELECT nom FROM mondes").fetchone()["nom"] == "m"
 
 

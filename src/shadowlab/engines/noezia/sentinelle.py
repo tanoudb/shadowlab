@@ -3,7 +3,8 @@
 Signes retenus (§ 5 du document de conception) :
 1. statut 401, 403, 407, 429 ou 503 ; un 403 sur une ressource de la page (photo, appel de données) du même hôte
    compte aussi (`examiner_ressources`), sauf si son corps est un défi (`detecter_defi_ressource`) : c'est alors le
-   signe 2 ;
+   signe 2 ; un 403 de page qui porte `X-Arena-Refus: bannissement` dit un bannissement (visiteur, empreinte ou compte,
+   D-104) ;
 2. page de défi : `body[data-arena]` (Arena) ; en-tête `cf-mitigated: challenge`, formulaire de défi ou cadre de
    Cloudflare ; cadre reCAPTCHA, hCaptcha ou Turnstile (`detecter_defi`) ;
 3. adresse finale hors des hôtes de la recette, ou hors du motif `url` du type de page attendu ;
@@ -85,6 +86,17 @@ _MOTIFS_DEFI_ARENA = {"defi-js": "arena", "turnstile": "turnstile", "recaptcha":
 MOTIF_BANNISSEMENT = "bannissement"
 # Le motif d'un refus dont le corps n'est jamais arrivé (attendu un temps borné par le moteur, D-103) : rien n'est su.
 MOTIF_NON_LU = "corps-non-lu"
+# L'en-tête qui dit le motif d'une PAGE refusée (`gardien.ENTETE_REFUS`, D-104) : la page de refus, elle, est la même
+# pour tous les refus. Lu en minuscules (le moteur rend les en-têtes ainsi).
+ENTETE_REFUS = "x-arena-refus"
+
+
+def _motif_de_page(statut: int | None, entetes: Mapping[str, str] | None) -> str | None:
+    """`MOTIF_BANNISSEMENT` pour un 403 qui porte `X-Arena-Refus: bannissement` (D-104), sinon None."""
+    if statut != 403:
+        return None
+    valeur = next((v for k, v in (entetes or {}).items() if k.lower() == ENTETE_REFUS), "")
+    return MOTIF_BANNISSEMENT if valeur.strip().lower() == MOTIF_BANNISSEMENT else None
 
 
 def motif_de_refus(corps: str) -> str | None:
@@ -136,9 +148,10 @@ class Alerte:
 
 def verdict_identite(alerte: Alerte, premiere_page: bool) -> str:
     """Ce que l'alerte veut dire pour l'identité (§ 5.5) : `banni` pour un refus franc (403) dès la première page de la
-    passe, ou à toute page quand le site dit lui-même que le visiteur est banni (motif `bannissement` lu dans le corps
-    du refus d'une ressource, D-103) ; `alerte` pour tout le reste (429 et autres statuts, défi, retour à la connexion,
-    hors site, porte revenue trop tôt…). Ne fait que classer : aucune requête, aucune action."""
+    passe, ou à toute page quand le site dit lui-même que le visiteur (ou son compte) est banni : motif `bannissement`
+    lu dans le corps du refus d'une ressource (D-103) ou dans l'en-tête `X-Arena-Refus` d'une page refusée (D-104) ;
+    `alerte` pour tout le reste (429 et autres statuts, défi, retour à la connexion, hors site, porte revenue trop
+    tôt…). Ne fait que classer : aucune requête, aucune action."""
     if alerte.signe == "statut" and alerte.statut == 403 and (premiere_page or alerte.motif == MOTIF_BANNISSEMENT):
         return "banni"
     return "alerte"
@@ -161,9 +174,12 @@ class Sentinelle:
         html: str | None = None,
         entetes: Mapping[str, str] | None = None,
     ) -> Alerte | None:
-        """Signes 1, 3 et 2 (si le contenu est donné), avant de lire le contenu."""
+        """Signes 1, 3 et 2 (si le contenu est donné), avant de lire le contenu. Un 403 dont l'en-tête dit
+        `bannissement` (D-104) porte ce motif : un bannissement à toute page de la passe (`verdict_identite`)."""
         if statut in STATUTS_ALERTE:
-            return Alerte("statut", f"statut {statut}", adresse, statut)
+            motif = _motif_de_page(statut, entetes)
+            detail = f"statut {statut}" + (" (motif bannissement)" if motif else "")
+            return Alerte("statut", detail, adresse, statut, motif=motif)
         hote = (urlsplit(adresse_finale).hostname or "").lower()
         if hote not in self._hotes:
             return Alerte("hors_site", f"redirection vers un autre hôte : {hote or adresse_finale}", adresse, statut)
