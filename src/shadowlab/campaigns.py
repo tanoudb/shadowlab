@@ -41,6 +41,7 @@ from . import __version__, passages
 from . import database as db
 from . import espacement as espacement_mod
 from .arena import bannissements, pile, visiteurs
+from .arena import comptes as comptes_arena
 from .arena import profils as module_profils
 from .arena.profils import BASELINE, normaliser
 from .config import Reglages
@@ -53,6 +54,7 @@ from .issues import CAUSE_PANNE_ARENA
 from .mesures import PIDS_EXCLUS, Echantillonneur
 from .perimetre import verifier_url
 from .scenarios import PAGES_PAR_VISITE, SCENARIOS, avec_pages
+from .site.comptes import COMPTES
 
 journal = logging.getLogger("shadowlab.campagne")
 
@@ -88,6 +90,30 @@ class MoteurConfig(BaseModel):
     # (`<sorties>/campagnes/<n°>/recolte/<libellé>-<protection>/`) ; chaque visite reprend là où la précédente s'est
     # arrêtée, puis commence une passe incrémentale. Faux : chaque visite repart de zéro (la soirée).
     recolte_incrementale: bool = False
+    # Compte de test du bras (I10, D-104) : une fixture de `site/comptes.py`. Le scénario `visite` s'y connecte à la
+    # première visite de l'identité, puis lit l'espace privé à chaque visite ; `bannir_avant_visite` bannit alors le
+    # COMPTE du bras dans son monde, pas son visiteur.
+    compte: str | None = None
+    # Témoin des comptes (I10) : à partir de la visite `bannir_avant_visite`, les visites sont faites par cette autre
+    # identité (un autre navigateur : autre profil Chrome, donc autre visiteur), avec le même compte.
+    identite_apres_bannissement: str | None = None
+
+    @field_validator("compte")
+    @classmethod
+    def compte_connu(cls, compte: str | None) -> str | None:
+        if compte is not None and compte not in COMPTES:
+            raise ValueError(f"compte inconnu : {compte} (comptes de test : {', '.join(sorted(COMPTES))})")
+        return compte
+
+    @field_validator("identite_apres_bannissement")
+    @classmethod
+    def nom_d_identite(cls, nom: str | None) -> str | None:
+        if nom is not None:
+            try:
+                module_identite.verifier_nom(nom)
+            except ValueError as erreur:
+                raise ValueError(f"identite_apres_bannissement : {erreur}") from None
+        return nom
 
     @property
     def nom_affiche(self) -> str:
@@ -199,7 +225,18 @@ class Experience(BaseModel):
             raise ValueError(
                 "recolte_incrementale : c'est le scénario `visite` qui récolte, `scenarios` doit être [visite]"
             )
+        if any(m.compte for m in self.engines) and self.scenarios != ["visite"]:
+            raise ValueError("compte : c'est le scénario `visite` qui se connecte, `scenarios` doit être [visite]")
         for moteur in self.engines:
+            if moteur.identite_apres_bannissement is not None:
+                champ = f"identite_apres_bannissement ({moteur.nom_affiche})"
+                if moteur.bannir_avant_visite is None or moteur.compte is None:
+                    raise ValueError(
+                        f"{champ} : il faut `compte` et `bannir_avant_visite` (le compte banni, puis la visite "
+                        "suivante par une autre identité avec le même compte)"
+                    )
+                if moteur.identite_apres_bannissement == moteur.options.get("identite"):
+                    raise ValueError(f"{champ} : il faut une autre identité que `identite`")
             if moteur.bannir_avant_visite is None:
                 continue
             if "identite" not in moteur.options:
@@ -658,12 +695,23 @@ def _moteur_indisponible(cx, experiment_id, experience, moteur_cfg, protection, 
             )  # fmt: skip
 
 
-def _bannir_avant_visite(cx, monde: str, label: str, visite: int) -> bool:
-    """Bannit le visiteur du bras dans son monde, avant sa visite `visite` (témoin de la sentinelle d'identité).
+def _bannir_avant_visite(cx, monde: str, label: str, visite: int, compte: str | None = None) -> bool:
+    """Bannit le visiteur du bras dans son monde, avant sa visite `visite` (témoin de la sentinelle d'identité) ; ou,
+    pour un bras qui a un `compte` (témoin des comptes, I10), le compte dans ce monde.
 
-    Même code que `shadowlab arena bannir`. Faux (et rien d'écrit) si aucun visiteur n'est connu dans le monde : la
-    campagne s'arrête alors sur ce bras plutôt que de continuer sans le témoin.
+    Même code que `shadowlab arena bannir` (`--visiteur` ou `--compte`). Faux (et rien d'écrit) si aucun visiteur
+    n'est connu dans le monde, ou si le compte ne s'y est jamais connecté : la campagne s'arrête alors sur ce bras
+    plutôt que de continuer sans le témoin. Un compte déjà banni (reprise) n'arrête rien.
     """
+    if compte is not None:
+        try:
+            ecrit = comptes_arena.bannir_compte_connu(cx, monde, compte)
+        except bannissements.BannissementRefuse as erreur:
+            journal.error("%s : %s, impossible de bannir le compte avant la visite %d", label, erreur, visite)
+            return False
+        etat = "banni" if ecrit else "déjà banni"
+        journal.info("%s : compte %s %s dans le monde %s avant la visite %d", label, compte, etat, monde, visite)
+        return True
     visiteur = bannissements.dernier_visiteur(cx, monde)
     if visiteur is None:
         journal.error(
@@ -690,7 +738,16 @@ def _reglages_visite(
     if moteur_cfg.recolte_incrementale:
         nom = re.sub(r"[^a-z0-9_-]+", "-", f"{moteur_cfg.nom_affiche}-{protection}".lower()).strip("-")
         dossier = dossier_campagne(reglages, experiment_id) / "recolte" / nom
-    return {"duree_porte_s": duree, "dossier_recolte": dossier}
+    return {"duree_porte_s": duree, "dossier_recolte": dossier, "compte": moteur_cfg.compte}
+
+
+def _options_de_la_visite(moteur_cfg: MoteurConfig, repetition: int) -> dict[str, Any]:
+    """Les options du pilote pour la visite `repetition` : celles du bras, sauf pour le témoin des comptes (I10) qui,
+    à partir de la visite de son bannissement, prend l'autre identité (`identite_apres_bannissement`)."""
+    autre = moteur_cfg.identite_apres_bannissement
+    if autre and moteur_cfg.bannir_avant_visite and repetition >= moteur_cfg.bannir_avant_visite:
+        return {**moteur_cfg.options, "identite": autre}
+    return moteur_cfg.options
 
 
 def _noteur(reglages: Reglages, experiment_id: int, label: str, protection: str) -> Callable[[dict[str, Any]], None]:
@@ -817,9 +874,14 @@ def executer_unite(
         # aussi : le moteur refuse de s'ouvrir sur une identité bannie ou en alerte, et ce refus écrivait toutes les
         # répétitions restantes en erreur (« démarrage impossible »). En alerte, on attend donc la fin de l'attente (le
         # premier créneau est pris avant l'ouverture) ; bannie, le bras est fini sans rien écrire dans `runs`.
-        nom_identite = moteur_cfg.options.get("identite") if cadence is not None else None
+        a_faire = (
+            _premiere_a_faire(experience, moteur_cfg, protection, faits)
+            if cadence is not None and moteur_cfg.options.get("identite")
+            else None
+        )
+        options_pilote = _options_de_la_visite(moteur_cfg, a_faire or 1)  # reprise après le bannissement : l'autre
+        nom_identite = options_pilote.get("identite") if cadence is not None else None
         premier = None
-        a_faire = _premiere_a_faire(experience, moteur_cfg, protection, faits) if nom_identite else None
         if nom_identite and a_faire is not None:
             etat = _identite_avant_creneau(nom_identite, cadence, noter, horloge, experience, moteur_cfg, a_faire)
             if etat == "bannie":
@@ -830,7 +892,7 @@ def executer_unite(
                     return "interrompu"
                 if premier.echeance:
                     return _fin_de_course(noter, cadence, horloge, experience, moteur_cfg, a_faire)
-        pilote = classe(reglages.hotes_autorises, moteur_cfg.options)
+        pilote = classe(reglages.hotes_autorises, options_pilote)
         try:
             pilote.open()
         except Exception as exc:  # noqa: BLE001 — un moteur qui ne démarre pas ne doit pas arrêter la campagne
@@ -881,10 +943,23 @@ def executer_unite(
                     monde = visiteurs.nom_monde(
                         experience.monde, experiment_id, moteur_cfg.nom_affiche, protection, nom_scenario, repetition
                     )
-                    if moteur_cfg.bannir_avant_visite == repetition and not _bannir_avant_visite(
-                        cx, monde, moteur_cfg.nom_affiche, repetition
-                    ):
-                        return "interrompu"
+                    if moteur_cfg.bannir_avant_visite == repetition:
+                        if not _bannir_avant_visite(cx, monde, label, repetition, moteur_cfg.compte):
+                            return "interrompu"
+                        options = _options_de_la_visite(moteur_cfg, repetition)
+                        if options != options_pilote:  # témoin des comptes : la suite par l'autre identité (I10)
+                            pilote.close()
+                            pilote, options_pilote = classe(reglages.hotes_autorises, options), options
+                            try:
+                                pilote.open()
+                            except Exception as exc:  # noqa: BLE001 — même règle qu'au premier démarrage
+                                journal.error("%s : autre identité, démarrage impossible : %s", label, exc)
+                                return "interrompu"
+                            config = {**pilote.configuration(), "label": label}
+                            versions = pilote.versions()
+                            engine_id = db.engine_id(cx, moteur_cfg.name, db.j(versions), pilote.runtime, config)
+                            nom_identite = options.get("identite") if cadence is not None else None
+                            journal.info("%s : visites suivantes par l'identité %s", label, nom_identite)
                     details = _passage(
                         cx,
                         reglages,

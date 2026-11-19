@@ -440,6 +440,13 @@ def test_sans_compte_la_visite_reste_celle_d_avant(visites):
 
 # ═══ 4. La campagne ══════════════════════════════════════════════════════════════════════════════════════════
 
+
+@pytest.fixture
+def infrastructure_saine(monkeypatch):
+    """Ni Arena ni site dans les tests de campagne : la sonde d'avant visite (I9) les dit joignables."""
+    monkeypatch.setattr(campaigns, "_panne_infrastructure", lambda reglages, protection: None)
+
+
 BRAS_COMPTES = """
     - name: noezia
       label: sujet-compte
@@ -557,7 +564,7 @@ def _connecter_le_compte(compte):
 
 
 def test_avant_la_visite_voulue_le_compte_est_banni_puis_le_pilote_change_d_identite(
-    tmp_path, reglages, monkeypatch, racine
+    tmp_path, reglages, monkeypatch, racine, infrastructure_saine
 ):
     experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra=ESPACEMENT, engines=BRAS_COMPTES)
     pilote = _pilote_qui_note_ses_options()
@@ -595,7 +602,9 @@ def test_avant_la_visite_voulue_le_compte_est_banni_puis_le_pilote_change_d_iden
     ]  # fmt: skip
 
 
-def test_un_compte_jamais_connecte_arrete_le_bras_sans_changer_d_identite(tmp_path, reglages, monkeypatch, racine):
+def test_un_compte_jamais_connecte_arrete_le_bras_sans_changer_d_identite(
+    tmp_path, reglages, monkeypatch, racine, infrastructure_saine
+):
     experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra=ESPACEMENT, engines=BRAS_COMPTES)
     pilote = _pilote_qui_note_ses_options()
     monkeypatch.setattr(campaigns, "registre", lambda: {"noezia": pilote})
@@ -613,7 +622,7 @@ def test_un_compte_jamais_connecte_arrete_le_bras_sans_changer_d_identite(tmp_pa
 
 
 def test_a_la_reprise_apres_le_bannissement_le_pilote_s_ouvre_sur_l_autre_identite(
-    tmp_path, reglages, monkeypatch, racine
+    tmp_path, reglages, monkeypatch, racine, infrastructure_saine
 ):
     experience, cx, experiment_id = preparer(tmp_path, reglages, monkeypatch, extra=ESPACEMENT, engines=BRAS_COMPTES)
     pilote = _pilote_qui_note_ses_options()

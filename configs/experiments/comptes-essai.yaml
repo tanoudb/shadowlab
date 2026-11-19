@@ -1,0 +1,54 @@
+# Palier 2, I10 (D-104) : essai des comptes au profil `endurance`, deux bras, chacun dans son monde et avec son compte.
+#
+# Sujet connecté (`sujet-compte`, compte `demo`) : 4 visites espacées de 2 minutes ; chaque visite lit 6 pages de la
+# vitrine, puis l'étape du compte : la connexion (page, formulaire, espace) à la 1re visite seulement, l'espace privé
+# sans se reconnecter aux suivantes (la connexion est gardée 30 jours par l'Arena, dans le profil Chrome de l'identité).
+# Témoin des comptes (`temoin-compte`, compte `analyste`) : visites 1 et 2 par l'identité A (connexion, puis espace) ;
+# avant la 3e, son COMPTE est banni à la main (`bannir_avant_visite`, le code de `shadowlab arena bannir --compte`) ; la
+# 3e visite est faite par l'identité B (`identite_apres_bannissement` : autre profil Chrome, autre visiteur) avec le même
+# compte : la vitrine passe, la connexion doit être refusée (403, `X-Arena-Refus: bannissement`), B notée `banni`, rien
+# demandé après ; la 4e visite n'est pas lancée (B bannie : ligne `bannie` du relevé de cadence).
+#
+# Ce que l'essai montre : le sujet reste connecté d'un lancement de Chrome à l'autre (un seul appareil, un seul
+# visiteur, une seule empreinte E), le refus du compte banni depuis un autre navigateur, la sentinelle qui s'arrête.
+# Il ne dit rien de la durée (4 visites ne valent pas une soirée), ni d'une autre empreinte (B tourne sur la même
+# machine que A : même empreinte E ; l'autre empreinte est prouvée par `tests/test_comptes.py`).
+# Les identités de l'essai ont leurs propres noms (B finit bannie) : changer les suffixes `-1` pour recommencer.
+#
+# Préalables :
+#   1. Arena lancée (`uv run shadowlab arena demarrer`), puis, SANS SHADOWLAB_PROFILS_EXTRA :
+#        uv run shadowlab arena appliquer
+#   2. Rien d'autre de lourd sur le Mac pendant la campagne.
+#
+# Commande (des fenêtres de Chrome s'ouvrent) :
+#   uv run shadowlab campagne configs/experiments/comptes-essai.yaml
+# Durée estimée : environ 15 minutes (4 visites de 1 à 2 minutes, 3 écarts de 2 minutes).
+# Débit : 6 pages lues par visite, environ 12 pages comptées avec la connexion, bien sous 240 par heure.
+experiment:
+  name: comptes_essai
+  description: >-
+    Essai des comptes (I10) : un sujet connecté qui revient 4 fois, un témoin dont le compte banni est refusé à une
+    autre identité.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet-compte
+      visites: 4
+      compte: demo
+      options: {headless: false, channel: chrome, identite_native: true, identite: comptes-sujet-1}
+    - name: noezia
+      label: temoin-compte
+      visites: 4
+      compte: analyste
+      bannir_avant_visite: 3
+      identite_apres_bannissement: comptes-temoin-b-1
+      options: {headless: false, channel: chrome, identite_native: true, identite: comptes-temoin-a-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 4
+  pages_par_visite: 6
+  espacement: {mode: fixe, minutes: 2}
+  concurrency: 2
+  monde: serie
+  seed: 20261119
+  output: [json, html]
