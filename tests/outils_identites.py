@@ -142,3 +142,8 @@ def travailleur(chemin_etat: str, passe: int, nom: str, journal: str, pause_s: f
             faites += 1
     etat.fermer()
     verrou.close()
+
+
+def fin_fixe(fin: str) -> str:
+    """Tâche d'une identité pour `gestionnaire.superviser` dans des processus neufs : rend la fin donnée."""
+    return fin

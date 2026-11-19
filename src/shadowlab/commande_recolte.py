@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
+import functools
 import os
+import random
 import shlex
 import sys
 from collections.abc import Iterator
@@ -21,11 +24,14 @@ from urllib.parse import urlsplit
 from . import campaigns, notation
 from .config import Reglages
 from .engines.curl_cffi_engine import DriverCurlCffi
+from .engines.noezia import gestionnaire
 from .engines.noezia.etat import Etat
-from .engines.noezia.identite import IdentiteRefusee
+from .engines.noezia.identite import IdentiteRefusee, lire_etat
 from .engines.noezia.identite import verifier_nom as verifier_nom_identite
+from .engines.noezia.lecture import LectureHumaine
 from .engines.noezia.navigateur import MoteurNavigateur
 from .engines.noezia.parcours import (
+    Bilan,
     Moteur,
     MoteurDriver,
     Options,
@@ -43,6 +49,10 @@ from .site import rallye, vitrine
 SEUIL = 0.99  # « Récolte » du § 1 du plan : pages, enregistrements et champs, chacun ≥ 99 %
 MOTEURS_DISPONIBLES = ("http", "navigateur")
 _LOCAUX = {"127.0.0.1", "localhost", "::1"}
+# Récolte partagée entre identités (`--identites`, étape 4.2).
+EN_FILS = False  # tests : les identités dans des fils au lieu de processus neufs
+ATTENTE_FILE_S = gestionnaire.ATTENTE_FILE_S  # rien à prendre : la file est relue après
+LECTURE_PARTAGEE = LectureHumaine()  # chaque visite lit comme le scénario `visite` (durées dispersées, retours)
 
 
 def _err(message: str) -> None:
@@ -194,6 +204,9 @@ def _lancer(args: argparse.Namespace, reglages: Reglages) -> int:
     recette, texte = _lire_recette(chemin)
     if args.pages_max is not None and args.pages_max < 1:
         raise RefusParcours("--pages-max : au moins 1")
+    if args.identites is not None:
+        return _lancer_partage(args, reglages, chemin, recette, texte)
+    _sans_identites(args)
     nom_moteur = _moteur_disponible(args.moteur or recette.moteur)
     options = Options(
         tranche=_tranche(args.tranche),
@@ -212,6 +225,200 @@ def _lancer(args: argparse.Namespace, reglages: Reglages) -> int:
         return parcours.lancer().code
 
 
+def _sans_identites(args: argparse.Namespace) -> None:
+    """Les réglages du rythme d'une identité ne vont qu'avec `--identites` : sans, un refus (rien d'ignoré)."""
+    for option, valeur in (("--pages-visite", args.pages_visite), ("--ecart", args.ecart), ("--plage", args.plage)):
+        if valeur is not None:
+            raise RefusParcours(f"{option} ne va qu'avec `--identites` (récolte partagée entre identités)")
+
+
+def _noms_identites(valeur: str) -> list[str]:
+    return [nom.strip() for nom in valeur.split(",") if nom.strip()]
+
+
+def _rythme(args: argparse.Namespace) -> gestionnaire.Rythme:
+    """Le rythme des identités : l'ordonnanceur de D-90 par défaut ; `--pages-visite`, `--ecart` (minutes) et `--plage`
+    (heures « 8-23 », « 0-24 » : à toute heure) le fixent pour un essai. Les plafonds par heure et par jour restent."""
+    if args.pages_visite is not None and args.pages_visite < 1:
+        raise RefusParcours("--pages-visite : au moins 1")
+    if args.ecart is not None and args.ecart < 0:
+        raise RefusParcours("--ecart : un nombre de minutes, positif")
+    plage = None
+    if args.plage is not None:
+        debut, tiret, fin = args.plage.partition("-")
+        try:
+            plage = (int(debut), int(fin))
+        except ValueError:
+            plage = None
+        if not tiret or plage is None or not 0 <= plage[0] < plage[1] <= 24:
+            raise RefusParcours(f"--plage attend deux heures « A-B » (0 ≤ A < B ≤ 24), reçu « {args.plage} »")
+    return gestionnaire.Rythme(pages=args.pages_visite, ecart_min=args.ecart, plage=plage)
+
+
+def _refus_partage(args: argparse.Namespace, nom_moteur: str) -> None:
+    if args.identite is not None:
+        raise RefusParcours("--identite (une seule identité) et --identites (récolte partagée) ne vont pas ensemble")
+    if nom_moteur != "navigateur":
+        raise RefusParcours(
+            "--identites ne va qu'avec le moteur navigateur (`--moteur navigateur`) : chaque identité est un profil "
+            "Chrome à elle"
+        )
+    if args.pages_max is not None:
+        raise RefusParcours(
+            "--pages-max ne va pas avec --identites : `--pages-visite N` borne une visite, `bornes.pages_max` de la "
+            "recette borne toute la récolte"
+        )
+
+
+def _lancer_partage(args: argparse.Namespace, reglages: Reglages, chemin: Path, recette: Recette, texte: str) -> int:
+    """`recolte lancer <recette> --moteur navigateur --identites a,b,c` : une passe neuve, partagée par les identités,
+    chacune dans son processus, à son rythme, jusqu'à la fin de la récolte. Tous les refus avant toute requête."""
+    _refus_partage(args, args.moteur or recette.moteur)
+    rythme = _rythme(args)
+    identites, _ = gestionnaire.controler_identites(_noms_identites(args.identites), recette)
+    options = Options(
+        tranche=_tranche(args.tranche),
+        sans=tuple(t.strip() for t in args.sans.split(",") if t.strip()),
+        tout_refaire=args.tout_refaire,
+        ignorer_robots=args.ignorer_robots,
+        lecture=LECTURE_PARTAGEE,
+    )
+    dossier = _dossier(args, reglages, recette.nom)
+    modele = Parcours(
+        recette,
+        texte,
+        str(chemin.resolve()),
+        construire_moteur("navigateur", recette, reglages),  # sa seule description : rien n'est lancé
+        dossier,
+        options,
+        options_reprise=_options_reprise(args),
+    )
+    verrou = modele.ouvrir_passe_partagee({i.nom: i.proxy_masque for i in identites})
+    return _faire_vivre(modele, verrou, identites, rythme, reglages, args)
+
+
+def _reprendre_partage(args: argparse.Namespace, reglages: Reglages, dossier: Path, passe: dict[str, Any]) -> int:
+    """`recolte reprendre <nom>` d'une passe partagée : avec les identités de la passe (ou `--identites`), sans les
+    bannies, qui ne resservent jamais."""
+    _refus_partage(args, "navigateur")
+    rythme = _rythme(args)
+    recette, texte = _recette_de_la_passe(passe)
+    if args.identites is not None:
+        noms = _noms_identites(args.identites)
+    else:
+        etat = Etat(dossier / "etat.sqlite3")
+        try:
+            noms = [i["nom"] for i in etat.identites(passe["numero"])]
+        finally:
+            etat.fermer()
+    identites, ecartees = gestionnaire.controler_identites(noms, recette, ecarter_bannies=True)
+    if not identites:
+        raise RefusParcours(
+            f"toutes les identités sont bannies ({', '.join(ecartees)}) : une identité bannie ne resservira jamais ; "
+            f"`uv run shadowlab recolte reprendre {passe['recette']}{_options_reprise(args)} --identites <nouvelles>`"
+        )
+    gardees = passe["options"] or {}
+    options = Options(
+        tranche=dict(gardees.get("tranche", {})),
+        sans=tuple(gardees.get("sans", ())),
+        ignorer_robots=bool(gardees.get("ignorer_robots", False)),
+        tout_refaire=bool(gardees.get("tout_refaire", False)),
+        lecture=LECTURE_PARTAGEE,
+    )
+    modele = Parcours(
+        recette,
+        texte,
+        passe["chemin_recette"],
+        construire_moteur("navigateur", recette, reglages),
+        dossier,
+        options,
+        options_reprise=_options_reprise(args),
+    )
+    verrou = modele.reprendre_passe_partagee({i.nom: i.proxy_masque for i in identites})
+    for nom in ecartees:
+        print(f"Identité {nom} écartée : bannie, elle ne resservira jamais.", flush=True)
+    return _faire_vivre(modele, verrou, identites, rythme, reglages, args)
+
+
+def _faire_vivre(
+    modele: Parcours,
+    verrou: Verrou,
+    identites: list[gestionnaire.IdentiteDeRecolte],
+    rythme: gestionnaire.Rythme,
+    reglages: Reglages,
+    args: argparse.Namespace,
+) -> int:
+    """Chaque identité dans son processus (`gestionnaire.superviser`), le verrou de la récolte tenu jusqu'au bout ;
+    puis la passe est close (pages encore tenues remises en file, exports, `resume.json`)."""
+    try:
+        with site_du_labo(modele.recette, reglages):
+            taches = {
+                i.nom: functools.partial(
+                    _travailleur_identite,
+                    modele.chemin_recette,
+                    modele.texte_recette,
+                    str(modele.dossier),
+                    modele.options,
+                    i.nom,
+                    i.graine,
+                    rythme,
+                    ATTENTE_FILE_S,
+                    reglages,
+                    _options_reprise(args),
+                )
+                for i in identites
+            }
+            print(
+                f"Récolte partagée : {len(identites)} identité(s) ({', '.join(taches)}), une file commune, une page à "
+                "une seule identité à la fois.",
+                flush=True,
+            )
+            try:
+                fins = gestionnaire.superviser(taches, en_fils=EN_FILS)
+            except KeyboardInterrupt:
+                fins = {nom: "interrompue" for nom in taches}
+        return modele.cloturer_partage(fins).code
+    finally:
+        verrou.liberer()
+
+
+def _travailleur_identite(
+    chemin_recette: str,
+    texte: str,
+    dossier: str,
+    options: Options,
+    nom: str,
+    graine: int,
+    rythme: gestionnaire.Rythme,
+    attente_file_s: float,
+    reglages: Reglages,
+    options_reprise: str,
+) -> str:
+    """La vie d'une identité (dans son processus) : chaque visite construit SON moteur (son profil Chrome, son proxy) et
+    lit la file commune ; ses hasards viennent de SA graine."""
+    recette = lire_texte(texte, source=chemin_recette)
+
+    def ecran(message: str) -> None:
+        print(f"[{nom}] {message}", flush=True)
+
+    def visiter(pages: int, alea: random.Random) -> Bilan:
+        moteur = construire_moteur("navigateur", recette, reglages, identite=nom)
+        parcours = Parcours(
+            recette,
+            texte,
+            chemin_recette,
+            moteur,
+            Path(dossier),
+            dataclasses.replace(options),
+            ecran=ecran,
+            alea=alea,
+            options_reprise=options_reprise,
+        )
+        return parcours.visiter_partage(nom, pages)
+
+    return gestionnaire.vie_d_une_identite(nom, graine, visiter, rythme, attente_file_s=attente_file_s, ecran=ecran)
+
+
 def _passe_de(args: argparse.Namespace, reglages: Reglages) -> tuple[Path, dict[str, Any]]:
     """Dossier et dernière passe de la récolte nommée, ou refus."""
     dossier = _dossier(args, reglages, args.cible)
@@ -227,15 +434,25 @@ def _passe_de(args: argparse.Namespace, reglages: Reglages) -> tuple[Path, dict[
     return dossier, passe
 
 
-def _reprendre(args: argparse.Namespace, reglages: Reglages) -> int:
-    dossier, passe = _passe_de(args, reglages)
+def _recette_de_la_passe(passe: dict[str, Any]) -> tuple[Recette, str]:
     chemin = Path(passe["chemin_recette"])
     if chemin.is_file():
-        recette, texte = _lire_recette(chemin)
-    else:
-        print(f"Recette d'origine absente ({chemin}) : copie gardée au début de la passe.", flush=True)
-        texte = passe["texte_recette"]
-        recette = lire_texte(texte, source="copie de la passe")
+        return _lire_recette(chemin)
+    print(f"Recette d'origine absente ({chemin}) : copie gardée au début de la passe.", flush=True)
+    texte = passe["texte_recette"]
+    return lire_texte(texte, source="copie de la passe"), texte
+
+
+def _reprendre(args: argparse.Namespace, reglages: Reglages) -> int:
+    dossier, passe = _passe_de(args, reglages)
+    if (passe["options"] or {}).get("partagee"):
+        return _reprendre_partage(args, reglages, dossier, passe)
+    if args.identites is not None:
+        raise RefusParcours(
+            f"--identites : la passe {passe['numero']} n'est pas partagée entre identités (lancée sans `--identites`)"
+        )
+    _sans_identites(args)
+    recette, texte = _recette_de_la_passe(passe)
     moteur = _moteur(
         passe["moteur"]["nom"], recette, reglages, identite_de_la_passe(passe)
     )  # la passe garde son identité
@@ -287,6 +504,8 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
         if passe["arret"]:
             a = passe["arret"]
             print(nettoyer(f"  arrêt : signe d'alerte ({a['detail']}) sur {a['adresse']} à {a['quand']}"))
+        if (passe["options"] or {}).get("partagee"):
+            _etat_partage(etat, numero, dossier)
         if args.pages:
             print("\nJournal des pages (n°, heure, statut, type, durées, enregistrements, liens neufs, décision) :")
             for ligne in etat.lignes_pages(numero):
@@ -301,6 +520,31 @@ def _etat(args: argparse.Namespace, reglages: Reglages) -> int:
     finally:
         etat.fermer()
     return 0
+
+
+def _etat_partage(etat: Etat, numero: int, dossier: Path) -> None:
+    """Récolte partagée : chaque identité (son état, ses pages, ses visites) et la file commune."""
+    identites = etat.identites(numero)
+    pages = etat.pages_par_identite(numero)
+    tenues = etat.en_cours_par_identite(numero)
+    a_faire, en_cours = etat.pages_restantes(numero)
+    print(f"  identités : {len(identites)}")
+    for i in identites:
+        nom = i["nom"]
+        lues = pages.get(nom, {"lues": 0, "echecs": 0})
+        derniere = i["derniere_visite"]
+        ligne = (
+            f"    {nom} · {(lire_etat(nom) or {}).get('etat', 'inconnue')} · {lues['lues']} lue(s), "
+            f"{lues['echecs']} échec(s), {tenues.get(nom, 0)} en cours · {i['visites']} visite(s)"
+        )
+        if derniere:
+            ligne += f", dernière le {derniere['debut']} ({derniere['statut']}, {derniere['pages']} page(s))"
+        if i["proxy"]:
+            ligne += f" · proxy {i['proxy']}"
+        if gestionnaire.travailleur_vivant(dossier, nom):
+            ligne += " · en visite en ce moment"
+        print(nettoyer(ligne))
+    print(f"  file : {a_faire} à faire, {en_cours} en cours")
 
 
 def _essayer(args: argparse.Namespace, reglages: Reglages) -> int:

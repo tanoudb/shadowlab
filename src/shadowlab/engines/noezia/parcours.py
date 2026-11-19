@@ -31,6 +31,7 @@ from ..base import Driver
 from .etat import Etat, Page, canonique
 from .export import FORMAT_CSV, ecrire_exports
 from .extraction import Signatures
+from .identite import lire_etat
 from .lecture import LectureHumaine, PlanDeLecture
 from .recettes import Recette, Resultat, _est_local, chemin_et_parametres, extraire
 from .robots import Robots
@@ -548,6 +549,123 @@ class Parcours:
                 etat.fermer()
                 travail.close()
 
+    def ouvrir_passe_partagee(self, identites: Mapping[str, str | None]) -> Verrou:
+        """Lancement d'une récolte partagée (`recolte lancer --identites`), sans aucune requête : les refus de `lancer`,
+        puis une passe neuve (ses départs en file, ses identités notées avec leur proxy masqué). Rend le verrou de la
+        récolte, PRIS : aucun autre lancement, seul ou partagé, tant que les identités travaillent. Chaque visite lit
+        robots.txt et passe la porte d'entrée elle-même."""
+        self._controles()
+        verrou = Verrou(self.dossier / "verrou")
+        verrou.prendre()
+        etat = Etat(self.dossier / "etat.sqlite3")
+        try:
+            derniere = self._refus_lancer(etat)
+            if self.options.tout_refaire and derniere:
+                if derniere["statut"] in PASSES_NON_FINIES:
+                    etat.terminer_passe(derniere["numero"], "abandonnee", derniere["arret"], self._horodatage())
+                etat.effacer_enregistrements()
+            passe = etat.ouvrir_passe(
+                self.recette.nom,
+                self.empreinte,
+                self.texte_recette,
+                self.chemin_recette,
+                self.moteur.description(),
+                {**self._options_gardees(), "pages_max": None, "partagee": True},
+                self._horodatage(),
+            )
+            etat.empiler(
+                passe,
+                [(d.url, d.type) for d in self.recette.depart],
+                self.recette.parametres_ignores,
+                self.recette.bornes.par_type,
+            )
+            etat.enregistrer_identites(passe, identites, self._horodatage())
+            self._evenement(etat, passe, "debut", {"moteur": "navigateur", "identites": list(identites)})
+        except BaseException:
+            verrou.liberer()
+            raise
+        finally:
+            etat.fermer()
+        return verrou
+
+    def reprendre_passe_partagee(self, identites: Mapping[str, str | None]) -> Verrou:
+        """Reprise d'une récolte partagée (`recolte reprendre`) : verrou de la récolte pris ; refus si une identité de
+        la passe travaille encore (son verrou de travail est tenu : un processus resté en vie après une coupure) ; sinon
+        les pages « en cours » d'une coupure reviennent toutes en file, la passe est remise en cours et les nouvelles
+        identités sont notées. Rend le verrou, PRIS."""
+        from .gestionnaire import travailleur_vivant  # le gestionnaire importe ce module
+
+        verrou = Verrou(self.dossier / "verrou")
+        verrou.prendre()
+        etat = Etat(self.dossier / "etat.sqlite3")
+        try:
+            passe = etat.derniere_passe()
+            if passe is None or not (passe["options"] or {}).get("partagee"):
+                raise RefusParcours("la dernière passe de cette récolte n'est pas partagée entre identités")
+            if passe["statut"] not in PASSES_NON_FINIES:
+                raise RefusParcours(f"la passe {passe['numero']} est {passe['statut']} : rien à reprendre")
+            if passe["empreinte"] != self.empreinte:
+                raise RefusParcours(
+                    f"la recette a changé depuis le début de la passe partagée {passe['numero']} : une récolte "
+                    "partagée garde la même recette jusqu'au bout"
+                )
+            noms = {i["nom"] for i in etat.identites(passe["numero"])} | set(
+                etat.en_cours_par_identite(passe["numero"])
+            )
+            vivantes = sorted(nom for nom in noms if travailleur_vivant(self.dossier, nom))
+            if vivantes:
+                raise RefusParcours(
+                    f"l'identité {', '.join(vivantes)} travaille encore sur cette récolte (verrou de travail tenu) : "
+                    "attendre la fin de son processus avant de reprendre"
+                )
+            remises = etat.reprendre_passe(passe["numero"])
+            etat.enregistrer_identites(passe["numero"], identites, self._horodatage())
+            detail = {"pages_remises_en_file": remises, "identites": list(identites)}
+            self._evenement(etat, passe["numero"], "reprise", detail)
+        except BaseException:
+            verrou.liberer()
+            raise
+        finally:
+            etat.fermer()
+        return verrou
+
+    def cloturer_partage(self, fins: Mapping[str, str]) -> Bilan:
+        """Après la dernière identité (`recolte lancer --identites`, `reprendre`) : les pages encore tenues reviennent
+        en file, la passe est notée (terminée ; `arretee` si toutes les identités sont tombées, bannies ; `interrompue`
+        sinon), puis les exports et `resume.json` sont écrits, comme à la fin d'une passe seule. Aucune requête."""
+        from .gestionnaire import travailleur_vivant  # le gestionnaire importe ce module
+
+        etat = Etat(self.dossier / "etat.sqlite3")
+        try:
+            passe = etat.derniere_passe()
+            assert passe is not None
+            numero = passe["numero"]
+            etat.liberer_orphelines(numero, lambda nom: travailleur_vivant(self.dossier, nom))
+            self._identite_partage = None
+            self._preparer(etat, numero, reprise=True)
+            statut, arret = passe["statut"], passe["arret"]
+            if statut not in ("terminee", "limitee"):
+                if etat.terminer_si_finie(numero, self._horodatage()):
+                    statut, arret = "terminee", None
+                else:
+                    statut = "arretee" if fins and all(f == "bannie" for f in fins.values()) else "interrompue"
+                    if statut == "arretee":
+                        arret = {
+                            "signe": "identites",
+                            "detail": f"toutes les identités sont bannies ({', '.join(fins)})",
+                            "adresse": "",
+                            "statut": None,
+                            "quand": self._horodatage(),
+                        }
+                    etat.terminer_passe(numero, statut, arret, self._horodatage())
+                    if arret:
+                        self._evenement(etat, numero, "arret", arret)
+            for nom, fin in fins.items():
+                self._ecran(f"Identité {nom} : {fin}")
+            return self._conclure(etat, numero, statut, arret)
+        finally:
+            etat.fermer()
+
     def _evenement(self, etat: Etat, passe: int, genre: str, detail: Mapping[str, Any]) -> None:
         """Un événement de la passe : dans l'état, et dans le journal du labo (niveau DEBUG, fichier seulement). Dans
         une récolte partagée, il porte le nom de l'identité de la visite."""
@@ -907,9 +1025,6 @@ class Parcours:
             passe_statut=etat.passe(passe)["statut"],
             travail_fini=statut in ("terminee", "finie") or self._borne_partagee_atteinte(),
             file={"a_faire": a_faire, "en_cours": en_cours, "en_cours_par_identite": etat.en_cours_par_identite(passe)},
-            identites={
-                i["nom"]: {**i, **etat.pages_par_identite(passe).get(i["nom"], {})} for i in etat.identites(passe)
-            },
         )
         dossier_passe = self.dossier / f"passe-{passe:03d}"
         if arret:
@@ -1624,6 +1739,10 @@ class Parcours:
                 f"Limite atteinte ({limite} pages lues, échecs compris) : {pages_faites(c['faites'])}, {lignes}, "
                 f"{c['a_faire']} à faire. Suite : {suite}"
             )
+        elif statut == "arretee" and arret and arret.get("signe") == "identites":  # récolte partagée
+            self._ecran(f"ARRÊT : {arret['detail']}. État gardé : {pages_faites(c['faites'])}, {c['a_faire']} à faire.")
+            relancer = self._commande_reprendre("--identites <nouvelles>")
+            self._ecran(f"Suite : `{relancer}` (une identité bannie ne resservira jamais)")
         elif statut == "arretee" and arret:
             self._ecran(f"ARRÊT : signe d'alerte ({arret['detail']}) sur {arret['adresse']} à {arret['quand']}.")
             self._ecran(f"Aucun nouvel essai. État gardé : {pages_faites(c['faites'])}, {c['a_faire']} à faire.")
@@ -1694,6 +1813,19 @@ class Parcours:
             }
         if len(origines) > 1:
             resume["robots_origines"] = origines
+        if (ligne["options"] or {}).get("partagee"):  # récolte partagée : chaque identité, son état et ses pages
+            pages = etat.pages_par_identite(passe)
+            resume["identites"] = {
+                i["nom"]: {
+                    "etat": (lire_etat(i["nom"]) or {}).get("etat"),
+                    "proxy": i["proxy"],
+                    "lues": pages.get(i["nom"], {}).get("lues", 0),
+                    "echecs": pages.get(i["nom"], {}).get("echecs", 0),
+                    "visites": i["visites"],
+                    "ajoutee_le": i["ajoutee_le"],
+                }
+                for i in etat.identites(passe)
+            }
         return resume
 
     def _bilan_incremental(self, etat: Etat, passe: int, lues: int) -> dict[str, Any]:

@@ -11,23 +11,32 @@ Ce module tient ce qui est commun à la commande (`shadowlab recolte lancer --id
   sortiraient par la même adresse) ;
 - la **graine** de chaque identité (`preparer_identite`) : tirée une fois du hasard du système (`secrets`), écrite dans
   son `identite.json`, jamais dérivée d'une graine commune (graine de campagne, `random.seed`). Elle nourrit ses tirages
-  (rythme des visites, lecture d'une page) : deux identités ne tirent jamais la même suite.
+  (rythme des visites, lecture d'une page) : deux identités ne tirent jamais la même suite ;
+- la **vie d'une identité** dans une récolte partagée (`vie_d_une_identite`) : ses visites à son rythme (ordonnanceur de
+  D-90, `Rythme`), jusqu'à la fin de la récolte ; bannie, plus jamais ; en alerte, elle attend la fin de l'alerte ;
+- le **superviseur** (`superviser`) : une identité par processus neuf (`spawn`), ou par fil pour les tests.
 """
 
 from __future__ import annotations
 
 import fcntl
 import json
+import multiprocessing
 import os
+import random
 import secrets
+import sys
+import threading
 import time
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import IO
 
-from .identite import IdentiteRefusee, lire_proxy, ouvrir, racine_identites, verifier_nom
-from .parcours import RefusParcours
+from . import visites
+from .identite import IdentiteRefusee, fin_d_alerte, lire_etat, lire_proxy, ouvrir, racine_identites, verifier_nom
+from .parcours import Bilan, RefusParcours
 from .proxy_identite import ProxyIdentite, ProxyInvalide
 from .recettes import Recette, _est_local
 
@@ -36,6 +45,10 @@ ATTENTE_VERROU_S = 5.0  # un autre processus peut tenir ce verrou une fraction d
 # Écrit dans le dossier de profil Chrome de l'identité, au premier passage par le gestionnaire : un profil copié dans
 # une autre identité porte encore le nom de la première. Chrome ignore ce fichier.
 MARQUEUR_PROFIL = ".identite-recolte.json"
+ATTENTE_FILE_S = 30.0  # rien à prendre (les autres identités tiennent les dernières pages) : la file est relue après
+PAS_ARRET_S = 5.0  # une attente longue (écart, alerte) regarde la demande d'arrêt à ce rythme
+# Fin d'une identité dans une récolte partagée, et code de sortie de son processus.
+FINS = {"fini": 0, "bannie": 3, "interrompue": 4}
 
 
 class PartageRefuse(RefusParcours):
@@ -219,3 +232,153 @@ def travailleur_vivant(dossier: Path, nom: str) -> bool:
             return True
         fcntl.flock(fichier, fcntl.LOCK_UN)
         return False
+
+
+# ═══ Vie d'une identité dans une récolte partagée ══════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class Rythme:
+    """Le rythme des visites d'une identité : l'ordonnanceur de D-90 par défaut (plage 8 h à 23 h, écart de 45 à 180 min
+    tiré, 5 à 40 pages par visite, 120 pages par heure et 200 par jour) ; pour un essai, des pages et un écart fixes,
+    une autre plage (`(0, 24)` : à toute heure). Les plafonds par heure et par jour restent ceux de D-90."""
+
+    pages: int | None = None
+    ecart_min: float | None = None
+    plage: tuple[int, int] | None = None
+
+    def ordonnanceur(
+        self, graine: int, horloge: Callable[[], datetime], dormir: Callable[[float], None]
+    ) -> visites.Ordonnanceur:
+        champs: dict = {}
+        if self.pages is not None:
+            champs.update(pages_min=self.pages, pages_med=self.pages, pages_max=self.pages)
+        if self.ecart_min is not None:
+            champs.update(ecart_min_min=self.ecart_min, ecart_med_min=self.ecart_min, ecart_max_min=self.ecart_min)
+        if self.plage is not None:
+            champs["plage"] = tuple(self.plage)
+            if tuple(self.plage) == (0, 24):  # à toute heure : aucune visite repoussée au lendemain
+                champs["duree_visite_max_min"] = 0
+        reglages = replace(visites.Reglages(), **champs)
+        return visites.Ordonnanceur(reglages, random.Random(f"{graine}:ordonnanceur"), horloge, dormir)
+
+
+class _Arret(Exception):
+    """Arrêt demandé pendant une attente."""
+
+
+def _maintenant() -> datetime:
+    return datetime.now().astimezone()
+
+
+def vie_d_une_identite(
+    nom: str,
+    graine: int,
+    visiter: Callable[[int, random.Random], Bilan],
+    rythme: Rythme,
+    *,
+    horloge: Callable[[], datetime] = _maintenant,
+    dormir: Callable[[float], None] = time.sleep,
+    arret: Callable[[], bool] = lambda: False,
+    attente_file_s: float = ATTENTE_FILE_S,
+    ecran: Callable[[str], None] = lambda _message: None,
+) -> str:
+    """Les visites d'une identité dans une récolte partagée, jusqu'à la fin. Rend `fini` (plus rien à faire pour
+    personne), `bannie` ou `interrompue`.
+
+    Avant chaque visite, l'état de l'identité est relu : bannie, elle ne visite plus jamais ; en alerte, elle attend la
+    fin de l'alerte (`identite.ATTENTE_ALERTE_S`, D-91). Chaque visite commence à l'heure de son ordonnanceur (tiré de
+    SA graine) et lit au plus le nombre de pages qu'il donne : `visiter(pages, alea)`, où `alea` vient aussi de sa
+    graine. Une visite qui n'a rien pu prendre (les autres tiennent les dernières pages) n'est pas comptée : la file
+    est relue après `attente_file_s`."""
+
+    def patienter(secondes: float) -> None:
+        fin = horloge() + timedelta(seconds=secondes)
+        while True:
+            if arret():
+                raise _Arret
+            reste = (fin - horloge()).total_seconds()
+            if reste <= 0:
+                return
+            dormir(min(reste, PAS_ARRET_S))
+
+    ordonnanceur = rythme.ordonnanceur(graine, horloge, patienter)
+    numero = 0
+    try:
+        while True:
+            if arret():
+                return "interrompue"
+            donnees = lire_etat(nom) or {}
+            if donnees.get("etat") == "banni":
+                ecran(f"identité {nom} bannie : plus aucune visite ({donnees.get('raison', '')})")
+                return "bannie"
+            fin = fin_d_alerte(donnees, horloge())
+            if fin is not None and fin > horloge():
+                ecran(f"identité {nom} en alerte : aucune visite avant {fin.isoformat(timespec='seconds')}")
+                patienter((fin - horloge()).total_seconds())
+                continue
+            prevue = ordonnanceur.attendre_prochaine()
+            numero += 1
+            try:
+                bilan = visiter(prevue.pages, random.Random(f"{graine}:visite:{numero}"))
+            except IdentiteRefusee as refus:  # l'état relu au tour suivant décide ; prise ailleurs : on réessaie
+                ecran(f"identité {nom} : {refus}")
+                if (lire_etat(nom) or {}).get("etat", "ok") == "ok":
+                    patienter(attente_file_s)
+                continue
+            if bilan.statut == "interrompue":
+                return "interrompue"
+            if bilan.resume.get("travail_fini"):
+                return "fini"
+            lancement = bilan.resume["lancement"]
+            demandees = lancement["pages"] + lancement.get("relectures", 0)
+            if bilan.statut in ("attente", "finie") and demandees == 0:
+                patienter(attente_file_s)  # rien n'a été demandé : ce n'est pas une visite
+                continue
+            ordonnanceur.terminer(prevue, demandees)
+    except (_Arret, KeyboardInterrupt):
+        return "interrompue"
+
+
+def _dans_un_processus(tache: Callable[[], str]) -> None:
+    sys.exit(FINS.get(tache(), 1))
+
+
+def superviser(taches: Mapping[str, Callable[[], str]], *, en_fils: bool = False) -> dict[str, str]:
+    """Fait vivre chaque identité dans son propre processus neuf (`spawn`), toutes en même temps, et rend la fin de
+    chacune (`fini`, `bannie`, `interrompue`, ou l'erreur). Aucune ne partage de mémoire avec une autre : elles ne se
+    parlent que par l'état de la récolte. `en_fils` : des fils au lieu des processus (tests ; les tâches n'ont alors
+    pas besoin d'être sérialisables)."""
+    if en_fils:
+        fins: dict[str, str] = {}
+
+        def courir(nom: str, tache: Callable[[], str]) -> None:
+            try:
+                fins[nom] = tache()
+            except BaseException as erreur:  # noqa: BLE001 — une identité en erreur n'arrête pas les autres
+                fins[nom] = f"erreur : {type(erreur).__name__}: {erreur}"
+
+        fils = [
+            threading.Thread(target=courir, args=(nom, tache), name=f"identite-{nom}") for nom, tache in taches.items()
+        ]
+        for f in fils:
+            f.start()
+        for f in fils:
+            f.join()
+        return fins
+    contexte = multiprocessing.get_context("spawn")
+    processus = {
+        nom: contexte.Process(target=_dans_un_processus, args=(tache,), name=f"identite-{nom}")
+        for nom, tache in taches.items()
+    }
+    for p in processus.values():
+        p.start()
+    try:
+        for p in processus.values():
+            p.join()
+    except KeyboardInterrupt:  # le Ctrl-C atteint aussi les processus des identités : chacune finit proprement
+        for p in processus.values():
+            p.join(timeout=60)
+        raise
+    codes = {code: fin for fin, code in FINS.items()}
+    return {nom: codes.get(p.exitcode, f"erreur (code {p.exitcode})") for nom, p in processus.items()}

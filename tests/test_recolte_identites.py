@@ -13,13 +13,15 @@ Sans navigateur ni réseau : pilotes d'identité factices sur le `TestClient` du
 
 from __future__ import annotations
 
+import functools
 import json
+import pickle
 import random
 import shutil
 from datetime import datetime, timedelta
 
 import pytest
-from outils_identites import PiloteIdentite
+from outils_identites import PiloteIdentite, fin_fixe
 from outils_recolte import GRAINE, RECETTE_VITRINE, TAILLE, creer_client
 
 from shadowlab import commande_recolte, notation
@@ -164,6 +166,24 @@ def test_le_rythme_par_defaut_est_celui_de_d90():
     assert (o.reglages.ecart_min_min, o.reglages.ecart_max_min) == (45, 180)
 
 
+def test_chaque_identite_vit_dans_son_processus_et_sa_fin_revient():
+    taches = {
+        nom: functools.partial(fin_fixe, fin) for nom, fin in (("a", "fini"), ("b", "bannie"), ("c", "interrompue"))
+    }
+    assert gestionnaire.superviser(taches) == {"a": "fini", "b": "bannie", "c": "interrompue"}
+
+
+def test_la_tache_d_une_identite_passe_dans_un_processus_neuf(reglages):
+    """Ce que la commande donne à chaque processus (`spawn`) se sérialise : recette, options, rythme, réglages."""
+    tache = functools.partial(
+        commande_recolte._travailleur_identite, str(RECETTE_VITRINE), RECETTE_VITRINE.read_text(), "/tmp/recolte",
+        commande_recolte.Options(lecture=LectureHumaine()), "ident-a", 1234, gestionnaire.Rythme(pages=8), 30.0,
+        reglages, "",
+    )  # fmt: skip
+    copie = pickle.loads(pickle.dumps(tache))
+    assert copie.args[4:6] == ("ident-a", 1234) and copie.func is commande_recolte._travailleur_identite
+
+
 # ── 2. La commande ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -219,11 +239,14 @@ def test_trois_identites_une_bannie_en_route_les_autres_finissent(pilotes, regla
     finally:
         etat.fermer()
     assert note["completude"] == 1.0 and note["exactitude"] == 1.0 and pages["completude_pages"] == 1.0
-    assert par_identite["ident-b"]["lues"] == 2 and sum(v["lues"] for v in par_identite.values()) == PAGES
+    assert sum(v["lues"] for v in par_identite.values()) == PAGES
     assert set(identites) == {"ident-a", "ident-b", "ident-c"}
     assert json.loads((racine / "ident-b" / "identite.json").read_text())["etat"] == "banni"
-    # rien demandé par ident-b après son refus : sa dernière visite s'arrête sur la page refusée
+    # rien demandé par ident-b après son refus : deux pages demandées, la troisième refusée, plus rien ensuite ; une
+    # des deux peut être une relecture de la lecture humaine (entrée par la liste, retour à la liste), pas une page lue
     de_b = [p for p in construits if p.nom == "ident-b"]
+    assert sum(p.requetes_pages for p in de_b) == 3
+    assert 1 <= par_identite["ident-b"]["lues"] <= 2
     assert sum(1 for p in de_b if p.statuts and p.statuts[-1] == 403) == 1
     assert [p.statuts[-1] for p in de_b if p.statuts][-1] == 403
     resume = json.loads((dossier / "passe-001" / "resume.json").read_text())

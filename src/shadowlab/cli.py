@@ -93,6 +93,25 @@ def main(argv: list[str] | None = None) -> int:
         "passe à l'autre ; la reprise la retrouve",
     )
     p.add_argument(
+        "--identites",
+        metavar="A,B,C",
+        help="lancer, reprendre : récolte partagée entre plusieurs identités persistantes (moteur navigateur) : une "
+        "file commune, chaque page à une seule identité à la fois ; une identité bannie s'arrête et ses pages "
+        "reviennent en file ; refus si deux identités partagent un profil Chrome, un proxy ou une graine (étape 4.2)",
+    )
+    p.add_argument(
+        "--pages-visite", type=int, metavar="N", help="avec --identites : pages par visite (défaut : D-90, 5 à 40)"
+    )
+    p.add_argument(
+        "--ecart",
+        type=float,
+        metavar="MIN",
+        help="avec --identites : minutes de la fin d'une visite au début de la suivante (défaut : D-90, 45 à 180)",
+    )
+    p.add_argument(
+        "--plage", metavar="A-B", help="avec --identites : heures des visites (défaut : 8-23 ; 0-24 : à toute heure)"
+    )
+    p.add_argument(
         "--tranche", action="append", default=[], metavar="NOM=VALEUR", help="valeur d'une variable de la recette"
     )
     p.add_argument(
