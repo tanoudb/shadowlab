@@ -255,6 +255,15 @@ MIGRATIONS: list[str] = [
     ALTER TABLE bannissements ADD COLUMN compte TEXT;
     CREATE INDEX bannissements_compte ON bannissements(monde_id, compte)
     """,
+    # 13 — adresses IP simulées (palier 4, étape 4.1, D-105) : l'adresse du visiteur (celle que le frontal a signée :
+    # le pair, ou l'en-tête PROXY d'un pair local) est notée sur la visite, une fois, à la première requête de la
+    # session ; un bannissement peut viser une adresse (colonne `adresse`, seule renseignée sur sa ligne). Colonnes
+    # vides et un index : sûre sur la base de l'application publique, qui ne lit ni n'écrit rien de tout cela.
+    """
+    ALTER TABLE visites ADD COLUMN adresse TEXT;
+    ALTER TABLE bannissements ADD COLUMN adresse TEXT;
+    CREATE INDEX bannissements_adresse ON bannissements(monde_id, adresse)
+    """,
 ]
 
 

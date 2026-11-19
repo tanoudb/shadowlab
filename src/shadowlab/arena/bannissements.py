@@ -14,6 +14,16 @@ Ce module décide une chose : « cette requête vient-elle d'un visiteur banni d
   Les compteurs se **lisent** dans `observations_http` jointe à `visites` ; ils ne s'écrivent jamais.
 - Les mondes `manuel` et `hors-passage` ne sont jamais remis à zéro : aucun bannissement **automatique** n'y est écrit
   (détection ni débit). Un bannissement manuel (`shadowlab arena bannir`) vaut dans tous les mondes.
+- **Par adresse** (D-105) : l'adresse signée par le frontal pour la requête (`X-ShadowLab-Adresse`, `site/gardien.py`).
+  Une ligne qui ne porte que `adresse`. Elle est lue **avant** tout le reste, même pour un navigateur neuf dont on ne
+  sait encore rien (première requête, ni cookie ni empreinte). À la main (`arena bannir --ip`, motif `manuel`) elle
+  refuse tout le monde derrière cette adresse dans ce monde. Automatique (règle ci-dessous, motif `visiteurs_bannis_…`,
+  24 h) elle épargne le visiteur dont une visite DANS CE MONDE est plus ancienne que le bannissement : un humain qui
+  revient avec son cookie derrière une adresse partagée n'est pas refusé parce que d'autres visiteurs de cette adresse
+  l'ont été (même raison que la règle de l'empreinte E). Un navigateur refusé ne devient pas un habitué : la visite
+  écrite à son refus est postérieure au bannissement, il reste refusé avec le cookie reçu. Aucune cascade : une adresse
+  bannie ne bannit ni visiteur ni empreinte ; l'adresse du pair non simulé (127.0.0.1, `::1`) ne déclenche jamais la
+  règle automatique, tous les clients d'un poste la portent.
 - **Par compte** (I10, D-104) : une ligne peut viser un compte (colonne `compte`) ; elle ne touche que la connexion et
   l'espace privé (`arena/comptes.py`), jamais les autres pages du visiteur. Un visiteur banni alors qu'il est connecté
   à un compte (connexion encore valable, `appareils.connecte_jusqu_au`) fait bannir ce compte, dans le même monde
@@ -33,7 +43,7 @@ from datetime import UTC, datetime, timedelta
 
 from .. import correlation
 from ..detection import CHEMINS_TECHNIQUES, RESSOURCES_DE_PAGE
-from . import visiteurs
+from . import adresses, visiteurs
 from .profils import Bannissement
 
 HEURE = timedelta(hours=1)
@@ -41,6 +51,11 @@ JOUR = timedelta(hours=24)
 MONDES_SANS_BANNISSEMENT_AUTO = frozenset({visiteurs.MONDE_MANUEL, visiteurs.MONDE_HORS_PASSAGE})
 MOTIF_MANUEL = "manuel"
 MOTIF_VISITEUR_BANNI = "visiteur_banni"  # préfixe du motif d'un compte banni parce que son visiteur connecté l'a été
+# Règle automatique des adresses (D-105) : au moins `SEUIL_ADRESSE` visiteurs DISTINCTS bannis en 24 h dans le monde,
+# dont une visite est venue de la même adresse déclarée, bannissent cette adresse pour 24 h.
+SEUIL_ADRESSE = 3
+DUREE_ADRESSE = JOUR
+MOTIF_ADRESSE = "visiteurs_bannis_meme_adresse"
 
 
 @dataclass(frozen=True)
@@ -48,7 +63,7 @@ class Verdict:
     monde: str
     visiteur: str | None
     motif: str  # `manuel`, `detecte:<détecteurs>`, `debit:pages_par_heure`, `debit:pages_par_jour`…
-    par: str  # `visiteur`, `empreinte`, `debit` ou `compte`
+    par: str  # `visiteur`, `empreinte`, `adresse`, `debit` ou `compte`
     compte: str | None = None  # le compte refusé (`par` = `compte`)
 
 
@@ -91,20 +106,33 @@ _COMPTE = (
 )
 _JOINTURE_BAN = (
     f" LEFT JOIN bannissements b ON b.monde_id = {_MONDE} AND (b.expire_le IS NULL OR b.expire_le > :maintenant)"
-    " AND (b.visiteur = :visiteur OR (:empreinte IS NOT NULL AND b.empreinte = :empreinte))"
+    " AND (b.visiteur = :visiteur OR (:empreinte IS NOT NULL AND b.empreinte = :empreinte)"
+    f" OR (:adresse IS NOT NULL AND b.adresse = :adresse AND (b.motif = '{MOTIF_MANUEL}' OR NOT EXISTS ("
+    " SELECT 1 FROM visites vv WHERE vv.monde_id = b.monde_id AND vv.visiteur = :visiteur AND vv.vue_le < b.cree_le))))"
     " ORDER BY b.id LIMIT 1"
 )  # sans bannissement, la jointure rend quand même une ligne, vide : les compteurs sortent toujours
-_LIRE_BAN = "SELECT b.motif AS motif, b.visiteur AS vise, 0 AS jour, 0 AS heure FROM (SELECT 1) c" + _JOINTURE_BAN
+_LIRE_BAN = (
+    "SELECT b.motif AS motif, b.visiteur AS vise, b.adresse AS adr, 0 AS jour, 0 AS heure FROM (SELECT 1) c"
+    + _JOINTURE_BAN
+)
 _LIRE_BAN_ET_COMPTES = (
-    f"SELECT b.motif AS motif, b.visiteur AS vise, c.jour AS jour, c.heure AS heure FROM ({_COMPTE}) c" + _JOINTURE_BAN
+    "SELECT b.motif AS motif, b.visiteur AS vise, b.adresse AS adr, c.jour AS jour, c.heure AS heure"
+    f" FROM ({_COMPTE}) c" + _JOINTURE_BAN
 )
 
 
-def _parametres(monde: str, visiteur: str | None, empreinte: str | None, maintenant: datetime) -> dict:
+def _parametres(
+    monde: str,
+    visiteur: str | None,
+    empreinte: str | None,
+    maintenant: datetime,
+    adresse: str | None = None,
+) -> dict:
     return {
         "monde": monde,
         "visiteur": visiteur,
         "empreinte": empreinte,
+        "adresse": adresse,
         "maintenant": _stamp(maintenant),
         "heure": _stamp(maintenant - HEURE),
         "jour": _stamp(maintenant - JOUR),
@@ -128,26 +156,34 @@ def bannir(
     visiteur: str | None = None,
     empreinte: str | None = None,
     compte: str | None = None,
+    adresse: str | None = None,
     motif: str,
     maintenant: datetime | None = None,
     expire_le: datetime | None = None,
 ) -> bool:
-    """Écrit un bannissement (visiteur, empreinte, compte) dans `monde`. Faux si le même est déjà en vigueur.
+    """Écrit un bannissement (visiteur, empreinte, compte, adresse) dans `monde`. Faux si le même est déjà en vigueur.
 
     Un visiteur banni fait bannir les comptes auxquels il est encore connecté dans ce monde (I10), sauf dans les mondes
-    partagés (aucun bannissement automatique n'y est écrit)."""
-    if visiteur is None and empreinte is None and compte is None:
-        raise ValueError("un bannissement vise un visiteur, une empreinte ou un compte")
+    partagés (aucun bannissement automatique n'y est écrit) ; et, si assez de visiteurs ont été bannis depuis une même
+    adresse, cette adresse (D-105, `regle_adresse`)."""
+    if visiteur is None and empreinte is None and compte is None and adresse is None:
+        raise ValueError("un bannissement vise un visiteur, une empreinte, un compte ou une adresse")
+    if adresse is not None:
+        adresse = adresses.normaliser(adresse)
+        if adresse is None:
+            raise ValueError("adresse illisible : une adresse IP (v4 ou v6) est attendue")
     maintenant = maintenant or datetime.now(UTC)
     cree = cx.execute(
-        "INSERT INTO bannissements (monde_id, visiteur, empreinte, compte, motif, cree_le, expire_le)"
-        " SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM bannissements WHERE monde_id = ?"
-        " AND visiteur IS ? AND empreinte IS ? AND compte IS ? AND (expire_le IS NULL OR expire_le > ?))",
+        "INSERT INTO bannissements (monde_id, visiteur, empreinte, compte, adresse, motif, cree_le, expire_le)"
+        " SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM bannissements WHERE monde_id = ?"
+        " AND visiteur IS ? AND empreinte IS ? AND compte IS ? AND adresse IS ?"
+        " AND (expire_le IS NULL OR expire_le > ?))",
         (
             monde_id := visiteurs.identifiant_monde(cx, monde),
             visiteur,
             empreinte,
             compte,
+            adresse,
             motif,
             _stamp(maintenant),
             _stamp(expire_le) if expire_le else None,
@@ -155,9 +191,12 @@ def bannir(
             visiteur,
             empreinte,
             compte,
+            adresse,
             _stamp(maintenant),
         ),
     )
+    if visiteur is not None and cree.rowcount > 0 and monde not in MONDES_SANS_BANNISSEMENT_AUTO:
+        regle_adresse(cx, monde, monde_id, visiteur, maintenant)
     if visiteur is not None and monde not in MONDES_SANS_BANNISSEMENT_AUTO:
         for (connecte,) in cx.execute(
             "SELECT c.identifiant FROM appareils a JOIN comptes c ON c.id = a.compte_id"
@@ -166,6 +205,40 @@ def bannir(
         ).fetchall():
             bannir(cx, monde, compte=connecte, motif=f"{MOTIF_VISITEUR_BANNI}:{motif}", maintenant=maintenant)
     return cree.rowcount > 0
+
+
+def regle_adresse(cx: sqlite3.Connection, monde: str, monde_id: int, visiteur: str, maintenant: datetime) -> None:
+    """Règle automatique des adresses (D-105) : pour chaque adresse déclarée d'où ce visiteur est venu, si au moins
+    `SEUIL_ADRESSE` visiteurs distincts dont une visite en est venue ont été bannis dans les dernières 24 h, l'adresse
+    est bannie pour 24 h. Les adresses du pair non simulé (boucle locale) n'y entrent jamais.
+
+    Pourquoi 3 : un humain derrière une box ou un réseau d'entreprise n'est pas banni parce qu'un autre l'a été une ou
+    deux fois (une fausse détection) ; trois visiteurs différents bannis depuis la même adresse en un jour, c'est une
+    adresse d'où l'on fait tourner des identités, ce que l'étape 4.2 va faire. Ce n'est pas une mesure : aucun humain
+    derrière une adresse partagée en base."""
+    deja_vues = cx.execute(
+        "SELECT DISTINCT adresse FROM visites WHERE monde_id = ? AND visiteur = ? AND adresse IS NOT NULL",
+        (monde_id, visiteur),
+    ).fetchall()
+    for ligne in deja_vues:
+        adresse = ligne["adresse"]
+        if adresses.est_local(adresse):
+            continue
+        distincts = cx.execute(
+            "SELECT COUNT(DISTINCT b.visiteur) FROM bannissements b JOIN visites v"
+            " ON v.monde_id = b.monde_id AND v.visiteur = b.visiteur"
+            " WHERE b.monde_id = ? AND b.visiteur IS NOT NULL AND b.cree_le >= ? AND v.adresse = ?",
+            (monde_id, _stamp(maintenant - JOUR), adresse),
+        ).fetchone()[0]
+        if distincts >= SEUIL_ADRESSE:
+            bannir(
+                cx,
+                monde,
+                adresse=adresse,
+                motif=MOTIF_ADRESSE,
+                maintenant=maintenant,
+                expire_le=maintenant + DUREE_ADRESSE,
+            )
 
 
 def compte_banni(cx: sqlite3.Connection, monde: str, compte: str, maintenant: datetime | None = None) -> str | None:
@@ -207,6 +280,29 @@ def bannir_visiteur_connu(cx: sqlite3.Connection, monde: str, visiteur: str, *, 
     if vu is None:
         raise BannissementRefuse(f"visiteur inconnu dans le monde {monde} : {visiteur}")
     return bannir(cx, monde, visiteur=visiteur, motif=motif)
+
+
+def derniere_adresse(cx: sqlite3.Connection, monde: str) -> str | None:
+    """La dernière adresse déclarée vue dans `monde` (visite la plus récente qui en porte une), ou None."""
+    ligne = cx.execute(
+        "SELECT v.adresse FROM visites v JOIN mondes m ON m.id = v.monde_id"
+        " WHERE m.nom = ? AND v.adresse IS NOT NULL ORDER BY v.id DESC LIMIT 1",
+        (monde,),
+    ).fetchone()
+    return ligne["adresse"] if ligne else None
+
+
+def bannir_adresse_connue(cx: sqlite3.Connection, monde: str, adresse: str, *, motif: str = MOTIF_MANUEL) -> bool:
+    """Bannissement manuel d'une adresse dans un monde EXISTANT : `shadowlab arena bannir --ip` et `bannir_adresse`
+    d'une campagne passent tous deux ici. Refuse (`BannissementRefuse`) un monde inconnu ou une adresse illisible, sans
+    rien créer. Une adresse jamais vue dans ce monde est permise (on peut la bannir avant qu'elle n'arrive). Vrai si
+    une ligne est écrite, faux si l'adresse était déjà bannie."""
+    if cx.execute("SELECT 1 FROM mondes WHERE nom = ?", (monde,)).fetchone() is None:
+        raise BannissementRefuse(f"monde inconnu : {monde}")
+    normale = adresses.normaliser(adresse)
+    if normale is None:
+        raise BannissementRefuse(f"adresse illisible : {adresse!r} (une adresse IP v4 ou v6 est attendue)")
+    return bannir(cx, monde, adresse=normale, motif=motif)
 
 
 @dataclass
@@ -267,8 +363,12 @@ class Surveillance:
         page: bool,
         seuils: Bannissement,
         maintenant: datetime | None = None,
+        adresse: str | None = None,
     ) -> Verdict | None:
-        """Le verdict sur cette requête : banni (visiteur, ou empreinte pour une session neuve), ou débit dépassé.
+        """Le verdict sur cette requête : banni (visiteur, empreinte ou adresse), ou débit dépassé.
+
+        `adresse` : l'adresse signée par le frontal pour CETTE requête (jamais retenue dans la fiche : elle peut
+        changer d'une requête à l'autre d'une session). Elle est jugée même si on ne sait encore rien du visiteur.
 
         `page` : la requête est une page (D-78) ; seules les pages font lire les compteurs. Un dépassement écrit le
         bannissement du visiteur (une seule fois). Une seule instruction SQL lit le bannissement et les compteurs.
@@ -278,16 +378,17 @@ class Surveillance:
         if fiche.neuve and fiche.empreinte is None:
             fiche.empreinte = correlation.empreinte_de_session(cx, jeton)
         empreinte = fiche.empreinte if fiche.neuve else None
-        if fiche.visiteur is None and empreinte is None:
+        if fiche.visiteur is None and empreinte is None and adresse is None:
             return None  # un navigateur neuf dont on ne sait encore rien : rien à lui reprocher
         compter = page and fiche.visiteur is not None and fiche.monde not in MONDES_SANS_BANNISSEMENT_AUTO
         ligne = cx.execute(
             _LIRE_BAN_ET_COMPTES if compter else _LIRE_BAN,
-            _parametres(fiche.monde, fiche.visiteur, empreinte, maintenant),
+            _parametres(fiche.monde, fiche.visiteur, empreinte, maintenant, adresse),
         ).fetchone()
         if ligne["motif"] is not None:
             direct = fiche.visiteur is not None and ligne["vise"] == fiche.visiteur
-            return Verdict(fiche.monde, fiche.visiteur, ligne["motif"], "visiteur" if direct else "empreinte")
+            par = "visiteur" if direct else "adresse" if ligne["adr"] is not None else "empreinte"
+            return Verdict(fiche.monde, fiche.visiteur, ligne["motif"], par)
         if compter:
             motif = depassement(int(ligne["heure"]), int(ligne["jour"]), seuils)
             if motif:

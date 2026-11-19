@@ -1,0 +1,56 @@
+# Palier 4, étape 4.1 (D-105) : essai des adresses IP simulées au profil `endurance`, trois bras, chacun dans son monde.
+#
+# Chaque identité déclare, dans son `proxy.json`, un amont `arena://127.0.0.1:<port de l'Arena>` et une adresse simulée :
+# le relais local de l'identité (D-99) envoie alors l'en-tête PROXY de cette adresse au frontal de l'Arena, avant le TLS.
+# Le frontal doit tourner avec `SHADOWLAB_ARENA_PROXY_PROTOCOLE=1` (éteint par défaut).
+#
+# Sujet A (adresse 198.51.100.11) et sujet B (adresse 198.51.100.22) : 3 visites chacun, espacées d'une minute. Ce que
+# l'essai doit montrer : DEUX adresses distinctes en base (`visites.adresse`), une par sujet, jamais 127.0.0.1.
+# Témoin de l'adresse (203.0.113.33) : visite 1 par l'identité C1 ; avant la visite 2, l'ADRESSE vue dans son monde est
+# bannie à la main (`bannir_adresse`, le code de `shadowlab arena bannir --ip`) ; la visite 2 est faite par l'identité C2
+# (autre profil Chrome, donc autre visiteur) déclarée avec la même adresse : l'Arena doit la refuser (403,
+# `X-Arena-Refus: bannissement`, décision `bannissement` `par: adresse`), C2 est notée `banni` par la sentinelle, rien n'est
+# demandé après.
+# Un client qui envoie un `X-Forwarded-For` forgé est un autre contrôle : `scripts/ip-simulees-controle.py` (il n'y a
+# pas d'option de moteur qui envoie un en-tête de son choix, et l'étape n'en ajoute pas).
+#
+# Les identités de l'essai ont leurs propres noms (C2 finit bannie) : changer les suffixes `-1` pour recommencer.
+#
+# Préalables (dossier de travail avec ses propres ports : `SHADOWLAB_PORT` et `SHADOWLAB_PORT_ARENA` ; pile Docker
+# partagée telle qu'elle est, jamais `arena demarrer` ni `arena appliquer`, voir la note d'essai de D-104) :
+#   1. Déclarer les quatre identités (le port est celui de `SHADOWLAB_PORT_ARENA`) :
+#        uv run python scripts/ip-simulees-declarer.py <port de l'Arena>
+#   2. Lancer :
+#        SHADOWLAB_ARENA_PROXY_PROTOCOLE=1 uv run shadowlab campagne configs/experiments/ip-simulees-essai.yaml
+# Durée estimée : une dizaine de minutes. Débit : 4 pages lues par visite, très en dessous de 240 par heure.
+experiment:
+  name: ip_simulees_essai
+  description: >-
+    Essai des adresses IP simulées (4.1) : deux identités avec deux adresses, et une adresse bannie à la main qui refuse
+    un autre navigateur arrivé avec elle.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet-a
+      visites: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: ip-a-1}
+    - name: noezia
+      label: sujet-b
+      visites: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: ip-b-1}
+    - name: noezia
+      label: temoin-adresse
+      visites: 2
+      bannir_avant_visite: 2
+      bannir_adresse: true
+      identite_apres_bannissement: ip-c-2
+      options: {headless: false, channel: chrome, identite_native: true, identite: ip-c-1}
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 3
+  pages_par_visite: 4
+  espacement: {mode: fixe, minutes: 1}
+  concurrency: 3
+  monde: serie
+  seed: 20261119
+  output: [json, html]

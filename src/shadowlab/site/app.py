@@ -157,7 +157,14 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
             visite = connus.retrouver(secret, request.cookies.get(visiteurs.COOKIE), jeton)
             if visite is None:
                 with base() as cx:
-                    visite = visiteurs.reconnaitre(cx, secret, request.cookies.get(visiteurs.COOKIE), jeton, connus)
+                    visite = visiteurs.reconnaitre(
+                        cx,
+                        secret,
+                        request.cookies.get(visiteurs.COOKIE),
+                        jeton,
+                        connus,
+                        adresse=sceau.adresse if sceau is not None else None,
+                    )
             if visite.cookie:
                 reponse.set_cookie(
                     visiteurs.COOKIE,
@@ -391,7 +398,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         # 0) Un visiteur banni ne se connecte pas : le bannissement se lit en tête, comme pour une page (I10)
         if memoire:
             with base() as cx:
-                verdict = surveillance.juger(cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement)
+                verdict = surveillance.juger(
+                    cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement, adresse=sceau.adresse
+                )
                 if verdict:
                     return gardien.refus_banni(request, cx, jeton, "/lab/connexion", verdict)
 
@@ -640,7 +649,9 @@ def creer_app(reglages: Reglages | None = None) -> FastAPI:
         cookie_visiteur = request.cookies.get(visiteurs.COOKIE)
         with base() as cx:
             if profil and profil.bannissement.actif:  # un banni n'obtient pas le cookie de porte (valable 24 h)
-                verdict = surveillance.juger(cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement)
+                verdict = surveillance.juger(
+                    cx, secret, cookie_visiteur, jeton, page=False, seuils=profil.bannissement, adresse=sceau.adresse
+                )
                 if verdict:
                     gardien.refus_banni(request, cx, jeton, request.url.path, verdict)
                     raise HTTPException(403, "banni")

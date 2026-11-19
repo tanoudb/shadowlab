@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from .. import correlation, scoring
 from .. import database as db
-from ..arena import bannissements, defis, profils, visiteurs
+from ..arena import adresses, bannissements, defis, profils, visiteurs
 from ..arena import secret as secrets_arena
 from ..detection import CHEMINS_TECHNIQUES, Detecteur, Observations, Signal, est_ressource_de_page, registre
 from . import pages
@@ -56,6 +56,18 @@ class Sceau:
     ja4: str
     liaison: str
     lier_tls: bool
+    adresse: str | None = (
+        None  # l'adresse du visiteur, signée par le frontal (D-105) ; jamais celle d'un en-tête du client
+    )
+
+
+def _adresse_signee(h, secret: bytes, observation: str, session: str) -> str | None:
+    """L'adresse que le frontal a signée pour CETTE requête, ou None (absente, mal signée, changée en route)."""
+    adresse = h.get(adresses.ENTETE.lower())
+    signature = h.get(adresses.ENTETE_SCEAU.lower())
+    if not adresse or not signature or adresses.normaliser(adresse) != adresse:
+        return None
+    return adresse if adresses.verifier(secret, signature, observation, session, adresse) else None
 
 
 def lire_sceau(request: Request, secret: bytes) -> Sceau | None:
@@ -73,7 +85,7 @@ def lire_sceau(request: Request, secret: bytes) -> Sceau | None:
         return None
     configuration = profils.charger().de(profil)
     lier = bool(configuration and configuration.defi_js.lier_tls)
-    return Sceau(observation, profil, session, ja4, liaison, lier)
+    return Sceau(observation, profil, session, ja4, liaison, lier, _adresse_signee(h, secret, observation, session))
 
 
 def empreinte_liee(sceau: Sceau) -> str:
@@ -341,7 +353,13 @@ def controler(
     # Le bannissement se lit en tête, avant tout défi, et seulement si le profil l'active (niveaux 01 à 07 : jamais).
     if profil.bannissement.actif:
         verdict = surveillance.juger(
-            cx, secret, cookie_visiteur, jeton, page=_est_une_page(chemin), seuils=profil.bannissement
+            cx,
+            secret,
+            cookie_visiteur,
+            jeton,
+            page=_est_une_page(chemin),
+            seuils=profil.bannissement,
+            adresse=sceau.adresse,
         )
         if verdict:
             return refus_banni(request, cx, jeton, chemin, verdict)
