@@ -1,0 +1,43 @@
+# Palier 2, I10 (D-104) : la soirée « une identité CONNECTÉE qui revient ».
+#
+# C'est la soirée du palier 2 (`identite-soiree.yaml`, campagne 131), aux mêmes quatre bras, mêmes rythmes et même
+# profil `endurance`, avec une seule différence : le sujet a un compte (`demo`). Il se connecte à sa première visite
+# seulement, puis lit l'espace privé à chaque visite sans se reconnecter (connexion gardée 30 jours par l'Arena, dans le
+# profil Chrome de l'identité). Les trois témoins sont ceux de la soirée, sans compte.
+#
+# Préalables : ceux de `identite-soiree.yaml` (Arena lancée, `arena appliquer` SANS SHADOWLAB_PROFILS_EXTRA, noms
+# d'identité à usage unique : changer les suffixes `-1` pour recommencer).
+# Commande : caffeinate -i uv run shadowlab campagne configs/experiments/comptes-soiree.yaml   (4 h 30 à 5 h)
+# Bilan : uv run shadowlab soiree bilan <n°>   (les critères de la soirée) ; ce que le compte ajoute se lit en base :
+# une seule décision `connexion/valide` pour le sujet, l'espace atteint à chaque visite, un seul appareil.
+experiment:
+  name: comptes_soiree
+  description: >-
+    Soirée des comptes (I10) : la soirée du palier 2 avec un sujet connecté à un compte, qui revient 24 fois sans se
+    reconnecter ; mêmes trois témoins.
+  environment: local
+  engines:
+    - name: noezia
+      label: sujet
+      compte: demo
+      options: {headless: false, channel: chrome, identite_native: true, identite: comptes-soiree-sujet-1}
+    - name: noezia
+      label: temoin-negatif
+      options: {headless: false, channel: chrome, identite_native: true}
+    - name: noezia
+      label: temoin-sentinelle
+      visites: 6
+      bannir_avant_visite: 3
+      options: {headless: false, channel: chrome, identite_native: true, identite: comptes-soiree-sentinelle-1}
+    - name: playwright
+      label: temoin-classique
+      visites: 4
+  protections: [endurance]
+  scenarios: [visite]
+  repetitions: 24
+  pages_par_visite: 15
+  espacement: {mode: fixe, minutes: 10}
+  concurrency: 4
+  monde: serie
+  seed: 20261119
+  output: [json, html]

@@ -4104,3 +4104,14 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   navigateur (même machine) ; aucune durée de plusieurs jours avec compte ; aucun humain connecté.
 - **Reste** : course I9 jusqu'au 25/11 ; I8 attend Ethan ; palier 3 attend un serveur, un domaine et un compte Cloudflare ; suites
   Linux bloquées par le disque (13 Gio libres à 9 h 16).
+
+## 2026-11-19 (9h30) — Claude (Fable 5.2, coordination) — Essai 149 des comptes tenu ; soirée avec un sujet connecté lancée
+
+- **Essai 149** (`configs/experiments/comptes-espace-essai.yaml`, 9 h 19 à 9 h 27, vraie Arena, profil `endurance`) : un compte banni à
+  la main est refusé sur l'espace privé à l'identité déjà connectée. Visites 1 et 2 réussies (une seule connexion), compte banni avant
+  la 3ᵉ, `/lab/espace` refusé (`par: compte`), identité `banni`, rien demandé après, 4ᵉ visite non lancée. Ajouté à D-104.
+- **Soirée des comptes lancée à 9 h 28** (`configs/experiments/comptes-soiree.yaml`, tmux `comptes-soiree`, environ 4 h 40) : la soirée
+  du palier 2 (campagne 131), mêmes quatre bras, avec un sujet connecté au compte `demo` (24 visites, une seule connexion attendue).
+  Bilan par `shadowlab soiree bilan`, plus ce que le compte ajoute, lu en base. La course I9 tourne en même temps.
+- Le worktree du sous-agent d'I10 est fusionné mais encore verrouillé par l'application : à retirer plus tard (base de son essai
+  copiée dans `outputs/comptes-essai-2026-11-19.sqlite3`).
