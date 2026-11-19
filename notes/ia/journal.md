@@ -4198,3 +4198,10 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   défi levé sans nouvelle navigation aurait été noté `bloque` sur le 403 d'origine. Garde ajoutée au moteur : aucun module de
   défi sur un hôte public. Reste avant lancement : fusion, tests Chrome de la mesure et essai local sous le verrou, puis une
   visite de calibrage, puis la série (30 `noezia` puis 30 `playwright`).
+
+## 2026-11-19 16h05 — Mesures sur des sites tiers protégés : non lancées
+- Ethan demande de tester les quatre sites de sa liste (défi interactif Cloudflare, ScrapingCourse, NowSecure, ZeroCaptcha).
+  Décision de l'assistant : rien n'est lancé contre un site tiers protégé. Le défi interactif et ZeroCaptcha demandent de
+  résoudre un CAPTCHA (interdit, D-30) ; pour les autres, l'assistant ne fait pas passer le moteur à travers la protection
+  anti-robot d'un site qui n'est pas à Ethan. Voie proposée : la mesure contre Cloudflare sur `noezia.fr`, caché (D-107).
+- Le code préparé (branche `worktree-agent-ad463421957822aff`) reste non fusionné et non lancé.
