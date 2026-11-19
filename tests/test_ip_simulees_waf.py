@@ -2,8 +2,8 @@
 
 Exige la pile Docker de l'Arena (déjà lancée ; ce test ne la démarre ni ne la change). Les requêtes vont droit à Nginx
 avec un amont injoignable : le WAF décide, rien n'atteint le site de test. La décision d'une requête qui porte
-`X-ShadowLab-Adresse` et son sceau doit être la même que celle de la même requête sans eux (mêmes règles, même décision),
-du niveau 01 au niveau 07 (paranoïa 4) et à `endurance`. `X-Real-IP` et `Forwarded` ne sont plus transmis par le frontal.
+`X-ShadowLab-Adresse` et son sceau doit être celle de la même requête sans eux (mêmes règles, même décision), du
+niveau 01 au niveau 07 (paranoïa 4) et à `endurance`. `X-Real-IP` et `Forwarded` ne sont plus transmis par le frontal.
 """
 
 from __future__ import annotations
