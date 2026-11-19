@@ -842,6 +842,13 @@ site **en direct** : elle n'est pas jugée par l'Arena. Devant l'Arena, la même
 (champ `recolte_partagee` d'un bras, scénario `visite`, `monde: campagne`, `espacement` obligatoire : voir
 `configs/experiments/identites-essai.yaml`), où chaque identité est un bras.
 
+Mesuré le 19/11 (D-106) : devant l'Arena (profil `endurance`, campagne de l'essai, vitrine de 60 annonces, trois
+identités, l'une bannie exprès en pleine visite par `scripts/identites-bannir-en-visite.sh`), 63 pages sur 63 et 840
+champs sur 840, rien demandé par l'identité bannie après son refus, les deux autres ont fini ; bilan par
+`scripts/identites-bilan.py <n°>`. La commande elle-même, hors Arena, avec deux identités et deux vrais Chrome : 11
+pages sur 11. Non mesuré : 1 000 pages (`configs/experiments/identites-1000.yaml`, environ 7 h), un vrai proxy, une
+coupure franche dans un vrai Chrome.
+
 ## 7. Les deux moteurs
 
 | | `http` | `navigateur` |
