@@ -1006,7 +1006,8 @@ def visite(
             duree_porte_s=duree_porte_s,
             noter=(lambda dossier, _bilan: noter_recolte_durable(dossier)) if dossier_recolte is not None else None,
             dossier_durable=dossier_recolte,
-            identite_partagee=identite_partagee,
+            # récolte partagée seulement : sans elle, l'appel reste celui d'avant l'étape 4.2
+            **({"identite_partagee": identite_partagee} if identite_partagee is not None else {}),
         )
         lancement = bilan.resume["lancement"]
         lues, echecs, relectures = lancement["pages"], lancement["echecs"], lancement["relectures"]
