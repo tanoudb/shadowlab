@@ -257,3 +257,33 @@ def test_deux_identites_en_meme_temps_ne_demandent_jamais_la_meme_page(tmp_path,
     lues = [d for _, _, demandes in visites for d in demandes if not d.startswith("/robots.txt")]
     assert len(lues) == len(set(lues)) == PAGES  # aucune page demandée deux fois, par la même ou une autre identité
     assert set(par_identite) == {"ident-a", "ident-b"}
+
+
+def test_une_recolte_partagee_ne_rejoint_jamais_une_passe_simple(tmp_path, site):
+    """Une passe lancée sans identités (`recolte lancer`) n'est jamais rejointe par une identité : sa reprise remettrait
+    en file les pages des identités vivantes, et inversement."""
+    from outils_recolte import PiloteFactice, fabriquer
+
+    from shadowlab.engines.noezia.parcours import RefusParcours
+
+    dossier = tmp_path / "recolte"
+    fabriquer(dossier, PiloteFactice(site), options=Options(pages_max=3)).lancer()  # passe simple, limitée
+    pilote = PiloteIdentite(site, "ident-a")
+    with pytest.raises(RefusParcours, match="sans identités"):
+        parcours_partage(dossier, pilote).visiter_partage("ident-a", 5)
+    assert pilote.sessions == 0 and not pilote.urls
+
+
+def test_une_passe_partagee_ne_se_reprend_pas_comme_une_passe_simple(tmp_path, site):
+    from outils_recolte import PiloteFactice, fabriquer
+
+    from shadowlab.engines.noezia.parcours import RefusParcours
+
+    dossier = tmp_path / "recolte"
+    _visite(dossier, site, "ident-a", 3)
+    pilote = PiloteFactice(site)
+    with pytest.raises(RefusParcours, match="partagée"):
+        fabriquer(dossier, pilote).reprendre()
+    with pytest.raises(RefusParcours, match="partagée"):
+        fabriquer(dossier, pilote).visiter(5)
+    assert not pilote.urls

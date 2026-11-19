@@ -30,7 +30,7 @@ from shadowlab import database as db
 from shadowlab.campaigns import lire
 from shadowlab.engines.noezia import identite as ident
 from shadowlab.engines.noezia.etat import Etat
-from shadowlab.engines.noezia.gestionnaire import PartageRefuse
+from shadowlab.engines.noezia.gestionnaire import PartageRefuse, verrou_travailleur
 from shadowlab.site import vitrine
 
 BASE = "http://127.0.0.1:8770"
@@ -121,6 +121,8 @@ def test_campagne_partagee_valide(tmp_path, reglages):
             "[visite]",
             "recolte_incrementale",
         ),
+        # sans espacement, une identité bannie ou en alerte n'est pas relue avant chaque visite
+        (BRAS_PARTAGES, "  concurrency: 3\n  monde: campagne\n", "[visite]", "espacement"),
     ],
 )
 def test_campagne_partagee_refusee(tmp_path, reglages, engines, suite, scenarios_, message):
@@ -193,6 +195,33 @@ def test_une_identite_bannie_en_route_s_arrete_l_autre_finit(tmp_path, site, reg
     assert issue.details["recolte"]["annonces"] == 1.0 and issue.details["recolte"]["champs"] == 1.0
 
 
+def test_une_visite_qui_lit_puis_attend_les_autres_reussit_une_visite_vide_est_marquee(
+    tmp_path, site, reglages, racine
+):
+    """Fin de récolte : la file est vide, une autre identité (vivante) tient la dernière page. Une visite qui a lu
+    sans échec puis attend est réussie ; une visite qui n'a rien pu prendre le dit (`rien_a_faire`)."""
+    experience = nouvelle_experience(reglages, "partage-attente")
+    dossier = tmp_path / "recolte"
+    _visite(site, reglages, experience, dossier, "essai-a", 1, pages=3)
+    verrou = verrou_travailleur(dossier, "essai-z")
+    etat = Etat(dossier / "etat.sqlite3")
+    try:
+        tenues = []
+        while (page := etat.prochaine(1, identite="essai-z")) is not None:
+            tenues.append(page)
+        etat.rendre(tenues[0])  # une seule page reste à prendre
+    finally:
+        etat.fermer()
+    issue, _, _ = _visite(site, reglages, experience, dossier, "essai-b", 2, pages=5)
+    assert issue.details["statut"] == "attente" and issue.details["pages_faites"] == 1
+    assert issue.success is True and issue.details["rien_a_faire"] is False
+    issue, pilote, _ = _visite(site, reglages, experience, dossier, "essai-a", 3, pages=5)
+    assert issue.details["statut"] == "attente" and issue.details["pages_faites"] == 0
+    assert issue.success is False and issue.details["rien_a_faire"] is True
+    assert pilote.requetes_pages == 0
+    verrou.close()
+
+
 # ── 3. Le bras ───────────────────────────────────────────────────────────────────────────────────
 
 
@@ -254,6 +283,44 @@ def test_le_bras_ne_lance_rien_quand_la_recolte_est_deja_finie(tmp_path, reglage
         campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=horloge.dormir) == "termine"
     )
     assert passages.appels == []
+
+
+def test_le_bras_attend_sans_passage_tant_que_rien_n_est_a_prendre(tmp_path, reglages, monkeypatch, racine):
+    """Toutes les pages restantes sont tenues par une autre identité vivante : le bras attend, sans ouvrir de passage
+    (aucun Chrome, rien en base), puis visite quand une page revient en file."""
+    experience, _, experiment_id = _preparer(tmp_path, reglages, monkeypatch)
+    dossier = campaigns._reglages_visite(reglages, experiment_id, experience.engines[0], "endurance")["dossier_recolte"]
+    etat = Etat(dossier / "etat.sqlite3")
+    passe = etat.ouvrir_passe(
+        "vitrine-annonces", "sha256:x", "", "", {}, {"partagee": True}, "2026-11-19T10:00:00+00:00"
+    )
+    etat.empiler(passe, [("http://127.0.0.1:8750/lab/vitrine/annonces", "liste")])
+    tenue = etat.prochaine(passe, identite="essai-z")
+    etat.fermer()
+    verrou = verrou_travailleur(dossier, "essai-z")
+    horloge = Horloge()
+    pauses_avant = []
+
+    def dormir(secondes):
+        horloge.dormir(secondes)
+        pauses_avant.append(secondes)
+        if len(pauses_avant) == 3:  # essai-z rend sa page (elle tombe) : il y a de nouveau quelque chose à prendre
+            e = Etat(dossier / "etat.sqlite3")
+            e.rendre(tenue)
+            e.fermer()
+
+    class Fin(Passages):
+        def __call__(self, *args, **kwargs):
+            details = super().__call__(*args, **kwargs)
+            return {**details, "travail_fini": True}
+
+    passages = Fin(reglages, horloge)
+    monkeypatch.setattr(campaigns, "_passage", passages)
+    rang = rang_de(experience, "ident-a")
+    assert campaigns.executer_unite(reglages, experiment_id, rang, horloge=horloge.now, dormir=dormir) == "termine"
+    assert len(passages.appels) == 1 and len(pauses_avant) >= 3
+    assert all(p == campaigns.ATTENTE_FILE_PARTAGEE_S for p in pauses_avant[:3])
+    verrou.close()
 
 
 # ── 4. Rien de partagé, contrôlé au lancement ────────────────────────────────────────────────────
