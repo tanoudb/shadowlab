@@ -4182,3 +4182,19 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   (`scripts/site-public-tunnel.sh`, sur le mot d'Ethan) ; la base publique prendra les migrations 12 et 13 (sauvegarde au
   schéma 11 : `outputs/public/public-avant-migration12-2026-11-19.sqlite3`). Le dossier temporaire de l'assistant est vidé
   au redémarrage (scripts, journaux, verrou `arena-verrou`).
+
+## 2026-11-19 16h00 — 4.2 fusionné ; mesure ScrapingCourse corrigée avant lancement
+- 4.2 (D-106) fusionné (`a452001`) : conflits de `docs/DECISIONS.md` (ordre D-104, D-105, D-106, D-107) et de
+  `src/shadowlab/campaigns.py` (`bannir_adresse` de 4.1 et `recolte_partagee` de 4.2, les deux gardés). Lint propre, 327 tests
+  des deux étapes verts ; suite complète lancée sous le verrou (sortie : `outputs/suite-apres-4-2-2026-11-19.txt`). Chiffres
+  de l'essai relus (bilan : 63 pages sur 63, 840 champs, bannie sans rien demander après, un visiteur par identité) et copiés
+  hors du dossier temporaire : `outputs/gestionnaire-4-2-2026-11-19/`. Écrit dans `docs/PLAN.md` (§ 4, § 8), `AGENTS.md`,
+  trois questions ouvertes.
+- Écart : la fusion de 4.2 a eu lieu pendant la campagne de contrôle de 4.1 ; les dernières unités, lancées en processus
+  `spawn`, ont pu charger le code de 4.2. Une campagne de contrôle sur le code final est prévue après le redémarrage (elle
+  couvrira aussi la garde du moteur de la mesure Cloudflare).
+- Mesure ScrapingCourse (branche `worktree-agent-ad463421957822aff`, non fusionnée) : deux défauts trouvés à la relecture et
+  corrigés (`2c1c48c`) : le périmètre strict bloquait `challenges.cloudflare.com` (le défi n'aurait jamais pu se lever) ; un
+  défi levé sans nouvelle navigation aurait été noté `bloque` sur le 403 d'origine. Garde ajoutée au moteur : aucun module de
+  défi sur un hôte public. Reste avant lancement : fusion, tests Chrome de la mesure et essai local sous le verrou, puis une
+  visite de calibrage, puis la série (30 `noezia` puis 30 `playwright`).

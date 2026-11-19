@@ -8,6 +8,14 @@ type: note
 
 Ce qui attend Ethan.
 ## Ouvertes
+- **2026-11-19 — Adresses (D-105) : garder « 3 visiteurs bannis en 24 h depuis la même adresse bannissent l'adresse 24 h » ?** Ordre de
+  grandeur, pas une mesure (aucun humain derrière une adresse partagée en base). Recommandation : garder tant qu'aucun humain n'est
+  mesuré ; ne bloque rien.
+- **2026-11-19 — Identités (D-106) : faut-il une preuve au rythme de l'ordonnanceur de D-90 ?** Environ 2 jours à 200 pages par jour et
+  par identité, au lieu des 7 h 30 de `identites-1000.yaml`. Recommandation : d'abord la preuve de 7 h 30, puis décider.
+- **2026-11-19 — Identités (D-106) : « aucun cookie ni proxy partagé » suffit-il sans vrai proxy ni seconde machine ?** Sur un poste,
+  toutes les identités ont la même empreinte E, donc restent reliables. Recommandation : accepter pour 4.2, le prouver à l'étape 3.4
+  (proxy) ou avec une seconde machine.
 - **2026-11-19 — Comptes (D-104) : garder « le 5ᵉ appareil différent en 24 h bannit le compte » ?** Le seuil de 4 appareils est un choix,
   pas une mesure (aucun humain connu sur deux appareils en base). Limite : une fenêtre privée compte comme un nouvel appareil à chaque
   fois. Recommandation : garder 4 tant qu'aucun humain n'est mesuré ; ne bloque rien.
