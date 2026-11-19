@@ -356,6 +356,12 @@ class Parcours:
         self._relectures: list[dict[str, Any]] = []
         self._pause_totale = 0.0
         self._duree_voulue = 0.0
+        # Récolte partagée entre identités (`visiter_partage`, étape 4.2) : l'identité de la visite, la page prise avant
+        # d'ouvrir le navigateur, l'heure du début de la visite, ses pages lues et échecs au début de la visite.
+        self._identite_partage: str | None = None
+        self._reservee: Page | None = None
+        self._debut_visite = ""
+        self._lues_identite_debut = (0, 0)
 
     def _commande_reprendre(self, *options: str) -> str:
         """La commande qui retrouve CETTE récolte (`--sortie` compris s'il a servi), avec les `options` en plus."""
@@ -459,8 +465,88 @@ class Parcours:
             return self.lancer()
         return bilan
 
+    def visiter_partage(self, identite: str, pages_max: int) -> Bilan:
+        """Une visite de l'identité `identite` sur une récolte partagée par plusieurs identités (étape 4.2) : au plus
+        `pages_max` pages de la file commune, chacune prise par une seule identité à la fois.
+
+        La passe est ouverte par la première visite, rejointe par les suivantes, jamais rouverte une fois finie
+        (`Etat.passe_partagee`). Avant toute requête : les pages que l'identité tenait encore (coupure) et celles des
+        identités qui ne travaillent plus (verrou de travail libre) reviennent en file ; puis la première page est
+        prise. Rien à prendre : aucun navigateur n'est ouvert (`attente` si d'autres identités tiennent encore des
+        pages, `terminee` si la récolte est finie). Chaque visite est un navigateur relancé : sa première page passe la
+        porte d'entrée, un refus y vaut bannissement.
+
+        Au premier signe de la sentinelle (`alerte` ou `banni`), l'identité s'arrête tout de suite : aucun nouvel
+        essai, aucune page de plus ; la page qu'elle tenait revient en file (événement `rendue`) et la passe continue
+        pour les autres identités (elle n'est jamais notée `arretee` par une identité). La visite qui finit la passe
+        écrit les exports et `resume.json` ; les autres ne les touchent pas (une seule écriture).
+        `resume.travail_fini` : plus rien à faire pour personne (passe finie, ou borne `pages_max` de la recette
+        atteinte pour la récolte entière)."""
+        from .gestionnaire import travailleur_vivant, verrou_travailleur  # le gestionnaire importe ce module
+
+        self._controles()
+        self._identite_partage = identite
+        self.options.pages_max = pages_max
+        self._debut_visite = self._horodatage()
+        travail = verrou_travailleur(self.dossier, identite)
+        etat = Etat(self.dossier / "etat.sqlite3")
+        passe: int | None = None
+        ouvert = False
+        try:
+            passe, sorte = etat.passe_partagee(
+                recette=self.recette.nom,
+                empreinte=self.empreinte,
+                texte_recette=self.texte_recette,
+                chemin_recette=self.chemin_recette,
+                moteur=self.moteur.description(),
+                options={**self._options_gardees(), "pages_max": None, "partagee": True},
+                quand=self._horodatage(),
+                departs=[(d.url, d.type) for d in self.recette.depart],
+                ignores=self.recette.parametres_ignores,
+                plafonds=self.recette.bornes.par_type,
+            )
+            if etat.passe(passe)["empreinte"] != self.empreinte:
+                raise RefusParcours(
+                    f"la recette a changé depuis le début de la passe partagée {passe} : une récolte partagée garde "
+                    "la même recette jusqu'au bout"
+                )
+            etat.noter_identite(passe, identite, self._horodatage())
+            etat.rendre_de(passe, identite)
+            rendues = etat.liberer_orphelines(
+                passe, lambda nom: nom == identite or travailleur_vivant(self.dossier, nom)
+            )
+            if rendues:
+                etat.evenement(passe, "orphelines", {"identite": identite, "rendues": rendues}, self._horodatage())
+            reprise = sorte != "ouverte"
+            self._preparer(etat, passe, reprise)
+            if sorte == "finie":
+                return self._finir_visite_partagee(etat, passe, "finie", None)
+            self._reservee = None if self._borne_partagee_atteinte() else etat.prochaine(passe, identite=identite)
+            if self._reservee is None:
+                statut = "limitee" if self._borne_partagee_atteinte() else self._file_vide()
+                return self._finir_visite_partagee(etat, passe, statut, None)
+            ouvert = True
+            self.moteur.ouvrir()
+            self._verifier_le_depart(reprise=reprise)
+            self._annoncer(etat, passe, reprise)
+            statut, arret = self._boucle_gardee()
+            return self._finir_visite_partagee(etat, passe, statut, arret)
+        finally:
+            try:
+                if passe is not None:
+                    etat.rendre_de(passe, identite)  # rien ne reste tenu par une visite finie (ou coupée)
+                self._reservee = None
+                if ouvert:
+                    self.moteur.fermer()
+            finally:
+                etat.fermer()
+                travail.close()
+
     def _evenement(self, etat: Etat, passe: int, genre: str, detail: Mapping[str, Any]) -> None:
-        """Un événement de la passe : dans l'état, et dans le journal du labo (niveau DEBUG, fichier seulement)."""
+        """Un événement de la passe : dans l'état, et dans le journal du labo (niveau DEBUG, fichier seulement). Dans
+        une récolte partagée, il porte le nom de l'identité de la visite."""
+        if self._identite_partage is not None and "identite" not in detail:
+            detail = {**detail, "identite": self._identite_partage}
         etat.evenement(passe, genre, detail, self._horodatage())
         _JOURNAL.debug(
             "récolte %s passe %s : %s %s", self.recette.nom, passe, genre, json.dumps(detail, ensure_ascii=False)
@@ -549,10 +635,20 @@ class Parcours:
         }
 
     def _pages_max(self) -> int | None:
-        """Le nombre de pages lues (échecs compris) où la passe s'arrête, en comptant depuis le début de la passe."""
+        """Le nombre de pages lues (échecs compris) où la passe s'arrête, en comptant depuis le début de la passe.
+        Récolte partagée : la limite de la visite seule ; la borne de la recette vaut pour toute la récolte et se compte
+        à part (`_borne_partagee_atteinte`), les autres identités lisant en même temps."""
         option = None if self.options.pages_max is None else self._decalage + self.options.pages_max
-        bornes = [b for b in (option, self.recette.bornes.pages_max) if b is not None]
+        recette = None if self._identite_partage is not None else self.recette.bornes.pages_max
+        bornes = [b for b in (option, recette) if b is not None]
         return min(bornes) if bornes else None
+
+    def _borne_partagee_atteinte(self) -> bool:
+        """Récolte partagée : la borne `pages_max` de la recette est-elle atteinte par les identités ensemble ?"""
+        borne = self.recette.bornes.pages_max
+        if self._identite_partage is None or borne is None:
+            return False
+        return self._etat.compteurs(self._passe)["lues"] >= borne
 
     # ── robots.txt ──────────────────────────────────────────────────────
     def _robots_de(self, adresse: str) -> Robots:
@@ -588,15 +684,37 @@ class Parcours:
 
     # ── Boucle ──────────────────────────────────────────────────────────
     def _executer(self, etat: Etat, passe: int, reprise: bool) -> Bilan:
+        self._preparer(etat, passe, reprise)
+        self._annoncer(etat, passe, reprise)
+        statut, arret = self._boucle_gardee()
+        etat.terminer_passe(passe, statut, arret, self._horodatage())
+        if arret:
+            self._evenement(etat, passe, "arret", arret)
+        return self._conclure(etat, passe, statut, arret)
+
+    def _boucle_gardee(self) -> tuple[str, dict[str, Any] | None]:
+        """La boucle ; un Ctrl-C rend la page en route à la file (« interrompue »)."""
+        try:
+            return self._boucle()
+        except KeyboardInterrupt:
+            if self._courante is not None:
+                self._etat.rendre(self._courante)
+                self._noter_rendue(self._courante, None)
+            self._ecran("INTERROMPU : état gardé, la passe peut être reprise.")
+            return "interrompue", None
+
+    def _preparer(self, etat: Etat, passe: int, reprise: bool) -> None:
+        """L'état de la boucle pour une passe, ou pour une visite d'une passe partagée. Aucune requête."""
         recette = self.recette
+        partage = self._identite_partage
         self._debut = self._horloge()
         self._etat = etat
         self._passe = passe
         self._sentinelle = Sentinelle(recette.hotes)
-        self._sentinelle.rejouer(etat.dernieres_lues(passe, FENETRE))
+        # Récolte partagée : la sentinelle d'une identité ne rejoue que ses propres pages (pas les échecs des autres).
+        self._sentinelle.rejouer(etat.dernieres_lues(passe, FENETRE, identite=partage))
         self._cadence = Cadence(rythme_de(recette), self._alea, self._horloge, self._dormir)
         self._signatures = Signatures(self.dossier / "signatures.json")
-        self._decalage = etat.compteurs(passe)["lues"] if reprise else 0
         self._plafonds = recette.bornes.par_type
         self._ignores = recette.parametres_ignores
         self._sans = set(self.options.sans)
@@ -606,13 +724,21 @@ class Parcours:
         self._base = etat.passe_de_base()
         self._incrementale = not self.options.tout_refaire and passe > self._base
         depart = etat.compteurs(passe)
+        # La limite de pages compte depuis le début de CE lancement (reprise, visite d'une passe partagée).
+        self._decalage = depart["lues"] if reprise or partage is not None else 0
         self._lues_debut, self._echecs_debut = (
             depart["lues"],
             depart["echecs"],
         )  # ce que CE lancement a lu (`lancement`)
-        # La porte d'entrée : première page de la passe, ou de chaque lancement (`entree_a_chaque_lancement`).
-        self._premiere_page = (not reprise and depart["lues"] == 0) or (
-            reprise and self.options.entree_a_chaque_lancement
+        if partage is not None:
+            a_moi = etat.pages_par_identite(passe).get(partage, {"lues": 0, "echecs": 0})
+            self._lues_identite_debut = (a_moi["lues"], a_moi["echecs"])
+        # La porte d'entrée : première page de la passe, ou de chaque lancement (`entree_a_chaque_lancement`), ou de
+        # chaque visite d'une passe partagée (un navigateur relancé).
+        self._premiere_page = (
+            partage is not None
+            or (not reprise and depart["lues"] == 0)
+            or (reprise and self.options.entree_a_chaque_lancement)
         )
         self._porte: dict[str, Any] | None = None
         self._alerte_en_premiere = False  # la réponse examinée est celle de la première page de la passe
@@ -629,21 +755,12 @@ class Parcours:
         self._entree_par_la_liste = self._plan is not None and reprise
         if self._entree_par_la_liste:
             self._liste = self._derniere_liste(etat, passe)
-        if self._repasser:
+        if self._repasser and partage is None:
             self._relire_les_passages(etat, passe)
-        self._annoncer(etat, passe, reprise)
-        statut, arret = "terminee", None
-        try:
-            statut, arret = self._boucle()
-        except KeyboardInterrupt:
-            if self._courante is not None:
-                etat.rendre(self._courante)
-            statut = "interrompue"
-            self._ecran("INTERROMPU : état gardé, la passe peut être reprise.")
-        etat.terminer_passe(passe, statut, arret, self._horodatage())
-        if arret:
-            self._evenement(etat, passe, "arret", arret)
-        return self._conclure(etat, passe, statut, arret)
+        elif self._repasser:
+            # Récolte partagée : chaque identité a son propre laissez-passer ; les repassages se comptent par visite,
+            # depuis son début (les événements de la passe sont ceux de toutes les identités).
+            self._dernier_passage = self._horodatage()
 
     def _annoncer(self, etat: Etat, passe: int, reprise: bool) -> None:
         recette = self.recette
@@ -673,25 +790,26 @@ class Parcours:
         self._ecran(f"{'Reprise de la passe' if reprise else 'Passe'} {passe} · état : {etat.chemin}")
 
     def _boucle(self) -> tuple[str, dict[str, Any] | None]:
-        etat, passe = self._etat, self._passe
+        etat = self._etat
         limite = self._pages_max()
-        lues = etat.compteurs(passe)["lues"]
+        lues = self._lues_debut
         while True:
             alerte = self._controler_ressources()  # un refus reçu pendant la page, avant toute nouvelle navigation
             if alerte is not None:
                 self._noter_alerte_identite(alerte)
                 return "arretee", self._arret(alerte)
-            if limite is not None and lues >= limite:
-                return "limitee", None
-            page = etat.prochaine(passe)
+            if (limite is not None and lues >= limite) or self._borne_partagee_atteinte():
+                return self._limite_atteinte(), None
+            page = self._prendre()
             if page is None:
-                return "terminee", None
+                return self._file_vide(), None
             self._courante = page
             if self._entree_due(page, limite, lues):
                 alerte, ajout = self._entrer_par_la_liste()
                 lues += ajout
                 if alerte is not None:
                     etat.rendre(page)  # rien n'a été demandé pour elle : elle reste à faire
+                    self._noter_rendue(page, alerte)
                     self._courante = None
                     self._noter_alerte_identite(alerte)
                     return "arretee", self._arret(alerte)
@@ -700,6 +818,8 @@ class Parcours:
             self._courante = None
             lues += lue
             if alerte is not None:
+                if not lue:  # `_traiter` a rendu la page à la file : rien n'en a été lu
+                    self._noter_rendue(page, alerte)
                 self._noter_alerte_identite(alerte)
                 return "arretee", self._arret(alerte)
             if lue and self._plan is not None:
@@ -710,6 +830,96 @@ class Parcours:
                     return "arretee", self._arret(alerte)
             if lue and lues % PAS_AFFICHAGE == 0:
                 self._progression(lues)
+
+    # ── Récolte partagée entre identités (étape 4.2) ────────────────────
+    def _prendre(self) -> Page | None:
+        """La page suivante : celle prise avant d'ouvrir le navigateur (récolte partagée), sinon la file. Dans une
+        récolte partagée, la page est prise au nom de l'identité : aucune autre ne peut la prendre."""
+        if self._reservee is not None:
+            page, self._reservee = self._reservee, None
+            return page
+        return self._etat.prochaine(self._passe, identite=self._identite_partage)
+
+    def _file_vide(self) -> str:
+        """Plus rien à prendre. Seul : la passe est terminée. Récolte partagée : terminée si plus aucune page n'est à
+        faire ni en cours (cette visite la termine), `finie` si une autre identité vient de la terminer, `attente` si
+        d'autres identités tiennent encore des pages (elles peuvent revenir en file, ou en ajouter)."""
+        if self._identite_partage is None:
+            return "terminee"
+        if self._etat.terminer_si_finie(self._passe, self._horodatage()):
+            return "terminee"
+        return "finie" if self._etat.passe(self._passe)["statut"] == "terminee" else "attente"
+
+    def _limite_atteinte(self) -> str:
+        """Limite de pages atteinte. Récolte partagée : si plus rien n'est à faire, cette visite termine la passe ; si
+        c'est la borne de la recette (toute la récolte), la passe est notée `limitee` : aucune identité n'ira plus
+        loin."""
+        if self._identite_partage is None:
+            return "limitee"
+        if self._etat.terminer_si_finie(self._passe, self._horodatage()):
+            return "terminee"
+        if self._borne_partagee_atteinte() and self._etat.passe(self._passe)["statut"] != "limitee":
+            self._etat.terminer_passe(self._passe, "limitee", None, self._horodatage())
+        return "limitee"
+
+    def _noter_rendue(self, page: Page, alerte: Alerte | None) -> None:
+        """Récolte partagée : la page que tenait l'identité est revenue en file sans être lue (elle tombe, ou la visite
+        est interrompue) ; une autre identité la lira. Tracé (événement `rendue`)."""
+        if self._identite_partage is None:
+            return
+        detail = {"adresse": page.adresse, "type": page.type, "signe": alerte.signe if alerte else "interruption"}
+        self._evenement(self._etat, self._passe, "rendue", detail)
+
+    def _finir_visite_partagee(self, etat: Etat, passe: int, statut: str, arret: dict[str, Any] | None) -> Bilan:
+        """Fin d'une visite d'une récolte partagée : la visite est notée (`visites_identites`), la passe n'est jamais
+        notée `arretee` par une identité ; seule la visite qui a fini la passe écrit les exports et `resume.json`."""
+        nom = self._identite_partage
+        assert nom is not None
+        etat.rendre_de(passe, nom)
+        if arret:
+            self._evenement(etat, passe, "arret", arret)
+        a_moi = etat.pages_par_identite(passe).get(nom, {"lues": 0, "echecs": 0})
+        lancement = {
+            "pages": a_moi["lues"] - self._lues_identite_debut[0],
+            "echecs": a_moi["echecs"] - self._lues_identite_debut[1],
+            "relectures": len(self._relectures),
+        }
+        etat.noter_visite(
+            passe, nom, debut=self._debut_visite, fin=self._horodatage(), pages=lancement["pages"], statut=statut,
+            arret=arret,
+        )  # fmt: skip
+        a_faire, en_cours = etat.pages_restantes(passe)
+        resume = self._resume(etat, passe, statut, arret)
+        resume.update(
+            identite=nom,
+            lancement=lancement,
+            passe_statut=etat.passe(passe)["statut"],
+            travail_fini=statut in ("terminee", "finie") or self._borne_partagee_atteinte(),
+            file={"a_faire": a_faire, "en_cours": en_cours, "en_cours_par_identite": etat.en_cours_par_identite(passe)},
+            identites={
+                i["nom"]: {**i, **etat.pages_par_identite(passe).get(i["nom"], {})} for i in etat.identites(passe)
+            },
+        )
+        dossier_passe = self.dossier / f"passe-{passe:03d}"
+        if arret:
+            self._ecran(
+                f"ARRÊT de l'identité {nom} : signe d'alerte ({arret['detail']}) sur {arret['adresse']}. Aucun nouvel "
+                "essai, aucune page de plus ; sa page revient en file, les autres identités continuent."
+            )
+        self._ecran(
+            f"Visite de {nom} : {pages_faites(lancement['pages'])} ({statut}) · file : {a_faire} à faire, "
+            f"{en_cours} en cours"
+        )
+        if statut == "terminee":
+            resume["fichiers"] = ecrire_exports(etat, dossier_passe, passe)
+            resume["csv"] = FORMAT_CSV
+            self._ecrire_sorties(dossier_passe, resume)
+            c = etat.compteurs(passe)
+            self._ecran(
+                f"Récolte terminée : {pages_faites(c['faites'])}, {c['echecs']} échec(s). Données : {dossier_passe}"
+            )
+        code = {"terminee": 0, "limitee": 0, "attente": 0, "finie": 0, "arretee": 3}.get(statut, 1)
+        return Bilan(code, statut, passe, arret, resume, dossier_passe)
 
     # ── Sentinelle : ressources de la page ──────────────────────────────
     def _controler_ressources(self) -> Alerte | None:

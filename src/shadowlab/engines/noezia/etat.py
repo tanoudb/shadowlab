@@ -20,6 +20,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -149,10 +150,24 @@ class Etat:
         if tables and "passes" not in tables:
             self._cx.close()
             raise ValueError(f"{chemin} n'est pas un état de récolte (table des passes absente)")
-        self._cx.execute("PRAGMA journal_mode = WAL")
+        self._passer_en_wal()
         self._cx.execute("PRAGMA synchronous = NORMAL")
         self._cx.executescript(_SCHEMA)
         self._migrer()
+
+    def _passer_en_wal(self) -> None:
+        """Journal WAL (gardé dans le fichier). Changer de journal n'attend pas le délai de SQLite : deux identités qui
+        ouvrent ensemble une base neuve se gênent (« database is locked » tout de suite) ; on réessaie dans le délai."""
+        limite = time.monotonic() + DELAI_VERROU_MS / 1000
+        while True:
+            try:
+                if self._cx.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                    self._cx.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as erreur:
+                if "locked" not in str(erreur) or time.monotonic() >= limite:
+                    raise
+                time.sleep(0.02)
 
     def _migrer(self) -> None:
         """Une base écrite avant l'étape 4.2 n'a pas la colonne du porteur d'une page : elle la reçoit (vide)."""
@@ -424,6 +439,15 @@ class Etat:
                     " ON CONFLICT (passe, nom) DO UPDATE SET proxy = excluded.proxy",
                     (passe, nom, quand, proxy),
                 )
+
+    def noter_identite(self, passe: int, nom: str, quand: str) -> None:
+        """Note une identité qui arrive sur la passe (sa première visite), sans toucher à ce qui est déjà noté (le
+        proxy masqué écrit par le lancement)."""
+        with self.transaction():
+            self._cx.execute(
+                "INSERT OR IGNORE INTO identites (passe, nom, ajoutee_le, proxy) VALUES (?, ?, ?, NULL)",
+                (passe, nom, quand),
+            )
 
     def noter_visite(
         self,
