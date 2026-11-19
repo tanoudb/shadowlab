@@ -4115,3 +4115,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   Bilan par `shadowlab soiree bilan`, plus ce que le compte ajoute, lu en base. La course I9 tourne en même temps.
 - Le worktree du sous-agent d'I10 est fusionné mais encore verrouillé par l'application : à retirer plus tard (base de son essai
   copiée dans `outputs/comptes-essai-2026-11-19.sqlite3`).
+
+## 2026-11-19 (9h50) — Claude (Fable 5.2, coordination) — Travail en parallèle : paliers 4.1 et 4.2 lancés pendant que le palier 3 attend
+
+- Ethan : « j'ai pas tout ça encore, on peut travailler plusieurs choses en même temps ? » (il n'a pas encore le serveur, le domaine, le
+  compte Cloudflare ni le proxy du palier 3). Exception à la règle du plan § 4 (« on ne commence pas un palier avant la fin du
+  précédent ») : le palier 3 est bloqué par ces moyens, le palier 4 se développe pendant ce temps et pendant la course.
+- **Deux sous-agents, chacun dans son worktree** : **4.1** (Sonnet) adresses IP simulées par le protocole PROXY accepté du seul local,
+  bannissement par adresse, migration 13, D-105 ; **4.2** (Opus) gestionnaire d'identités (file d'adresses dans la base de la récolte,
+  réaffectation quand une identité tombe, rien de partagé), D-106. Fichiers séparés ; aucun ne touche `AGENTS.md` ni le plan (je les
+  écris après les fusions). Chrome et campagnes seulement après la soirée des comptes, un à la fois (verrou `arena-verrou` dans mon
+  dossier temporaire), ports 8775/8749 et 8776/8750, pile Docker partagée sans `appliquer`. Pas de suite complète dans les worktrees :
+  je la lance après chaque fusion.
+- Worktree du sous-agent d'I10 retiré (fusionné, propre, base de l'essai copiée). Disque : 9,1 Gio libres à 9 h 45 ; il baissait
+  d'environ 4 Go en 25 minutes vers 9 h 30, par d'autres projets (caches Hugging Face et `uv`, conversations Claude, `omni-trad`).
