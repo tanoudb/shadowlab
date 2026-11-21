@@ -4213,3 +4213,22 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - Décision maintenue sur les sites tiers protégés : non lancés ; raisons données à Ethan (solveur de CAPTCHA réel interdit ;
   la détection de Cloudflare vaut pour tous ses sites, pas seulement la page de test). Voie retenue : noezia.fr caché (D-107),
   à préparer après le redémarrage, sur l'accord d'Ethan (« Oui, après »).
+
+
+## 2026-11-19 — Codex — Avis sur le positionnement du scraper
+- Lecture du code de navigation, parcours et gestionnaire, des consignes et des mesures. Vérification des rapports JSON : campagne 145, 252 passages réussis, 42 par niveau de 01 à 06 sans corrélation.
+- Avis : moteur et laboratoire sérieux ; supériorité mondiale non établie. Réserves : comparaison de configurations différentes, Arena maison, CAPTCHA en clés de test, pas de comparaison avec les services commerciaux.
+- Aucun moteur lancé, aucune campagne ni fichier de code modifié ; changements de moteur déjà présents laissés intacts. Reste : comparaison externe à conditions équivalentes sur cibles autorisées.
+
+## 2026-11-21 16h00 — Tunnel du site public relancé après le redémarrage du 19/11
+- Sur demande d'Ethan (« relance juste le tunnel cloudflare »). Le Mac a redémarré le 19/11 vers 16 h 40 ; les deux
+  sessions tmux `site-public-tunnel` et `site-public-app` étaient donc éteintes.
+- Relancé à l'identique : `scripts/site-public-tunnel.sh tunnel` (session `site-public-tunnel`) puis, derrière,
+  `SHADOWLAB_PUBLIC_CONTACT="Labo Vitrine" SHADOWLAB_PUBLIC_SESSIONS_PAR_JOUR=150 scripts/site-public-tunnel.sh app`
+  (session `site-public-app`). Nouvelle adresse (le tunnel rapide la change) : écrite dans
+  `outputs/public/adresse-publique.txt`. Vérifié : /fr en 200 en local (8771) et par le tunnel (5 967 octets).
+- Base publique migrée au schéma 13 (migrations 12 puis 13 appliquées au premier démarrage ; sauvegarde au schéma 11 :
+  `outputs/public/public-avant-migration12-2026-11-19.sqlite3`).
+- **Constat à part (course I9)** : la course est ARRÊTÉE depuis le 19/11 16 h 28 (redémarrage du Mac), jamais reprise ;
+  47,5 h sans visite, sujet à 15 visites sur 200. Conteneurs Docker encore debout. Non repris (hors de la demande) ;
+  décision à Ethan. Disque à 5,6 Gio (sous le seuil de 20 Gio).
