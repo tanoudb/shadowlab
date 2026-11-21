@@ -1573,3 +1573,21 @@ Format : `D-xx — date — décision (pourquoi)`. Une décision remplacée est 
   Mots d'Ethan : « j'ai un nom de domaine noezia.fr mais j'ai toujours pas fait de site », puis, après l'objection (D-81 : le site public ne cite jamais le projet ; les noms des certificats sont publiés ; le nom est celui de son produit) : « faut juste que personne y ait accès et soit caché ».
   Conséquences : (1) **le site public reste sans `noezia.fr`** (D-81 inchangée ; son nom d'hôte stable reste à trouver) ; (2) la cible est un **sous-domaine tiré au hasard** de `noezia.fr`, publié nulle part, servi par un tunnel nommé vers une application qui ne sert que la vitrine ; couvert par le certificat universel de Cloudflare (`*.noezia.fr`), il n'apparaît pas en clair dans les journaux de certificats (à vérifier après mise en place) ; (3) **porte d'accès** : une règle WAF de Cloudflare bloque toute requête sans un cookie secret que seuls nos moteurs (sujet et témoin) posent ; elle ne saute aucune protection, donc la détection de Cloudflare juge nos passages comme ceux d'un visiteur ordinaire ; (4) `robots.txt` qui refuse tout et `X-Robots-Tag: noindex` ; (5) le secret n'entre jamais dans git ; (6) rien ne change pour l'adresse `noezia.fr` elle-même ni pour son courrier : passer les serveurs DNS chez Cloudflare (seule voie du forfait gratuit) impose de recopier d'abord les enregistrements de courrier d'OVH (MX, SPF), vérifiés avant la bascule.
   À faire par Ethan : compte Cloudflare gratuit, ajout de `noezia.fr`, bascule des serveurs DNS chez OVH (après vérification du courrier), autorisation de l'extension Cloudflare (`/mcp`) et `cloudflared tunnel login`. Ensuite la coordination fait le reste (tunnel, sous-domaine, règle, mesure 1.8 depuis le poste).
+
+- **D-108 — 21/11/2026 — Collecte de vraies sessions humaines sur un site à nous (omni-read.com), par opt-in explicite, pour calibrer les détecteurs.**
+  Constat : le projet n'a aucune session humaine en base ; les détecteurs sont réglés sur nos sites de démonstration. `omni-read.com`
+  (site d'Ethan, Next.js derrière Cloudflare, vrai trafic) peut fournir de vraies sessions, **sur consentement explicite** des lecteurs.
+  Garde-fous (demande/accord d'Ethan) : opt-in **refusé par défaut, jamais déclenché par la bannière cookies** ; suppression possible ;
+  **jamais le texte tapé, jamais l'IP** ; compte sous **identifiant masqué** (HMAC côté site). But affiché honnête : améliorer OmniRead
+  **et** nourrir notre analyse (les deux dans la notice).
+  **Côté ShadowLab (fait, fusion `17007ec`)** : paquet d'observateurs **sans marque** (D-81, `uv run shadowlab externe paquet <dossier>`,
+  point d'envoi réglable par `meta sl-collecte`) ; contrat de données `docs/collecte-externe.md` (envois, session JSONL, règle d'or,
+  taille/quotas/rétention) ; pont `shadowlab externe analyser <jsonl> [--niveaux]` qui fait passer les sessions dans nos détecteurs
+  (même code que `rejeu`, agrégation Wilson) et **dit les non-évalués au lieu de deviner**. `releve.js` lit un point d'envoi réglable,
+  repli sur `/lab/collecte` : le site public ne change pas d'un octet (3 092 tests verts, lint propre).
+  **Côté site (à faire, autre dépôt `omni-read-web`, autre session relue par la session du site)** : opt-in + notice + table Supabase
+  + route de collecte (valide la trace, compresse en blob, plafond, rétention, masque le compte), d'après le contrat.
+  **Réserves** : détecteurs réglés sur pages courtes — un site Next.js sans rechargement donne une empreinte/comportement par chargement
+  complet, effet inconnu ; les traces de gestes sont collectées mais **aucun détecteur ne les lit encore** (matière à améliorer les
+  détecteurs plus tard) ; sessions « humaines » **présumées**, pas prouvées ; paquet jamais tourné dans un vrai navigateur ; `sl-sans-tiers=1`
+  obligatoire sinon `observateur.js` ouvre une connexion WebRTC vers un STUN Google qui verrait l'IP.

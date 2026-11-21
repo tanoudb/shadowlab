@@ -4232,3 +4232,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Constat à part (course I9)** : la course est ARRÊTÉE depuis le 19/11 16 h 28 (redémarrage du Mac), jamais reprise ;
   47,5 h sans visite, sujet à 15 visites sur 200. Conteneurs Docker encore debout. Non repris (hors de la demande) ;
   décision à Ethan. Disque à 5,6 Gio (sous le seuil de 20 Gio).
+
+## 2026-11-21 19h05 — Collecte externe (côté ShadowLab) : D-108, fusionnée (`17007ec`)
+- Objectif d'Ethan : brancher notre analyse sur les vrais utilisateurs d'omni-read.com (son site, Next.js, Cloudflare, vrai trafic)
+  pour obtenir de vraies sessions humaines (zéro en base aujourd'hui). Collecte **sur opt-in explicite** (pas via les cookies), sessions
+  rangées dans la **Supabase du site**, analyse ShadowLab par-dessus.
+- Sous-agent (Sonnet) → `docs/collecte-externe.md` (contrat + quotas/rétention), `src/shadowlab/externe/{paquet,analyse}.py`, sous-commande
+  `shadowlab externe paquet|analyser`, `releve.js` à point d'envoi réglable (repli `/lab/collecte`, site public inchangé). Vérifié par la
+  coordination : analyse honnête (attrape le robot webdriver, liste les non-évalués), paquet sans marque, 112 tests ciblés verts (3 092 à la
+  suite complète du sous-agent).
+- Reste : la **session du site** (opt-in + notice + table Supabase + route), sur une branche d'`omni-read-web`, relue par la session du site,
+  fusionnée par Ethan. Le texte exact de l'opt-in est à valider par Ethan avant de toucher au site.
+- Préalable infra abandonné (tunnel) : les sessions vont dans Supabase, pas besoin d'adresse stable. Reste à chiffrer : plan Supabase + trafic
+  (questions ouvertes).
+- Rappel : quotas — ~20 à 100 Ko compressés/session, 1 000 sessions ≈ 20 à 100 Mo ; compresser en blob + plafond + purge.

@@ -130,3 +130,4 @@ Ce qui attend Ethan.
 - **2026-11-11 — Objectif de la v1** : validé par Ethan (D-54). Voir `docs/PLAN.md` § 1.
 - **2026-11-03 — Moteurs anti-détection** : Ethan autorise leur intégration contre nos propres protections (D-15).
 - **2026-11-03 — Docker Compose** : devenu nécessaire pour l'Arena (Coraza, Nginx) ; OrbStack est disponible.
+2026-11-21 — Collecte externe (D-108) : plan Supabase d'omni-read ? trafic quotidien ? (pour dimensionner la collecte)
