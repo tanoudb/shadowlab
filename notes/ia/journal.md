@@ -4246,3 +4246,18 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - Préalable infra abandonné (tunnel) : les sessions vont dans Supabase, pas besoin d'adresse stable. Reste à chiffrer : plan Supabase + trafic
   (questions ouvertes).
 - Rappel : quotas — ~20 à 100 Ko compressés/session, 1 000 sessions ≈ 20 à 100 Mo ; compresser en blob + plafond + purge.
+
+## 2026-11-21 20h45 — Collecte externe, côté SITE : construite sur une branche d'omni-read (non poussée, non déployée)
+- Suite de D-108. Session du site impossible à lancer (dossier `omni-read-web` pas « de confiance », Ethan sur mobile) → j'ai créé
+  la branche `chantier/collecte-sessions` (worktree `~/dev/omni-read-web-collecte`, coupée de la branche en ligne) et délégué la
+  construction à un sous-agent Sonnet (commits au fil de l'eau ; le 1ᵉʳ essai avait été coupé par un redémarrage).
+- Fait (8 commits sur la branche) : opt-in au texte validé (séparé du bandeau cookies), notice `/etude`, suppression de session,
+  observateurs sans marque dans `public/etude/`, routes `app/api/etude/{session,collecte,supprimer}`, migration Supabase (5 tables,
+  7 fonctions `SECURITY DEFINER` gardées par une clé de route = interrupteur), plafonds en octets + purge 30 j, export JSONL du contrat.
+- Vérifié par la coordination : 34 tests Node verts, `next build --webpack` ok, code servi/exécuté SANS marque (nettoyé, commit `292b823`),
+  IP de confiance Cloudflare pour la limite de débit (correctif de la revue de sécurité : `cf-connecting-ip` + LRU), rien poussé, rien déployé.
+  Quotas : pire cas ~300 Mio, usage attendu 40 à 200 Mio pour 2 000 sessions (plan gratuit = 500 Mio).
+- **Reste à Ethan** (son infra, sa règle « la mise en production reste à moi ») : relire+fusionner la branche, 2 secrets (`ETUDE_CLE_ROUTE`,
+  `ETUDE_SECRET_COMPTE`), migration Supabase, couper Rocket Loader, remplir les trous légaux de `/etude`, déployer, puis poser la clé de
+  route en base pour allumer. Export → `shadowlab externe analyser` (côté ShadowLab). Détail dans `omni-read-web:docs/etude-collecte.md`.
+- À surveiller (Q-etude-2) : le bandeau d'étude n'apparaît qu'après la réponse au bandeau cookies (ceux qui l'ignorent ne le voient pas).
