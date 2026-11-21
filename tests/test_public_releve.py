@@ -393,7 +393,8 @@ def test_releve_ni_autorisation_ni_stockage_ni_ailleurs():
     assert not re.search(r"(?:https?:)?//[a-z0-9]", code, re.I), "aucune adresse vers un autre hôte"
     # Une seule adresse dans le script, celle du point d'entrée de ce site ; tout envoi passe par elle.
     adresses = {m for m in re.findall(r"'(/[^']*)'", code)}
-    assert adresses == {"/lab/collecte?sl="}, adresses
+    assert adresses == {"/lab/collecte"}, adresses  # point d'entrée par défaut ; la balise `sl-collecte` le remplace
+    assert "const ADRESSE = BASE + (BASE.includes('?') ? '&sl=' : '?sl=');" in code
     assert set(re.findall(r"(?:fetch|sendBeacon)\(\s*(\w+)", code)) == {"adresse"}
     assert "const adresse = ADRESSE + encodeURIComponent(jeton);" in code
     # Hors session, rien : le script s'arrête avant le premier écouteur.

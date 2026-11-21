@@ -115,7 +115,7 @@ def rejouer(cx: sqlite3.Connection, publique: bool = False, niveaux: profils_are
         "experience": experience,
         "sessions": {"total": len(lignes), "rejouees": len(detail), "inutilisables": len(inutilisables)},
         "inutilisables": inutilisables,
-        "niveaux": [_agreger(code, profil, detail) for code, profil in niveaux.items()],
+        "niveaux": [agreger(code, profil, detail) for code, profil in niveaux.items()],
         "detail": detail,
     }
 
@@ -169,6 +169,38 @@ def _historique(
     return registre()["correlation-session"].classer(observations).classification == "automatise"
 
 
+def juger(
+    http: list[dict],
+    js: list[dict],
+    tls: dict | None,
+    pieges: list[str],
+    niveaux: profils_arena.Profils,
+    neuve: bool,
+    tous: dict[str, Detecteur],
+    non_evalues: dict[str, str],
+) -> dict[str, dict]:
+    """Verdict de chaque niveau pour des observations : refait la décision de l'Arena à chacun de ses moments
+    (`_moments`). Partagé avec `externe.analyse` : un seul code de décision pour les deux rejeux."""
+    verdicts = {code: {"arretee": False, "moment": None, "motifs": [], "classes": {}} for code, _ in niveaux.items()}
+    actifs = [(code, profil) for code, profil in niveaux.items() if profil.fingerprinting.actif]
+    for moment, nb_http, nb_js in _moments(http, js):
+        observations = Observations(http=http[:nb_http], js=js[:nb_js], tls=tls, visite_neuve=neuve)
+        nb_pieges = sum(1 for instant in pieges if moment["instant"] is None or instant <= moment["instant"])
+        for code, profil in actifs:
+            parametres = gardien.parametres(profil)
+            parametres["exclure"] = [*(parametres["exclure"] or []), *non_evalues]
+            # Un piège n'existe qu'aux niveaux qui en servent : ailleurs, la personne n'aurait rien pu déclencher.
+            servis = nb_pieges if profil.honeypots.actif else 0
+            motifs = gardien.motifs_suspicion(observations, servis, tous=tous, **parametres)
+            verdict = verdicts[code]
+            for motif in motifs:
+                codes = verdict["classes"].setdefault(motif["detecteur"], [])
+                codes += [s["code"] for s in motif["signaux"] if s["code"] not in codes]
+            if motifs and profil.fingerprinting.bloquer != "non" and not verdict["arretee"]:
+                verdict.update(arretee=True, moment=moment, motifs=motifs)
+    return verdicts
+
+
 def _rejouer_session(
     cx: sqlite3.Connection, ligne: sqlite3.Row, niveaux: profils_arena.Profils, publique: bool
 ) -> dict | None:
@@ -190,23 +222,7 @@ def _rejouer_session(
     for nom, regles in ecartees.items():
         tous[nom] = _SansRegles(tous[nom], frozenset(regles))
     non_evalues = _non_evalues(tls, Observations(http=http, js=js).empreinte_js, publique)
-    verdicts = {code: {"arretee": False, "moment": None, "motifs": [], "classes": {}} for code, _ in niveaux.items()}
-    actifs = [(code, profil) for code, profil in niveaux.items() if profil.fingerprinting.actif]
-    for moment, nb_http, nb_js in _moments(http, js):
-        observations = Observations(http=http[:nb_http], js=js[:nb_js], tls=tls, visite_neuve=neuve)
-        nb_pieges = sum(1 for instant in pieges if moment["instant"] is None or instant <= moment["instant"])
-        for code, profil in actifs:
-            parametres = gardien.parametres(profil)
-            parametres["exclure"] = [*(parametres["exclure"] or []), *non_evalues]
-            # Un piège n'existe qu'aux niveaux qui en servent : ailleurs, la personne n'aurait rien pu déclencher.
-            servis = nb_pieges if profil.honeypots.actif else 0
-            motifs = gardien.motifs_suspicion(observations, servis, tous=tous, **parametres)
-            verdict = verdicts[code]
-            for motif in motifs:
-                codes = verdict["classes"].setdefault(motif["detecteur"], [])
-                codes += [s["code"] for s in motif["signaux"] if s["code"] not in codes]
-            if motifs and profil.fingerprinting.bloquer != "non" and not verdict["arretee"]:
-                verdict.update(arretee=True, moment=moment, motifs=motifs)
+    verdicts = juger(http, js, tls, pieges, niveaux, neuve, tous, non_evalues)
     return {
         "jeton": jeton,
         "statut": ligne["status"],
@@ -223,7 +239,7 @@ def _tri(compteur: Counter) -> list[tuple[str, int]]:
     return sorted(compteur.items(), key=lambda e: (-e[1], e[0]))
 
 
-def _agreger(code: str, profil: profils_arena.Profil, sessions: list[dict]) -> dict:
+def agreger(code: str, profil: profils_arena.Profil, sessions: list[dict]) -> dict:
     """Chiffres d'un niveau : sessions arrêtées (intervalle de Wilson) et sessions classées par détecteur."""
     f = profil.fingerprinting
     consultes = set(f.detecteurs or [*gardien.REGLES_REQUETE, *gardien.REGLES_JAVASCRIPT]) if f.actif else set()

@@ -159,6 +159,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--session", choices=["vivante", "absente"], help="`etat` : la session tmux de la course (`scripts/course.sh`)"
     )
+    p = sous.add_parser(
+        "externe", help="collecte externe : fabriquer le paquet d'observateurs, analyser un export de sessions"
+    )
+    p.add_argument("action", choices=["analyser", "paquet"])
+    p.add_argument("cible", type=Path, help="`analyser` : export JSONL ; `paquet` : dossier de sortie")
+    p.add_argument("--niveaux", help="`analyser` : niveaux à juger, séparés par des virgules (défaut : tous)")
+    p.add_argument("--json", dest="format_json", action="store_true", help="`analyser` : sortie JSON")
     p = sous.add_parser("rejeu", help="rejouer les sessions humaines contre chaque niveau de l'Arena")
     p.add_argument("--base", type=Path, help="base du site public, lue sans écrire (défaut : base du labo)")
     p.add_argument("--json", dest="format_json", action="store_true", help="sortie JSON")
@@ -274,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.commande == "rejeu":
         return _rejeu(args, reglages)
+    if args.commande == "externe":
+        return _externe(args)
 
     cx = db.ouvrir(reglages.base_donnees)
     if args.commande == "liste":
@@ -495,6 +504,12 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
     if not s["rejouees"]:
         print("Aucune session humaine à rejouer : ouvrir /manuel (labo) ou le site public dans un navigateur.")
         return 0
+    _afficher_niveaux(resultat)
+    return 0
+
+
+def _afficher_niveaux(resultat: dict) -> None:
+    """Tableau par niveau puis détail par détecteur : partagé par `rejeu` et `externe analyser`."""
     ligne = "{:<7} {:<22} {:>8} {:>8} {:>8}  {:<12} {}"
     print("\n" + ligne.format("Niveau", "Nom", "Rejouées", "Arrêtées", "Passées", "Taux d'arrêt", "IC 95 %"))
     for n in resultat["niveaux"]:
@@ -532,6 +547,46 @@ def _rejeu(args: argparse.Namespace, reglages: Reglages) -> int:
                 f"  correlation-session (visites antérieures du monde de chaque session) : {h['sessions']}/{h['sur']}"
                 " classée(s) automatisée(s) — dépend de l'historique, hors du taux."
             )
+
+
+def _externe(args: argparse.Namespace) -> int:
+    """`shadowlab externe paquet <dossier>` ou `analyser <export.jsonl>` (contrat : docs/collecte-externe.md)."""
+    import json
+
+    from .externe import analyse, paquet
+    from .public.script_public import ScriptPublicInvalide
+
+    if args.action == "paquet":
+        try:
+            empreintes = paquet.fabriquer(args.cible)
+        except ScriptPublicInvalide as erreur:
+            print(f"Refus : {erreur}", file=sys.stderr)
+            return 2
+        print(f"Paquet sans marque écrit dans {_nettoyer(args.cible)} :")
+        for nom, sha in empreintes.items():
+            print(f"  {nom}  sha256 {sha}")
+        return 0
+    try:
+        sessions, refusees = analyse.lire_export(args.cible)
+        codes = [c.strip() for c in args.niveaux.split(",") if c.strip()] if args.niveaux else None
+        resultat = analyse.analyser(sessions, refusees, codes)
+    except ValueError as erreur:
+        print(f"Refus : {erreur}", file=sys.stderr)
+        return 2
+    if args.format_json:
+        print(json.dumps(resultat, ensure_ascii=False, indent=2))
+        return 0
+    s = resultat["sessions"]
+    print(f"Analyse d'un export externe — {_nettoyer(args.cible)} : {s['total']} session(s) lue(s)")
+    for r in resultat["refusees"]:
+        print(f"  Session refusée, ligne {r['ligne']} : {_nettoyer(r['raison'])}")
+    if not s["rejouees"]:
+        print("Aucune session à juger.")
+        return 0
+    print(
+        f"{s['rejouees']} session(s) jugée(s). Traces : {resultat['traces']['recues']} — {resultat['traces']['note']}."
+    )
+    _afficher_niveaux(resultat)
     return 0
 
 

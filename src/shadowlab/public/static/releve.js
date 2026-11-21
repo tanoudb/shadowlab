@@ -19,7 +19,11 @@
   if (!jeton) return; // hors session : aucun écouteur, aucun envoi
 
   const VERSION = 1;
-  const ADRESSE = '/lab/collecte?sl=';
+  // Point d'entrée : celui de ce site (`/lab/collecte`) sauf si la page déclare le sien par
+  // <meta name="sl-collecte" content="/chemin"> (chemin de la même origine seulement : jamais un autre hôte).
+  const declare = document.querySelector('meta[name="sl-collecte"]')?.content || '';
+  const BASE = /^\/(?![\/\\])[^\s]*$/.test(declare) ? declare : '/lab/collecte';
+  const ADRESSE = BASE + (BASE.includes('?') ? '&sl=' : '?sl=');
   const PERIODE_MS = 1000 / 30; // flux échantillonnés : 30 relevés par seconde au plus
   const ENVOIS_PAR_PAGE = 60;
   const TAMPON_PLEIN = 0;

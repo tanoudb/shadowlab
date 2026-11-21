@@ -60,7 +60,11 @@ function fabriquer(options) {
       activeElement: null,
       documentElement: { scrollWidth: 1280, scrollHeight: 5000 },
       hasFocus: () => true,
-      querySelector: (s) => (s === 'meta[name="sl-session"]' && jeton ? { content: jeton } : null),
+      querySelector: (s) => {
+        if (s === 'meta[name="sl-session"]' && jeton) return { content: jeton };
+        if (s === 'meta[name="sl-collecte"]' && options.collecte !== undefined) return { content: options.collecte };
+        return null;
+      },
       addEventListener: (type, f) => ecouteurs.push({ cible: 'document', type, f }),
     },
     ['cookie', 'getSelection', 'body', 'forms', 'title', 'referrer', 'URL', 'domain', 'execCommand'],
