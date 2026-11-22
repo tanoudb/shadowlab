@@ -1283,7 +1283,13 @@ function pageDefilable() {
   return racine.scrollHeight > racine.clientHeight;
 }
 
-addEventListener('pagehide', () => {
+// Le résumé de comportement part à la sortie de la page. `pagehide` n'est pas fiable (Safari, mobile, onglet fermé) :
+// `visibilitychange` vers `hidden` est le dernier événement sûr avant qu'une page soit déchargée ou gelée. On envoie au
+// premier des deux qui se déclenche, une seule fois (sinon 3 sessions sur 5 perdaient leur comportement).
+let comportementEnvoye = false;
+function envoyerComportement() {
+  if (comportementEnvoye) return;
+  comportementEnvoye = true;
   envoyer('comportement', {
     evenements, premiere_interaction_ms: premiereInteraction, duree_page_ms: Math.round(performance.now() - debut),
     delais_souris_ms: delais_souris,
@@ -1294,6 +1300,10 @@ addEventListener('pagehide', () => {
     wheel_deltas: wheel_deltas,
     page_defilable: pageDefilable(),
   }, true);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') envoyerComportement();
 });
+addEventListener('pagehide', envoyerComportement);
 
 demarrer();
