@@ -4261,3 +4261,21 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
   `ETUDE_SECRET_COMPTE`), migration Supabase, couper Rocket Loader, remplir les trous légaux de `/etude`, déployer, puis poser la clé de
   route en base pour allumer. Export → `shadowlab externe analyser` (côté ShadowLab). Détail dans `omni-read-web:docs/etude-collecte.md`.
 - À surveiller (Q-etude-2) : le bandeau d'étude n'apparaît qu'après la réponse au bandeau cookies (ceux qui l'ignorent ne le voient pas).
+
+## 2026-11-22 17h20 — PREMIÈRES VRAIES SESSIONS HUMAINES analysées (D-108) : les détecteurs sur-bloquent
+- Récupérées **directement** par le connecteur Supabase (projet `omniread`, `execute_sql`), sans export manuel ni clé de service
+  côté assistant : SQL → fichier → assemblage avec le vrai `construireSession` d'omni-read (décompresse les blobs gzip) →
+  `outputs/etude-2026-11-22.jsonl` (5 sessions, 0 écartée) → `shadowlab externe analyser`.
+- 5 sessions présumées humaines : Safari 27/Mac, Safari 26/iPhone, Chrome 157/Windows, Firefox 160/Windows ; 2 comptes masqués, 1 anonyme.
+- **Résultat : taux d'arrêt (faux positifs) beaucoup trop hauts** — 04 : 2/5, 05 : 2/5, 06 : 3/5, 07 : 4/5 (objectif : au plus 1/10).
+  Détecteurs responsables :
+  - `composite` : `aucune_interaction` (3 sessions sur 5 n'ont PAS de relevé de comportement — envoi de sortie non arrivé),
+    `timing_quantifie` et `permissions_all_denied` (vraies fonctions de confidentialité de Safari/Firefox, prises pour de l'évasion),
+    `hasFocus_false` ;
+  - `deep-proxy` : 1 session (`getter_non_natif`, `illegal_invoc_absent` — extension de navigateur probable).
+- **Réserves** : n=5 (IC très larges) ; verdict PARTIEL (TLS, règles HTTP, corrélation, honeypot, WebRTC non évaluables hors Arena) ;
+  les traces de gestes sont collectées (13) mais **aucun détecteur ne les lit encore** ; 3/5 sans comportement = autant un défaut de
+  CAPTURE qu'un défaut de détecteur ; certaines sessions sont peut-être les tests d'Ethan lui-même.
+- **Portée** : première preuve dure que les détecteurs, réglés seulement sur nos sites de démo, **sur-bloquent le vrai monde** (surtout
+  à cause des fonctions de confidentialité des vrais navigateurs). C'est exactement ce que la collecte devait révéler. Reste : plus de
+  sessions, corriger la capture du comportement, puis dé-sensibiliser les règles fautives une par une (chiffres à l'appui).
