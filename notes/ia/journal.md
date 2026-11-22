@@ -4279,3 +4279,17 @@ corrélation entre sessions (elle compte toute la base : 443 sessions pour l'emp
 - **Portée** : première preuve dure que les détecteurs, réglés seulement sur nos sites de démo, **sur-bloquent le vrai monde** (surtout
   à cause des fonctions de confidentialité des vrais navigateurs). C'est exactement ce que la collecte devait révéler. Reste : plus de
   sessions, corriger la capture du comportement, puis dé-sensibiliser les règles fautives une par une (chiffres à l'appui).
+
+## 2026-11-22 18h05 — Correctif de capture du comportement (observateur) ; contrôle labo en attente (disque)
+- Cause du trou (3 sessions sur 5 sans comportement) : l'observateur n'envoyait le résumé que sur `pagehide`, peu fiable
+  (Safari, mobile, onglet fermé) ; les traces, elles, arrivaient car `releve.js` envoie aussi sur `visibilitychange`.
+- Correctif (`src/shadowlab/site/static/observateur.js`) : envoi du comportement aussi sur `visibilitychange → hidden`, une
+  seule fois (dédoublonné). Ne touche ni le canvas ni l'empreinte. Empreinte figée du test mise à jour (`test_public_releve.py`).
+  Commit labo `ad6cda6` ; 3 094 tests verts, lint propre.
+- Porté dans le paquet sans marque et copié dans `public/etude/` d'omni-read (commit `a802fa2`, branche `collecte-sessions`,
+  non poussé). **À faire par Ethan : redéployer omni-read** pour que les vraies sessions futures gardent leur comportement.
+- **Campagne de contrôle labo (règle du projet pour un changement d'observateur) : NON LANCÉE** — disque à 5 Gio (sous 20),
+  machine chargée par d'autres sessions. Risque faible (en Chrome à l'écran, `visibilitychange→hidden` ≈ `pagehide` à la sortie,
+  dédoublonné → envoi unique au même moment). À lancer dès qu'il y a de la place : `controle-vrai-chrome.yaml` (comparer aux
+  campagnes 132/134/139/148/151 : noezia natif 15/15/15, Chrome sans comportement 10/15/0, patchright 0/45).
+- Disque critique (5 Gio) : surtout d'autres projets/sessions (Supabase locaux omni-read, Studios).
